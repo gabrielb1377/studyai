@@ -1,7 +1,8 @@
 export type TutorConversation = {
   id: string;
   title: string;
-  preview: string;
+  messages: TutorMessage[];
+  createdAt: string;
   updatedAt: string;
 };
 

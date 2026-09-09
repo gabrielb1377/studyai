@@ -1,13 +1,6 @@
 import type { TutorConversation, TutorMessage } from "@/types/tutor";
 
-export const tutorConversations: readonly TutorConversation[] = [
-  { id: "algorithms", title: "Algoritmos", preview: "Vetores e matrizes", updatedAt: "Agora" },
-  { id: "database", title: "Banco de Dados", preview: "Modelo entidade-relacionamento", updatedAt: "Ontem" },
-  { id: "java", title: "Java", preview: "Classes e objetos", updatedAt: "Segunda" },
-  { id: "math", title: "Matemática", preview: "Lógica proposicional", updatedAt: "Sexta" },
-];
-
-export const tutorMessages: readonly TutorMessage[] = [
+const algorithmsMessages: TutorMessage[] = [
   {
     id: "tutor-welcome",
     role: "assistant",
@@ -36,5 +29,38 @@ export const tutorMessages: readonly TutorMessage[] = [
       headers: ["Índice", "Valor"],
       rows: [["0", "8"], ["1", "9"], ["2", "7"]],
     },
+  },
+];
+
+const mockDate = "2026-09-09T12:00:00.000Z";
+
+export const tutorConversations: readonly TutorConversation[] = [
+  {
+    id: "algorithms",
+    title: "Algoritmos",
+    messages: algorithmsMessages,
+    createdAt: mockDate,
+    updatedAt: mockDate,
+  },
+  {
+    id: "database",
+    title: "Banco de Dados",
+    messages: [{ id: "database-welcome", role: "assistant", content: "Vamos revisar os fundamentos de Banco de Dados." }],
+    createdAt: "2026-09-08T12:00:00.000Z",
+    updatedAt: "2026-09-08T12:00:00.000Z",
+  },
+  {
+    id: "java",
+    title: "Java",
+    messages: [{ id: "java-welcome", role: "assistant", content: "Podemos explorar classes e objetos em Java." }],
+    createdAt: "2026-09-07T12:00:00.000Z",
+    updatedAt: "2026-09-07T12:00:00.000Z",
+  },
+  {
+    id: "math",
+    title: "Matemática",
+    messages: [{ id: "math-welcome", role: "assistant", content: "Vamos estudar lógica proposicional." }],
+    createdAt: "2026-09-06T12:00:00.000Z",
+    updatedAt: "2026-09-06T12:00:00.000Z",
   },
 ];

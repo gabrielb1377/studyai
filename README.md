@@ -236,6 +236,16 @@ Arquivos modificados: `src/lib/navigation.ts`, `src/components/layout/sidebar.ts
 
 Validação final da Sprint 7: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. Os testes Playwright validaram conversas mockadas, busca, nova conversa, mensagens com lista/código/tabela, ações rápidas, envio simulado e responsividade mobile. Não foram testados dispositivos físicos.
 
+## Sprint 8 — Tutor IA: Chat Core
+
+O Tutor agora mantém conversas e mensagens no `localStorage` do navegador. Cada conversa possui identificador, título, mensagens, data de criação e de atualização. O núcleo é dividido entre `TutorService` (regras de conversa), `TutorStorage` (persistência), `useTutor` (estado da interface) e `message-utils` (identificadores e metadados de exibição). O envio adiciona a mensagem do usuário e a resposta fake “Resposta simulada do Tutor IA.”.
+
+Arquivos criados: `src/features/tutor/services/TutorService.ts`, `src/features/tutor/services/TutorStorage.ts`, `src/features/tutor/hooks/useTutor.ts` e `src/features/tutor/utils/message-utils.ts`.
+
+Arquivos modificados: `src/types/tutor.ts`, `src/lib/mock/tutor.ts`, `src/features/tutor/TutorSidebar.tsx`, `src/features/tutor/TutorWorkspace.tsx`, `tests/tutor.spec.ts`, `tests/foundation.spec.ts` e `README.md`. Nenhum arquivo foi removido.
+
+Validação final da Sprint 8: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros; os 19 testes Playwright foram aprovados. A persistência foi validada com criação, renomeação, envio, recarga da página e exclusão de uma conversa. Não foram testados dispositivos físicos.
+
 Validação final da Sprint 4: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. A suíte Playwright aprovou a árvore, as ações locais, o redirecionamento para a Biblioteca e a responsividade em viewports emulados de 360, 768, 1024 e 1440px. Não foram testados dispositivos físicos.
 
 ## Sprint 5 — Estudo
