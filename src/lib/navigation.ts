@@ -1,4 +1,4 @@
-import { BookOpen, FolderTree, House, Library, Settings, Upload } from "lucide-react";
+import { BookOpen, Bot, FolderTree, House, Library, Settings, Upload } from "lucide-react";
 
 export const navigation = [
   {
@@ -18,6 +18,12 @@ export const navigation = [
     label: "Estudo",
     icon: BookOpen,
     description: "Seu espaço para aprender",
+  },
+  {
+    href: "/tutor",
+    label: "Tutor IA",
+    icon: Bot,
+    description: "Seu assistente de estudo",
   },
   {
     href: "/importar",

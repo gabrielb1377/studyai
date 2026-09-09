@@ -234,6 +234,8 @@ Arquivos criados: `src/app/organizar/page.tsx`, `src/app/organizar/loading.tsx`,
 
 Arquivos modificados: `src/lib/navigation.ts`, `src/components/layout/sidebar.tsx`, `tests/foundation.spec.ts` e `README.md`. Nenhum arquivo foi removido.
 
+Validação final da Sprint 7: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. Os testes Playwright validaram conversas mockadas, busca, nova conversa, mensagens com lista/código/tabela, ações rápidas, envio simulado e responsividade mobile. Não foram testados dispositivos físicos.
+
 Validação final da Sprint 4: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. A suíte Playwright aprovou a árvore, as ações locais, o redirecionamento para a Biblioteca e a responsividade em viewports emulados de 360, 768, 1024 e 1440px. Não foram testados dispositivos físicos.
 
 ## Sprint 5 — Estudo
@@ -253,3 +255,11 @@ A aba Material agora possui um visualizador por tipo. PDFs usam `react-pdf` com 
 Arquivos criados: `src/features/study/MaterialViewer.tsx` e `src/features/study/PdfMaterialViewer.tsx`.
 
 Arquivos modificados: `src/features/study/MaterialTab.tsx`, `src/lib/mock/study-workspace.ts`, `src/types/study.ts`, `tests/study.spec.ts`, `package.json`, `package-lock.json` e `README.md`. A dependência `react-pdf@9.2.1` foi adicionada; não há upload, banco ou API.
+
+## Sprint 7 — Tutor IA
+
+A rota `/tutor` oferece a interface completa do Tutor IA: histórico pesquisável de conversas mockadas, nova conversa, mensagens de usuário e assistente, blocos de lista, código e tabela, além de um compositor expansível com ações rápidas e anexo apenas visual. Nenhuma mensagem deixa o navegador.
+
+Arquivos criados: `src/app/tutor/page.tsx`, `src/types/tutor.ts`, `src/lib/mock/tutor.ts`, `src/features/tutor/TutorSidebar.tsx`, `src/features/tutor/TutorMessage.tsx`, `src/features/tutor/TutorConversation.tsx`, `src/features/tutor/TutorComposer.tsx`, `src/features/tutor/TutorWorkspace.tsx` e `tests/tutor.spec.ts`.
+
+Arquivos modificados: `src/lib/navigation.ts`, `src/components/layout/sidebar.tsx`, `tests/foundation.spec.ts` e `README.md`. Nenhum arquivo foi removido.

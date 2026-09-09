@@ -50,6 +50,7 @@ for (const width of [360, 768, 1024, 1440]) {
       "/",
       "/biblioteca",
       "/estudo",
+      "/tutor",
       "/importar",
       "/organizar",
       "/configuracoes",

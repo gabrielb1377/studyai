@@ -100,7 +100,7 @@ export function Sidebar() {
         >
           <DialogTitle className="sr-only">Menu de navegação</DialogTitle>
           <DialogDescription className="sr-only">
-            Acesse as seis áreas do seu workspace.
+            Acesse as sete áreas do seu workspace.
           </DialogDescription>
           <SidebarContent />
         </DialogContent>
