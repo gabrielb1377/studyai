@@ -235,3 +235,13 @@ Arquivos criados: `src/app/organizar/page.tsx`, `src/app/organizar/loading.tsx`,
 Arquivos modificados: `src/lib/navigation.ts`, `src/components/layout/sidebar.tsx`, `tests/foundation.spec.ts` e `README.md`. Nenhum arquivo foi removido.
 
 Validação final da Sprint 4: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. A suíte Playwright aprovou a árvore, as ações locais, o redirecionamento para a Biblioteca e a responsividade em viewports emulados de 360, 768, 1024 e 1440px. Não foram testados dispositivos físicos.
+
+## Sprint 5 — Estudo
+
+A rota `/estudo` agora é o workspace principal do tema. O cabeçalho apresenta breadcrumb, matéria, tema e retorno ao Dashboard. As abas Material, IA e Estudar mantêm interfaces mockadas e responsivas, sem acessar materiais físicos ou serviços externos.
+
+Arquivos criados: `src/lib/mock/study-workspace.ts`, `src/features/study/StudyHeader.tsx`, `src/features/study/MaterialTab.tsx`, `src/features/study/AiTab.tsx`, `src/features/study/StudyToolsTab.tsx`, `src/features/study/StudyWorkspace.tsx` e `tests/study.spec.ts`.
+
+Arquivos modificados: `src/app/estudo/page.tsx`, `src/types/study.ts` e `README.md`. Nenhum arquivo foi removido.
+
+Validação final da Sprint 5: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. Os testes Playwright validaram as abas, o material mockado, a interface do tutor, as ações rápidas, os cards de estudo, o retorno e a responsividade mobile. Não foram testados dispositivos físicos.
