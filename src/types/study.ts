@@ -7,7 +7,7 @@ export type Topic = {
   lastStudied: string;
 };
 
-export type StudyMaterialType = "pdf" | "video" | "audio";
+export type StudyMaterialType = "pdf" | "video" | "audio" | "txt";
 
 export type StudyMaterial = {
   id: string;
@@ -15,6 +15,8 @@ export type StudyMaterial = {
   type: StudyMaterialType;
   label: string;
   size: string;
+  source?: string;
+  textContent?: string;
 };
 
 export type StudyMessage = {

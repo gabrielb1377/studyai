@@ -1,67 +1,73 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Headphones, Play, Video } from "lucide-react";
+import { FileText, Headphones, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StudyMaterial } from "@/types/study";
+import { MaterialViewer } from "./MaterialViewer";
 
 const materialIcons = {
   pdf: FileText,
   video: Video,
   audio: Headphones,
+  txt: FileText,
 };
 
 export function MaterialTab({ materials }: { materials: readonly StudyMaterial[] }) {
-  const [message, setMessage] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectedMaterial = materials[selectedIndex] ?? materials[0];
+
+  if (!selectedMaterial) {
+    return <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Nenhum material disponível.</p>;
+  }
 
   return (
     <section aria-labelledby="materials-title" className="space-y-5">
       <div>
-        <h2 id="materials-title" className="text-lg font-semibold tracking-tight">
-          Materiais deste tema
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Prévia visual dos materiais disponíveis para estudo.
-        </p>
+        <h2 id="materials-title" className="text-lg font-semibold tracking-tight">Visualizador de materiais</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Abra cada arquivo no visualizador correspondente.</p>
       </div>
-      {message && (
-        <p role="status" className="rounded-lg border bg-secondary/50 px-4 py-3 text-sm text-muted-foreground">
-          {message}
-        </p>
-      )}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {materials.map((material) => {
-          const Icon = materialIcons[material.type];
-          return (
-            <Card key={material.id} className="gap-0 overflow-hidden py-0 shadow-none">
-              <div className="flex min-h-36 items-center justify-center border-b bg-secondary/55 text-primary">
-                <span className="flex size-14 items-center justify-center rounded-2xl border bg-card shadow-sm">
-                  <Icon className="size-7" strokeWidth={1.5} aria-hidden="true" />
-                </span>
-              </div>
-              <CardContent className="p-5">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <Badge variant="outline" className="font-normal text-muted-foreground">
-                    {material.label}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{material.size}</span>
-                </div>
-                <h3 className="min-h-11 text-sm font-semibold leading-5">{material.name}</h3>
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <MaterialViewer
+          material={selectedMaterial}
+          hasPrevious={selectedIndex > 0}
+          hasNext={selectedIndex < materials.length - 1}
+          onPrevious={() => setSelectedIndex((current) => Math.max(0, current - 1))}
+          onNext={() => setSelectedIndex((current) => Math.min(materials.length - 1, current + 1))}
+        />
+        <Card className="gap-0 py-0 shadow-none">
+          <CardHeader className="border-b px-5 py-5">
+            <CardTitle className="text-base">Materiais</CardTitle>
+            <p className="text-sm text-muted-foreground">{materials.length} arquivos mockados</p>
+          </CardHeader>
+          <CardContent className="space-y-2 p-3">
+            {materials.map((material, index) => {
+              const Icon = materialIcons[material.type];
+              const isSelected = index === selectedIndex;
+              return (
                 <Button
+                  key={material.id}
                   type="button"
-                  variant="outline"
-                  className="mt-5 w-full"
-                  onClick={() => setMessage(`Abertura de “${material.name}” disponível em breve.`)}
+                  variant="ghost"
+                  aria-pressed={isSelected}
+                  className={`h-auto w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left ${isSelected ? "bg-accent text-accent-foreground" : ""}`}
+                  onClick={() => setSelectedIndex(index)}
                 >
-                  <Play className="size-4" aria-hidden="true" />
-                  Abrir material
+                  <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium">{material.name}</span>
+                    <span className="mt-1 flex items-center gap-2 text-[11px] font-normal text-muted-foreground">
+                      <Badge variant="outline" className="h-4 px-1 text-[9px]">{material.label}</Badge>
+                      {material.size}
+                    </span>
+                  </span>
                 </Button>
-              </CardContent>
-            </Card>
-          );
-        })}
+              );
+            })}
+          </CardContent>
+        </Card>
       </div>
     </section>
   );

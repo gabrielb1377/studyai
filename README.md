@@ -245,3 +245,11 @@ Arquivos criados: `src/lib/mock/study-workspace.ts`, `src/features/study/StudyHe
 Arquivos modificados: `src/app/estudo/page.tsx`, `src/types/study.ts` e `README.md`. Nenhum arquivo foi removido.
 
 Validação final da Sprint 5: `npm run lint`, `npm run typecheck` e `npm run build` concluídos sem erros. Os testes Playwright validaram as abas, o material mockado, a interface do tutor, as ações rápidas, os cards de estudo, o retorno e a responsividade mobile. Não foram testados dispositivos físicos.
+
+## Sprint 6 — Visualizador de Material
+
+A aba Material agora possui um visualizador por tipo. PDFs usam `react-pdf` com worker local, zoom, página atual e navegação. Vídeos e áudios usam elementos HTML5; arquivos TXT são exibidos em uma prévia monoespaçada. A lista lateral permite alternar entre os quatro materiais mockados, e os controles anterior/próximo percorrem a sequência.
+
+Arquivos criados: `src/features/study/MaterialViewer.tsx` e `src/features/study/PdfMaterialViewer.tsx`.
+
+Arquivos modificados: `src/features/study/MaterialTab.tsx`, `src/lib/mock/study-workspace.ts`, `src/types/study.ts`, `tests/study.spec.ts`, `package.json`, `package-lock.json` e `README.md`. A dependência `react-pdf@9.2.1` foi adicionada; não há upload, banco ou API.

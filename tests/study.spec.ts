@@ -13,12 +13,23 @@ test("workspace de estudo apresenta abas e interações mockadas", async ({ page
     "data-state",
     "active",
   );
-  await expect(page.getByText("Introdução aos vetores.pdf", { exact: true })).toBeVisible();
-  await expect(page.getByText("PDF", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Introdução aos vetores\.pdf/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Introdução aos vetores\.pdf/ }).getByText("PDF", { exact: true })).toBeVisible();
   await expect(page.getByText("2,4 MB", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Abrir material" }).first().click();
-  await expect(page.getByRole("status")).toContainText("disponível em breve");
+  await expect(page.getByText("Leitor de PDF", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Aumentar zoom do PDF" })).toBeVisible();
+  await expect(page.locator(".react-pdf__Page__canvas")).toBeVisible();
+  await page.getByRole("button", { name: "Próximo", exact: true }).click();
+  await expect(page.getByLabel(/Player de vídeo/)).toBeVisible();
+  await page.getByRole("button", { name: "Anterior", exact: true }).click();
+  await expect(page.getByText("Leitor de PDF", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Vetores e matrizes — Aula 03\.mp4/ }).click();
+  await expect(page.getByLabel(/Player de vídeo/)).toBeVisible();
+  await page.getByRole("button", { name: /Revisão da aula\.mp3/ }).click();
+  await expect(page.getByLabel(/Player de áudio/)).toBeVisible();
+  await page.getByRole("button", { name: /Resumo da aula\.txt/ }).click();
+  await expect(page.getByText("Um vetor é uma estrutura linear", { exact: false })).toBeVisible();
 
   await page.getByRole("tab", { name: "IA", exact: true }).click();
   await expect(page.getByText("Tutor de estudo", { exact: true })).toBeVisible();

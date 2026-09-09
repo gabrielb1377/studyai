@@ -7,6 +7,8 @@ export const studyMaterials: readonly StudyMaterial[] = [
     type: "pdf",
     label: "PDF",
     size: "2,4 MB",
+    source:
+      "data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0OSA+PgpzdHJlYW0KQlQKL0YxIDI0IFRmCjcyIDcyMCBUZAooTW9jayBTdHVkeUFJIFBERikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDAzMzggMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0MDgKJSVFT0YK",
   },
   {
     id: "material-video",
@@ -14,6 +16,7 @@ export const studyMaterials: readonly StudyMaterial[] = [
     type: "video",
     label: "Vídeo",
     size: "184 MB",
+    source: undefined,
   },
   {
     id: "material-audio",
@@ -21,6 +24,16 @@ export const studyMaterials: readonly StudyMaterial[] = [
     type: "audio",
     label: "Áudio",
     size: "12,8 MB",
+    source: undefined,
+  },
+  {
+    id: "material-txt",
+    name: "Resumo da aula.txt",
+    type: "txt",
+    label: "TXT",
+    size: "18 KB",
+    textContent:
+      "Vetores e matrizes\n\nUm vetor é uma estrutura linear que armazena elementos em sequência.\n\nPontos para revisar:\n- Índices começam em zero em muitas linguagens.\n- Matrizes organizam valores em linhas e colunas.\n- O acesso por índice é rápido e previsível.",
   },
 ];
 
