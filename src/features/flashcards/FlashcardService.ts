@@ -1,4 +1,5 @@
 import type { Flashcard, FlashcardDifficulty } from "@/types/flashcard";
+import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
 
 const STORAGE_KEY = "studyai:flashcards";
 
@@ -21,18 +22,11 @@ function isFlashcardList(value: unknown): value is Flashcard[] {
 
 export const FlashcardService = {
   load(): Flashcard[] {
-    if (typeof window === "undefined") return [];
-    try {
-      const value: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "[]");
-      return isFlashcardList(value) ? value : [];
-    } catch {
-      return [];
-    }
+    return readLocalStorage(STORAGE_KEY, isFlashcardList) ?? [];
   },
 
   save(cards: readonly Flashcard[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    writeLocalStorage(STORAGE_KEY, cards);
   },
 
   create(studyId: string, cards: readonly GeneratedFlashcard[], now = new Date().toISOString()): Flashcard[] {

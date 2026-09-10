@@ -10,10 +10,12 @@ export function useTutorContext() {
   useEffect(() => {
     const reload = () => setContext(TutorContextService.loadCurrent());
     reload();
+    window.addEventListener("studyai:study-updated", reload);
     window.addEventListener("studyai:notes-updated", reload);
     window.addEventListener("studyai:summaries-updated", reload);
 
     return () => {
+      window.removeEventListener("studyai:study-updated", reload);
       window.removeEventListener("studyai:notes-updated", reload);
       window.removeEventListener("studyai:summaries-updated", reload);
     };

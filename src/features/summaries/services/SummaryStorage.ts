@@ -1,6 +1,8 @@
 import type { StudySummary } from "@/types/summary";
+import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
 
 const STORAGE_KEY = "studyai:summaries";
+const UPDATE_EVENT = "studyai:summaries-updated";
 
 function isSummaryList(value: unknown): value is StudySummary[] {
   return Array.isArray(value) && value.every((summary) =>
@@ -14,21 +16,10 @@ function isSummaryList(value: unknown): value is StudySummary[] {
 
 export const SummaryStorage = {
   load(): StudySummary[] | null {
-    if (typeof window === "undefined") return null;
-
-    try {
-      const rawValue = window.localStorage.getItem(STORAGE_KEY);
-      if (!rawValue) return null;
-      const parsedValue: unknown = JSON.parse(rawValue);
-      return isSummaryList(parsedValue) ? parsedValue : null;
-    } catch {
-      return null;
-    }
+    return readLocalStorage(STORAGE_KEY, isSummaryList);
   },
 
   save(summaries: readonly StudySummary[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(summaries));
-    window.dispatchEvent(new Event("studyai:summaries-updated"));
+    writeLocalStorage(STORAGE_KEY, summaries, UPDATE_EVENT);
   },
 };

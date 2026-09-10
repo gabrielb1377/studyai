@@ -13,7 +13,6 @@ export function useTutor() {
     tutorConversations.map((conversation) => ({ ...conversation, messages: [...conversation.messages] })),
   );
   const [activeConversationId, setActiveConversationId] = useState(tutorConversations[0]?.id ?? "");
-  const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,13 +31,10 @@ export function useTutor() {
     if (storedConversations?.length) {
       setConversations(storedConversations);
       setActiveConversationId(storedConversations[0].id);
+    } else {
+      TutorStorage.save(tutorConversations);
     }
-    setIsReady(true);
   }, []);
-
-  useEffect(() => {
-    if (isReady) TutorStorage.save(conversations);
-  }, [conversations, isReady]);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? conversations[0],
@@ -108,7 +104,6 @@ export function useTutor() {
     context,
     error,
     isLoading,
-    isReady,
     clearError: () => setError(null),
     setError,
     createConversation,

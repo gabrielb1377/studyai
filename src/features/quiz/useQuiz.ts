@@ -12,16 +12,75 @@ export function useQuiz(studyId?: string) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reload = useCallback(() => setStore(QuizService.load()), []);
-  useEffect(() => { reload(); window.addEventListener("studyai:quiz-updated", reload); return () => window.removeEventListener("studyai:quiz-updated", reload); }, [reload]);
-  const update = useCallback((updater: (current: QuizStore) => QuizStore) => setStore((current) => { const next = updater(current); QuizService.save(next); return next; }), []);
-  const questions = useMemo(() => studyId ? store.questions.filter((question) => question.studyId === studyId) : store.questions, [store.questions, studyId]);
-  const results = useMemo(() => studyId ? store.results.filter((result) => result.studyId === studyId) : store.results, [store.results, studyId]);
+
+  useEffect(() => {
+    reload();
+    window.addEventListener("studyai:quiz-updated", reload);
+    return () => window.removeEventListener("studyai:quiz-updated", reload);
+  }, [reload]);
+
+  const updateStore = useCallback(
+    (updater: (current: QuizStore) => QuizStore) => {
+      setStore((current) => {
+        const nextStore = updater(current);
+        QuizService.save(nextStore);
+        return nextStore;
+      });
+    },
+    [],
+  );
+
+  const questions = useMemo(
+    () => studyId
+      ? store.questions.filter((question) => question.studyId === studyId)
+      : store.questions,
+    [store.questions, studyId],
+  );
+  const results = useMemo(
+    () => studyId
+      ? store.results.filter((result) => result.studyId === studyId)
+      : store.results,
+    [store.results, studyId],
+  );
+
   const generate = async (study: Pick<StudyRecord, "studyId" | "title" | "subject">) => {
     if (isGenerating) return false;
-    setError(null); setIsGenerating(true);
-    try { const generated = await QuizService.requestGeneration(study); update((current) => ({ ...current, questions: [...current.questions, ...QuizService.createQuestions(study.studyId, generated)] })); return true; }
-    catch (generationError) { setError(generationError instanceof Error ? generationError.message : "Erro inesperado ao criar o quiz."); return false; }
-    finally { setIsGenerating(false); }
+    setError(null);
+    setIsGenerating(true);
+
+    try {
+      const generatedQuestions = await QuizService.requestGeneration(study);
+      updateStore((current) => ({
+        ...current,
+        questions: [
+          ...current.questions,
+          ...QuizService.createQuestions(study.studyId, generatedQuestions),
+        ],
+      }));
+      return true;
+    } catch (generationError) {
+      setError(
+        generationError instanceof Error
+          ? generationError.message
+          : "Erro inesperado ao criar o quiz.",
+      );
+      return false;
+    } finally {
+      setIsGenerating(false);
+    }
   };
-  return { questions, results, isGenerating, error, generate, saveResult: (result: QuizResult) => update((current) => ({ ...current, results: [result, ...current.results] })), clearError: () => setError(null) };
+
+  return {
+    questions,
+    results,
+    isGenerating,
+    error,
+    generate,
+    saveResult: (result: QuizResult) =>
+      updateStore((current) => ({
+        ...current,
+        results: [result, ...current.results],
+      })),
+    clearError: () => setError(null),
+  };
 }

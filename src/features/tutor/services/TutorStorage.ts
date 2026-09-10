@@ -1,4 +1,9 @@
 import type { TutorConversation } from "@/types/tutor";
+import {
+  readLocalStorage,
+  removeLocalStorage,
+  writeLocalStorage,
+} from "@/lib/local-storage";
 
 const STORAGE_KEY = "studyai:tutor-conversations";
 
@@ -13,25 +18,14 @@ function isConversationList(value: unknown): value is TutorConversation[] {
 
 export const TutorStorage = {
   load(): TutorConversation[] | null {
-    if (typeof window === "undefined") return null;
-
-    try {
-      const rawValue = window.localStorage.getItem(STORAGE_KEY);
-      if (!rawValue) return null;
-      const parsedValue: unknown = JSON.parse(rawValue);
-      return isConversationList(parsedValue) ? parsedValue : null;
-    } catch {
-      return null;
-    }
+    return readLocalStorage(STORAGE_KEY, isConversationList);
   },
 
   save(conversations: readonly TutorConversation[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+    writeLocalStorage(STORAGE_KEY, conversations);
   },
 
   clear() {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(STORAGE_KEY);
+    removeLocalStorage(STORAGE_KEY);
   },
 };

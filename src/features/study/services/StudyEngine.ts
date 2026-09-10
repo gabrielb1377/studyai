@@ -1,7 +1,9 @@
 import type { Topic } from "@/types/study";
 import type { StudyRecord, StudyStatus } from "@/types/study-engine";
+import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
 
 const STORAGE_KEY = "studyai:study-engine";
+const UPDATE_EVENT = "studyai:study-updated";
 const SEED_DATE = "2026-01-01T00:00:00.000Z";
 
 function isStudyRecordList(value: unknown): value is StudyRecord[] {
@@ -27,20 +29,11 @@ function statusFromProgress(progress: number): StudyStatus {
 
 export const StudyEngine = {
   load(): StudyRecord[] {
-    if (typeof window === "undefined") return [];
-
-    try {
-      const rawValue = window.localStorage.getItem(STORAGE_KEY);
-      const parsedValue: unknown = rawValue ? JSON.parse(rawValue) : [];
-      return isStudyRecordList(parsedValue) ? parsedValue : [];
-    } catch {
-      return [];
-    }
+    return readLocalStorage(STORAGE_KEY, isStudyRecordList) ?? [];
   },
 
   save(records: readonly StudyRecord[]) {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    writeLocalStorage(STORAGE_KEY, records, UPDATE_EVENT);
   },
 
   create(topic: Pick<Topic, "id" | "title" | "subject" | "progress">, now = new Date().toISOString()): StudyRecord {
