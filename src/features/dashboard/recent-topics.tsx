@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { StudyRecord } from "@/types/study-engine";
 import type { Flashcard } from "@/types/flashcard";
+import type { QuizResult } from "@/types/quiz";
 import { topics } from "./data";
 
 const icons = [Braces, Database, Shapes];
 
-export function RecentTopics({ records, flashcards }: { records: readonly StudyRecord[]; flashcards: readonly Flashcard[] }) {
+export function RecentTopics({ records, flashcards, quizzes }: { records: readonly StudyRecord[]; flashcards: readonly Flashcard[]; quizzes: readonly QuizResult[] }) {
   const recentTopics = records.length
     ? [...records].sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt)).map((record) => ({ topic: topics.find((item) => item.id === record.studyId), record })).filter((item): item is { topic: typeof topics[number]; record: StudyRecord } => Boolean(item.topic))
     : topics.map((topic) => ({ topic, record: undefined }));
@@ -30,6 +31,7 @@ export function RecentTopics({ records, flashcards }: { records: readonly StudyR
         {recentTopics.map(({ topic, record }, index) => {
           const Icon = icons[index];
           const flashcardCount = flashcards.filter((card) => card.studyId === topic.id).length;
+          const topicQuizzes = quizzes.filter((quiz) => quiz.studyId === topic.id).sort((a, b) => b.completedAt.localeCompare(a.completedAt));
           return (
             <Link
               key={topic.id}
@@ -72,6 +74,7 @@ export function RecentTopics({ records, flashcards }: { records: readonly StudyR
                   {record ? "Acessado recentemente" : topic.lastStudied}
                 </p>
                 <p className="mt-2 text-[11px] text-muted-foreground">{flashcardCount} flashcards</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{topicQuizzes.length} quizzes{topicQuizzes[0] ? ` · último resultado: ${topicQuizzes[0].score}%` : ""}</p>
               </Card>
             </Link>
           );

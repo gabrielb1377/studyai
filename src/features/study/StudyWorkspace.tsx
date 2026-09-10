@@ -10,12 +10,14 @@ import { StudyToolsTab } from "./StudyToolsTab";
 import { StudyStatistics } from "./StudyStatistics";
 import { useStudyEngine } from "./hooks/useStudyEngine";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
+import { useQuiz } from "@/features/quiz/useQuiz";
 import type { Topic } from "@/types/study";
 
 export function StudyWorkspace({ topic }: { topic: Topic }) {
   const { records, isReady, recordAccess, setProgress, setStatus } = useStudyEngine();
   const record = records.find((item) => item.studyId === topic.id);
   const { cards: flashcards } = useFlashcards(topic.id);
+  const { results: quizzes } = useQuiz(topic.id);
 
   useEffect(() => {
     if (isReady) recordAccess(topic);
@@ -31,7 +33,7 @@ export function StudyWorkspace({ topic }: { topic: Topic }) {
       <TabsContent value="material" forceMount className="data-[state=inactive]:hidden"><MaterialTab materials={studyMaterials} /></TabsContent>
       <TabsContent value="ia" forceMount className="data-[state=inactive]:hidden"><AiTab messages={initialStudyMessages} /></TabsContent>
       <TabsContent value="study" forceMount className="data-[state=inactive]:hidden">{record && <StudyToolsTab tools={studyTools} study={record} />}</TabsContent>
-      {record && <StudyStatistics record={record} flashcardCount={flashcards.length} onProgressChange={(progress) => setProgress(record.studyId, progress)} onStatusChange={(status) => setStatus(record.studyId, status)} />}
+      {record && <StudyStatistics record={record} flashcardCount={flashcards.length} quizCount={quizzes.length} onProgressChange={(progress) => setProgress(record.studyId, progress)} onStatusChange={(status) => setStatus(record.studyId, status)} />}
     </Tabs>
   );
 }
