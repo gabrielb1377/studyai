@@ -9,6 +9,18 @@ export function getConversationPreview(messages: readonly TutorMessage[]) {
   return latestMessage?.content ?? "Sem mensagens";
 }
 
+export function getMessageText(message: TutorMessage) {
+  const list = message.list?.map((item) => `- ${item}`).join("\n");
+  const code = message.code
+    ? `\`\`\`${message.code.language}\n${message.code.code}\n\`\`\``
+    : undefined;
+  const table = message.table
+    ? [message.table.headers, ...message.table.rows].map((row) => row.join(" | ")).join("\n")
+    : undefined;
+
+  return [message.heading, message.content, list, code, table].filter(Boolean).join("\n\n");
+}
+
 export function formatConversationUpdatedAt(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Agora";

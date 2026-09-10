@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bot } from "lucide-react";
+import { AlertCircle, Bot, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +23,9 @@ export function TutorWorkspace() {
     activeConversation,
     activeConversationId,
     conversations,
+    error,
+    isLoading,
+    clearError,
     createConversation,
     renameConversation,
     deleteConversation,
@@ -55,8 +58,9 @@ export function TutorWorkspace() {
     closeRename();
   };
 
-  const sendDraft = () => {
-    sendMessage(draft);
+  const sendDraft = async () => {
+    const sent = await sendMessage(draft);
+    if (!sent) return;
     setDraft("");
   };
 
@@ -81,13 +85,22 @@ export function TutorWorkspace() {
             <h2 className="text-lg font-semibold tracking-tight">
               {activeConversation?.title ?? "Nova conversa"}
             </h2>
-            <p className="text-sm text-muted-foreground">Tutor IA · Conversas salvas neste navegador</p>
+            <p className="text-sm text-muted-foreground">Gemini · Conversas salvas neste navegador</p>
           </div>
         </div>
+        {error && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <p className="flex-1">{error}</p>
+            <Button type="button" variant="ghost" size="icon-sm" onClick={clearError} aria-label="Fechar erro">
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        )}
         {activeConversation ? (
           <>
-            <TutorConversation messages={activeConversation.messages} />
-            <TutorComposer draft={draft} onDraftChange={setDraft} onSend={sendDraft} />
+            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} />
+            <TutorComposer draft={draft} isLoading={isLoading} onDraftChange={setDraft} onSend={() => { void sendDraft(); }} />
           </>
         ) : (
           <div className="rounded-xl border border-dashed p-10 text-center">

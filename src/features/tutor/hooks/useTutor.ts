@@ -12,6 +12,8 @@ export function useTutor() {
   );
   const [activeConversationId, setActiveConversationId] = useState(tutorConversations[0]?.id ?? "");
   const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const updateConversations = (
     updater: (current: TutorConversation[]) => TutorConversation[],
@@ -66,28 +68,45 @@ export function useTutor() {
     });
   };
 
-  const sendMessage = (content: string) => {
+  const sendMessage = async (content: string) => {
     const nextContent = content.trim();
-    if (!nextContent) return;
-    if (activeConversation) {
-      updateConversations((current) =>
-        TutorService.addMessage(current, activeConversation.id, nextContent),
-      );
-      return;
-    }
+    if (!nextContent || isLoading) return false;
 
-    const conversation = TutorService.createConversation();
-    updateConversations((current) =>
-      TutorService.addMessage([conversation, ...current], conversation.id, nextContent),
-    );
-    setActiveConversationId(conversation.id);
+    const conversation = activeConversation ?? TutorService.createConversation();
+    const userMessage = TutorService.createMessage("user", nextContent);
+    setError(null);
+    setIsLoading(true);
+
+    if (!activeConversation) setActiveConversationId(conversation.id);
+    updateConversations((current) => TutorService.addMessage(
+      activeConversation ? current : [conversation, ...current],
+      conversation.id,
+      userMessage,
+    ));
+
+    try {
+      const response = await TutorService.requestReply(conversation.messages, nextContent);
+      const assistantMessage = TutorService.createMessage("assistant", response.text);
+      updateConversations((current) =>
+        TutorService.addMessage(current, conversation.id, assistantMessage),
+      );
+      return true;
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Erro inesperado no Tutor IA.");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return {
     activeConversation,
     activeConversationId,
     conversations,
+    error,
+    isLoading,
     isReady,
+    clearError: () => setError(null),
     createConversation,
     renameConversation,
     deleteConversation,

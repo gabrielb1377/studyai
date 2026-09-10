@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Tutor IA" };
 export default function TutorPage() {
   return (
     <>
-      <PageHeading eyebrow="Estudo" title="Tutor IA" description="Um espaço de conversa preparado para acompanhar seus estudos. Nesta etapa, todas as respostas são apenas demonstrativas." />
+      <PageHeading eyebrow="Estudo" title="Tutor IA" description="Converse com o Gemini mantendo o contexto do histórico salvo neste navegador." />
       <TutorWorkspace />
     </>
   );
