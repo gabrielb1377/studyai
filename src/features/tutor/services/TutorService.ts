@@ -1,4 +1,5 @@
 import type { TutorConversation, TutorMessage } from "@/types/tutor";
+import type { TutorStudyContext } from "@/types/tutor-context";
 import { createTutorId, getMessageText } from "../utils/message-utils";
 
 type TutorApiResponse = {
@@ -72,6 +73,7 @@ export const TutorService = {
   async requestReply(
     history: readonly TutorMessage[],
     message: string,
+    context?: TutorStudyContext | null,
   ): Promise<{ model: string; text: string }> {
     const response = await fetch("/api/tutor", {
       method: "POST",
@@ -82,6 +84,7 @@ export const TutorService = {
           content: getMessageText(historyMessage),
         })),
         message,
+        context: context ?? undefined,
       }),
     });
     const data = await response.json().catch(() => null) as TutorApiResponse | null;

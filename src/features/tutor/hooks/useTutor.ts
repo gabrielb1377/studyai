@@ -5,8 +5,10 @@ import { tutorConversations } from "@/lib/mock/tutor";
 import type { TutorConversation } from "@/types/tutor";
 import { TutorService } from "../services/TutorService";
 import { TutorStorage } from "../services/TutorStorage";
+import { useTutorContext } from "./useTutorContext";
 
 export function useTutor() {
+  const context = useTutorContext();
   const [conversations, setConversations] = useState<TutorConversation[]>(() =>
     tutorConversations.map((conversation) => ({ ...conversation, messages: [...conversation.messages] })),
   );
@@ -85,7 +87,7 @@ export function useTutor() {
     ));
 
     try {
-      const response = await TutorService.requestReply(conversation.messages, nextContent);
+      const response = await TutorService.requestReply(conversation.messages, nextContent, context);
       const assistantMessage = TutorService.createMessage("assistant", response.text);
       updateConversations((current) =>
         TutorService.addMessage(current, conversation.id, assistantMessage),
@@ -103,6 +105,7 @@ export function useTutor() {
     activeConversation,
     activeConversationId,
     conversations,
+    context,
     error,
     isLoading,
     isReady,

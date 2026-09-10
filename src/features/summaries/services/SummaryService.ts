@@ -9,11 +9,13 @@ export const SummaryService = {
     conversationId,
     conversationTitle,
     content,
+    studyId,
     now = new Date().toISOString(),
   }: {
     conversationId: string;
     conversationTitle: string;
     content: string;
+    studyId?: string;
     now?: string;
   }): StudySummary {
     return {
@@ -21,6 +23,7 @@ export const SummaryService = {
       title: `Resumo — ${conversationTitle}`,
       content,
       conversationId,
+      studyId,
       createdAt: now,
       updatedAt: now,
     };

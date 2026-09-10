@@ -7,6 +7,7 @@ function isSummaryList(value: unknown): value is StudySummary[] {
     typeof summary === "object" && summary !== null &&
     typeof summary.id === "string" && typeof summary.title === "string" &&
     typeof summary.content === "string" && typeof summary.conversationId === "string" &&
+    (summary.studyId === undefined || typeof summary.studyId === "string") &&
     typeof summary.createdAt === "string" && typeof summary.updatedAt === "string",
   );
 }
@@ -28,5 +29,6 @@ export const SummaryStorage = {
   save(summaries: readonly StudySummary[]) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(summaries));
+    window.dispatchEvent(new Event("studyai:summaries-updated"));
   },
 };

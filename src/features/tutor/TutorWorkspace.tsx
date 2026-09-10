@@ -28,6 +28,7 @@ export function TutorWorkspace() {
     activeConversation,
     activeConversationId,
     conversations,
+    context,
     error,
     isLoading,
     clearError,
@@ -84,6 +85,7 @@ export function TutorWorkspace() {
         conversationId: activeConversation.id,
         conversationTitle: activeConversation.title,
         content: response.text,
+        studyId: context?.studyId,
       }));
       setIsSummaryOpen(true);
     } catch (summaryError) {
@@ -134,6 +136,11 @@ export function TutorWorkspace() {
               {activeConversation?.title ?? "Nova conversa"}
             </h2>
             <p className="text-sm text-muted-foreground">Gemini · Conversas salvas neste navegador</p>
+            {context && (
+              <p className="mt-1 text-xs font-medium text-primary">
+                Utilizando contexto do tema atual
+              </p>
+            )}
           </div>
         </div>
         {error && (
