@@ -31,9 +31,9 @@ export function ImportProgress({
           <h2 className="text-sm font-semibold">Progresso da importação</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {phase === "complete"
-              ? "Simulação concluída. Nenhum arquivo foi enviado."
+              ? "Extração local concluída. Nenhum arquivo foi enviado."
               : phase === "processing"
-                ? "Processando os materiais selecionados..."
+                ? "Extraindo texto e metadados localmente..."
                 : `${fileCount} ${fileCount === 1 ? "arquivo pronto" : "arquivos prontos"} para importar.`}
           </p>
         </div>

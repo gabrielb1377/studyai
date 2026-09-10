@@ -9,6 +9,7 @@ import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
 import { useNotes } from "@/features/notes/useNotes";
+import { ExtractionSummary } from "@/features/extraction/ExtractionSummary";
 
 export function StudyDashboard() {
   const { records, isReady, ensureTopics } = useStudyEngine();
@@ -26,6 +27,7 @@ export function StudyDashboard() {
         <ContinueStudying records={records} />
         <ImportMaterial />
       </div>
+      <ExtractionSummary />
       <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />
     </>
   );

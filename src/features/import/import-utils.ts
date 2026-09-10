@@ -39,11 +39,12 @@ export const importStatusDetails: Record<
   { label: string; className: string }
 > = {
   uploaded: {
-    label: "Arquivo enviado",
+    label: "Não iniciado",
     className: "text-muted-foreground",
   },
   processing: { label: "Processando...", className: "text-primary" },
-  complete: { label: "Concluído", className: "text-primary" },
+  complete: { label: "Extraído", className: "text-primary" },
+  error: { label: "Erro", className: "text-destructive" },
 };
 
 export function getFileExtension(name: string) {

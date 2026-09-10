@@ -18,7 +18,9 @@ export function ImportWorkspace() {
     importFiles,
   } = useImport();
   const processing = phase === "processing";
-  const hasPendingFiles = files.some((file) => file.status !== "complete");
+  const hasPendingFiles = files.some(
+    (file) => file.status === "uploaded" || file.status === "error",
+  );
 
   return (
     <div className="space-y-6">
@@ -45,14 +47,14 @@ export function ImportWorkspace() {
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {files.length} {files.length === 1 ? "material" : "materiais"}{" "}
-                nesta simulação
+                nesta extração
               </p>
             </div>
             <Button
               type="button"
               className="h-11"
               disabled={processing || !hasPendingFiles}
-              onClick={importFiles}
+              onClick={() => { void importFiles(); }}
             >
               {phase === "complete" ? (
                 <CheckCircle2 className="size-4" aria-hidden="true" />
@@ -62,7 +64,7 @@ export function ImportWorkspace() {
               {processing
                 ? "Processando..."
                 : phase === "complete" && !hasPendingFiles
-                  ? "Importação concluída"
+                  ? "Extração concluída"
                   : "Importar"}
             </Button>
           </div>

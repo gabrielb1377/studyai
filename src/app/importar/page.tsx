@@ -10,7 +10,7 @@ export default function ImportPage() {
       <PageHeading
         eyebrow="Biblioteca"
         title="Importar"
-        description="Selecione materiais para preparar sua biblioteca. Nesta etapa, todo o processamento é apenas uma simulação local."
+        description="Selecione materiais para extrair texto e metadados localmente. Nenhum arquivo é enviado para um servidor."
       />
       <ImportWorkspace />
     </>

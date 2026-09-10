@@ -1,4 +1,4 @@
-export type ImportFileStatus = "uploaded" | "processing" | "complete";
+export type ImportFileStatus = "uploaded" | "processing" | "complete" | "error";
 
 export type ImportFile = {
   id: string;

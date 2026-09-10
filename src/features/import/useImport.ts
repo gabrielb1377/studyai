@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
 import type { ImportFile, ImportPhase } from "@/types/import";
 import {
   getFileExtension,
@@ -14,17 +15,6 @@ export function useImport() {
   const [files, setFiles] = useState<ImportFile[]>([]);
   const [phase, setPhase] = useState<ImportPhase>("idle");
   const [feedback, setFeedback] = useState("");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const completionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function clearTimers() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (completionRef.current) clearTimeout(completionRef.current);
-    intervalRef.current = null;
-    completionRef.current = null;
-  }
-
-  useEffect(() => clearTimers, []);
 
   function addFiles(incoming: File[]): AddFilesResult {
     const unsupported = incoming.filter((file) => !isSupportedFile(file));
@@ -77,46 +67,40 @@ export function useImport() {
     setFeedback("");
   }
 
-  function importFiles() {
+  async function importFiles() {
     if (
       phase === "processing" ||
-      !files.some((file) => file.status !== "complete")
+      !files.some((file) => file.status === "uploaded" || file.status === "error")
     ) {
       return;
     }
 
-    clearTimers();
     setFeedback("");
     setPhase("processing");
+    const pendingFiles = files.filter(
+      (file) => file.status === "uploaded" || file.status === "error",
+    );
     setFiles((current) =>
       current.map((file) =>
-        file.status === "complete"
-          ? file
-          : { ...file, status: "processing", progress: 12 },
+        pendingFiles.some((pending) => pending.id === file.id)
+          ? { ...file, status: "processing", progress: 10 }
+          : file,
       ),
     );
 
-    intervalRef.current = setInterval(() => {
-      setFiles((current) =>
-        current.map((file) =>
-          file.status === "processing"
-            ? { ...file, progress: Math.min(file.progress + 11, 89) }
-            : file,
-        ),
-      );
-    }, 180);
-
-    completionRef.current = setTimeout(() => {
-      clearTimers();
-      setFiles((current) =>
-        current.map((file) =>
-          file.status === "processing"
-            ? { ...file, status: "complete", progress: 100 }
-            : file,
-        ),
-      );
-      setPhase("complete");
-    }, 1_650);
+    await ExtractionPipeline.run(pendingFiles, {
+      onProgress: ({ fileId, status, progress }) => {
+        setFiles((current) => current.map((file) => file.id === fileId
+          ? {
+              ...file,
+              status: status === "extracted" ? "complete" : status,
+              progress,
+            }
+          : file,
+        ));
+      },
+    });
+    setPhase("complete");
   }
 
   const overallProgress = useMemo(

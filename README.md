@@ -1,6 +1,6 @@
 # StudyAI
 
-Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne uma biblioteca mockada, um ambiente de estudo, recursos locais de revisão e um Tutor IA integrado ao Gemini.
+Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação e extração local de materiais, um ambiente de estudo, recursos de revisão e um Tutor IA integrado ao Gemini.
 
 ## Início rápido
 
@@ -36,7 +36,7 @@ Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um err
 | --- | --- |
 | Dashboard | Progresso, temas recentes e indicadores locais de estudo. |
 | Biblioteca | Pesquisa e filtros sobre materiais mockados. |
-| Importar | Seleção local, drag and drop e progresso simulado; não envia arquivos. |
+| Importar | Seleção local, drag and drop e extração de PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
 | Organizar | Árvore mockada com ações locais de renomear, mover e excluir. |
 | Estudo | Material mockado, PDF de demonstração, players HTML5, progresso, notas, flashcards, quizzes e resumos. |
 | Tutor IA | Conversas persistidas, histórico e contexto do tema atual enviados ao Gemini. |
@@ -59,7 +59,7 @@ Os dados pessoais são locais por enquanto. Serviços de browser validam o conte
 
 ## Limites deliberados
 
-Esta versão não tem extração de arquivos, RAG, embeddings, banco de dados, autenticação, sincronização ou Ollama. A IA recebe somente texto de conversa e o contexto estruturado do estudo atual; nunca recebe arquivos físicos.
+Esta versão não tem RAG, embeddings, banco de dados, autenticação, sincronização ou Ollama. A extração ocorre no navegador e a IA recebe somente texto de conversa e o contexto estruturado do estudo atual; nunca recebe arquivos físicos.
 
 ## Referências
 

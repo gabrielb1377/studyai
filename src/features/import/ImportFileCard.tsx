@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDot, LoaderCircle, Trash2 } from "lucide-react";
+import { CheckCircle2, CircleDot, LoaderCircle, Trash2, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ const statusIcons = {
   uploaded: CircleDot,
   processing: LoaderCircle,
   complete: CheckCircle2,
+  error: TriangleAlert,
 } as const;
 
 export function ImportFileCard({

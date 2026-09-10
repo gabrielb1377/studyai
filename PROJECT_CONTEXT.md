@@ -4,7 +4,7 @@ Atualizado em 10 de setembro de 2026.
 
 ## Propósito
 
-StudyAI é um workspace pessoal de estudos. A versão atual oferece experiências locais para organizar uma rotina de estudo e uma integração inicial com Gemini. A aplicação ainda não é uma plataforma de ingestão ou recuperação de conhecimento.
+StudyAI é um workspace pessoal de estudos. A versão atual oferece extração local de materiais, experiências para organizar uma rotina de estudo e uma integração inicial com Gemini. A aplicação ainda não possui recuperação semântica de conhecimento.
 
 ## Stack
 
@@ -16,6 +16,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece experiência
 | Estado de layout | Zustand |
 | Tema | next-themes |
 | Material PDF mockado | react-pdf |
+| Documentos OOXML | JSZip |
 | Testes de interface | Playwright |
 
 ## Estrutura de módulos
@@ -30,6 +31,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece experiência
 | `src/features/tutor` | Conversas, contexto, prompt e comunicação com o Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/{library,import,organization}` | Fluxos mockados de materiais. |
+| `src/features/extraction` | Extração, pipeline, persistência e status de conteúdo. |
 | `src/lib/local-storage.ts` | Leitura, escrita e remoção tipadas do `localStorage`. |
 | `src/types` | Tipos de domínio compartilhados. |
 
@@ -46,8 +48,22 @@ Não existe banco de dados. As chaves atuais são:
 | `studyai:quizzes` | Questões geradas e resultados. |
 | `studyai:notes` | Notas em Markdown básico. |
 | `studyai-theme` | Preferência visual. |
+| `studyai:extracted-content` | Texto, metadados e status produzidos pelo pipeline. |
 
 Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválidos não quebram a interface e são tratados como estado vazio.
+
+## Fluxo de extração
+
+```text
+File selecionado
+  → ExtractionPipeline
+  → ContentExtractionService
+  → texto + metadados
+  → ContentStorage
+  → Dashboard
+```
+
+PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; MP3 e MP4 usam `loadedmetadata` dos elementos HTML5. Áudio e vídeo ainda não produzem transcrição. Materiais sem tema organizado recebem temporariamente `studyId: "unassigned"`.
 
 ## Fluxo do Tutor IA
 
@@ -77,10 +93,10 @@ Todos validam o corpo recebido e normalizam erros do `GeminiService`. Eles não 
 
 ## Limites conhecidos
 
-- Biblioteca, importação e organização ainda usam dados mockados.
-- Importação não transfere arquivos, não persiste a seleção e não extrai conteúdo.
+- Biblioteca e organização ainda usam dados mockados.
+- Importação não transfere nem persiste arquivos físicos; somente o resultado extraído é salvo.
 - O PDF é uma demonstração local; vídeos e áudios não possuem fonte real.
-- Não há RAG, embeddings, OCR, banco, autenticação, cloud ou Ollama.
+- Não há RAG, embeddings, OCR, transcrição, banco, autenticação, cloud ou Ollama.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 
 ## Qualidade
