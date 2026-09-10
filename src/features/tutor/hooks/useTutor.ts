@@ -107,6 +107,7 @@ export function useTutor() {
     isLoading,
     isReady,
     clearError: () => setError(null),
+    setError,
     createConversation,
     renameConversation,
     deleteConversation,

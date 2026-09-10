@@ -90,4 +90,22 @@ export const TutorService = {
     }
     return { model: data.model ?? "Gemini", text: data.text };
   },
+
+  async requestSummary(history: readonly TutorMessage[]): Promise<{ model: string; text: string }> {
+    const response = await fetch("/api/tutor/summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        history: history.map((historyMessage) => ({
+          role: historyMessage.role,
+          content: getMessageText(historyMessage),
+        })),
+      }),
+    });
+    const data = await response.json().catch(() => null) as TutorApiResponse | null;
+    if (!response.ok || !data?.text) {
+      throw new TutorRequestError(data?.error ?? "Não foi possível gerar o resumo agora.");
+    }
+    return { model: data.model ?? "Gemini", text: data.text };
+  },
 };

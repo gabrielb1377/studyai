@@ -1,6 +1,9 @@
+"use client";
+
 import { BrainCircuit, ClipboardCheck, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { SummaryList } from "@/features/summaries/SummaryList";
 import type { StudyTool } from "@/types/study";
 
 const toolIcons = { flashcards: BrainCircuit, quiz: ClipboardCheck, notes: NotebookPen };
@@ -25,6 +28,7 @@ export function StudyToolsTab({ tools }: { tools: readonly StudyTool[] }) {
           );
         })}
       </div>
+      <SummaryList />
     </section>
   );
 }

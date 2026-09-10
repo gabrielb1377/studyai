@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef } from "react";
-import { LoaderCircle, Paperclip, Send } from "lucide-react";
+import { FileText, LoaderCircle, Paperclip, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const quickActions = ["Explicar", "Resumir", "Flashcards", "Exercícios"];
 
-export function TutorComposer({ draft, isLoading, onDraftChange, onSend }: { draft: string; isLoading: boolean; onDraftChange: (value: string) => void; onSend: () => void }) {
+export function TutorComposer({ draft, isLoading, isSummaryLoading, onDraftChange, onGenerateSummary, onSend }: { draft: string; isLoading: boolean; isSummaryLoading: boolean; onDraftChange: (value: string) => void; onGenerateSummary: () => void; onSend: () => void }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const updateDraft = (value: string) => {
     onDraftChange(value);
@@ -21,6 +21,10 @@ export function TutorComposer({ draft, isLoading, onDraftChange, onSend }: { dra
     <div className="mt-5">
       <div className="mb-3 flex flex-wrap gap-2" aria-label="Ações rápidas">
         {quickActions.map((action) => <Button key={action} type="button" size="sm" variant="outline" onClick={() => updateDraft(`${action} este tema`)}>{action}</Button>)}
+        <Button type="button" size="sm" variant="secondary" onClick={onGenerateSummary} disabled={isLoading || isSummaryLoading}>
+          <FileText className="size-4" aria-hidden="true" />
+          {isSummaryLoading ? "Gerando resumo..." : "Gerar resumo"}
+        </Button>
       </div>
       <form className="rounded-xl border bg-card p-2 shadow-sm" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
         <textarea ref={textareaRef} aria-label="Mensagem para o Tutor IA" value={draft} onChange={(event) => updateDraft(event.target.value)} placeholder="Pergunte sobre o tema que está estudando..." rows={1} className="max-h-45 min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground" />

@@ -13,7 +13,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { TutorConversation as TutorConversationType } from "@/types/tutor";
+import type { StudySummary } from "@/types/summary";
+import { SummaryDialog } from "@/features/summaries/SummaryDialog";
+import { useSummaries } from "@/features/summaries/hooks/useSummaries";
+import { SummaryService } from "@/features/summaries/services/SummaryService";
 import { useTutor } from "./hooks/useTutor";
+import { TutorService } from "./services/TutorService";
 import { TutorComposer } from "./TutorComposer";
 import { TutorConversation } from "./TutorConversation";
 import { TutorSidebar } from "./TutorSidebar";
@@ -26,16 +31,21 @@ export function TutorWorkspace() {
     error,
     isLoading,
     clearError,
+    setError,
     createConversation,
     renameConversation,
     deleteConversation,
     selectConversation,
     sendMessage,
   } = useTutor();
+  const { summaries, saveSummary, deleteSummary } = useSummaries();
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [conversationToRename, setConversationToRename] = useState<TutorConversationType | null>(null);
   const [title, setTitle] = useState("");
+  const [summaryDraft, setSummaryDraft] = useState<StudySummary | null>(null);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
 
   const startNewConversation = () => {
     createConversation();
@@ -62,6 +72,44 @@ export function TutorWorkspace() {
     const sent = await sendMessage(draft);
     if (!sent) return;
     setDraft("");
+  };
+
+  const generateSummary = async () => {
+    if (!activeConversation || isSummaryLoading) return;
+    setIsSummaryLoading(true);
+    clearError();
+    try {
+      const response = await TutorService.requestSummary(activeConversation.messages);
+      setSummaryDraft(SummaryService.create({
+        conversationId: activeConversation.id,
+        conversationTitle: activeConversation.title,
+        content: response.text,
+      }));
+      setIsSummaryOpen(true);
+    } catch (summaryError) {
+      setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao gerar o resumo.");
+    } finally {
+      setIsSummaryLoading(false);
+    }
+  };
+
+  const regenerateSummary = async () => {
+    if (!summaryDraft || isSummaryLoading) return;
+    const conversation = conversations.find((item) => item.id === summaryDraft.conversationId);
+    if (!conversation) {
+      setError("A conversa de origem deste resumo não está mais disponível.");
+      return;
+    }
+    setIsSummaryLoading(true);
+    clearError();
+    try {
+      const response = await TutorService.requestSummary(conversation.messages);
+      setSummaryDraft((current) => current ? { ...current, content: response.text, updatedAt: new Date().toISOString() } : current);
+    } catch (summaryError) {
+      setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");
+    } finally {
+      setIsSummaryLoading(false);
+    }
   };
 
   return (
@@ -100,7 +148,7 @@ export function TutorWorkspace() {
         {activeConversation ? (
           <>
             <TutorConversation messages={activeConversation.messages} isLoading={isLoading} />
-            <TutorComposer draft={draft} isLoading={isLoading} onDraftChange={setDraft} onSend={() => { void sendDraft(); }} />
+            <TutorComposer draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
           </>
         ) : (
           <div className="rounded-xl border border-dashed p-10 text-center">
@@ -109,6 +157,23 @@ export function TutorWorkspace() {
           </div>
         )}
       </section>
+
+      <SummaryDialog
+        summary={summaryDraft}
+        open={isSummaryOpen}
+        isLoading={isSummaryLoading}
+        isSaved={summaryDraft ? summaries.some((summary) => summary.id === summaryDraft.id) : false}
+        onOpenChange={setIsSummaryOpen}
+        onSave={(summary) => {
+          saveSummary(summary);
+          setSummaryDraft(summary);
+        }}
+        onDelete={(summaryId) => {
+          deleteSummary(summaryId);
+          setIsSummaryOpen(false);
+        }}
+        onRegenerate={() => { void regenerateSummary(); }}
+      />
 
       <Dialog open={conversationToRename !== null} onOpenChange={(open) => !open && closeRename()}>
         <DialogContent>
