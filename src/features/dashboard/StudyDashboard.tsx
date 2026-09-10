@@ -8,11 +8,13 @@ import { RecentTopics } from "./recent-topics";
 import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
+import { useNotes } from "@/features/notes/useNotes";
 
 export function StudyDashboard() {
   const { records, isReady, ensureTopics } = useStudyEngine();
   const { cards } = useFlashcards();
   const { results: quizzes } = useQuiz();
+  const { notes } = useNotes();
 
   useEffect(() => {
     if (isReady) ensureTopics(topics);
@@ -24,7 +26,7 @@ export function StudyDashboard() {
         <ContinueStudying records={records} />
         <ImportMaterial />
       </div>
-      <RecentTopics records={records} flashcards={cards} quizzes={quizzes} />
+      <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />
     </>
   );
 }
