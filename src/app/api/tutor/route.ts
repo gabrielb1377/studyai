@@ -5,6 +5,7 @@ import {
 } from "@/features/tutor/services/GeminiService";
 import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
+import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { PromptBuilder } from "@/features/tutor/services/PromptBuilder";
 
 export const runtime = "nodejs";
@@ -13,7 +14,24 @@ type TutorRequest = {
   history: Array<Pick<TutorMessage, "content" | "role">>;
   message: string;
   context?: TutorStudyContext;
+  chunks?: RetrievedChunk[];
 };
+
+function isRetrievedChunk(value: unknown): value is RetrievedChunk {
+  if (typeof value !== "object" || value === null) return false;
+  const chunk = value as Partial<RetrievedChunk>;
+  return typeof chunk.id === "string" && typeof chunk.studyId === "string" &&
+    typeof chunk.fileId === "string" && Number.isInteger(chunk.chunkIndex) &&
+    typeof chunk.text === "string" && chunk.text.length <= 8_000 &&
+    typeof chunk.score === "number" && Number.isFinite(chunk.score) &&
+    Array.isArray(chunk.matchedTerms) && chunk.matchedTerms.every((term) => typeof term === "string") &&
+    typeof chunk.metadata === "object" && chunk.metadata !== null &&
+    typeof chunk.metadata.extractedContentId === "string" &&
+    typeof chunk.metadata.sourceName === "string" &&
+    typeof chunk.metadata.fileType === "string" &&
+    typeof chunk.metadata.mimeType === "string" &&
+    typeof chunk.metadata.size === "number";
+}
 
 function isTutorContext(value: unknown): value is TutorStudyContext {
   if (typeof value !== "object" || value === null) return false;
@@ -35,6 +53,10 @@ function isTutorRequest(value: unknown): value is TutorRequest {
   const request = value as Partial<TutorRequest>;
   return typeof request.message === "string" && request.message.trim().length > 0 &&
     (request.context === undefined || isTutorContext(request.context)) &&
+    (request.chunks === undefined || (
+      Array.isArray(request.chunks) && request.chunks.length <= 10 &&
+      request.chunks.every(isRetrievedChunk)
+    )) &&
     Array.isArray(request.history) && request.history.every((message) =>
       typeof message === "object" && message !== null &&
       (message.role === "assistant" || message.role === "user") &&
@@ -52,9 +74,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await GeminiService.generateReply({
+    const prompt = PromptBuilder.build({
+      question: body.message,
       history: body.history,
-      message: PromptBuilder.build(body.message, body.context),
+      studyContext: body.context,
+      chunks: body.chunks,
+    });
+    const response = await GeminiService.generateReply({
+      history: prompt.history,
+      message: prompt.message,
       signal: request.signal,
     });
     return NextResponse.json(response);

@@ -1,5 +1,7 @@
 import { ContentExtractionService } from "./ContentExtractionService";
 import { ContentStorage } from "./ContentStorage";
+import { ChunkService } from "@/features/retrieval/ChunkService";
+import { ChunkStorage } from "@/features/retrieval/ChunkStorage";
 import type {
   ExtractedContent,
   ExtractionFileType,
@@ -46,6 +48,7 @@ export const ExtractionPipeline = {
         new Date().toISOString(),
       );
       ContentStorage.upsert(processingRecord);
+      ChunkStorage.replaceForContent(processingRecord.id, []);
       options.onProgress?.({ fileId: input.id, status: "processing", progress: 15 });
 
       try {
@@ -56,6 +59,10 @@ export const ExtractionPipeline = {
           status: "extracted",
         };
         ContentStorage.upsert(extractedRecord);
+        ChunkStorage.replaceForContent(
+          extractedRecord.id,
+          ChunkService.createChunks(extractedRecord),
+        );
         options.onProgress?.({ fileId: input.id, status: "extracted", progress: 100 });
         results.push(extractedRecord);
       } catch (error) {

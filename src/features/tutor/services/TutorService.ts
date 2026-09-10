@@ -1,5 +1,6 @@
 import type { TutorConversation, TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
+import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { createTutorId, getMessageText } from "../utils/message-utils";
 
 type TutorApiResponse = {
@@ -74,6 +75,7 @@ export const TutorService = {
     history: readonly TutorMessage[],
     message: string,
     context?: TutorStudyContext | null,
+    chunks: readonly RetrievedChunk[] = [],
   ): Promise<{ model: string; text: string }> {
     const response = await fetch("/api/tutor", {
       method: "POST",
@@ -85,6 +87,7 @@ export const TutorService = {
         })),
         message,
         context: context ?? undefined,
+        chunks: chunks.length > 0 ? chunks : undefined,
       }),
     });
     const data = await response.json().catch(() => null) as TutorApiResponse | null;

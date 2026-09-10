@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { tutorConversations } from "@/lib/mock/tutor";
+import { RetrievalService } from "@/features/retrieval/RetrievalService";
 import type { TutorConversation } from "@/types/tutor";
 import { TutorService } from "../services/TutorService";
 import { TutorStorage } from "../services/TutorStorage";
@@ -83,7 +84,15 @@ export function useTutor() {
     ));
 
     try {
-      const response = await TutorService.requestReply(conversation.messages, nextContent, context);
+      const retrieval = RetrievalService.retrieve(nextContent, {
+        studyId: context?.studyId,
+      });
+      const response = await TutorService.requestReply(
+        conversation.messages,
+        nextContent,
+        context,
+        retrieval.chunks,
+      );
       const assistantMessage = TutorService.createMessage("assistant", response.text);
       updateConversations((current) =>
         TutorService.addMessage(current, conversation.id, assistantMessage),

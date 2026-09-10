@@ -1,10 +1,10 @@
-# Handoff Atual — Sprint 17
+# Handoff Atual — Sprint 18
 
 Atualizado em 10 de setembro de 2026.
 
 ## Estado entregue
 
-A importação agora processa arquivos reais no navegador e persiste um registro normalizado com texto, metadados e status.
+O conteúdo extraído agora é segmentado e recuperado localmente antes de cada pergunta ao Tutor. A busca é lexical, determinística e não depende de serviços externos.
 
 ```text
 ImportWorkspace
@@ -12,48 +12,52 @@ ImportWorkspace
   → ExtractionPipeline
   → ContentExtractionService
   → ContentStorage
-  → ExtractionSummary no Dashboard
+  → ChunkService
+  → ChunkStorage
+  → RetrievalService
+  → SearchService
+  → TutorService
+  → PromptBuilder / ContextAssembler
+  → GeminiService
 ```
 
-## Formatos
+## Chunking e busca
 
-| Formato | Extração atual |
-| --- | --- |
-| PDF | Texto por página e quantidade de páginas com PDF.js. |
-| DOCX | Texto dos documentos, cabeçalhos, rodapés e notas OOXML. |
-| PPTX | Texto dos slides e notas; quantidade de slides. |
-| TXT | Texto integral pela API `File`. |
-| MP3 | Duração e metadados básicos pelo elemento HTML5. Sem transcrição. |
-| MP4 | Duração, largura, altura e metadados básicos pelo elemento HTML5. Sem transcrição. |
+- Cada bloco usa até 160 palavras com sobreposição de 30 palavras.
+- Cada chunk preserva `studyId`, `fileId`, índice, texto e metadados da origem.
+- A busca normaliza caixa e acentos, remove palavras muito comuns e pontua frequência, cobertura, nome do arquivo e frase exata.
+- Apenas os cinco melhores resultados são enviados por padrão.
+- Quando existe tema ativo, a busca considera o mesmo `studyId` e materiais ainda `unassigned`.
+- Conteúdos extraídos antes desta Sprint são indexados de forma incremental na primeira busca.
 
 ## Persistência
 
-`studyai:extracted-content` guarda um objeto versionado:
+`studyai:content-chunks` guarda um objeto versionado:
 
 ```text
 {
   version: 1,
-  records: ExtractedContent[]
+  chunks: ContentChunk[]
 }
 ```
 
-Cada registro possui `id`, `studyId`, `fileId`, `fileType`, `extractedText`, `metadata`, `status` e `createdAt`. Arquivos ainda não organizados usam `studyId: "unassigned"`. Somente o resultado é persistido; o arquivo físico continua temporário e nunca é enviado ao servidor.
+O índice é substituído por origem quando o arquivo é reprocessado, evitando contexto obsoleto. `studyai:extracted-content` continua sendo a fonte normalizada do conteúdo e permite reconstruir o índice local.
 
-## Estados
+## Fallback
 
-- `processing`: extração em andamento.
-- `extracted`: texto ou metadados extraídos e persistidos.
-- `error`: arquivo inválido, corrompido ou mídia sem metadados legíveis.
-- O Dashboard deriva “Não iniciado” quando não existe nenhum registro.
+- Com chunks relevantes: contexto limitado + contexto do estudo + histórico + pergunta.
+- Sem chunks, mas com tema ativo: contexto do estudo + histórico + pergunta.
+- Sem qualquer contexto: histórico + pergunta original, como antes da Sprint 18.
 
 ## Próximo passo seguro
 
-Antes de implementar RAG, criar uma etapa explícita de associação entre registros `unassigned` e um `studyId`, além de segmentação determinística do `extractedText` com proveniência por página ou slide.
+Criar uma etapa explícita de associação entre registros `unassigned` e um `studyId`. Uma evolução posterior pode adicionar proveniência por página/slide e trocar o ranking lexical por um índice vetorial sem alterar o contrato `ContentChunk`.
 
 ## Limites obrigatórios
 
-- Não há RAG, embeddings, busca semântica, Ollama ou banco.
+- Não há embeddings, busca vetorial, Ollama ou banco.
 - Não transcrever áudio ou vídeo nesta camada.
 - Não enviar arquivos físicos ao Tutor ou ao Gemini.
-- Manter a extração independente de qualquer provedor de IA.
+- Não enviar todo o conteúdo extraído ao Gemini; somente os resultados ranqueados.
+- Manter extração e recuperação independentes de qualquer provedor de IA.
 - Validar com `npm run lint`, `npm run typecheck`, `npm run test:e2e` e `npm run build`.
