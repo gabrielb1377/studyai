@@ -1,9 +1,7 @@
 import { Leaf } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { PageHeading } from "@/components/page-heading";
-import { ContinueStudying } from "@/features/dashboard/continue-studying";
-import { ImportMaterial } from "@/features/dashboard/import-material";
-import { RecentTopics } from "@/features/dashboard/recent-topics";
+import { StudyDashboard } from "@/features/dashboard/StudyDashboard";
 import { WeeklyProgress } from "@/features/dashboard/weekly-progress";
 
 export default function DashboardPage() {
@@ -23,11 +21,7 @@ export default function DashboardPage() {
           </Badge>
         }
       />
-      <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
-        <ContinueStudying />
-        <ImportMaterial />
-      </div>
-      <RecentTopics />
+      <StudyDashboard />
       <WeeklyProgress />
       <p className="pb-2 text-center text-[11px] text-muted-foreground">
         Aprender não é uma corrida. Encontre o seu ritmo.

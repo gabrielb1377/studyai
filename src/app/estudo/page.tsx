@@ -25,7 +25,7 @@ export default async function StudyPage({
   return (
     <>
       <StudyHeader topic={topic} />
-      <StudyWorkspace />
+      <StudyWorkspace topic={topic} />
     </>
   );
 }

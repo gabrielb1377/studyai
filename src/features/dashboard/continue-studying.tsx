@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { ArrowRight, BookOpen, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { StudyRecord } from "@/types/study-engine";
 import { topics } from "./data";
 
-export function ContinueStudying() {
-  const topic = topics[0];
+export function ContinueStudying({ records }: { records: readonly StudyRecord[] }) {
+  const record = [...records].sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
+  const topic = topics.find((item) => item.id === record?.studyId) ?? topics[0];
+  const progress = record?.progress ?? topic.progress;
   return (
     <section
       className="relative flex min-h-72 flex-col overflow-hidden rounded-xl border border-primary/15 bg-secondary/60 p-6 sm:p-8"
@@ -35,7 +38,7 @@ export function ContinueStudying() {
             </Link>
           </Button>
           <span className="text-xs text-muted-foreground">
-            {topic.progress}% concluído
+            {progress}% concluído
           </span>
         </div>
       </div>
