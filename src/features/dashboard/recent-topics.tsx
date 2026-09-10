@@ -3,11 +3,12 @@ import { ArrowRight, Braces, Clock3, Database, Shapes } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { StudyRecord } from "@/types/study-engine";
+import type { Flashcard } from "@/types/flashcard";
 import { topics } from "./data";
 
 const icons = [Braces, Database, Shapes];
 
-export function RecentTopics({ records }: { records: readonly StudyRecord[] }) {
+export function RecentTopics({ records, flashcards }: { records: readonly StudyRecord[]; flashcards: readonly Flashcard[] }) {
   const recentTopics = records.length
     ? [...records].sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt)).map((record) => ({ topic: topics.find((item) => item.id === record.studyId), record })).filter((item): item is { topic: typeof topics[number]; record: StudyRecord } => Boolean(item.topic))
     : topics.map((topic) => ({ topic, record: undefined }));
@@ -28,6 +29,7 @@ export function RecentTopics({ records }: { records: readonly StudyRecord[] }) {
       <div className="grid gap-4 md:grid-cols-3">
         {recentTopics.map(({ topic, record }, index) => {
           const Icon = icons[index];
+          const flashcardCount = flashcards.filter((card) => card.studyId === topic.id).length;
           return (
             <Link
               key={topic.id}
@@ -69,6 +71,7 @@ export function RecentTopics({ records }: { records: readonly StudyRecord[] }) {
                   <Clock3 className="size-3" />
                   {record ? "Acessado recentemente" : topic.lastStudied}
                 </p>
+                <p className="mt-2 text-[11px] text-muted-foreground">{flashcardCount} flashcards</p>
               </Card>
             </Link>
           );

@@ -17,10 +17,12 @@ function formatLastAccess(value: string) {
 
 export function StudyStatistics({
   record,
+  flashcardCount,
   onProgressChange,
   onStatusChange,
 }: {
   record: StudyRecord;
+  flashcardCount: number;
   onProgressChange: (progress: number) => void;
   onStatusChange: (status: StudyStatus) => void;
 }) {
@@ -44,7 +46,7 @@ export function StudyStatistics({
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><BookOpenCheck className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Último acesso</p><p className="text-sm font-medium leading-5">{formatLastAccess(record.lastAccessedAt)}</p></Card>
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><BarChart3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Progresso</p><p className="text-xl font-semibold">{record.progress}%</p></Card>
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><Sparkles className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Resumos</p><p className="text-xl font-semibold">{summaryCount}</p></Card>
-        <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground"><Layers3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Flashcards</p><p className="text-xl font-semibold">—</p></Card>
+        <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><Layers3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Flashcards</p><p className="text-xl font-semibold">{flashcardCount}</p></Card>
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground"><Layers3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Quiz</p><p className="text-xl font-semibold">—</p></Card>
       </div>
       <Card className="gap-3 p-4 shadow-none">
