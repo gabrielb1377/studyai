@@ -1,7 +1,10 @@
 import { ContentStorage } from "@/features/extraction/ContentStorage";
 import { ChunkService } from "./ChunkService";
 import { ChunkStorage } from "./ChunkStorage";
+import { EmbeddingStorage } from "./EmbeddingStorage";
+import { RankingService } from "./RankingService";
 import { SearchService } from "./SearchService";
+import { SemanticSearchService } from "./SemanticSearchService";
 import type { RetrievalOptions, RetrievalResult } from "./RetrievalTypes";
 
 function ensureChunksAreIndexed() {
@@ -27,7 +30,38 @@ function ensureChunksAreIndexed() {
 
 export const RetrievalService = {
   retrieve(question: string, options: RetrievalOptions = {}): RetrievalResult {
-    const chunks = SearchService.search(question, ensureChunksAreIndexed(), options);
-    return { question, chunks, hasContext: chunks.length > 0 };
+    const sourceChunks = ensureChunksAreIndexed();
+    const candidateLimit = Math.max((options.limit ?? 5) * 4, 20);
+    const lexicalChunks = SearchService.search(question, sourceChunks, {
+      ...options,
+      limit: candidateLimit,
+    });
+
+    try {
+      const embeddings = EmbeddingStorage.synchronize(sourceChunks).embeddings;
+      const semanticChunks = SemanticSearchService.search(
+        question,
+        sourceChunks,
+        embeddings,
+        { ...options, limit: candidateLimit },
+      );
+      const chunks = RankingService.rank(
+        question,
+        sourceChunks,
+        semanticChunks,
+        lexicalChunks,
+        options,
+      );
+      return { question, chunks, hasContext: chunks.length > 0, strategy: "hybrid" };
+    } catch {
+      const chunks = lexicalChunks.slice(0, options.limit ?? 5);
+      return {
+        question,
+        chunks,
+        hasContext: chunks.length > 0,
+        strategy: "lexical",
+        warning: "A busca semântica falhou; o ranking lexical foi utilizado.",
+      };
+    }
   },
 };

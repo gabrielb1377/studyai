@@ -39,4 +39,6 @@ export type RetrievalResult = {
   question: string;
   chunks: RetrievedChunk[];
   hasContext: boolean;
+  strategy: "hybrid" | "lexical";
+  warning?: string;
 };

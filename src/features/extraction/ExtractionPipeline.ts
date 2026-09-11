@@ -2,6 +2,7 @@ import { ContentExtractionService } from "./ContentExtractionService";
 import { ContentStorage } from "./ContentStorage";
 import { ChunkService } from "@/features/retrieval/ChunkService";
 import { ChunkStorage } from "@/features/retrieval/ChunkStorage";
+import { EmbeddingStorage } from "@/features/retrieval/EmbeddingStorage";
 import type {
   ExtractedContent,
   ExtractionFileType,
@@ -15,6 +16,14 @@ type PipelineOptions = {
   studyId?: string;
   onProgress?: (progress: ExtractionProgress) => void;
 };
+
+function synchronizeEmbeddings() {
+  try {
+    EmbeddingStorage.synchronize(ChunkStorage.load().chunks);
+  } catch {
+    return;
+  }
+}
 
 function createRecord(
   input: ExtractionInput,
@@ -49,6 +58,7 @@ export const ExtractionPipeline = {
       );
       ContentStorage.upsert(processingRecord);
       ChunkStorage.replaceForContent(processingRecord.id, []);
+      synchronizeEmbeddings();
       options.onProgress?.({ fileId: input.id, status: "processing", progress: 15 });
 
       try {
@@ -63,6 +73,7 @@ export const ExtractionPipeline = {
           extractedRecord.id,
           ChunkService.createChunks(extractedRecord),
         );
+        synchronizeEmbeddings();
         options.onProgress?.({ fileId: input.id, status: "extracted", progress: 100 });
         results.push(extractedRecord);
       } catch (error) {

@@ -1,6 +1,6 @@
 # StudyAI
 
-Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação, extração e recuperação lexical local de materiais, um ambiente de estudo, recursos de revisão e um Tutor IA integrado ao Gemini.
+Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação, extração e recuperação híbrida local de materiais, um ambiente de estudo, recursos de revisão e um Tutor IA integrado ao Gemini.
 
 ## Início rápido
 
@@ -40,7 +40,7 @@ Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um err
 | Organizar | Árvore mockada com ações locais de renomear, mover e excluir. |
 | Estudo | Material mockado, PDF de demonstração, players HTML5, progresso, notas, flashcards, quizzes e resumos. |
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
-| RAG local | Chunking determinístico, ranking lexical e contexto limitado, sem embeddings ou banco vetorial. |
+| RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
 | Configurações | Tema claro, escuro ou do sistema. |
 
 ## Arquitetura
@@ -60,7 +60,7 @@ Os dados pessoais são locais por enquanto. Serviços de browser validam o conte
 
 ## Limites deliberados
 
-Esta versão não tem embeddings, banco vetorial, banco de dados, autenticação, sincronização ou Ollama. O RAG é lexical e local: a IA recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebe arquivos físicos nem todo o acervo.
+Esta versão não tem banco vetorial, banco de dados, autenticação, sincronização ou Ollama. O RAG combina embeddings linguísticos locais com ranking lexical: a IA recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebe arquivos físicos nem todo o acervo.
 
 ## Referências
 

@@ -1,10 +1,10 @@
-# Handoff Atual — Sprint 18
+# Handoff Atual — Sprint 19
 
 Atualizado em 10 de setembro de 2026.
 
 ## Estado entregue
 
-O conteúdo extraído agora é segmentado e recuperado localmente antes de cada pergunta ao Tutor. A busca é lexical, determinística e não depende de serviços externos.
+O RAG agora combina busca vetorial local com o ranking lexical existente. A indexação é determinística, versionada e não depende de serviços externos.
 
 ```text
 ImportWorkspace
@@ -14,48 +14,65 @@ ImportWorkspace
   → ContentStorage
   → ChunkService
   → ChunkStorage
+  → EmbeddingService
+  → EmbeddingStorage
   → RetrievalService
-  → SearchService
+  → SemanticSearchService + SearchService
+  → RankingService
   → TutorService
   → PromptBuilder / ContextAssembler
   → GeminiService
 ```
 
-## Chunking e busca
+## Embeddings locais
 
-- Cada bloco usa até 160 palavras com sobreposição de 30 palavras.
-- Cada chunk preserva `studyId`, `fileId`, índice, texto e metadados da origem.
-- A busca normaliza caixa e acentos, remove palavras muito comuns e pontua frequência, cobertura, nome do arquivo e frase exata.
-- Apenas os cinco melhores resultados são enviados por padrão.
-- Quando existe tema ativo, a busca considera o mesmo `studyId` e materiais ainda `unassigned`.
-- Conteúdos extraídos antes desta Sprint são indexados de forma incremental na primeira busca.
+- O modelo `local-feature-hash-v1` gera vetores normalizados de 192 dimensões.
+- As features incluem termos, raízes em português, trigramas e pares de palavras.
+- A comparação usa similaridade de cosseno.
+- A indexação ocorre após a extração e também é sincronizada sob demanda.
+- Embeddings válidos são reutilizados; registros órfãos são removidos.
+- Nenhuma chamada HTTP ou biblioteca de modelo foi adicionada.
 
 ## Persistência
 
-`studyai:content-chunks` guarda um objeto versionado:
+`studyai:embeddings` guarda um objeto versionado:
 
 ```text
 {
   version: 1,
-  chunks: ContentChunk[]
+  model: "local-feature-hash-v1",
+  dimensions: 192,
+  status: "idle" | "indexing" | "ready" | "error",
+  embeddings: ChunkEmbedding[],
+  lastIndexedAt?: string
 }
 ```
 
-O índice é substituído por origem quando o arquivo é reprocessado, evitando contexto obsoleto. `studyai:extracted-content` continua sendo a fonte normalizada do conteúdo e permite reconstruir o índice local.
+Cada embedding relaciona `chunkId`, `studyId`, vetor e `createdAt`. `studyai:content-chunks` continua sendo a fonte do índice e permite reconstruir todos os vetores.
+
+## Ranking híbrido
+
+O score único combina:
+
+- similaridade semântica: até 55 pontos;
+- ranking lexical: até 25 pontos;
+- mesmo `studyId`: 8 pontos;
+- correspondência no nome do arquivo: até 7 pontos;
+- frequência dos termos: até 5 pontos.
 
 ## Fallback
 
-- Com chunks relevantes: contexto limitado + contexto do estudo + histórico + pergunta.
-- Sem chunks, mas com tema ativo: contexto do estudo + histórico + pergunta.
-- Sem qualquer contexto: histórico + pergunta original, como antes da Sprint 18.
+- Se a geração, persistência ou comparação de embeddings falhar, o `RetrievalService` utiliza a busca lexical da Sprint 18.
+- Sem chunks, mas com tema ativo, seguem contexto do estudo, histórico e pergunta.
+- Sem qualquer contexto, seguem histórico e pergunta original.
 
 ## Próximo passo seguro
 
-Criar uma etapa explícita de associação entre registros `unassigned` e um `studyId`. Uma evolução posterior pode adicionar proveniência por página/slide e trocar o ranking lexical por um índice vetorial sem alterar o contrato `ContentChunk`.
+Criar uma etapa explícita de associação entre registros `unassigned` e um `studyId`. Uma evolução posterior pode trocar apenas o `EmbeddingService` por um modelo neural local, mantendo persistência, busca e ranking.
 
 ## Limites obrigatórios
 
-- Não há embeddings, busca vetorial, Ollama ou banco.
+- Não há banco vetorial, modelo neural externo, Ollama ou banco de dados.
 - Não transcrever áudio ou vídeo nesta camada.
 - Não enviar arquivos físicos ao Tutor ou ao Gemini.
 - Não enviar todo o conteúdo extraído ao Gemini; somente os resultados ranqueados.

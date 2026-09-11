@@ -4,7 +4,7 @@ Atualizado em 10 de setembro de 2026.
 
 ## Propósito
 
-StudyAI é um workspace pessoal de estudos. A versão atual oferece extração e recuperação lexical local de materiais, experiências para organizar uma rotina de estudo e uma integração inicial com Gemini. A aplicação ainda não possui recuperação semântica por embeddings.
+StudyAI é um workspace pessoal de estudos. A versão atual oferece extração, recuperação híbrida local de materiais, experiências para organizar uma rotina de estudo e uma integração inicial com Gemini.
 
 ## Stack
 
@@ -32,7 +32,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração e
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/{library,import,organization}` | Fluxos mockados de materiais. |
 | `src/features/extraction` | Extração, pipeline, persistência e status de conteúdo. |
-| `src/features/retrieval` | Chunking, persistência, ranking lexical e montagem do contexto recuperado. |
+| `src/features/retrieval` | Chunking, embeddings locais, buscas semântica e lexical, ranking híbrido e montagem do contexto. |
 | `src/lib/local-storage.ts` | Leitura, escrita e remoção tipadas do `localStorage`. |
 | `src/types` | Tipos de domínio compartilhados. |
 
@@ -51,6 +51,7 @@ Não existe banco de dados. As chaves atuais são:
 | `studyai-theme` | Preferência visual. |
 | `studyai:extracted-content` | Texto, metadados e status produzidos pelo pipeline. |
 | `studyai:content-chunks` | Chunks versionados com proveniência, prontos para futura indexação. |
+| `studyai:embeddings` | Vetores locais versionados, status e data da última indexação. |
 
 Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválidos não quebram a interface e são tratados como estado vazio.
 
@@ -63,6 +64,7 @@ File selecionado
   → texto + metadados
   → ContentStorage
   → ChunkService / ChunkStorage
+  → EmbeddingService / EmbeddingStorage
   → Dashboard
 ```
 
@@ -75,7 +77,8 @@ TutorWorkspace
   → useTutor / useTutorContext
   → TutorContextService
   → RetrievalService
-  → SearchService
+  → SemanticSearchService + SearchService
+  → RankingService
   → TutorService
   → /api/tutor
   → PromptBuilder
@@ -84,7 +87,9 @@ TutorWorkspace
   → Gemini API
 ```
 
-O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalService` consulta somente chunks compatíveis com esse tema ou ainda marcados como `unassigned`, aplica ranking lexical e limita o resultado aos cinco melhores trechos. O `PromptBuilder` é executado no servidor e recebe pergunta, histórico, contexto do estudo e chunks. Se a busca não encontrar material, o fluxo existente continua normalmente com o contexto do estudo ou com a mensagem original.
+O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalService` consulta somente chunks compatíveis com esse tema ou ainda marcados como `unassigned`. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. O `PromptBuilder` é executado no servidor e recebe pergunta, histórico, contexto do estudo e chunks. Se os embeddings falharem, o ranking lexical permanece disponível; se não houver resultados, o fluxo continua com o contexto do estudo ou com a mensagem original.
+
+Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões. Ele representa termos, raízes linguísticas, n-gramas e pares de palavras em um vetor normalizado. Todo o cálculo acontece no navegador, sem download de modelo, API externa ou banco vetorial. O contrato versionado permite substituir esse gerador por um modelo neural local futuramente.
 
 ## Endpoints existentes
 
@@ -102,7 +107,7 @@ Todos validam o corpo recebido e normalizam erros do `GeminiService`. Eles não 
 - Biblioteca e organização ainda usam dados mockados.
 - Importação não transfere nem persiste arquivos físicos; somente o resultado extraído é salvo.
 - O PDF é uma demonstração local; vídeos e áudios não possuem fonte real.
-- O RAG atual usa correspondência lexical; não há embeddings, OCR, transcrição, banco, autenticação, cloud ou Ollama.
+- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há OCR, transcrição, banco, autenticação, cloud ou Ollama.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 
 ## Qualidade
