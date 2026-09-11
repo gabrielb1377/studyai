@@ -24,7 +24,12 @@ function isMetadata(value: unknown): value is ExtractionMetadata {
     (metadata.duration === undefined || typeof metadata.duration === "number") &&
     (metadata.language === undefined || typeof metadata.language === "string") &&
     (metadata.width === undefined || typeof metadata.width === "number") &&
-    (metadata.height === undefined || typeof metadata.height === "number");
+    (metadata.height === undefined || typeof metadata.height === "number") &&
+    (metadata.ocrPerformed === undefined || typeof metadata.ocrPerformed === "boolean") &&
+    (metadata.ocrConfidence === undefined || typeof metadata.ocrConfidence === "number") &&
+    (metadata.transcriptionPerformed === undefined || typeof metadata.transcriptionPerformed === "boolean") &&
+    (metadata.transcriptionModel === undefined || typeof metadata.transcriptionModel === "string") &&
+    (metadata.processingTimeMs === undefined || typeof metadata.processingTimeMs === "number");
 }
 
 function isExtractedContent(value: unknown): value is ExtractedContent {

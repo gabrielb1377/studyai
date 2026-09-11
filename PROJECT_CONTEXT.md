@@ -1,10 +1,10 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 10 de setembro de 2026.
+Atualizado em 11 de setembro de 2026.
 
 ## Propósito
 
-StudyAI é um workspace pessoal de estudos. A versão atual oferece extração, recuperação híbrida local de materiais, experiências para organizar uma rotina de estudo e uma integração inicial com Gemini.
+StudyAI é um workspace pessoal de estudos. A versão atual oferece extração com OCR e transcrição local, recuperação híbrida dos materiais, experiências para organizar uma rotina de estudo e uma integração inicial com Gemini.
 
 ## Stack
 
@@ -17,6 +17,8 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração, 
 | Tema | next-themes |
 | Material PDF mockado | react-pdf |
 | Documentos OOXML | JSZip |
+| OCR local | Tesseract.js com dados em português e inglês |
+| Transcrição local | Transformers.js com Whisper Tiny |
 | Testes de interface | Playwright |
 
 ## Estrutura de módulos
@@ -31,7 +33,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração, 
 | `src/features/tutor` | Conversas, contexto, prompt e comunicação com o Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/{library,import,organization}` | Fluxos mockados de materiais. |
-| `src/features/extraction` | Extração, pipeline, persistência e status de conteúdo. |
+| `src/features/extraction` | Extração de documentos e mídia, OCR, transcrição, pipeline, persistência e status. |
 | `src/features/retrieval` | Chunking, embeddings locais, buscas semântica e lexical, ranking híbrido e montagem do contexto. |
 | `src/lib/local-storage.ts` | Leitura, escrita e remoção tipadas do `localStorage`. |
 | `src/types` | Tipos de domínio compartilhados. |
@@ -60,7 +62,10 @@ Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválid
 ```text
 File selecionado
   → ExtractionPipeline
+  → MediaExtractionPipeline
   → ContentExtractionService
+  → OCRService, quando imagem ou PDF sem camada de texto
+  → MediaTranscriptionService, quando áudio ou vídeo
   → texto + metadados
   → ContentStorage
   → ChunkService / ChunkStorage
@@ -68,7 +73,9 @@ File selecionado
   → Dashboard
 ```
 
-PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; MP3 e MP4 usam `loadedmetadata` dos elementos HTML5. Áudio e vídeo ainda não produzem transcrição. Materiais sem tema organizado recebem temporariamente `studyId: "unassigned"`.
+PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs sem texto são renderizados página a página e enviados ao mesmo OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador. O resultado segue automaticamente para chunks, embeddings e indexação. Materiais sem tema organizado recebem temporariamente `studyId: "unassigned"`.
+
+O núcleo, o worker e os idiomas do OCR são servidos por rotas internas a partir das dependências instaladas, com cache imutável. Nenhum material do usuário passa por essas rotas. O modelo de transcrição é obtido do Hugging Face Hub no primeiro uso, armazenado no cache do navegador e executado localmente nas execuções seguintes.
 
 ## Fluxo do Tutor IA
 
@@ -99,6 +106,8 @@ Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões.
 | `POST /api/tutor/summary` | Resumo de uma conversa. |
 | `POST /api/tutor/flashcards` | Geração de flashcards JSON. |
 | `POST /api/tutor/quiz` | Geração de questões JSON. |
+| `GET /api/ocr/assets/[asset]` | Worker e núcleo WebAssembly locais do Tesseract.js. |
+| `GET /api/ocr/languages/[language]` | Dados locais de idioma usados pelo OCR. |
 
 Todos validam o corpo recebido e normalizam erros do `GeminiService`. Eles não recebem nem leem arquivos físicos.
 
@@ -106,8 +115,10 @@ Todos validam o corpo recebido e normalizam erros do `GeminiService`. Eles não 
 
 - Biblioteca e organização ainda usam dados mockados.
 - Importação não transfere nem persiste arquivos físicos; somente o resultado extraído é salvo.
-- O PDF é uma demonstração local; vídeos e áudios não possuem fonte real.
-- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há OCR, transcrição, banco, autenticação, cloud ou Ollama.
+- O PDF do workspace é uma demonstração local; a importação processa os arquivos escolhidos sem persistir o binário original.
+- O primeiro uso da transcrição requer download do modelo Whisper; o tamanho e o tempo dependem da conexão e do dispositivo. Depois disso, o cache do navegador é reutilizado.
+- A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
+- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação, cloud de processamento ou Ollama.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 
 ## Qualidade

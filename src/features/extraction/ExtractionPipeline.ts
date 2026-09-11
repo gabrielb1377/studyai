@@ -1,5 +1,6 @@
 import { ContentExtractionService } from "./ContentExtractionService";
 import { ContentStorage } from "./ContentStorage";
+import { MediaExtractionPipeline } from "./MediaExtractionPipeline";
 import { ChunkService } from "@/features/retrieval/ChunkService";
 import { ChunkStorage } from "@/features/retrieval/ChunkStorage";
 import { EmbeddingStorage } from "@/features/retrieval/EmbeddingStorage";
@@ -62,7 +63,13 @@ export const ExtractionPipeline = {
       options.onProgress?.({ fileId: input.id, status: "processing", progress: 15 });
 
       try {
-        const extraction = await ContentExtractionService.extract(input.file, fileType);
+        const extraction = await MediaExtractionPipeline.extract(input.file, fileType, {
+          onProgress: (progress) => options.onProgress?.({
+            fileId: input.id,
+            status: "processing",
+            progress: Math.min(95, Math.max(15, Math.round(progress))),
+          }),
+        });
         const extractedRecord: ExtractedContent = {
           ...processingRecord,
           ...extraction,
@@ -80,7 +87,11 @@ export const ExtractionPipeline = {
         const errorRecord: ExtractedContent = {
           ...processingRecord,
           status: "error",
-          error: error instanceof Error ? error.message : "Erro inesperado na extração.",
+          error: error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : "Erro inesperado na extração.",
         };
         ContentStorage.upsert(errorRecord);
         options.onProgress?.({ fileId: input.id, status: "error", progress: 100 });

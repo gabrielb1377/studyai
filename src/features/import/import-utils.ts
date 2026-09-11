@@ -2,6 +2,7 @@ import {
   FileText,
   FileType2,
   Headphones,
+  ImageIcon,
   Presentation,
   Video,
 } from "lucide-react";
@@ -14,6 +15,12 @@ export const supportedExtensions = [
   "txt",
   "mp4",
   "mp3",
+  "wav",
+  "m4a",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
 ] as const;
 
 export const acceptedFileTypes = [
@@ -23,6 +30,12 @@ export const acceptedFileTypes = [
   ".txt",
   ".mp4",
   ".mp3",
+  ".wav",
+  ".m4a",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".webp",
 ].join(",");
 
 export const fileTypeDetails = {
@@ -32,6 +45,12 @@ export const fileTypeDetails = {
   txt: { label: "TXT", icon: FileText },
   mp4: { label: "MP4", icon: Video },
   mp3: { label: "MP3", icon: Headphones },
+  wav: { label: "WAV", icon: Headphones },
+  m4a: { label: "M4A", icon: Headphones },
+  png: { label: "PNG", icon: ImageIcon },
+  jpg: { label: "JPG", icon: ImageIcon },
+  jpeg: { label: "JPEG", icon: ImageIcon },
+  webp: { label: "WEBP", icon: ImageIcon },
 } as const;
 
 export const importStatusDetails: Record<

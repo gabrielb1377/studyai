@@ -23,6 +23,12 @@ export function useExtraction() {
     processing: records.filter((record) => record.status === "processing").length,
     extracted: records.filter((record) => record.status === "extracted").length,
     errors: records.filter((record) => record.status === "error").length,
+    ocr: records.filter((record) => record.metadata.ocrPerformed).length,
+    transcriptions: records.filter((record) => record.metadata.transcriptionPerformed).length,
+    processingTimeMs: records.reduce(
+      (total, record) => total + (record.metadata.processingTimeMs ?? 0),
+      0,
+    ),
   }), [records]);
 
   return { records, statistics, isReady };

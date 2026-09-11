@@ -1,80 +1,94 @@
-# Handoff Atual — Sprint 19
+# Handoff Atual — Sprint 20
 
-Atualizado em 10 de setembro de 2026.
+Atualizado em 11 de setembro de 2026.
 
 ## Estado entregue
 
-O RAG agora combina busca vetorial local com o ranking lexical existente. A indexação é determinística, versionada e não depende de serviços externos.
+O pipeline de extração agora reconhece texto em imagens e PDFs escaneados, além de transcrever áudio e a faixa de áudio de vídeos compatíveis. Todo o resultado continua alimentando o RAG local já existente.
 
 ```text
 ImportWorkspace
   → useImport
   → ExtractionPipeline
-  → ContentExtractionService
+  → MediaExtractionPipeline
+      → ContentExtractionService
+      → OCRService
+      → MediaTranscriptionService
   → ContentStorage
-  → ChunkService
-  → ChunkStorage
-  → EmbeddingService
-  → EmbeddingStorage
+  → ChunkService / ChunkStorage
+  → EmbeddingService / EmbeddingStorage
   → RetrievalService
-  → SemanticSearchService + SearchService
-  → RankingService
-  → TutorService
-  → PromptBuilder / ContextAssembler
-  → GeminiService
+  → Tutor contextual
 ```
 
-## Embeddings locais
+## OCR
 
-- O modelo `local-feature-hash-v1` gera vetores normalizados de 192 dimensões.
-- As features incluem termos, raízes em português, trigramas e pares de palavras.
-- A comparação usa similaridade de cosseno.
-- A indexação ocorre após a extração e também é sincronizada sob demanda.
-- Embeddings válidos são reutilizados; registros órfãos são removidos.
-- Nenhuma chamada HTTP ou biblioteca de modelo foi adicionada.
+- PNG, JPG, JPEG e WEBP são reconhecidos com Tesseract.js.
+- PDFs sem camada de texto são renderizados página a página com PDF.js antes do OCR.
+- Os idiomas `por` e `eng`, o worker e o núcleo WebAssembly vêm das dependências instaladas e são servidos por rotas internas com cache.
+- Os arquivos do usuário nunca são enviados às rotas de OCR.
+- O resultado registra confiança, quantidade de páginas, dimensões e tempo de processamento.
 
-## Persistência
+## Transcrição
 
-`studyai:embeddings` guarda um objeto versionado:
+- MP3, WAV e M4A são decodificados pelas APIs Web Audio.
+- MP4 preserva os metadados de vídeo e tenta decodificar sua faixa de áudio pelo mesmo fluxo.
+- O áudio é normalizado para mono em 16 kHz.
+- `onnx-community/whisper-tiny` roda via Transformers.js e ONNX Runtime Web em precisão `fp32`.
+- O modelo é baixado no primeiro uso, armazenado no cache do navegador e reutilizado depois.
+- O resultado registra duração, modelo utilizado e tempo de processamento.
+
+## Pipeline e persistência
+
+`ExtractionPipeline` permanece como orquestrador único. Ele persiste `processing`, `extracted` ou `error`, substitui os chunks daquele conteúdo e sincroniza o índice semântico. Uma falha em um arquivo não interrompe os demais.
+
+Novos metadados em `studyai:extracted-content`:
 
 ```text
-{
-  version: 1,
-  model: "local-feature-hash-v1",
-  dimensions: 192,
-  status: "idle" | "indexing" | "ready" | "error",
-  embeddings: ChunkEmbedding[],
-  lastIndexedAt?: string
-}
+ocrPerformed
+ocrConfidence
+transcriptionPerformed
+transcriptionModel
+processingTimeMs
 ```
 
-Cada embedding relaciona `chunkId`, `studyId`, vetor e `createdAt`. `studyai:content-chunks` continua sendo a fonte do índice e permite reconstruir todos os vetores.
+## Dashboard
 
-## Ranking híbrido
+O resumo de extração mostra:
 
-O score único combina:
+- status consolidado;
+- quantidade de OCRs concluídos;
+- quantidade de transcrições concluídas;
+- tempo acumulado de processamento;
+- extraídos, processando e erros.
 
-- similaridade semântica: até 55 pontos;
-- ranking lexical: até 25 pontos;
-- mesmo `studyId`: 8 pontos;
-- correspondência no nome do arquivo: até 7 pontos;
-- frequência dos termos: até 5 pontos.
+## Validação automatizada
 
-## Fallback
+- OCR real de PNG.
+- OCR real de PDF composto apenas por imagem.
+- Geração de chunks e embeddings a partir do texto reconhecido.
+- Inicialização e inferência reais do Whisper com um WAV válido.
+- Aceitação dos novos formatos de imagem e áudio.
+- Dashboard com estatísticas da Sprint 20.
 
-- Se a geração, persistência ou comparação de embeddings falhar, o `RetrievalService` utiliza a busca lexical da Sprint 18.
-- Sem chunks, mas com tema ativo, seguem contexto do estudo, histórico e pergunta.
-- Sem qualquer contexto, seguem histórico e pergunta original.
+## Limites atuais
+
+- A primeira transcrição exige acesso ao Hugging Face Hub para obter o modelo; não há upload do áudio nem inferência remota.
+- A compatibilidade de MP4/M4A depende dos codecs que o navegador consegue decodificar.
+- OCR e transcrição usam CPU/WASM e podem ser lentos em dispositivos modestos.
+- Arquivos físicos continuam efêmeros; somente os resultados estruturados são persistidos.
+- Não há banco, Ollama ou serviço cloud de processamento.
+- `npm audit --omit=dev` aponta quatro alertas altos transitivos em `onnxruntime-node` e `sharp`, trazidos pelo Transformers.js e sem correção disponível. A aplicação importa o runtime de navegador/WASM, mas o alerta permanece no grafo instalado e deve ser reavaliado quando o pacote publicar uma atualização.
 
 ## Próximo passo seguro
 
-Criar uma etapa explícita de associação entre registros `unassigned` e um `studyId`. Uma evolução posterior pode trocar apenas o `EmbeddingService` por um modelo neural local, mantendo persistência, busca e ranking.
+Mover OCR e transcrição para Web Workers dedicados com fila e cancelamento por arquivo, mantendo os mesmos contratos. Para distribuição totalmente offline, empacotar também os pesos do Whisper como ativos locais versionados.
 
-## Limites obrigatórios
+## Comandos de validação
 
-- Não há banco vetorial, modelo neural externo, Ollama ou banco de dados.
-- Não transcrever áudio ou vídeo nesta camada.
-- Não enviar arquivos físicos ao Tutor ou ao Gemini.
-- Não enviar todo o conteúdo extraído ao Gemini; somente os resultados ranqueados.
-- Manter extração e recuperação independentes de qualquer provedor de IA.
-- Validar com `npm run lint`, `npm run typecheck`, `npm run test:e2e` e `npm run build`.
+```text
+npm run lint
+npm run typecheck
+npm run test:e2e
+npm run build
+```

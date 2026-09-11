@@ -4,7 +4,13 @@ export const extractionFileTypes = [
   "pptx",
   "txt",
   "mp3",
+  "wav",
+  "m4a",
   "mp4",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
 ] as const;
 
 export type ExtractionFileType = (typeof extractionFileTypes)[number];
@@ -19,6 +25,11 @@ export type ExtractionMetadata = {
   language?: string;
   width?: number;
   height?: number;
+  ocrPerformed?: boolean;
+  ocrConfidence?: number;
+  transcriptionPerformed?: boolean;
+  transcriptionModel?: string;
+  processingTimeMs?: number;
 };
 
 export type ExtractedContent = {
@@ -32,6 +43,8 @@ export type ExtractedContent = {
   createdAt: string;
   error?: string;
 };
+
+export type ExtractionResult = Pick<ExtractedContent, "extractedText" | "metadata">;
 
 export type ExtractionStore = {
   version: 1;

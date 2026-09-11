@@ -11,7 +11,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@tailwindcss/postcss": "^4.1.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/por": "^1.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "jszip": "^3.10.2",
@@ -24,6 +27,7 @@
     "react-pdf": "^9.2.1",
     "tailwind-merge": "^3.0.0",
     "tailwindcss": "^4.1.0",
+    "tesseract.js": "^7.0.0",
     "tw-animate-css": "^1.3.0",
     "zustand": "^5.0.0"
   },

@@ -4,6 +4,14 @@ import { CircleDot, FileCheck2, LoaderCircle, TriangleAlert } from "lucide-react
 import { Card } from "@/components/ui/card";
 import { useExtraction } from "./useExtraction";
 
+function formatDuration(milliseconds: number) {
+  if (milliseconds < 1_000) return `${milliseconds} ms`;
+  if (milliseconds < 60_000) return `${(milliseconds / 1_000).toFixed(1)} s`;
+  const minutes = Math.floor(milliseconds / 60_000);
+  const seconds = Math.round((milliseconds % 60_000) / 1_000);
+  return `${minutes} min ${seconds} s`;
+}
+
 export function ExtractionSummary() {
   const { statistics, isReady } = useExtraction();
   const status = !isReady || statistics.processing > 0
@@ -47,6 +55,20 @@ export function ExtractionSummary() {
             <span><strong className="text-foreground">{statistics.errors}</strong> com erro</span>
           </div>
         </div>
+        <dl className="grid gap-3 border-t pt-4 text-xs sm:grid-cols-3">
+          <div>
+            <dt className="text-muted-foreground">OCR realizado</dt>
+            <dd className="mt-1 font-semibold">{statistics.ocr}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Transcrições realizadas</dt>
+            <dd className="mt-1 font-semibold">{statistics.transcriptions}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Tempo de processamento</dt>
+            <dd className="mt-1 font-semibold">{formatDuration(statistics.processingTimeMs)}</dd>
+          </div>
+        </dl>
       </Card>
     </section>
   );

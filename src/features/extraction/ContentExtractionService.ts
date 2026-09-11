@@ -1,10 +1,8 @@
 import type {
-  ExtractedContent,
   ExtractionFileType,
   ExtractionMetadata,
+  ExtractionResult,
 } from "./ExtractionTypes";
-
-type ExtractionResult = Pick<ExtractedContent, "extractedText" | "metadata">;
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -158,13 +156,35 @@ function extractMedia(file: File, type: "audio" | "video"): Promise<ExtractionRe
   });
 }
 
+async function extractImage(file: File): Promise<ExtractionResult> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    return {
+      extractedText: "",
+      metadata: {
+        ...baseMetadata(file),
+        width: bitmap.width,
+        height: bitmap.height,
+      },
+    };
+  } finally {
+    bitmap.close();
+  }
+}
+
 const extractors: Record<ExtractionFileType, (file: File) => Promise<ExtractionResult>> = {
   pdf: extractPdf,
   docx: extractDocx,
   pptx: extractPptx,
   txt: extractTxt,
   mp3: (file) => extractMedia(file, "audio"),
+  wav: (file) => extractMedia(file, "audio"),
+  m4a: (file) => extractMedia(file, "audio"),
   mp4: (file) => extractMedia(file, "video"),
+  png: extractImage,
+  jpg: extractImage,
+  jpeg: extractImage,
+  webp: extractImage,
 };
 
 export const ContentExtractionService = {
