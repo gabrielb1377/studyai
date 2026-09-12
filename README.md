@@ -34,11 +34,11 @@ Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um err
 
 | Módulo | Estado atual |
 | --- | --- |
-| Dashboard | Progresso, temas recentes e indicadores locais de estudo. |
-| Biblioteca | Pesquisa e filtros sobre materiais mockados. |
+| Dashboard | Progresso, temas recentes e indicadores calculados somente a partir dos dados do usuário. |
+| Biblioteca | Pesquisa e filtros sobre arquivos realmente importados. |
 | Importar | Seleção local, drag and drop e extração de PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
-| Organizar | Árvore mockada com ações locais de renomear, mover e excluir. |
-| Estudo | Material mockado, PDF de demonstração, players HTML5, progresso, notas, flashcards, quizzes e resumos. |
+| Organizar | Árvore dos materiais importados; renomear, mover ou excluir atualiza todos os dados derivados. |
+| Estudo | Materiais do tema, visualizadores, progresso, notas, flashcards, quizzes, resumos e Tutor contextual. |
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
 | RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
 | Configurações | Tema claro, escuro ou do sistema. |
@@ -51,7 +51,8 @@ src/
 ├── components/          # Layout compartilhado e componentes UI
 ├── features/            # Módulos de domínio e suas interfaces
 ├── hooks/               # Estado transversal de layout
-├── lib/                 # Utilitários, mocks e persistência local compartilhada
+├── lib/                 # Utilitários e persistência local compartilhada
+├── services/            # Registro persistido e referências de runtime dos materiais
 ├── styles/              # Tokens e estilos globais
 └── types/               # Contratos TypeScript compartilhados
 ```

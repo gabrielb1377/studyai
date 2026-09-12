@@ -1,5 +1,6 @@
 import type { QuizDifficulty, QuizQuestion, QuizResult } from "@/types/quiz";
 import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { RetrievalService } from "@/features/retrieval/RetrievalService";
 
 const STORAGE_KEY = "studyai:quizzes";
 const UPDATE_EVENT = "studyai:quiz-updated";
@@ -70,10 +71,14 @@ export const QuizService = {
   },
 
   async requestGeneration({ studyId, title, subject }: { studyId: string; title: string; subject: string }) {
+    const chunks = RetrievalService.forStudy(studyId).chunks;
+    if (chunks.length === 0) {
+      throw new Error("Este estudo ainda não possui conteúdo real extraído para gerar um quiz.");
+    }
     const response = await fetch("/api/tutor/quiz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studyId, title, subject }),
+      body: JSON.stringify({ studyId, title, subject, chunks }),
     });
     const data = await response.json().catch(() => null) as { questions?: GeneratedQuestion[]; error?: string } | null;
     if (!response.ok || !data?.questions) {

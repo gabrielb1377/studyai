@@ -53,7 +53,7 @@ export default function PdfMaterialViewer({ material }: { material: StudyMateria
         <Document
           file={material.source}
           loading={<p className="self-center text-sm text-muted-foreground">Carregando PDF...</p>}
-          error={<p role="alert" className="self-center text-sm text-destructive">Não foi possível carregar este PDF mockado.</p>}
+          error={<p role="alert" className="self-center text-sm text-destructive">Não foi possível carregar este PDF.</p>}
           onLoadSuccess={({ numPages: pages }) => {
             setNumPages(pages);
             setPageNumber((current) => Math.min(current, pages));

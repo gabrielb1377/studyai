@@ -66,17 +66,24 @@ export const EmbeddingStorage = {
 
   synchronize(chunks: readonly ContentChunk[]) {
     const current = this.load();
-    const chunkIds = new Set(chunks.map((chunk) => chunk.id));
-    const retained = current.embeddings.filter((embedding) => chunkIds.has(embedding.chunkId));
+    const chunksById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+    const retained = current.embeddings
+      .filter((embedding) => chunksById.has(embedding.chunkId))
+      .map((embedding) => ({
+        ...embedding,
+        studyId: chunksById.get(embedding.chunkId)?.studyId ?? embedding.studyId,
+      }));
     const indexedIds = new Set(retained.map((embedding) => embedding.chunkId));
     const pending = chunks.filter((chunk) => !indexedIds.has(chunk.id));
-    const removedStaleEmbeddings = retained.length !== current.embeddings.length;
+    const indexChanged = retained.length !== current.embeddings.length || retained.some(
+      (embedding, index) => embedding.studyId !== current.embeddings[index]?.studyId,
+    );
 
     if (chunks.length === 0) {
       if (current.status !== "idle" || current.embeddings.length > 0) this.save(EMPTY_STORE);
       return EMPTY_STORE;
     }
-    if (pending.length === 0 && !removedStaleEmbeddings && current.status === "ready") {
+    if (pending.length === 0 && !indexChanged && current.status === "ready") {
       return current;
     }
 

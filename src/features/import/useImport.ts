@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
+import { MaterialRuntimeStore } from "@/services/material-runtime-store";
+import { MaterialService } from "@/services/material-service";
 import type { ImportFile, ImportPhase } from "@/types/import";
+import type { MaterialFileType } from "@/types/material";
 import {
   getFileExtension,
   getFileIdentity,
@@ -19,7 +22,10 @@ export function useImport() {
   function addFiles(incoming: File[]): AddFilesResult {
     const unsupported = incoming.filter((file) => !isSupportedFile(file));
     const supported = incoming.filter(isSupportedFile);
-    const existingIds = new Set(files.map(({ file }) => getFileIdentity(file)));
+    const existingIds = new Set([
+      ...files.map(({ file }) => getFileIdentity(file)),
+      ...MaterialService.load().map(({ identity }) => identity),
+    ]);
     const duplicates: File[] = [];
     const unique: File[] = [];
     supported.forEach((file) => {
@@ -80,6 +86,15 @@ export function useImport() {
     const pendingFiles = files.filter(
       (file) => file.status === "uploaded" || file.status === "error",
     );
+    pendingFiles.forEach((item) => {
+      const material = MaterialService.createFromFile(
+        item.file,
+        item.extension as MaterialFileType,
+        item.id,
+      );
+      MaterialRuntimeStore.register(item.id, item.file);
+      MaterialService.upsert(material);
+    });
     setFiles((current) =>
       current.map((file) =>
         pendingFiles.some((pending) => pending.id === file.id)
@@ -88,8 +103,12 @@ export function useImport() {
       ),
     );
 
-    await ExtractionPipeline.run(pendingFiles, {
+    const results = await ExtractionPipeline.run(pendingFiles, {
       onProgress: ({ fileId, status, progress }) => {
+        MaterialService.update(fileId, {
+          progress,
+          status: status === "extracted" ? "ready" : status,
+        });
         setFiles((current) => current.map((file) => file.id === fileId
           ? {
               ...file,
@@ -99,6 +118,15 @@ export function useImport() {
           : file,
         ));
       },
+    });
+    results.forEach((result) => {
+      if (result.status === "error") {
+        MaterialService.update(result.fileId, {
+          status: "error",
+          progress: 100,
+          error: result.error,
+        });
+      }
     });
     setPhase("complete");
   }

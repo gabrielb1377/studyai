@@ -17,6 +17,7 @@ import type { StudySummary } from "@/types/summary";
 import { SummaryDialog } from "@/features/summaries/SummaryDialog";
 import { useSummaries } from "@/features/summaries/hooks/useSummaries";
 import { SummaryService } from "@/features/summaries/services/SummaryService";
+import { RetrievalService } from "@/features/retrieval/RetrievalService";
 import { useTutor } from "./hooks/useTutor";
 import { TutorService } from "./services/TutorService";
 import { TutorComposer } from "./TutorComposer";
@@ -77,10 +78,19 @@ export function TutorWorkspace() {
 
   const generateSummary = async () => {
     if (!activeConversation || isSummaryLoading) return;
+    if (!context) {
+      setError("Abra um estudo organizado antes de gerar um resumo.");
+      return;
+    }
+    const chunks = RetrievalService.forStudy(context.studyId).chunks;
+    if (chunks.length === 0) {
+      setError("Este estudo ainda não possui conteúdo extraído para resumir.");
+      return;
+    }
     setIsSummaryLoading(true);
     clearError();
     try {
-      const response = await TutorService.requestSummary(activeConversation.messages);
+      const response = await TutorService.requestSummary(activeConversation.messages, context, chunks);
       setSummaryDraft(SummaryService.create({
         conversationId: activeConversation.id,
         conversationTitle: activeConversation.title,
@@ -102,10 +112,19 @@ export function TutorWorkspace() {
       setError("A conversa de origem deste resumo não está mais disponível.");
       return;
     }
+    if (!context || context.studyId !== summaryDraft.studyId) {
+      setError("Abra o estudo relacionado a este resumo para atualizá-lo.");
+      return;
+    }
+    const chunks = RetrievalService.forStudy(context.studyId).chunks;
+    if (chunks.length === 0) {
+      setError("Este estudo não possui conteúdo extraído para atualizar o resumo.");
+      return;
+    }
     setIsSummaryLoading(true);
     clearError();
     try {
-      const response = await TutorService.requestSummary(conversation.messages);
+      const response = await TutorService.requestSummary(conversation.messages, context, chunks);
       setSummaryDraft((current) => current ? { ...current, content: response.text, updatedAt: new Date().toISOString() } : current);
     } catch (summaryError) {
       setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");

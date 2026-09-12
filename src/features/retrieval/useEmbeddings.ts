@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { EMBEDDINGS_UPDATE_EVENT, EmbeddingStorage } from "./EmbeddingStorage";
 import { ChunkStorage } from "./ChunkStorage";
-import type { EmbeddingStore } from "./EmbeddingTypes";
+import {
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_MODEL,
+  type EmbeddingStore,
+} from "./EmbeddingTypes";
+
+const initialStore: EmbeddingStore = {
+  version: 1,
+  model: EMBEDDING_MODEL,
+  dimensions: EMBEDDING_DIMENSIONS,
+  status: "idle",
+  embeddings: [],
+};
 
 function synchronizeStoredChunks() {
   try {
@@ -14,7 +26,7 @@ function synchronizeStoredChunks() {
 }
 
 export function useEmbeddings() {
-  const [store, setStore] = useState<EmbeddingStore>(() => EmbeddingStorage.load());
+  const [store, setStore] = useState<EmbeddingStore>(initialStore);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {

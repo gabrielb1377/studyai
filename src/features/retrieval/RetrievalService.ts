@@ -29,6 +29,25 @@ function ensureChunksAreIndexed() {
 }
 
 export const RetrievalService = {
+  forStudy(studyId: string, limit = 12) {
+    const chunks = ensureChunksAreIndexed()
+      .filter((chunk) => chunk.studyId === studyId)
+      .sort((a, b) => a.fileId.localeCompare(b.fileId) || a.chunkIndex - b.chunkIndex)
+      .slice(0, limit)
+      .map((chunk, index) => ({
+        ...chunk,
+        score: Math.max(1, 100 - index),
+        matchedTerms: [],
+      }));
+
+    return {
+      question: "Conteúdo integral do estudo",
+      chunks,
+      hasContext: chunks.length > 0,
+      strategy: "lexical" as const,
+    };
+  },
+
   retrieve(question: string, options: RetrievalOptions = {}): RetrievalResult {
     const sourceChunks = ensureChunksAreIndexed();
     const candidateLimit = Math.max((options.limit ?? 5) * 4, 20);

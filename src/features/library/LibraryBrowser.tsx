@@ -2,23 +2,22 @@
 
 import { useRef, useState } from "react";
 import { Search, Star, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Material, MaterialFilter } from "@/types/material";
-import { LibraryEmptyState, LibraryNoResults } from "./LibraryStates";
+import { useMaterials } from "@/hooks/useMaterials";
+import type { MaterialFilter } from "@/types/material";
+import { LibraryEmptyState, LibraryLoading, LibraryNoResults } from "./LibraryStates";
 import { MaterialCard } from "./MaterialCard";
 import { filterMaterials, materialFilters } from "./material-utils";
 
-export function LibraryBrowser({
-  materials,
-}: {
-  materials: readonly Material[];
-}) {
+export function LibraryBrowser() {
+  const { materials, isLoading } = useMaterials();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("all");
   const searchRef = useRef<HTMLInputElement>(null);
   const results = filterMaterials(materials, query, filter);
+
+  if (isLoading) return <LibraryLoading />;
 
   function clearFilters() {
     setQuery("");
@@ -92,12 +91,7 @@ export function LibraryBrowser({
                 : " na biblioteca"}
             </span>
           </h2>
-          <Badge
-            variant="outline"
-            className="font-normal text-muted-foreground"
-          >
-            Dados demonstrativos
-          </Badge>
+          <span className="text-xs text-muted-foreground">Dados importados neste dispositivo</span>
         </div>
         {materials.length === 0 ? (
           <LibraryEmptyState />

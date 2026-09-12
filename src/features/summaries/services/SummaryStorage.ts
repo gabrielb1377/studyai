@@ -2,7 +2,7 @@ import type { StudySummary } from "@/types/summary";
 import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
 
 const STORAGE_KEY = "studyai:summaries";
-const UPDATE_EVENT = "studyai:summaries-updated";
+export const SUMMARIES_UPDATE_EVENT = "studyai:summaries-updated";
 
 function isSummaryList(value: unknown): value is StudySummary[] {
   return Array.isArray(value) && value.every((summary) =>
@@ -20,6 +20,6 @@ export const SummaryStorage = {
   },
 
   save(summaries: readonly StudySummary[]) {
-    writeLocalStorage(STORAGE_KEY, summaries, UPDATE_EVENT);
+    writeLocalStorage(STORAGE_KEY, summaries, SUMMARIES_UPDATE_EVENT);
   },
 };

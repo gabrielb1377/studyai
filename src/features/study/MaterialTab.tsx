@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Headphones, Video } from "lucide-react";
+import { FileText, Headphones, ImageIcon, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatFileSize } from "@/features/import/import-utils";
 import type { StudyMaterial } from "@/types/study";
 import { MaterialViewer } from "./MaterialViewer";
 
@@ -12,7 +13,9 @@ const materialIcons = {
   pdf: FileText,
   video: Video,
   audio: Headphones,
-  txt: FileText,
+  text: FileText,
+  document: FileText,
+  image: ImageIcon,
 };
 
 export function MaterialTab({ materials }: { materials: readonly StudyMaterial[] }) {
@@ -40,7 +43,7 @@ export function MaterialTab({ materials }: { materials: readonly StudyMaterial[]
         <Card className="gap-0 py-0 shadow-none">
           <CardHeader className="border-b px-5 py-5">
             <CardTitle className="text-base">Materiais</CardTitle>
-            <p className="text-sm text-muted-foreground">{materials.length} arquivos mockados</p>
+            <p className="text-sm text-muted-foreground">{materials.length} {materials.length === 1 ? "arquivo importado" : "arquivos importados"}</p>
           </CardHeader>
           <CardContent className="space-y-2 p-3">
             {materials.map((material, index) => {
@@ -59,8 +62,8 @@ export function MaterialTab({ materials }: { materials: readonly StudyMaterial[]
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-medium">{material.name}</span>
                     <span className="mt-1 flex items-center gap-2 text-[11px] font-normal text-muted-foreground">
-                      <Badge variant="outline" className="h-4 px-1 text-[9px]">{material.label}</Badge>
-                      {material.size}
+                      <Badge variant="outline" className="h-4 px-1 text-[9px]">{material.type.toUpperCase()}</Badge>
+                      {formatFileSize(material.size)}
                     </span>
                   </span>
                 </Button>

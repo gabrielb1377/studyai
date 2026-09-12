@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { tutorConversations } from "@/lib/mock/tutor";
 import { RetrievalService } from "@/features/retrieval/RetrievalService";
 import type { TutorConversation } from "@/types/tutor";
 import { TutorService } from "../services/TutorService";
@@ -10,10 +9,8 @@ import { useTutorContext } from "./useTutorContext";
 
 export function useTutor() {
   const context = useTutorContext();
-  const [conversations, setConversations] = useState<TutorConversation[]>(() =>
-    tutorConversations.map((conversation) => ({ ...conversation, messages: [...conversation.messages] })),
-  );
-  const [activeConversationId, setActiveConversationId] = useState(tutorConversations[0]?.id ?? "");
+  const [conversations, setConversations] = useState<TutorConversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,8 +29,6 @@ export function useTutor() {
     if (storedConversations?.length) {
       setConversations(storedConversations);
       setActiveConversationId(storedConversations[0].id);
-    } else {
-      TutorStorage.save(tutorConversations);
     }
   }, []);
 

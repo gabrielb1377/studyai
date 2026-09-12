@@ -64,8 +64,7 @@ export const SearchService = {
     if (terms.length === 0) return [];
 
     return chunks
-      .filter((chunk) => !options.studyId ||
-        chunk.studyId === options.studyId || chunk.studyId === "unassigned")
+      .filter((chunk) => !options.studyId || chunk.studyId === options.studyId)
       .map((chunk) => rankChunk(chunk, terms, question))
       .filter((chunk): chunk is RetrievedChunk => chunk !== null)
       .sort((left, right) => {

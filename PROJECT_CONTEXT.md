@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 11 de setembro de 2026.
+Atualizado em 12 de setembro de 2026.
 
 ## Propósito
 
@@ -15,7 +15,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | Componentes base | shadcn/ui, Radix UI e Lucide |
 | Estado de layout | Zustand |
 | Tema | next-themes |
-| Material PDF mockado | react-pdf |
+| Visualização de PDF importado | react-pdf |
 | Documentos OOXML | JSZip |
 | OCR local | Tesseract.js com dados em português e inglês |
 | Transcrição local | Transformers.js com Whisper Tiny |
@@ -32,7 +32,9 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/study` | Workspace de um tema e Study Engine. |
 | `src/features/tutor` | Conversas, contexto, prompt e comunicação com o Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
-| `src/features/{library,import,organization}` | Fluxos mockados de materiais. |
+| `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
+| `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
+| `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
 | `src/features/extraction` | Extração de documentos e mídia, OCR, transcrição, pipeline, persistência e status. |
 | `src/features/retrieval` | Chunking, embeddings locais, buscas semântica e lexical, ranking híbrido e montagem do contexto. |
 | `src/lib/local-storage.ts` | Leitura, escrita e remoção tipadas do `localStorage`. |
@@ -44,8 +46,9 @@ Não existe banco de dados. As chaves atuais são:
 
 | Chave | Conteúdo |
 | --- | --- |
-| `studyai:study-engine` | Progresso e último acesso de cada tema. |
-| `studyai:tutor-conversations` | Conversas e mensagens do Tutor. |
+| `studyai:materials` | Arquivos importados, status, progresso e organização. |
+| `studyai:study-engine:v2` | Estudos criados a partir de materiais organizados. |
+| `studyai:tutor-conversations:v2` | Conversas criadas pelo usuário e suas mensagens. |
 | `studyai:summaries` | Resumos gerados e, opcionalmente, seu `studyId`. |
 | `studyai:flashcards` | Flashcards e métricas de revisão. |
 | `studyai:quizzes` | Questões geradas e resultados. |
@@ -61,6 +64,7 @@ Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválid
 
 ```text
 File selecionado
+  → MaterialService / MaterialRuntimeStore
   → ExtractionPipeline
   → MediaExtractionPipeline
   → ContentExtractionService
@@ -70,10 +74,10 @@ File selecionado
   → ContentStorage
   → ChunkService / ChunkStorage
   → EmbeddingService / EmbeddingStorage
-  → Dashboard
+  → Biblioteca / Organização / Dashboard
 ```
 
-PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs sem texto são renderizados página a página e enviados ao mesmo OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador. O resultado segue automaticamente para chunks, embeddings e indexação. Materiais sem tema organizado recebem temporariamente `studyId: "unassigned"`.
+PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs sem texto são renderizados página a página e enviados ao mesmo OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador. O resultado segue automaticamente para chunks, embeddings e indexação. Materiais sem tema organizado recebem temporariamente `studyId: "unassigned"`. Ao organizar, o mesmo `studyId` é propagado para material, conteúdo extraído, chunks, embeddings e Study Engine.
 
 O núcleo, o worker e os idiomas do OCR são servidos por rotas internas a partir das dependências instaladas, com cache imutável. Nenhum material do usuário passa por essas rotas. O modelo de transcrição é obtido do Hugging Face Hub no primeiro uso, armazenado no cache do navegador e executado localmente nas execuções seguintes.
 
@@ -94,7 +98,7 @@ TutorWorkspace
   → Gemini API
 ```
 
-O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalService` consulta somente chunks compatíveis com esse tema ou ainda marcados como `unassigned`. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. O `PromptBuilder` é executado no servidor e recebe pergunta, histórico, contexto do estudo e chunks. Se os embeddings falharem, o ranking lexical permanece disponível; se não houver resultados, o fluxo continua com o contexto do estudo ou com a mensagem original.
+O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. Quando existe estudo atual, o `RetrievalService` consulta exclusivamente os chunks vinculados a ele; sem estudo selecionado, pesquisa o acervo extraído disponível. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. O `PromptBuilder` é executado no servidor e recebe pergunta, histórico, contexto do estudo e chunks. Se os embeddings falharem, o ranking lexical permanece disponível; se não houver resultados, o fluxo continua com o contexto do estudo ou com a mensagem original.
 
 Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões. Ele representa termos, raízes linguísticas, n-gramas e pares de palavras em um vetor normalizado. Todo o cálculo acontece no navegador, sem download de modelo, API externa ou banco vetorial. O contrato versionado permite substituir esse gerador por um modelo neural local futuramente.
 
@@ -103,9 +107,9 @@ Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões.
 | Endpoint | Finalidade |
 | --- | --- |
 | `POST /api/tutor` | Conversa contextual com Gemini. |
-| `POST /api/tutor/summary` | Resumo de uma conversa. |
-| `POST /api/tutor/flashcards` | Geração de flashcards JSON. |
-| `POST /api/tutor/quiz` | Geração de questões JSON. |
+| `POST /api/tutor/summary` | Resumo baseado no contexto e nos chunks reais de um estudo. |
+| `POST /api/tutor/flashcards` | Flashcards gerados somente de chunks reais. |
+| `POST /api/tutor/quiz` | Questões geradas somente de chunks reais. |
 | `GET /api/ocr/assets/[asset]` | Worker e núcleo WebAssembly locais do Tesseract.js. |
 | `GET /api/ocr/languages/[language]` | Dados locais de idioma usados pelo OCR. |
 
@@ -113,9 +117,8 @@ Todos validam o corpo recebido e normalizam erros do `GeminiService`. Eles não 
 
 ## Limites conhecidos
 
-- Biblioteca e organização ainda usam dados mockados.
-- Importação não transfere nem persiste arquivos físicos; somente o resultado extraído é salvo.
-- O PDF do workspace é uma demonstração local; a importação processa os arquivos escolhidos sem persistir o binário original.
+- Importação não transfere nem persiste arquivos físicos; metadados, organização e resultados extraídos são salvos localmente.
+- O binário original fica disponível somente durante a sessão atual. Após recarregar, o conteúdo extraído permanece, mas o arquivo precisa ser selecionado novamente para reprodução ou visualização binária.
 - O primeiro uso da transcrição requer download do modelo Whisper; o tamanho e o tempo dependem da conexão e do dispositivo. Depois disso, o cache do navegador é reutilizado.
 - A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
 - Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação, cloud de processamento ou Ollama.

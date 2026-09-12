@@ -1,19 +1,44 @@
-import { FileText, Headphones, Presentation, Video } from "lucide-react";
-import type { Material, MaterialFilter, MaterialType } from "@/types/material";
+import { FileText, Headphones, ImageIcon, Presentation, Video } from "lucide-react";
+import type { Material, MaterialCategory, MaterialFileType, MaterialFilter } from "@/types/material";
 
 export const materialTypes = {
   pdf: { label: "PDF", icon: FileText },
-  video: { label: "Vídeo", icon: Video },
-  audio: { label: "Áudio", icon: Headphones },
-  slides: { label: "Slides", icon: Presentation },
-} satisfies Record<MaterialType, { label: string; icon: typeof FileText }>;
+  docx: { label: "DOCX", icon: FileText },
+  pptx: { label: "Slides", icon: Presentation },
+  txt: { label: "TXT", icon: FileText },
+  mp4: { label: "Vídeo", icon: Video },
+  mp3: { label: "Áudio", icon: Headphones },
+  wav: { label: "Áudio", icon: Headphones },
+  m4a: { label: "Áudio", icon: Headphones },
+  png: { label: "Imagem", icon: ImageIcon },
+  jpg: { label: "Imagem", icon: ImageIcon },
+  jpeg: { label: "Imagem", icon: ImageIcon },
+  webp: { label: "Imagem", icon: ImageIcon },
+} satisfies Record<MaterialFileType, { label: string; icon: typeof FileText }>;
+
+const categories: Record<MaterialFileType, MaterialCategory> = {
+  pdf: "pdf",
+  docx: "document",
+  pptx: "slides",
+  txt: "document",
+  mp4: "video",
+  mp3: "audio",
+  wav: "audio",
+  m4a: "audio",
+  png: "image",
+  jpg: "image",
+  jpeg: "image",
+  webp: "image",
+};
 
 export const materialFilters: { value: MaterialFilter; label: string }[] = [
   { value: "all", label: "Todos" },
-  ...Object.entries(materialTypes).map(([value, { label }]) => ({
-    value: value as MaterialType,
-    label,
-  })),
+  { value: "pdf", label: "PDF" },
+  { value: "video", label: "Vídeo" },
+  { value: "audio", label: "Áudio" },
+  { value: "slides", label: "Slides" },
+  { value: "document", label: "Documentos" },
+  { value: "image", label: "Imagens" },
   { value: "favorites", label: "Favoritos" },
 ];
 
@@ -34,14 +59,14 @@ export function filterMaterials(
   return materials.filter((material) => {
     const matchesFilter =
       filter === "all" ||
-      (filter === "favorites" ? material.isFavorite : material.type === filter);
+      (filter === "favorites" ? material.isFavorite : categories[material.fileType] === filter);
     const text = normalize(
       [
         material.name,
-        material.course,
-        material.semester,
-        material.subject,
-        material.topic,
+        material.course ?? "",
+        material.semester ?? "",
+        material.subject ?? "",
+        material.topic ?? "",
       ].join(" "),
     );
     return matchesFilter && words.every((word) => text.includes(word));

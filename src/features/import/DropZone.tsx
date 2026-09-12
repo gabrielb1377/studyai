@@ -64,7 +64,7 @@ export function DropZone({
           Arraste seus materiais para cá
         </h2>
         <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-          Os arquivos ficam somente neste navegador durante a simulação.
+          Os arquivos são processados localmente e os dados extraídos ficam neste navegador.
         </p>
         <input
           ref={inputRef}

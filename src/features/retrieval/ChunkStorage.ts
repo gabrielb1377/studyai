@@ -57,4 +57,23 @@ export const ChunkStorage = {
     );
     this.save({ version: 1, chunks: [...current, ...chunks] });
   },
+
+  updateFile(fileId: string, changes: { studyId?: string; sourceName?: string }) {
+    const chunks = this.load().chunks.map((chunk) => chunk.fileId === fileId
+      ? {
+          ...chunk,
+          ...(changes.studyId ? { studyId: changes.studyId } : {}),
+          metadata: changes.sourceName
+            ? { ...chunk.metadata, sourceName: changes.sourceName }
+            : chunk.metadata,
+        }
+      : chunk,
+    );
+    this.save({ version: 1, chunks });
+  },
+
+  removeByFileId(fileId: string) {
+    const chunks = this.load().chunks.filter((chunk) => chunk.fileId !== fileId);
+    this.save({ version: 1, chunks });
+  },
 };

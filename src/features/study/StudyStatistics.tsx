@@ -28,9 +28,8 @@ export function StudyStatistics({
   onProgressChange: (progress: number) => void;
   onStatusChange: (status: StudyStatus) => void;
 }) {
-  const { summaries } = useSummaries();
+  const { summaries } = useSummaries(record.studyId);
   const summaryCount = summaries.length;
-  const mockMinutes = Math.max(15, Math.round(record.progress * 1.4));
 
   return (
     <section aria-labelledby="study-statistics-title" className="space-y-4">
@@ -44,7 +43,7 @@ export function StudyStatistics({
         </select>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><Clock3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Tempo estudado</p><p className="text-xl font-semibold">{mockMinutes} min <span className="text-xs font-normal text-muted-foreground">(mock)</span></p></Card>
+        <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><Clock3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Tempo estudado</p><p className="text-sm font-medium">Não registrado</p></Card>
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><BookOpenCheck className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Último acesso</p><p className="text-sm font-medium leading-5">{formatLastAccess(record.lastAccessedAt)}</p></Card>
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><BarChart3 className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Progresso</p><p className="text-xl font-semibold">{record.progress}%</p></Card>
         <Card className="gap-1 p-4 shadow-none"><span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary"><Sparkles className="size-4" /></span><p className="mt-3 text-xs text-muted-foreground">Resumos</p><p className="text-xl font-semibold">{summaryCount}</p></Card>

@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
 import { ContinueStudying } from "./continue-studying";
-import { topics } from "./data";
 import { ImportMaterial } from "./import-material";
 import { RecentTopics } from "./recent-topics";
 import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
@@ -13,14 +11,10 @@ import { ExtractionSummary } from "@/features/extraction/ExtractionSummary";
 import { EmbeddingSummary } from "@/features/retrieval/EmbeddingSummary";
 
 export function StudyDashboard() {
-  const { records, isReady, ensureTopics } = useStudyEngine();
+  const { records } = useStudyEngine();
   const { cards } = useFlashcards();
   const { results: quizzes } = useQuiz();
   const { notes } = useNotes();
-
-  useEffect(() => {
-    if (isReady) ensureTopics(topics);
-  }, [ensureTopics, isReady]);
 
   return (
     <>

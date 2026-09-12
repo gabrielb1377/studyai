@@ -17,8 +17,7 @@ export const SemanticSearchService = {
     return embeddings
       .map((embedding) => {
         const chunk = chunksById.get(embedding.chunkId);
-        if (!chunk || (options.studyId && chunk.studyId !== options.studyId &&
-          chunk.studyId !== "unassigned")) return null;
+        if (!chunk || (options.studyId && chunk.studyId !== options.studyId)) return null;
         const similarity = EmbeddingService.cosineSimilarity(
           questionEmbedding,
           embedding.embedding,

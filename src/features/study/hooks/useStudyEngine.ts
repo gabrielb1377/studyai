@@ -1,41 +1,59 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Topic } from "@/types/study";
-import type { StudyRecord, StudyStatus } from "@/types/study-engine";
-import { StudyEngine } from "../services/StudyEngine";
+
+import {
+  STUDY_UPDATED_EVENT,
+  StudyEngine,
+} from "@/features/study/services/StudyEngine";
+import type { StudyStatus } from "@/types/study-engine";
+import type { StudyRecord } from "@/types/study-engine";
 
 export function useStudyEngine() {
   const [records, setRecords] = useState<StudyRecord[]>([]);
-  const [isReady, setIsReady] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refresh = useCallback(() => {
+    setRecords(StudyEngine.load());
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
-    setRecords(StudyEngine.load());
-    setIsReady(true);
+    refresh();
+    window.addEventListener(STUDY_UPDATED_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(STUDY_UPDATED_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [refresh]);
+
+  const update = useCallback((change: (records: ReturnType<typeof StudyEngine.load>) => ReturnType<typeof StudyEngine.load>) => {
+    const next = change(StudyEngine.load());
+    StudyEngine.save(next);
+    setRecords(next);
+    setIsLoading(false);
   }, []);
 
-  const updateRecords = useCallback((updater: (current: StudyRecord[]) => StudyRecord[]) => {
-    setRecords((current) => {
-      const nextRecords = updater(current);
-      StudyEngine.save(nextRecords);
-      return nextRecords;
-    });
-  }, []);
-
-  const ensureTopics = useCallback((topics: readonly Topic[]) => {
-    updateRecords((current) => StudyEngine.ensureTopics(current, topics));
-  }, [updateRecords]);
-
-  const recordAccess = useCallback((topic: Topic) => {
-    updateRecords((current) => StudyEngine.recordAccess(current, topic));
-  }, [updateRecords]);
+  const recordAccess = useCallback(
+    (studyId: string) => update((items) => StudyEngine.recordAccess(items, studyId)),
+    [update],
+  );
+  const setProgress = useCallback(
+    (studyId: string, progress: number) => update((items) => StudyEngine.setProgress(items, studyId, progress)),
+    [update],
+  );
+  const setStatus = useCallback(
+    (studyId: string, status: StudyStatus) => update((items) => StudyEngine.setStatus(items, studyId, status)),
+    [update],
+  );
 
   return {
     records,
-    isReady,
-    ensureTopics,
+    isLoading,
+    refresh,
     recordAccess,
-    setProgress: (studyId: string, progress: number) => updateRecords((current) => StudyEngine.setProgress(current, studyId, progress)),
-    setStatus: (studyId: string, status: StudyStatus) => updateRecords((current) => StudyEngine.setStatus(current, studyId, status)),
+    setProgress,
+    setStatus,
   };
 }

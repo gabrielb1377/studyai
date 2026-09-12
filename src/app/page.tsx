@@ -1,5 +1,3 @@
-import { Leaf } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { PageHeading } from "@/components/page-heading";
 import { StudyDashboard } from "@/features/dashboard/StudyDashboard";
 import { WeeklyProgress } from "@/features/dashboard/weekly-progress";
@@ -11,15 +9,6 @@ export default function DashboardPage() {
         eyebrow="Seu espaço de estudos"
         title="Que bom ter você por aqui."
         description="Um novo dia, uma nova descoberta. Vamos aprender algo?"
-        action={
-          <Badge
-            variant="outline"
-            className="gap-1.5 py-1.5 font-normal text-muted-foreground"
-          >
-            <Leaf className="size-3" />
-            Dados demonstrativos
-          </Badge>
-        }
       />
       <StudyDashboard />
       <WeeklyProgress />

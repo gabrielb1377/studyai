@@ -21,13 +21,7 @@ export const TutorService = {
     return {
       id: createTutorId("conversation"),
       title,
-      messages: [
-        {
-          id: createTutorId("assistant"),
-          role: "assistant",
-          content: "Nova conversa iniciada. Como posso ajudar no seu estudo?",
-        },
-      ],
+      messages: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -97,7 +91,11 @@ export const TutorService = {
     return { model: data.model ?? "Gemini", text: data.text };
   },
 
-  async requestSummary(history: readonly TutorMessage[]): Promise<{ model: string; text: string }> {
+  async requestSummary(
+    history: readonly TutorMessage[],
+    context: TutorStudyContext,
+    chunks: readonly RetrievedChunk[],
+  ): Promise<{ model: string; text: string }> {
     const response = await fetch("/api/tutor/summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -106,6 +104,8 @@ export const TutorService = {
           role: historyMessage.role,
           content: getMessageText(historyMessage),
         })),
+        context,
+        chunks,
       }),
     });
     const data = await response.json().catch(() => null) as TutorApiResponse | null;

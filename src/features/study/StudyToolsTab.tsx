@@ -5,15 +5,19 @@ import { BrainCircuit, ClipboardCheck, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SummaryList } from "@/features/summaries/SummaryList";
-import type { StudyTool } from "@/types/study";
 import type { StudyRecord } from "@/types/study-engine";
 import { FlashcardWorkspace } from "@/features/flashcards/FlashcardWorkspace";
 import { QuizWorkspace } from "@/features/quiz/QuizWorkspace";
 import { NotesWorkspace } from "@/features/notes/NotesWorkspace";
 
 const toolIcons = { flashcards: BrainCircuit, quiz: ClipboardCheck, notes: NotebookPen };
+const tools = [
+  { id: "flashcards" as const, title: "Flashcards", description: "Revise conceitos extraídos dos materiais deste tema." },
+  { id: "quiz" as const, title: "Quiz", description: "Pratique com questões baseadas no conteúdo extraído." },
+  { id: "notes" as const, title: "Notas", description: "Registre suas próprias observações sobre o tema." },
+];
 
-export function StudyToolsTab({ tools, study }: { tools: readonly StudyTool[]; study: StudyRecord }) {
+export function StudyToolsTab({ study }: { study: StudyRecord }) {
   const [isFlashcardWorkspaceOpen, setIsFlashcardWorkspaceOpen] = useState(false);
   const [isQuizWorkspaceOpen, setIsQuizWorkspaceOpen] = useState(false);
   const [isNotesWorkspaceOpen, setIsNotesWorkspaceOpen] = useState(false);
@@ -21,7 +25,7 @@ export function StudyToolsTab({ tools, study }: { tools: readonly StudyTool[]; s
     <section aria-labelledby="study-tools-title" className="space-y-5">
       <div>
         <h2 id="study-tools-title" className="text-lg font-semibold tracking-tight">Como você quer estudar?</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Escolha uma ferramenta para continuar quando ela estiver disponível.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Escolha uma ferramenta vinculada a este estudo.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         {tools.map((tool) => {
@@ -39,7 +43,7 @@ export function StudyToolsTab({ tools, study }: { tools: readonly StudyTool[]; s
       {isFlashcardWorkspaceOpen && <FlashcardWorkspace study={study} />}
       {isQuizWorkspaceOpen && <QuizWorkspace study={study} />}
       {isNotesWorkspaceOpen && <NotesWorkspace study={study} />}
-      <SummaryList />
+      <SummaryList studyId={study.studyId} />
     </section>
   );
 }

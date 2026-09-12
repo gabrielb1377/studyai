@@ -66,4 +66,27 @@ export const ContentStorage = {
       : [record, ...store.records];
     this.save({ version: 1, records });
   },
+
+  updateFile(fileId: string, changes: Partial<Pick<ExtractedContent, "studyId">> & { name?: string }) {
+    const store = this.load();
+    const records = store.records.map((record) => record.fileId === fileId
+      ? {
+          ...record,
+          ...(changes.studyId ? { studyId: changes.studyId } : {}),
+          metadata: changes.name
+            ? { ...record.metadata, name: changes.name }
+            : record.metadata,
+        }
+      : record,
+    );
+    this.save({ version: 1, records });
+  },
+
+  removeByFileId(fileId: string) {
+    const store = this.load();
+    this.save({
+      version: 1,
+      records: store.records.filter((record) => record.fileId !== fileId),
+    });
+  },
 };

@@ -2,12 +2,9 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StudyRecord } from "@/types/study-engine";
-import { topics } from "./data";
 
 export function ContinueStudying({ records }: { records: readonly StudyRecord[] }) {
   const record = [...records].sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
-  const topic = topics.find((item) => item.id === record?.studyId) ?? topics[0];
-  const progress = record?.progress ?? topic.progress;
   return (
     <section
       className="relative flex min-h-72 flex-col overflow-hidden rounded-xl border border-primary/15 bg-secondary/60 p-6 sm:p-8"
@@ -18,29 +15,46 @@ export function ContinueStudying({ records }: { records: readonly StudyRecord[] 
           <span className="size-1.5 rounded-full bg-primary" />
           CONTINUE DE ONDE PAROU
         </p>
+        {record ? (
+          <>
         <p className="mb-2 text-xs text-muted-foreground">
-          {topic.subject} <span className="mx-1">/</span> Tema 03
+          {record.subject}{record.semester ? <><span className="mx-1">/</span>{record.semester}</> : null}
         </p>
         <h2
           id="continue-title"
           className="text-2xl font-semibold tracking-tight sm:text-[28px]"
         >
-          {topic.title}
+          {record.title}
         </h2>
         <p className="mt-3 max-w-80 text-sm leading-6 text-muted-foreground">
-          {topic.description}
+          Retome o estudo com seus materiais, anotações e atividades vinculadas.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-4">
           <Button asChild className="h-11 px-5">
-            <Link href={`/estudo?tema=${topic.id}`}>
+            <Link href={`/estudo?tema=${record.studyId}`}>
               Continuar estudando
               <ArrowRight className="size-4" />
             </Link>
           </Button>
           <span className="text-xs text-muted-foreground">
-            {progress}% concluído
+            {record.progress}% concluído
           </span>
         </div>
+          </>
+        ) : (
+          <>
+            <p className="mb-2 text-xs text-muted-foreground">Nenhum estudo organizado</p>
+            <h2 id="continue-title" className="text-2xl font-semibold tracking-tight sm:text-[28px]">
+              Seu próximo tema começa aqui
+            </h2>
+            <p className="mt-3 max-w-80 text-sm leading-6 text-muted-foreground">
+              Importe um material e organize-o para criar o primeiro estudo.
+            </p>
+            <Button asChild className="mt-7 h-11 px-5">
+              <Link href="/importar">Importar material<ArrowRight className="size-4" /></Link>
+            </Button>
+          </>
+        )}
       </div>
       <div
         className="pointer-events-none absolute -right-6 top-10 hidden size-52 items-center justify-center rounded-full border border-primary/10 xl:flex"

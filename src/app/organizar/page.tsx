@@ -10,7 +10,7 @@ export default function OrganizationPage() {
       <PageHeading
         eyebrow="Biblioteca"
         title="Organizar"
-        description="Revise a estrutura dos materiais antes de adicioná-los à sua biblioteca. Todos os dados desta etapa são mockados."
+        description="Organize os materiais importados por curso, semestre, matéria e tema."
       />
       <OrganizationWorkspace />
     </>

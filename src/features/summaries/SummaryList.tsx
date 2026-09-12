@@ -12,8 +12,8 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(new Date(value));
 }
 
-export function SummaryList() {
-  const { summaries, isReady, saveSummary, deleteSummary } = useSummaries();
+export function SummaryList({ studyId }: { studyId?: string }) {
+  const { summaries, isReady, saveSummary, deleteSummary } = useSummaries(studyId);
   const [selectedSummary, setSelectedSummary] = useState<StudySummary | null>(null);
 
   return (

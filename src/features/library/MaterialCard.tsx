@@ -1,16 +1,18 @@
 import { Clock3, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { formatFileSize } from "@/features/import/import-utils";
 import type { Material } from "@/types/material";
 import { formatMaterialDate, materialTypes } from "./material-utils";
 
 export function MaterialCard({ material }: { material: Material }) {
-  const { icon: Icon, label } = materialTypes[material.type];
+  const { icon: Icon, label } = materialTypes[material.fileType];
   const details = [
-    { label: "Curso", value: material.course },
-    { label: "Semestre", value: material.semester },
-    { label: "Matéria", value: material.subject },
-    { label: "Tema", value: material.topic },
+    { label: "Tamanho", value: formatFileSize(material.size) },
+    { label: "Curso", value: material.course ?? "Não organizado" },
+    { label: "Matéria", value: material.subject ?? "Não organizada" },
+    { label: "Tema", value: material.topic ?? "Não organizado" },
   ];
 
   return (
@@ -53,12 +55,19 @@ export function MaterialCard({ material }: { material: Material }) {
             </div>
           ))}
         </dl>
+        <div className="mb-4 space-y-2 border-t pt-4">
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+            <span>{material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
+            <span>{material.progress}%</span>
+          </div>
+          <Progress value={material.progress} aria-label={`Progresso de ${material.name}`} />
+        </div>
         <p className="mt-auto flex items-center gap-1.5 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
           <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
           <span>
-            Atualizado em{" "}
-            <time dateTime={material.updatedAt}>
-              {formatMaterialDate(material.updatedAt)}
+            Importado em{" "}
+            <time dateTime={material.importedAt}>
+              {formatMaterialDate(material.importedAt)}
             </time>
           </span>
         </p>

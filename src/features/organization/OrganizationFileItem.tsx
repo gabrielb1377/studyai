@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Film, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { FileText, Film, Headphones, ImageIcon, MoreHorizontal, Pencil, Presentation, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,12 +9,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { OrganizationFile } from "@/types/organization";
+import { formatFileSize } from "@/features/import/import-utils";
+import type { Material } from "@/types/material";
 
 const fileIcons = {
   pdf: FileText,
-  video: Film,
-  document: FileText,
+  docx: FileText,
+  pptx: Presentation,
+  txt: FileText,
+  mp4: Film,
+  mp3: Headphones,
+  wav: Headphones,
+  m4a: Headphones,
+  png: ImageIcon,
+  jpg: ImageIcon,
+  jpeg: ImageIcon,
+  webp: ImageIcon,
 };
 
 export function OrganizationFileItem({
@@ -23,12 +33,12 @@ export function OrganizationFileItem({
   onMove,
   onDelete,
 }: {
-  file: OrganizationFile;
-  onRename: (file: OrganizationFile) => void;
-  onMove: (file: OrganizationFile) => void;
-  onDelete: (file: OrganizationFile) => void;
+  file: Material;
+  onRename: (file: Material) => void;
+  onMove: (file: Material) => void;
+  onDelete: (file: Material) => void;
 }) {
-  const Icon = fileIcons[file.type];
+  const Icon = fileIcons[file.fileType];
 
   return (
     <li className="group flex min-w-0 items-center gap-3 rounded-lg border bg-card px-3 py-3 transition-colors hover:border-primary/30 sm:px-4">
@@ -39,9 +49,9 @@ export function OrganizationFileItem({
         <p className="truncate text-sm font-medium">{file.name}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
-            {file.typeLabel}
+            {file.fileType.toUpperCase()}
           </Badge>
-          <span>{file.size}</span>
+          <span>{formatFileSize(file.size)}</span>
         </div>
       </div>
       <DropdownMenu>
