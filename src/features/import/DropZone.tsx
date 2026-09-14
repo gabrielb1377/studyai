@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { FilePlus2, UploadCloud } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FilePlus2, FolderOpen, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { acceptedFileTypes, supportedExtensions } from "./import-utils";
@@ -14,12 +14,18 @@ export function DropZone({
   onFiles: (files: File[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
   function selectFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
     onFiles(Array.from(fileList));
   }
+
+  useEffect(() => {
+    folderInputRef.current?.setAttribute("webkitdirectory", "");
+    folderInputRef.current?.setAttribute("directory", "");
+  }, []);
 
   return (
     <section>
@@ -79,16 +85,41 @@ export function DropZone({
             event.target.value = "";
           }}
         />
-        <Button
-          type="button"
-          variant="outline"
-          className="mt-6 h-11"
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          accept={acceptedFileTypes}
           disabled={disabled}
-          onClick={() => inputRef.current?.click()}
-        >
-          <FilePlus2 className="size-4" aria-hidden="true" />
-          Selecionar arquivos
-        </Button>
+          className="sr-only"
+          aria-label="Selecionar pasta do dispositivo"
+          onChange={(event) => {
+            selectFiles(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11"
+            disabled={disabled}
+            onClick={() => inputRef.current?.click()}
+          >
+            <FilePlus2 className="size-4" aria-hidden="true" />
+            Selecionar arquivos
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11"
+            disabled={disabled}
+            onClick={() => folderInputRef.current?.click()}
+          >
+            <FolderOpen className="size-4" aria-hidden="true" />
+            Selecionar pasta
+          </Button>
+        </div>
         <p className="mt-5 text-xs text-muted-foreground">
           Formatos aceitos:{" "}
           {supportedExtensions.map((item) => item.toUpperCase()).join(", ")}

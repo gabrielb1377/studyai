@@ -1,7 +1,7 @@
 import type { Material, MaterialFileType } from "@/types/material";
 
 const STORAGE_KEY = "studyai:materials";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 export const MATERIALS_UPDATED_EVENT = "studyai:materials-updated";
 
 type MaterialStore = {
@@ -9,7 +9,7 @@ type MaterialStore = {
   materials: Material[];
 };
 
-function isMaterial(value: unknown): value is Material {
+function isMaterialBase(value: unknown): value is Omit<Material, "relativePath"> & { relativePath?: string } {
   if (!value || typeof value !== "object") return false;
   const material = value as Partial<Material>;
 
@@ -17,6 +17,7 @@ function isMaterial(value: unknown): value is Material {
     typeof material.id === "string" &&
     typeof material.fileId === "string" &&
     typeof material.name === "string" &&
+    (material.relativePath === undefined || typeof material.relativePath === "string") &&
     typeof material.fileType === "string" &&
     typeof material.size === "number" &&
     typeof material.importedAt === "string" &&
@@ -38,9 +39,20 @@ export const MaterialService = {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
 
-      const store = JSON.parse(raw) as Partial<MaterialStore>;
-      if (store.version !== STORAGE_VERSION || !Array.isArray(store.materials)) return [];
-      return store.materials.filter(isMaterial);
+      const store = JSON.parse(raw) as { version?: unknown; materials?: unknown[] };
+      if ((store.version !== 1 && store.version !== STORAGE_VERSION) || !Array.isArray(store.materials)) return [];
+      const materials = store.materials.filter(isMaterialBase).map((material) => {
+        const relativePath = material.relativePath || material.name;
+        return {
+          ...material,
+          relativePath,
+          identity: `${relativePath}:${material.size}:${material.lastModified}`,
+        } satisfies Material;
+      });
+      if (store.version === 1) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, materials }));
+      }
+      return materials;
     } catch {
       return [];
     }
@@ -55,12 +67,16 @@ export const MaterialService = {
 
   createFromFile(file: File, fileType: MaterialFileType, id: string): Material {
     const now = new Date().toISOString();
+    const relativePath = (file.webkitRelativePath || file.name)
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "");
 
     return {
       id,
       fileId: id,
-      identity: `${file.name}:${file.size}:${file.lastModified}`,
+      identity: `${relativePath}:${file.size}:${file.lastModified}`,
       name: file.name,
+      relativePath,
       fileType,
       mimeType: file.type,
       size: file.size,

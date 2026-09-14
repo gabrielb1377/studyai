@@ -22,6 +22,7 @@ export type Material = {
   fileId: string;
   identity: string;
   name: string;
+  relativePath: string;
   fileType: MaterialFileType;
   mimeType: string;
   size: number;

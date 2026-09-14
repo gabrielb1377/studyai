@@ -9,15 +9,19 @@ import { useQuiz } from "@/features/quiz/useQuiz";
 import { useNotes } from "@/features/notes/useNotes";
 import { ExtractionSummary } from "@/features/extraction/ExtractionSummary";
 import { EmbeddingSummary } from "@/features/retrieval/EmbeddingSummary";
+import { useMaterials } from "@/hooks/useMaterials";
+import { DashboardStats } from "./dashboard-stats";
 
 export function StudyDashboard() {
   const { records } = useStudyEngine();
   const { cards } = useFlashcards();
   const { results: quizzes } = useQuiz();
   const { notes } = useNotes();
+  const { materials } = useMaterials();
 
   return (
     <>
+      <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} />
       <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
         <ContinueStudying records={records} />
         <ImportMaterial />

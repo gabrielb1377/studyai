@@ -67,6 +67,7 @@ export function filterMaterials(
         material.semester ?? "",
         material.subject ?? "",
         material.topic ?? "",
+        material.relativePath,
       ].join(" "),
     );
     return matchesFilter && words.every((word) => text.includes(word));

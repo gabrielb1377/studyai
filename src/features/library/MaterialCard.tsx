@@ -10,9 +10,12 @@ export function MaterialCard({ material }: { material: Material }) {
   const { icon: Icon, label } = materialTypes[material.fileType];
   const details = [
     { label: "Tamanho", value: formatFileSize(material.size) },
-    { label: "Curso", value: material.course ?? "Não organizado" },
-    { label: "Matéria", value: material.subject ?? "Não organizada" },
-    { label: "Tema", value: material.topic ?? "Não organizado" },
+    { label: "Curso", value: material.course ?? "Não informado" },
+    { label: "Matéria", value: material.subject ?? "Não informada" },
+    { label: "Tema", value: material.topic ?? "Não informado" },
+    ...(material.relativePath !== material.name
+      ? [{ label: "Caminho", value: material.relativePath }]
+      : []),
   ];
 
   return (

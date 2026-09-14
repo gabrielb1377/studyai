@@ -17,15 +17,55 @@ export type MaterialDestination = {
   topic: string;
 };
 
+type InferredDestination = Pick<MaterialDestination, "subject" | "topic"> &
+  Partial<Pick<MaterialDestination, "course" | "semester">>;
+
 function normalized(value: string) {
   return value.trim().toLocaleLowerCase("pt-BR");
 }
 
-function sameDestination(material: Material, destination: MaterialDestination) {
-  return normalized(material.course ?? "") === normalized(destination.course) &&
-    normalized(material.semester ?? "") === normalized(destination.semester) &&
+function sameDestination(material: Material, destination: InferredDestination) {
+  return normalized(material.course ?? "") === normalized(destination.course ?? "") &&
+    normalized(material.semester ?? "") === normalized(destination.semester ?? "") &&
     normalized(material.subject ?? "") === normalized(destination.subject) &&
     normalized(material.topic ?? "") === normalized(destination.topic);
+}
+
+function titleFromSegment(value: string) {
+  return value
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function inferMaterialDestination(material: Pick<Material, "name" | "relativePath">): InferredDestination {
+  const path = material.relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
+  const folders = path.split("/").filter(Boolean).slice(0, -1).map(titleFromSegment);
+  const topicFromName = titleFromSegment(material.name) || "Material importado";
+
+  if (folders.length >= 4) {
+    return {
+      course: folders[0],
+      semester: folders[1],
+      subject: folders.at(-2) ?? folders[2],
+      topic: folders.at(-1) ?? topicFromName,
+    };
+  }
+  if (folders.length === 3) {
+    return {
+      course: folders[0],
+      subject: folders[1],
+      topic: folders[2],
+    };
+  }
+  if (folders.length === 2) {
+    return { subject: folders[0], topic: folders[1] };
+  }
+  if (folders.length === 1) {
+    return { subject: folders[0], topic: topicFromName };
+  }
+  return { subject: "Materiais importados", topic: topicFromName };
 }
 
 function synchronizeEmbeddings() {
@@ -50,6 +90,24 @@ function migrateStudyData(previousStudyId: string, studyId: string) {
 }
 
 export const OrganizationService = {
+  organizeImported(materialId: string) {
+    const material = MaterialService.findById(materialId);
+    if (!material) throw new Error("O material importado não foi encontrado.");
+
+    const destination = inferMaterialDestination(material);
+    const matchingStudy = MaterialService.load().find((candidate) =>
+      candidate.id !== material.id && candidate.studyId && sameDestination(candidate, destination),
+    );
+    const studyId = material.studyId && sameDestination(material, destination)
+      ? material.studyId
+      : matchingStudy?.studyId ?? crypto.randomUUID();
+    const updated = MaterialService.update(material.id, { ...destination, studyId });
+    if (!updated) throw new Error("Não foi possível vincular o material ao estudo.");
+
+    StudyEngine.save(StudyEngine.syncMaterial(StudyEngine.load(), updated));
+    return { ...updated, studyId };
+  },
+
   rename(materialId: string, name: string) {
     const nextName = name.trim();
     if (!nextName) return null;

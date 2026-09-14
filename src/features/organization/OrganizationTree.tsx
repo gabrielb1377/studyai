@@ -14,7 +14,7 @@ export function OrganizationTree({
   onMove: (file: Material) => void;
   onDelete: (file: Material) => void;
 }) {
-  const courses = Array.from(new Set(files.map((file) => file.course ?? "Não organizado")));
+  const courses = Array.from(new Set(files.map((file) => file.course ?? "Curso não informado")));
 
   return (
     <Card className="gap-0 py-0 shadow-none">
@@ -32,7 +32,7 @@ export function OrganizationTree({
         ) : (
           <ul aria-label="Árvore de materiais" className="space-y-5">
             {courses.map((course) => {
-              const courseFiles = files.filter((file) => (file.course ?? "Não organizado") === course);
+              const courseFiles = files.filter((file) => (file.course ?? "Curso não informado") === course);
               const semesters = Array.from(
                 new Set(courseFiles.map((file) => file.semester ?? "Sem semestre")),
               );
@@ -67,18 +67,35 @@ export function OrganizationTree({
                                   <Folder className="size-4 text-primary" aria-hidden="true" />
                                   {subject}
                                 </div>
-                                <ul className="space-y-2" aria-label={`${subject}: arquivos`}>
-                                  {semesterFiles
-                                    .filter((file) => (file.subject ?? "Sem matéria") === subject)
-                                    .map((file) => (
-                                      <OrganizationFileItem
-                                        key={file.id}
-                                        file={file}
-                                        onRename={onRename}
-                                        onMove={onMove}
-                                        onDelete={onDelete}
-                                      />
-                                    ))}
+                                <ul className="ml-2 space-y-4 border-l pl-4" aria-label={`${subject}: temas`}>
+                                  {Array.from(new Set(
+                                    semesterFiles
+                                      .filter((file) => (file.subject ?? "Sem matéria") === subject)
+                                      .map((file) => file.topic ?? "Sem tema"),
+                                  )).map((topic) => (
+                                    <li key={topic}>
+                                      <div className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                                        <Folder className="size-3.5 text-primary" aria-hidden="true" />
+                                        {topic}
+                                      </div>
+                                      <ul className="space-y-2" aria-label={`${topic}: arquivos`}>
+                                        {semesterFiles
+                                          .filter((file) =>
+                                            (file.subject ?? "Sem matéria") === subject &&
+                                            (file.topic ?? "Sem tema") === topic,
+                                          )
+                                          .map((file) => (
+                                            <OrganizationFileItem
+                                              key={file.id}
+                                              file={file}
+                                              onRename={onRename}
+                                              onMove={onMove}
+                                              onDelete={onDelete}
+                                            />
+                                          ))}
+                                      </ul>
+                                    </li>
+                                  ))}
                                 </ul>
                               </li>
                             ))}

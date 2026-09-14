@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
+import { OrganizationService } from "@/features/organization/OrganizationService";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
 import type { ImportFile, ImportPhase } from "@/types/import";
@@ -86,14 +87,25 @@ export function useImport() {
     const pendingFiles = files.filter(
       (file) => file.status === "uploaded" || file.status === "error",
     );
-    pendingFiles.forEach((item) => {
-      const material = MaterialService.createFromFile(
-        item.file,
-        item.extension as MaterialFileType,
-        item.id,
-      );
+    const extractionInputs = pendingFiles.map((item) => {
+      const existingMaterial = MaterialService.findById(item.id);
+      const material = existingMaterial
+        ? {
+            ...existingMaterial,
+            status: "processing" as const,
+            progress: 0,
+            error: undefined,
+            updatedAt: new Date().toISOString(),
+          }
+        : MaterialService.createFromFile(
+            item.file,
+            item.extension as MaterialFileType,
+            item.id,
+          );
       MaterialRuntimeStore.register(item.id, item.file);
       MaterialService.upsert(material);
+      const organized = OrganizationService.organizeImported(material.id);
+      return { id: item.id, file: item.file, studyId: organized.studyId };
     });
     setFiles((current) =>
       current.map((file) =>
@@ -103,7 +115,7 @@ export function useImport() {
       ),
     );
 
-    const results = await ExtractionPipeline.run(pendingFiles, {
+    const results = await ExtractionPipeline.run(extractionInputs, {
       onProgress: ({ fileId, status, progress }) => {
         MaterialService.update(fileId, {
           progress,

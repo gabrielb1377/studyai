@@ -11,10 +11,7 @@ import type {
   ExtractionProgress,
 } from "./ExtractionTypes";
 
-export const UNASSIGNED_STUDY_ID = "unassigned";
-
 type PipelineOptions = {
-  studyId?: string;
   onProgress?: (progress: ExtractionProgress) => void;
 };
 
@@ -46,10 +43,10 @@ function createRecord(
 
 export const ExtractionPipeline = {
   async run(inputs: readonly ExtractionInput[], options: PipelineOptions = {}) {
-    const studyId = options.studyId ?? UNASSIGNED_STUDY_ID;
     const results: ExtractedContent[] = [];
 
     for (const input of inputs) {
+      const studyId = input.studyId;
       const fileType = input.file.name.split(".").pop()?.toLowerCase() as ExtractionFileType;
       const processingRecord = createRecord(
         input,

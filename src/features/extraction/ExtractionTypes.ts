@@ -54,6 +54,7 @@ export type ExtractionStore = {
 export type ExtractionInput = {
   id: string;
   file: File;
+  studyId: string;
 };
 
 export type ExtractionProgress = {

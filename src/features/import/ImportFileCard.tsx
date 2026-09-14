@@ -8,6 +8,7 @@ import {
   fileTypeDetails,
   formatFileSize,
   importStatusDetails,
+  getFileRelativePath,
 } from "./import-utils";
 
 const statusIcons = {
@@ -30,6 +31,7 @@ export function ImportFileCard({
   const TypeIcon = type.icon;
   const status = importStatusDetails[item.status];
   const StatusIcon = statusIcons[item.status];
+  const relativePath = getFileRelativePath(item.file);
 
   return (
     <Card role="listitem" className="gap-4 p-4 shadow-none sm:p-5">
@@ -47,6 +49,9 @@ export function ImportFileCard({
             </Badge>
             <span>{formatFileSize(item.file.size)}</span>
           </div>
+          {relativePath !== item.file.name && (
+            <p className="mt-1 break-all text-xs text-muted-foreground">{relativePath}</p>
+          )}
         </div>
         <Button
           type="button"

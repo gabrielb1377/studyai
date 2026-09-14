@@ -48,7 +48,7 @@ export function ContinueStudying({ records }: { records: readonly StudyRecord[] 
               Seu próximo tema começa aqui
             </h2>
             <p className="mt-3 max-w-80 text-sm leading-6 text-muted-foreground">
-              Importe um material e organize-o para criar o primeiro estudo.
+              Importe um material para criar automaticamente o primeiro estudo.
             </p>
             <Button asChild className="mt-7 h-11 px-5">
               <Link href="/importar">Importar material<ArrowRight className="size-4" /></Link>

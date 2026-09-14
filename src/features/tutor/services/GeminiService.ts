@@ -61,7 +61,7 @@ export const GeminiService = {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       throw new GeminiServiceError(
-        "Gemini não configurado. Adicione GEMINI_API_KEY ao arquivo .env.local.",
+        "Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.",
         "MISSING_API_KEY",
         503,
       );

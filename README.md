@@ -36,7 +36,7 @@ Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um err
 | --- | --- |
 | Dashboard | Progresso, temas recentes e indicadores calculados somente a partir dos dados do usuário. |
 | Biblioteca | Pesquisa e filtros sobre arquivos realmente importados. |
-| Importar | Seleção local, drag and drop e extração de PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
+| Importar | Seleção local de arquivos ou pastas, drag and drop, criação automática do Study e extração de PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
 | Organizar | Árvore dos materiais importados; renomear, mover ou excluir atualiza todos os dados derivados. |
 | Estudo | Materiais do tema, visualizadores, progresso, notas, flashcards, quizzes, resumos e Tutor contextual. |
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |

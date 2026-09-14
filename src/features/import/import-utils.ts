@@ -70,6 +70,11 @@ export function getFileExtension(name: string) {
   return name.split(".").pop()?.toLocaleLowerCase("pt-BR") ?? "";
 }
 
+export function getFileRelativePath(file: File) {
+  const path = file.webkitRelativePath || file.name;
+  return path.replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
 export function isSupportedFile(file: File) {
   return supportedExtensions.includes(
     getFileExtension(file.name) as (typeof supportedExtensions)[number],
@@ -83,5 +88,5 @@ export function formatFileSize(size: number) {
 }
 
 export function getFileIdentity(file: File) {
-  return `${file.name}:${file.size}:${file.lastModified}`;
+  return `${getFileRelativePath(file)}:${file.size}:${file.lastModified}`;
 }

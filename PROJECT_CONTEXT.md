@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 12 de setembro de 2026.
+Atualizado em 14 de setembro de 2026.
 
 ## Propósito
 
@@ -47,7 +47,7 @@ Não existe banco de dados. As chaves atuais são:
 | Chave | Conteúdo |
 | --- | --- |
 | `studyai:materials` | Arquivos importados, status, progresso e organização. |
-| `studyai:study-engine:v2` | Estudos criados a partir de materiais organizados. |
+| `studyai:study-engine:v2` | Estudos criados automaticamente na importação e refinados pela organização. |
 | `studyai:tutor-conversations:v2` | Conversas criadas pelo usuário e suas mensagens. |
 | `studyai:summaries` | Resumos gerados e, opcionalmente, seu `studyId`. |
 | `studyai:flashcards` | Flashcards e métricas de revisão. |
@@ -65,6 +65,8 @@ Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválid
 ```text
 File selecionado
   → MaterialService / MaterialRuntimeStore
+  → inferência de matéria e tema pelo caminho relativo
+  → StudyEngine
   → ExtractionPipeline
   → MediaExtractionPipeline
   → ContentExtractionService
@@ -74,10 +76,12 @@ File selecionado
   → ContentStorage
   → ChunkService / ChunkStorage
   → EmbeddingService / EmbeddingStorage
-  → Biblioteca / Organização / Dashboard
+  → Biblioteca / Organização / Dashboard / Workspace / Tutor
 ```
 
-PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs sem texto são renderizados página a página e enviados ao mesmo OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador. O resultado segue automaticamente para chunks, embeddings e indexação. Materiais sem tema organizado recebem temporariamente `studyId: "unassigned"`. Ao organizar, o mesmo `studyId` é propagado para material, conteúdo extraído, chunks, embeddings e Study Engine.
+PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs com camada de texto permanecem no resultado do PDF.js; somente PDFs sem texto são renderizados página a página e enviados ao OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador.
+
+Todo material recebe um `studyId` antes da extração. Quando existe caminho relativo, os dois últimos diretórios representam matéria e tema; hierarquias maiores também preservam curso e semestre quando disponíveis. Arquivos avulsos usam o nome real do arquivo como tema. Materiais da mesma matéria e tema compartilham um Study. O mesmo `studyId` acompanha conteúdo, chunks, embeddings, resumos, flashcards, quizzes e notas.
 
 O núcleo, o worker e os idiomas do OCR são servidos por rotas internas a partir das dependências instaladas, com cache imutável. Nenhum material do usuário passa por essas rotas. O modelo de transcrição é obtido do Hugging Face Hub no primeiro uso, armazenado no cache do navegador e executado localmente nas execuções seguintes.
 
@@ -99,6 +103,8 @@ TutorWorkspace
 ```
 
 O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. Quando existe estudo atual, o `RetrievalService` consulta exclusivamente os chunks vinculados a ele; sem estudo selecionado, pesquisa o acervo extraído disponível. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. O `PromptBuilder` é executado no servidor e recebe pergunta, histórico, contexto do estudo e chunks. Se os embeddings falharem, o ranking lexical permanece disponível; se não houver resultados, o fluxo continua com o contexto do estudo ou com a mensagem original.
+
+Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interface exibe: `Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.` Nenhuma mensagem artificial é criada para substituir o provedor.
 
 Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões. Ele representa termos, raízes linguísticas, n-gramas e pares de palavras em um vetor normalizado. Todo o cálculo acontece no navegador, sem download de modelo, API externa ou banco vetorial. O contrato versionado permite substituir esse gerador por um modelo neural local futuramente.
 
