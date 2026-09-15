@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { AIService } from "@/features/ai/AIService";
+import { normalizeAIError } from "@/features/ai/AIErrors";
+import { isAIProviderId, type AIProviderId } from "@/features/ai/AIProvider";
+import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
-import {
-  GeminiService,
-  GeminiServiceError,
-} from "@/features/tutor/services/GeminiService";
-import { PromptBuilder } from "@/features/tutor/services/PromptBuilder";
 import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 
@@ -15,6 +14,7 @@ type SummaryRequest = {
   history: Array<Pick<TutorMessage, "content" | "role">>;
   context: TutorStudyContext;
   chunks: RetrievedChunk[];
+  provider?: AIProviderId;
 };
 
 function isSummaryRequest(value: unknown): value is SummaryRequest {
@@ -22,7 +22,8 @@ function isSummaryRequest(value: unknown): value is SummaryRequest {
   const request = value as Partial<SummaryRequest>;
   return Array.isArray(request.history) && request.history.every((message) =>
     Boolean(message) && (message.role === "assistant" || message.role === "user") && typeof message.content === "string",
-  ) && Boolean(request.context) && typeof request.context?.studyId === "string" &&
+  ) && (request.provider === undefined || isAIProviderId(request.provider)) &&
+    Boolean(request.context) && typeof request.context?.studyId === "string" &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => Boolean(chunk) && typeof chunk.text === "string" && chunk.text.length <= 8_000 && chunk.studyId === request.context?.studyId);
 }
@@ -37,25 +38,16 @@ export async function POST(request: Request) {
   }
 
   try {
-    const prompt = PromptBuilder.build({
-      question: "Gere um resumo fiel, claro e organizado apenas a partir dos materiais recuperados. Use títulos curtos e tópicos quando ajudarem a revisão. Não invente informações ausentes.",
-      history: body.history,
-      studyContext: body.context,
-      chunks: body.chunks,
-    });
-    const response = await GeminiService.generateReply({
+    const prompt = PromptBuilder.summary(body.history, body.context, body.chunks);
+    const response = await AIService.generate({
       history: prompt.history,
       message: prompt.message,
       signal: request.signal,
+      provider: body.provider,
     });
     return NextResponse.json(response);
   } catch (error) {
-    if (error instanceof GeminiServiceError) {
-      return NextResponse.json({ code: error.code, error: error.message }, { status: error.status });
-    }
-    return NextResponse.json(
-      { code: "UNKNOWN_ERROR", error: "Erro inesperado ao gerar o resumo." },
-      { status: 500 },
-    );
+    const normalized = normalizeAIError(error, "Erro inesperado ao gerar o resumo.");
+    return NextResponse.json(normalized.body, { status: normalized.status });
   }
 }

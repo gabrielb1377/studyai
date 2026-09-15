@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RetrievalService } from "@/features/retrieval/RetrievalService";
+import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
 import type { TutorConversation } from "@/types/tutor";
 import { TutorService } from "../services/TutorService";
 import { TutorStorage } from "../services/TutorStorage";
@@ -79,9 +79,7 @@ export function useTutor() {
     ));
 
     try {
-      const retrieval = RetrievalService.retrieve(nextContent, {
-        studyId: context?.studyId,
-      });
+      const retrieval = RetrievalPipeline.forQuestion(nextContent, context?.studyId);
       const response = await TutorService.requestReply(
         conversation.messages,
         nextContent,

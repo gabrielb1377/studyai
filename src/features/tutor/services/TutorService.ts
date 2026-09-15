@@ -1,6 +1,7 @@
 import type { TutorConversation, TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
+import { AIClient } from "@/features/ai/AIClient";
 import { createTutorId, getMessageText } from "../utils/message-utils";
 
 type TutorApiResponse = {
@@ -71,10 +72,9 @@ export const TutorService = {
     context?: TutorStudyContext | null,
     chunks: readonly RetrievedChunk[] = [],
   ): Promise<{ model: string; text: string }> {
-    const response = await fetch("/api/tutor", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const data = await AIClient.request<TutorApiResponse>(
+      "/api/tutor",
+      {
         history: history.map((historyMessage) => ({
           role: historyMessage.role,
           content: getMessageText(historyMessage),
@@ -82,13 +82,11 @@ export const TutorService = {
         message,
         context: context ?? undefined,
         chunks: chunks.length > 0 ? chunks : undefined,
-      }),
-    });
-    const data = await response.json().catch(() => null) as TutorApiResponse | null;
-    if (!response.ok || !data?.text) {
-      throw new TutorRequestError(data?.error ?? "Não foi possível obter uma resposta do Tutor IA.");
-    }
-    return { model: data.model ?? "Gemini", text: data.text };
+      },
+      "Não foi possível obter uma resposta do Tutor IA.",
+    );
+    if (!data.text) throw new TutorRequestError("O provider retornou uma resposta vazia.");
+    return { model: data.model ?? "IA", text: data.text };
   },
 
   async requestSummary(
@@ -96,22 +94,19 @@ export const TutorService = {
     context: TutorStudyContext,
     chunks: readonly RetrievedChunk[],
   ): Promise<{ model: string; text: string }> {
-    const response = await fetch("/api/tutor/summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const data = await AIClient.request<TutorApiResponse>(
+      "/api/tutor/summary",
+      {
         history: history.map((historyMessage) => ({
           role: historyMessage.role,
           content: getMessageText(historyMessage),
         })),
         context,
         chunks,
-      }),
-    });
-    const data = await response.json().catch(() => null) as TutorApiResponse | null;
-    if (!response.ok || !data?.text) {
-      throw new TutorRequestError(data?.error ?? "Não foi possível gerar o resumo agora.");
-    }
-    return { model: data.model ?? "Gemini", text: data.text };
+      },
+      "Não foi possível gerar o resumo agora.",
+    );
+    if (!data.text) throw new TutorRequestError("O provider retornou um resumo vazio.");
+    return { model: data.model ?? "IA", text: data.text };
   },
 };

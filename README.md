@@ -1,6 +1,6 @@
 # StudyAI
 
-Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação, extração e recuperação híbrida local de materiais, um ambiente de estudo, recursos de revisão e um Tutor IA integrado ao Gemini.
+Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação, extração e recuperação híbrida local de materiais, um ambiente de estudo, recursos de revisão e um Tutor IA desacoplado por providers.
 
 ## Início rápido
 
@@ -20,7 +20,7 @@ npm run test:e2e
 npm run build
 ```
 
-## Configuração do Gemini
+## Configuração de IA
 
 Copie o conteúdo de `.env.example` para `.env.local` e informe uma chave válida:
 
@@ -28,7 +28,7 @@ Copie o conteúdo de `.env.example` para `.env.local` e informe uma chave válid
 GEMINI_API_KEY=
 ```
 
-Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um erro tratável. Nenhuma chave é exposta ao cliente: as chamadas ao Gemini ocorrem somente em Route Handlers.
+Gemini é o provider funcional atual. Sem a chave, Tutor, resumos, flashcards e quizzes exibem um erro tratável. Nenhuma chave é exposta ao cliente: as chamadas aos providers ocorrem somente em Route Handlers e passam pelo `AIService`.
 
 ## Módulos atuais
 
@@ -41,7 +41,8 @@ Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um err
 | Estudo | Materiais do tema, visualizadores, progresso, notas, flashcards, quizzes, resumos e Tutor contextual. |
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
 | RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
-| Configurações | Tema claro, escuro ou do sistema. |
+| AI Core | Serviço central, providers, prompts, contexto, retrieval e erros normalizados. |
+| Configurações | Tema visual e seleção persistida do provider de IA. |
 
 ## Arquitetura
 
@@ -49,7 +50,7 @@ Sem a chave, o Tutor, a geração de resumos, flashcards e quizzes exibem um err
 src/
 ├── app/                 # Rotas App Router e Route Handlers
 ├── components/          # Layout compartilhado e componentes UI
-├── features/            # Módulos de domínio e suas interfaces
+├── features/            # Módulos de domínio, incluindo o AI Core
 ├── hooks/               # Estado transversal de layout
 ├── lib/                 # Utilitários e persistência local compartilhada
 ├── services/            # Registro persistido e referências de runtime dos materiais
@@ -61,7 +62,7 @@ Os dados pessoais são locais por enquanto. Serviços de browser validam o conte
 
 ## Limites deliberados
 
-Esta versão não tem banco vetorial, banco de dados, autenticação, sincronização ou Ollama. O RAG combina embeddings linguísticos locais com ranking lexical: a IA recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebe arquivos físicos nem todo o acervo.
+Esta versão não tem banco vetorial, banco de dados, autenticação, sincronização ou integração funcional com Ollama/OpenRouter. O RAG combina embeddings linguísticos locais com ranking lexical: a IA recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebe arquivos físicos nem todo o acervo.
 
 ## Referências
 

@@ -1,19 +1,22 @@
 import { NextResponse } from "next/server";
 
-import { ContextAssembler } from "@/features/retrieval/ContextAssembler";
+import { AIService } from "@/features/ai/AIService";
+import { normalizeAIError } from "@/features/ai/AIErrors";
+import { isAIProviderId, type AIProviderId } from "@/features/ai/AIProvider";
+import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
-import { GeminiService, GeminiServiceError } from "@/features/tutor/services/GeminiService";
 
 export const runtime = "nodejs";
 
-type FlashcardRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[] };
+type FlashcardRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; provider?: AIProviderId };
 type GeneratedFlashcard = { question: string; answer: string; difficulty: "easy" | "medium" | "hard" };
 
 function isRequest(value: unknown): value is FlashcardRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Partial<FlashcardRequest>;
   return typeof request.studyId === "string" && typeof request.title === "string" && typeof request.subject === "string" &&
+    (request.provider === undefined || isAIProviderId(request.provider)) &&
     Boolean(request.studyId.trim() && request.title.trim() && request.subject.trim()) &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => isRetrievedChunk(chunk) && chunk.studyId === request.studyId);
@@ -38,17 +41,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const source = ContextAssembler.assemble(body.chunks);
-    const response = await GeminiService.generateReply({
+    const response = await AIService.generate({
       history: [],
       signal: request.signal,
-      message: `Crie 5 flashcards curtos em português usando somente o conteúdo fornecido. Responda apenas com um array JSON válido, sem markdown. Cada item deve ter question, answer e difficulty (easy, medium ou hard).\n\nTema: ${body.title}\nMatéria: ${body.subject}\n\nConteúdo real extraído:\n${source}`,
+      message: PromptBuilder.flashcards(body.title, body.subject, body.chunks),
+      provider: body.provider,
     });
     const cards = parseCards(response.text);
-    if (!cards) return NextResponse.json({ error: "O Gemini não retornou flashcards em um formato válido." }, { status: 502 });
+    if (!cards) return NextResponse.json({ error: "O provider não retornou flashcards em um formato válido." }, { status: 502 });
     return NextResponse.json({ cards });
   } catch (error) {
-    if (error instanceof GeminiServiceError) return NextResponse.json({ error: error.message }, { status: error.status });
-    return NextResponse.json({ error: "Erro inesperado ao criar flashcards." }, { status: 500 });
+    const normalized = normalizeAIError(error, "Erro inesperado ao criar flashcards.");
+    return NextResponse.json(normalized.body, { status: normalized.status });
   }
 }

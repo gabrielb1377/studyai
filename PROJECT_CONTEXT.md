@@ -30,7 +30,8 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/components/ui` | Primitivos visuais reutilizáveis. |
 | `src/features/dashboard` | Painel inicial e indicadores. |
 | `src/features/study` | Workspace de um tema e Study Engine. |
-| `src/features/tutor` | Conversas, contexto, prompt e comunicação com o Tutor. |
+| `src/features/ai` | AIService, contrato de providers, seleção, prompts, contexto, retrieval e erros. |
+| `src/features/tutor` | Conversas, persistência e interface do Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
@@ -54,6 +55,7 @@ Não existe banco de dados. As chaves atuais são:
 | `studyai:quizzes` | Questões geradas e resultados. |
 | `studyai:notes` | Notas em Markdown básico. |
 | `studyai-theme` | Preferência visual. |
+| `studyai:ai-settings` | Provider selecionado para todas as ferramentas de IA. |
 | `studyai:extracted-content` | Texto, metadados e status produzidos pelo pipeline. |
 | `studyai:content-chunks` | Chunks versionados com proveniência, prontos para futura indexação. |
 | `studyai:embeddings` | Vetores locais versionados, status e data da última indexação. |
@@ -91,18 +93,23 @@ O núcleo, o worker e os idiomas do OCR são servidos por rotas internas a parti
 TutorWorkspace
   → useTutor / useTutorContext
   → TutorContextService
-  → RetrievalService
+  → RetrievalPipeline
   → SemanticSearchService + SearchService
   → RankingService
   → TutorService
+  → AIClient
   → /api/tutor
   → PromptBuilder
-  → ContextAssembler
-  → GeminiService
+  → ContextBuilder
+  → AIService
+  → AIProvider
+  → GeminiProvider
   → Gemini API
 ```
 
-O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. Quando existe estudo atual, o `RetrievalService` consulta exclusivamente os chunks vinculados a ele; sem estudo selecionado, pesquisa o acervo extraído disponível. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. O `PromptBuilder` é executado no servidor e recebe pergunta, histórico, contexto do estudo e chunks. Se os embeddings falharem, o ranking lexical permanece disponível; se não houver resultados, o fluxo continua com o contexto do estudo ou com a mensagem original.
+O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. `PromptBuilder` e `ContextBuilder` são executados no servidor. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`; nenhuma feature conhece a implementação Gemini.
+
+`AIProvider` define o contrato comum. `GeminiProvider` é funcional; `OllamaProvider` e `OpenRouterProvider` são stubs que retornam erros normalizados e não realizam chamadas externas. O provider escolhido em Configurações é enviado às rotas internas pelo `AIClient`.
 
 Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interface exibe: `Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.` Nenhuma mensagem artificial é criada para substituir o provedor.
 
@@ -112,14 +119,14 @@ Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões.
 
 | Endpoint | Finalidade |
 | --- | --- |
-| `POST /api/tutor` | Conversa contextual com Gemini. |
+| `POST /api/tutor` | Conversa contextual pelo provider selecionado. |
 | `POST /api/tutor/summary` | Resumo baseado no contexto e nos chunks reais de um estudo. |
 | `POST /api/tutor/flashcards` | Flashcards gerados somente de chunks reais. |
 | `POST /api/tutor/quiz` | Questões geradas somente de chunks reais. |
 | `GET /api/ocr/assets/[asset]` | Worker e núcleo WebAssembly locais do Tesseract.js. |
 | `GET /api/ocr/languages/[language]` | Dados locais de idioma usados pelo OCR. |
 
-Todos validam o corpo recebido e normalizam erros do `GeminiService`. Eles não recebem nem leem arquivos físicos.
+Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem nem leem arquivos físicos.
 
 ## Limites conhecidos
 

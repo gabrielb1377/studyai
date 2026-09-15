@@ -36,7 +36,7 @@ export function TutorComposer({ draft, isLoading, isSummaryLoading, onDraftChang
           </Button>
         </div>
       </form>
-      <p className="mt-2 text-center text-xs text-muted-foreground">As respostas são geradas pelo Gemini e podem conter imprecisões.</p>
+      <p className="mt-2 text-center text-xs text-muted-foreground">As respostas são geradas pelo provider selecionado e podem conter imprecisões.</p>
     </div>
   );
 }

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import {
-  GeminiService,
-  GeminiServiceError,
-} from "@/features/tutor/services/GeminiService";
+import { AIService } from "@/features/ai/AIService";
+import { normalizeAIError } from "@/features/ai/AIErrors";
+import { isAIProviderId, type AIProviderId } from "@/features/ai/AIProvider";
+import { PromptBuilder } from "@/features/ai/PromptBuilder";
+import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
-import { PromptBuilder } from "@/features/tutor/services/PromptBuilder";
 
 export const runtime = "nodejs";
 
@@ -15,23 +15,8 @@ type TutorRequest = {
   message: string;
   context?: TutorStudyContext;
   chunks?: RetrievedChunk[];
+  provider?: AIProviderId;
 };
-
-function isRetrievedChunk(value: unknown): value is RetrievedChunk {
-  if (typeof value !== "object" || value === null) return false;
-  const chunk = value as Partial<RetrievedChunk>;
-  return typeof chunk.id === "string" && typeof chunk.studyId === "string" &&
-    typeof chunk.fileId === "string" && Number.isInteger(chunk.chunkIndex) &&
-    typeof chunk.text === "string" && chunk.text.length <= 8_000 &&
-    typeof chunk.score === "number" && Number.isFinite(chunk.score) &&
-    Array.isArray(chunk.matchedTerms) && chunk.matchedTerms.every((term) => typeof term === "string") &&
-    typeof chunk.metadata === "object" && chunk.metadata !== null &&
-    typeof chunk.metadata.extractedContentId === "string" &&
-    typeof chunk.metadata.sourceName === "string" &&
-    typeof chunk.metadata.fileType === "string" &&
-    typeof chunk.metadata.mimeType === "string" &&
-    typeof chunk.metadata.size === "number";
-}
 
 function isTutorContext(value: unknown): value is TutorStudyContext {
   if (typeof value !== "object" || value === null) return false;
@@ -52,6 +37,7 @@ function isTutorRequest(value: unknown): value is TutorRequest {
   if (typeof value !== "object" || value === null) return false;
   const request = value as Partial<TutorRequest>;
   return typeof request.message === "string" && request.message.trim().length > 0 &&
+    (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.context === undefined || isTutorContext(request.context)) &&
     (request.chunks === undefined || (
       Array.isArray(request.chunks) && request.chunks.length <= 10 &&
@@ -74,28 +60,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const prompt = PromptBuilder.build({
+    const prompt = PromptBuilder.contextual({
       question: body.message,
       history: body.history,
       studyContext: body.context,
       chunks: body.chunks,
     });
-    const response = await GeminiService.generateReply({
+    const response = await AIService.generate({
       history: prompt.history,
       message: prompt.message,
       signal: request.signal,
+      provider: body.provider,
     });
     return NextResponse.json(response);
   } catch (error) {
-    if (error instanceof GeminiServiceError) {
-      return NextResponse.json(
-        { code: error.code, error: error.message },
-        { status: error.status },
-      );
-    }
-    return NextResponse.json(
-      { code: "UNKNOWN_ERROR", error: "Erro inesperado ao consultar o Tutor IA." },
-      { status: 500 },
-    );
+    const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
+    return NextResponse.json(normalized.body, { status: normalized.status });
   }
 }

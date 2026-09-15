@@ -1,6 +1,7 @@
 import type { QuizDifficulty, QuizQuestion, QuizResult } from "@/types/quiz";
 import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
-import { RetrievalService } from "@/features/retrieval/RetrievalService";
+import { AIClient } from "@/features/ai/AIClient";
+import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
 
 const STORAGE_KEY = "studyai:quizzes";
 const UPDATE_EVENT = "studyai:quiz-updated";
@@ -71,19 +72,16 @@ export const QuizService = {
   },
 
   async requestGeneration({ studyId, title, subject }: { studyId: string; title: string; subject: string }) {
-    const chunks = RetrievalService.forStudy(studyId).chunks;
+    const chunks = RetrievalPipeline.forStudy(studyId).chunks;
     if (chunks.length === 0) {
       throw new Error("Este estudo ainda não possui conteúdo real extraído para gerar um quiz.");
     }
-    const response = await fetch("/api/tutor/quiz", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ studyId, title, subject, chunks }),
-    });
-    const data = await response.json().catch(() => null) as { questions?: GeneratedQuestion[]; error?: string } | null;
-    if (!response.ok || !data?.questions) {
-      throw new Error(data?.error ?? "Não foi possível criar o quiz agora.");
-    }
+    const data = await AIClient.request<{ questions?: GeneratedQuestion[] }>(
+      "/api/tutor/quiz",
+      { studyId, title, subject, chunks },
+      "Não foi possível criar o quiz agora.",
+    );
+    if (!data.questions) throw new Error("O provider retornou questões inválidas.");
     return data.questions;
   },
 };

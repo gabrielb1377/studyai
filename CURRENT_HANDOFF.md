@@ -1,10 +1,36 @@
-# Handoff Atual — Sprint 20.5A
+# Handoff Atual — Sprint 21
 
 Atualizado em 14 de setembro de 2026.
 
 ## Estado entregue
 
 O StudyAI utiliza exclusivamente dados criados pelo usuário. A importação cria o registro oficial, infere matéria e tema, cria ou reutiliza um Study, executa a extração e atualiza Biblioteca, Organização e Dashboard sem depender de uma organização manual posterior.
+
+A camada de IA agora é centralizada em `src/features/ai`. Tutor, resumo, flashcards e quiz não conhecem Gemini nem acessam o Retrieval Service diretamente.
+
+```text
+Feature cliente
+  → RetrievalPipeline
+  → AIClient
+  → Route Handler
+  → PromptBuilder / ContextBuilder
+  → AIService
+  → AIProvider
+  → GeminiProvider | OllamaProvider (stub) | OpenRouterProvider (stub)
+```
+
+## AI Core
+
+- `AIProvider.ts`: contrato compartilhado de requests, responses e providers.
+- `AIService.ts`: registro e resolução central no servidor.
+- `AIClient.ts`: fronteira única entre features cliente e rotas internas.
+- `AISettings.ts`: provider selecionado e persistido no navegador.
+- `PromptBuilder.ts`: prompts de Tutor, resumo, flashcards e quiz.
+- `ContextBuilder.ts`: contexto do Study e trechos recuperados com limite de tamanho.
+- `RetrievalPipeline.ts`: única entrada das features de IA para o RAG local.
+- `AIErrors.ts`: erros e normalização HTTP independentes do provider.
+
+Gemini é o único provider funcional. Ollama e OpenRouter são stubs seguros, sem chamadas HTTP. A página existente de Configurações permite selecionar o provider e sinaliza integrações ainda indisponíveis.
 
 ```text
 File selecionado
@@ -76,6 +102,7 @@ Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico �
 | `studyai:flashcards` | Flashcards por estudo. |
 | `studyai:quizzes` | Questões e resultados por estudo. |
 | `studyai:notes` | Notas por estudo. |
+| `studyai:ai-settings` | Provider selecionado para todas as ferramentas de IA. |
 
 ## Limites atuais
 
@@ -95,6 +122,8 @@ npm run test:e2e
 npm run build
 ```
 
+Na Sprint 21, a suíte completa possui 31 cenários E2E. Ela também valida a persistência da seleção de provider e o erro seguro dos providers stub.
+
 ## Próximo passo seguro
 
-Persistir os binários em IndexedDB com migração versionada e política de quota. Isso permitiria reabrir visualizadores após recarregar sem alterar os contratos atuais de Material, Content, Chunk ou Study.
+Implementar um dos providers stub dentro do contrato `AIProvider`. Essa mudança ficará isolada no arquivo do provider e não exigirá alterações em Tutor, resumos, flashcards, quiz, RAG ou Route Handlers.
