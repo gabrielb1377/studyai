@@ -26,9 +26,10 @@ Copie o conteúdo de `.env.example` para `.env.local` e informe uma chave válid
 
 ```env
 GEMINI_API_KEY=
+OLLAMA_URL=http://localhost:11434
 ```
 
-Gemini é o provider funcional atual. Sem a chave, Tutor, resumos, flashcards e quizzes exibem um erro tratável. Nenhuma chave é exposta ao cliente: as chamadas aos providers ocorrem somente em Route Handlers e passam pelo `AIService`.
+Gemini e Ollama são providers funcionais. Sem a chave do Gemini, suas ferramentas exibem um erro tratável. Para usar IA local, inicie o Ollama; o StudyAI detecta a versão e os modelos instalados em Configurações, sem nomes fixos. Nenhuma credencial ou chamada de provider é exposta ao cliente: toda comunicação passa por Route Handlers e pelo `AIService`.
 
 ## Módulos atuais
 
@@ -42,7 +43,7 @@ Gemini é o provider funcional atual. Sem a chave, Tutor, resumos, flashcards e 
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
 | RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
 | AI Core | Serviço central, providers, prompts, contexto, retrieval e erros normalizados. |
-| Configurações | Tema visual e seleção persistida do provider de IA. |
+| Configurações | Tema visual, provider, descoberta de modelos Ollama, teste de conexão e seleção persistida do modelo. |
 
 ## Arquitetura
 
@@ -62,7 +63,7 @@ Os dados pessoais são locais por enquanto. Serviços de browser validam o conte
 
 ## Limites deliberados
 
-Esta versão não tem banco vetorial, banco de dados, autenticação, sincronização ou integração funcional com Ollama/OpenRouter. O RAG combina embeddings linguísticos locais com ranking lexical: a IA recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebe arquivos físicos nem todo o acervo.
+Esta versão não tem banco vetorial, banco de dados, autenticação, sincronização ou integração funcional com OpenRouter/Groq. O RAG combina embeddings linguísticos locais com ranking lexical: Gemini ou Ollama recebem somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebem arquivos físicos nem todo o acervo.
 
 ## Referências
 

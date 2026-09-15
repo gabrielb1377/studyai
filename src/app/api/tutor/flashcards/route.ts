@@ -9,7 +9,7 @@ import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 
 export const runtime = "nodejs";
 
-type FlashcardRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; provider?: AIProviderId };
+type FlashcardRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; model?: string; provider?: AIProviderId };
 type GeneratedFlashcard = { question: string; answer: string; difficulty: "easy" | "medium" | "hard" };
 
 function isRequest(value: unknown): value is FlashcardRequest {
@@ -17,6 +17,7 @@ function isRequest(value: unknown): value is FlashcardRequest {
   const request = value as Partial<FlashcardRequest>;
   return typeof request.studyId === "string" && typeof request.title === "string" && typeof request.subject === "string" &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
+    (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     Boolean(request.studyId.trim() && request.title.trim() && request.subject.trim()) &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => isRetrievedChunk(chunk) && chunk.studyId === request.studyId);
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
       history: [],
       signal: request.signal,
       message: PromptBuilder.flashcards(body.title, body.subject, body.chunks),
+      model: body.model,
       provider: body.provider,
     });
     const cards = parseCards(response.text);

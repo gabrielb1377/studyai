@@ -1,4 +1,4 @@
-# Handoff Atual — Sprint 21
+# Handoff Atual — Sprint 22
 
 Atualizado em 14 de setembro de 2026.
 
@@ -16,7 +16,7 @@ Feature cliente
   → PromptBuilder / ContextBuilder
   → AIService
   → AIProvider
-  → GeminiProvider | OllamaProvider (stub) | OpenRouterProvider (stub)
+  → GeminiProvider | OllamaProvider | OpenRouterProvider (stub) | GroqProvider (stub)
 ```
 
 ## AI Core
@@ -24,13 +24,24 @@ Feature cliente
 - `AIProvider.ts`: contrato compartilhado de requests, responses e providers.
 - `AIService.ts`: registro e resolução central no servidor.
 - `AIClient.ts`: fronteira única entre features cliente e rotas internas.
-- `AISettings.ts`: provider selecionado e persistido no navegador.
+- `AISettings.ts`: provider e modelo selecionados, com migração da preferência anterior e persistência no navegador.
 - `PromptBuilder.ts`: prompts de Tutor, resumo, flashcards e quiz.
 - `ContextBuilder.ts`: contexto do Study e trechos recuperados com limite de tamanho.
 - `RetrievalPipeline.ts`: única entrada das features de IA para o RAG local.
 - `AIErrors.ts`: erros e normalização HTTP independentes do provider.
 
-Gemini é o único provider funcional. Ollama e OpenRouter são stubs seguros, sem chamadas HTTP. A página existente de Configurações permite selecionar o provider e sinaliza integrações ainda indisponíveis.
+Gemini e Ollama são providers funcionais. OpenRouter e Groq são stubs seguros. A página de Configurações lista os modelos realmente instalados no Ollama, permite selecionar um deles e testa conexão, versão e latência por uma rota interna do Next.js.
+
+```text
+Configurações / Feature
+  → AIClient
+  → Route Handler interno
+  → AIService
+  → OllamaProvider
+  → GET /api/tags | GET /api/version | POST /api/chat
+```
+
+O `OllamaProvider` usa `http://localhost:11434` por padrão ou `OLLAMA_URL` quando configurado. O chat recebe uma mensagem de sistema, o histórico e o prompt contextual já montado pelo AI Core. Respostas completas e streams NDJSON são normalizados no mesmo `AIResponse`.
 
 ```text
 File selecionado
@@ -79,7 +90,7 @@ Renomear atualiza o nome do material e a proveniência do conteúdo. Excluir rem
 - Quiz: exige chunks reais vinculados ao `studyId`.
 - Notas: recebem automaticamente o `studyId` do Workspace aberto.
 
-Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico é enviado ao Gemini.
+Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico é enviado ao Gemini ou ao Ollama.
 
 ## Dashboard e Biblioteca
 
@@ -102,14 +113,15 @@ Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico �
 | `studyai:flashcards` | Flashcards por estudo. |
 | `studyai:quizzes` | Questões e resultados por estudo. |
 | `studyai:notes` | Notas por estudo. |
-| `studyai:ai-settings` | Provider selecionado para todas as ferramentas de IA. |
+| `studyai:ai-settings` | Provider e modelo selecionados para todas as ferramentas de IA. |
 
 ## Limites atuais
 
 - O binário original não é persistido, pois ainda não há banco, IndexedDB ou upload. Depois de recarregar a página, o texto extraído permanece, mas PDF, áudio, vídeo ou imagem precisam ser selecionados novamente para visualização binária.
 - A primeira transcrição depende do download do modelo Whisper; indisponibilidade de rede é registrada como erro do arquivo sem interromper os demais.
 - O histórico do Tutor é local ao navegador.
-- Não há Ollama, banco, cloud ou sincronização.
+- O Ollama depende de um serviço local em execução e de pelo menos um modelo instalado.
+- Não há banco, cloud ou sincronização.
 
 ## Validação
 
@@ -122,8 +134,8 @@ npm run test:e2e
 npm run build
 ```
 
-Na Sprint 21, a suíte completa possui 31 cenários E2E. Ela também valida a persistência da seleção de provider e o erro seguro dos providers stub.
+Na Sprint 22, a suíte completa possui 32 cenários E2E. Ela também valida descoberta dinâmica de modelos, diagnóstico do Ollama, persistência da seleção e propagação do modelo ao Tutor pelo AI Core. A integração real foi verificada localmente com Ollama 0.32.14 e `qwen3:4b`: diagnóstico e conversa retornaram HTTP 200 pelo Route Handler do StudyAI.
 
 ## Próximo passo seguro
 
-Implementar um dos providers stub dentro do contrato `AIProvider`. Essa mudança ficará isolada no arquivo do provider e não exigirá alterações em Tutor, resumos, flashcards, quiz, RAG ou Route Handlers.
+Implementar OpenRouter ou Groq dentro do contrato `AIProvider`, mantendo as features dependentes apenas de `AIClient`, `RetrievalPipeline` e `AIService`.

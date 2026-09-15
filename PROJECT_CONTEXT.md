@@ -4,7 +4,7 @@ Atualizado em 14 de setembro de 2026.
 
 ## Propósito
 
-StudyAI é um workspace pessoal de estudos. A versão atual oferece extração com OCR e transcrição local, recuperação híbrida dos materiais, experiências para organizar uma rotina de estudo e uma integração inicial com Gemini.
+StudyAI é um workspace pessoal de estudos. A versão atual oferece extração com OCR e transcrição local, recuperação híbrida dos materiais, experiências para organizar uma rotina de estudo e integrações funcionais com Gemini e Ollama.
 
 ## Stack
 
@@ -103,13 +103,13 @@ TutorWorkspace
   → ContextBuilder
   → AIService
   → AIProvider
-  → GeminiProvider
-  → Gemini API
+  → GeminiProvider | OllamaProvider
+  → Gemini API | Ollama local
 ```
 
 O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. `PromptBuilder` e `ContextBuilder` são executados no servidor. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`; nenhuma feature conhece a implementação Gemini.
 
-`AIProvider` define o contrato comum. `GeminiProvider` é funcional; `OllamaProvider` e `OpenRouterProvider` são stubs que retornam erros normalizados e não realizam chamadas externas. O provider escolhido em Configurações é enviado às rotas internas pelo `AIClient`.
+`AIProvider` define o contrato comum. `GeminiProvider` e `OllamaProvider` são funcionais; OpenRouter e Groq permanecem stubs seguros. O provider e o modelo escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama consulta dinamicamente `/api/tags`, verifica `/api/version` e conversa por `/api/chat`, com timeout, cancelamento e suporte a resposta completa ou NDJSON. O navegador nunca acessa o processo local diretamente.
 
 Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interface exibe: `Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.` Nenhuma mensagem artificial é criada para substituir o provedor.
 
@@ -123,6 +123,7 @@ Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões.
 | `POST /api/tutor/summary` | Resumo baseado no contexto e nos chunks reais de um estudo. |
 | `POST /api/tutor/flashcards` | Flashcards gerados somente de chunks reais. |
 | `POST /api/tutor/quiz` | Questões geradas somente de chunks reais. |
+| `GET /api/ai/providers/[provider]` | Disponibilidade, versão, latência e modelos do provider pelo AI Core. |
 | `GET /api/ocr/assets/[asset]` | Worker e núcleo WebAssembly locais do Tesseract.js. |
 | `GET /api/ocr/languages/[language]` | Dados locais de idioma usados pelo OCR. |
 
@@ -134,7 +135,8 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 - O binário original fica disponível somente durante a sessão atual. Após recarregar, o conteúdo extraído permanece, mas o arquivo precisa ser selecionado novamente para reprodução ou visualização binária.
 - O primeiro uso da transcrição requer download do modelo Whisper; o tamanho e o tempo dependem da conexão e do dispositivo. Depois disso, o cache do navegador é reutilizado.
 - A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
-- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação, cloud de processamento ou Ollama.
+- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação ou cloud de processamento.
+- O Ollama precisa estar em execução no endereço configurado por `OLLAMA_URL` e possuir ao menos um modelo instalado.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 
 ## Qualidade

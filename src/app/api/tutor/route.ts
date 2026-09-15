@@ -15,7 +15,9 @@ type TutorRequest = {
   message: string;
   context?: TutorStudyContext;
   chunks?: RetrievedChunk[];
+  model?: string;
   provider?: AIProviderId;
+  stream?: boolean;
 };
 
 function isTutorContext(value: unknown): value is TutorStudyContext {
@@ -37,7 +39,9 @@ function isTutorRequest(value: unknown): value is TutorRequest {
   if (typeof value !== "object" || value === null) return false;
   const request = value as Partial<TutorRequest>;
   return typeof request.message === "string" && request.message.trim().length > 0 &&
+    (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
+    (request.stream === undefined || typeof request.stream === "boolean") &&
     (request.context === undefined || isTutorContext(request.context)) &&
     (request.chunks === undefined || (
       Array.isArray(request.chunks) && request.chunks.length <= 10 &&
@@ -69,8 +73,10 @@ export async function POST(request: Request) {
     const response = await AIService.generate({
       history: prompt.history,
       message: prompt.message,
+      model: body.model,
       signal: request.signal,
       provider: body.provider,
+      stream: body.stream,
     });
     return NextResponse.json(response);
   } catch (error) {

@@ -14,6 +14,7 @@ type SummaryRequest = {
   history: Array<Pick<TutorMessage, "content" | "role">>;
   context: TutorStudyContext;
   chunks: RetrievedChunk[];
+  model?: string;
   provider?: AIProviderId;
 };
 
@@ -23,6 +24,7 @@ function isSummaryRequest(value: unknown): value is SummaryRequest {
   return Array.isArray(request.history) && request.history.every((message) =>
     Boolean(message) && (message.role === "assistant" || message.role === "user") && typeof message.content === "string",
   ) && (request.provider === undefined || isAIProviderId(request.provider)) &&
+    (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     Boolean(request.context) && typeof request.context?.studyId === "string" &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => Boolean(chunk) && typeof chunk.text === "string" && chunk.text.length <= 8_000 && chunk.studyId === request.context?.studyId);
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
     const response = await AIService.generate({
       history: prompt.history,
       message: prompt.message,
+      model: body.model,
       signal: request.signal,
       provider: body.provider,
     });
