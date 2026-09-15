@@ -31,6 +31,12 @@ type OllamaChatChunk = {
   model?: string;
   message?: { content?: string };
   error?: string;
+  prompt_eval_count?: number;
+  eval_count?: number;
+};
+
+type OllamaProcessResponse = {
+  models?: Array<{ size_vram?: number }>;
 };
 
 function getBaseUrl() {
@@ -110,9 +116,12 @@ export const OllamaProvider: AIProvider = {
     const startedAt = performance.now();
     const request = withTimeout(signal, HEALTH_TIMEOUT_MS);
     try {
-      const [versionResponse, models] = await Promise.all([
+      const [versionResponse, models, processResponse] = await Promise.all([
         fetch(`${getBaseUrl()}/api/version`, { cache: "no-store", signal: request.signal }),
         listModels(request.signal),
+        fetch(`${getBaseUrl()}/api/ps`, { cache: "no-store", signal: request.signal })
+          .then((response) => response.ok ? response.json() as Promise<OllamaProcessResponse> : null)
+          .catch(() => null),
       ]);
       const versionData = await versionResponse.json().catch(() => null) as { version?: string } | null;
       if (!versionResponse.ok) throw new Error("Não foi possível consultar a versão do Ollama.");
@@ -122,6 +131,7 @@ export const OllamaProvider: AIProvider = {
         latencyMs: Math.round(performance.now() - startedAt),
         version: versionData?.version,
         models,
+        memoryBytes: processResponse?.models?.reduce((total, item) => total + (item.size_vram ?? 0), 0),
       };
     } catch {
       return {
@@ -178,7 +188,20 @@ export const OllamaProvider: AIProvider = {
       if (!text) {
         throw new AIError("O Ollama retornou uma resposta vazia.", "INVALID_RESPONSE", 502, this.id);
       }
-      return { provider: this.id, model: selectedModel, text };
+      const inputTokens = data?.prompt_eval_count;
+      const outputTokens = data?.eval_count;
+      return {
+        provider: this.id,
+        model: selectedModel,
+        text,
+        usage: {
+          inputTokens,
+          outputTokens,
+          totalTokens: inputTokens !== undefined || outputTokens !== undefined
+            ? (inputTokens ?? 0) + (outputTokens ?? 0)
+            : undefined,
+        },
+      };
     } catch (error) {
       if (error instanceof AIError) throw error;
       if (request.signal.aborted) {

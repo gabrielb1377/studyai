@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
 import { normalizeAIError } from "@/features/ai/AIErrors";
-import { isAIProviderId, type AIProviderId } from "@/features/ai/AIProvider";
+import {
+  isAIModelPreferences,
+  isAIProviderId,
+  isAISelectionMode,
+  type AIModelPreferences,
+  type AIProviderId,
+  type AISelectionMode,
+} from "@/features/ai/AIProvider";
 import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { TutorMessage } from "@/types/tutor";
@@ -16,6 +23,8 @@ type TutorRequest = {
   context?: TutorStudyContext;
   chunks?: RetrievedChunk[];
   model?: string;
+  models?: AIModelPreferences;
+  mode?: AISelectionMode;
   provider?: AIProviderId;
   stream?: boolean;
 };
@@ -40,6 +49,8 @@ function isTutorRequest(value: unknown): value is TutorRequest {
   const request = value as Partial<TutorRequest>;
   return typeof request.message === "string" && request.message.trim().length > 0 &&
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
+    isAIModelPreferences(request.models) &&
+    (request.mode === undefined || isAISelectionMode(request.mode)) &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.stream === undefined || typeof request.stream === "boolean") &&
     (request.context === undefined || isTutorContext(request.context)) &&
@@ -74,6 +85,8 @@ export async function POST(request: Request) {
       history: prompt.history,
       message: prompt.message,
       model: body.model,
+      models: body.models,
+      mode: body.mode,
       signal: request.signal,
       provider: body.provider,
       stream: body.stream,

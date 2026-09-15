@@ -1,4 +1,4 @@
-# Handoff Atual — Sprint 22
+# Handoff Atual — Sprint 23
 
 Atualizado em 14 de setembro de 2026.
 
@@ -15,6 +15,8 @@ Feature cliente
   → Route Handler
   → PromptBuilder / ContextBuilder
   → AIService
+  → ProviderManager
+  → ProviderRegistry / HealthService / LatencyService
   → AIProvider
   → GeminiProvider | OllamaProvider | OpenRouterProvider (stub) | GroqProvider (stub)
 ```
@@ -29,8 +31,14 @@ Feature cliente
 - `ContextBuilder.ts`: contexto do Study e trechos recuperados com limite de tamanho.
 - `RetrievalPipeline.ts`: única entrada das features de IA para o RAG local.
 - `AIErrors.ts`: erros e normalização HTTP independentes do provider.
+- `ProviderRegistry.ts`: catálogo server-only dos providers.
+- `HealthService.ts`: health agregado e cacheado para todos os providers.
+- `LatencyService.ts`: medição compartilhada de latência.
+- `ProviderManager.ts`: seleção manual/automática, fallback, logs e métricas.
 
-Gemini e Ollama são providers funcionais. OpenRouter e Groq são stubs seguros. A página de Configurações lista os modelos realmente instalados no Ollama, permite selecionar um deles e testa conexão, versão e latência por uma rota interna do Next.js.
+Gemini e Ollama são providers funcionais. OpenRouter e Groq são stubs seguros. A página de Configurações lista o health de todos, permite seleção manual ou automática e mostra status, latência, modelo, memória, versão, última verificação e métricas de geração.
+
+No modo manual, o provider preferencial é a primeira tentativa. No modo automático, o Manager seleciona o provider online de menor latência. Qualquer falha inicia a cadeia Ollama → Gemini → Groq → OpenRouter, sem exigir alterações no Tutor, Resumos, Flashcards, Quiz ou RAG. Se todos falharem, a interface recebe um erro normalizado e preserva a pergunta do usuário.
 
 ```text
 Configurações / Feature
@@ -113,7 +121,7 @@ Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico �
 | `studyai:flashcards` | Flashcards por estudo. |
 | `studyai:quizzes` | Questões e resultados por estudo. |
 | `studyai:notes` | Notas por estudo. |
-| `studyai:ai-settings` | Provider e modelo selecionados para todas as ferramentas de IA. |
+| `studyai:ai-settings` | Modo de seleção, provider preferencial e modelos selecionados. |
 
 ## Limites atuais
 
@@ -134,8 +142,8 @@ npm run test:e2e
 npm run build
 ```
 
-Na Sprint 22, a suíte completa possui 32 cenários E2E. Ela também valida descoberta dinâmica de modelos, diagnóstico do Ollama, persistência da seleção e propagação do modelo ao Tutor pelo AI Core. A integração real foi verificada localmente com Ollama 0.32.14 e `qwen3:4b`: diagnóstico e conversa retornaram HTTP 200 pelo Route Handler do StudyAI.
+Na Sprint 23, os 33 cenários E2E validam seleção manual, modo automático por latência, health agregado, persistência V3, propagação de modelos, erro seguro e cartão de IA do Dashboard. A prova operacional real iniciou pelo Groq indisponível, aplicou fallback para `qwen3:4b` no Ollama e registrou a falha, o fallback, a mensagem e 333 tokens no singleton efêmero do servidor.
 
 ## Próximo passo seguro
 
-Implementar OpenRouter ou Groq dentro do contrato `AIProvider`, mantendo as features dependentes apenas de `AIClient`, `RetrievalPipeline` e `AIService`.
+Implementar OpenRouter ou Groq dentro do contrato `AIProvider`. O novo provider precisa apenas ser registrado em `ProviderRegistry`; seleção, health, logs e fallback permanecem transparentes às features.

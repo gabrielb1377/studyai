@@ -2,14 +2,21 @@ import { NextResponse } from "next/server";
 
 import { AIService } from "@/features/ai/AIService";
 import { normalizeAIError } from "@/features/ai/AIErrors";
-import { isAIProviderId, type AIProviderId } from "@/features/ai/AIProvider";
+import {
+  isAIModelPreferences,
+  isAIProviderId,
+  isAISelectionMode,
+  type AIModelPreferences,
+  type AIProviderId,
+  type AISelectionMode,
+} from "@/features/ai/AIProvider";
 import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 
 export const runtime = "nodejs";
 
-type FlashcardRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; model?: string; provider?: AIProviderId };
+type FlashcardRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; model?: string; models?: AIModelPreferences; mode?: AISelectionMode; provider?: AIProviderId };
 type GeneratedFlashcard = { question: string; answer: string; difficulty: "easy" | "medium" | "hard" };
 
 function isRequest(value: unknown): value is FlashcardRequest {
@@ -18,6 +25,8 @@ function isRequest(value: unknown): value is FlashcardRequest {
   return typeof request.studyId === "string" && typeof request.title === "string" && typeof request.subject === "string" &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
+    isAIModelPreferences(request.models) &&
+    (request.mode === undefined || isAISelectionMode(request.mode)) &&
     Boolean(request.studyId.trim() && request.title.trim() && request.subject.trim()) &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => isRetrievedChunk(chunk) && chunk.studyId === request.studyId);
@@ -47,6 +56,8 @@ export async function POST(request: Request) {
       signal: request.signal,
       message: PromptBuilder.flashcards(body.title, body.subject, body.chunks),
       model: body.model,
+      models: body.models,
+      mode: body.mode,
       provider: body.provider,
     });
     const cards = parseCards(response.text);

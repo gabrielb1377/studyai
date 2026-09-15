@@ -29,7 +29,7 @@ GEMINI_API_KEY=
 OLLAMA_URL=http://localhost:11434
 ```
 
-Gemini e Ollama são providers funcionais. Sem a chave do Gemini, suas ferramentas exibem um erro tratável. Para usar IA local, inicie o Ollama; o StudyAI detecta a versão e os modelos instalados em Configurações, sem nomes fixos. Nenhuma credencial ou chamada de provider é exposta ao cliente: toda comunicação passa por Route Handlers e pelo `AIService`.
+Gemini e Ollama são providers funcionais. Sem a chave do Gemini, o Provider Manager tenta automaticamente a próxima opção disponível. Para usar IA local, inicie o Ollama; o StudyAI detecta versão, modelos, memória e latência sem nomes fixos. Configurações permite escolher entre modo manual ou automático, que prioriza o provider online mais rápido. Nenhuma credencial ou chamada de provider é exposta ao cliente: toda comunicação passa por Route Handlers, `AIService` e `ProviderManager`.
 
 ## Módulos atuais
 
@@ -42,8 +42,8 @@ Gemini e Ollama são providers funcionais. Sem a chave do Gemini, suas ferrament
 | Estudo | Materiais do tema, visualizadores, progresso, notas, flashcards, quizzes, resumos e Tutor contextual. |
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
 | RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
-| AI Core | Serviço central, providers, prompts, contexto, retrieval e erros normalizados. |
-| Configurações | Tema visual, provider, descoberta de modelos Ollama, teste de conexão e seleção persistida do modelo. |
+| AI Core | Registry, health, latência, seleção automática, fallback, métricas, providers, prompts e erros normalizados. |
+| Configurações | Tema visual, modos manual/automático, health dos providers, modelos, memória, latência e métricas. |
 
 ## Arquitetura
 

@@ -2,7 +2,14 @@ import { NextResponse } from "next/server";
 
 import { AIService } from "@/features/ai/AIService";
 import { normalizeAIError } from "@/features/ai/AIErrors";
-import { isAIProviderId, type AIProviderId } from "@/features/ai/AIProvider";
+import {
+  isAIModelPreferences,
+  isAIProviderId,
+  isAISelectionMode,
+  type AIModelPreferences,
+  type AIProviderId,
+  type AISelectionMode,
+} from "@/features/ai/AIProvider";
 import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import type { TutorMessage } from "@/types/tutor";
@@ -15,6 +22,8 @@ type SummaryRequest = {
   context: TutorStudyContext;
   chunks: RetrievedChunk[];
   model?: string;
+  models?: AIModelPreferences;
+  mode?: AISelectionMode;
   provider?: AIProviderId;
 };
 
@@ -25,6 +34,8 @@ function isSummaryRequest(value: unknown): value is SummaryRequest {
     Boolean(message) && (message.role === "assistant" || message.role === "user") && typeof message.content === "string",
   ) && (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
+    isAIModelPreferences(request.models) &&
+    (request.mode === undefined || isAISelectionMode(request.mode)) &&
     Boolean(request.context) && typeof request.context?.studyId === "string" &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => Boolean(chunk) && typeof chunk.text === "string" && chunk.text.length <= 8_000 && chunk.studyId === request.context?.studyId);
@@ -45,6 +56,8 @@ export async function POST(request: Request) {
       history: prompt.history,
       message: prompt.message,
       model: body.model,
+      models: body.models,
+      mode: body.mode,
       signal: request.signal,
       provider: body.provider,
     });

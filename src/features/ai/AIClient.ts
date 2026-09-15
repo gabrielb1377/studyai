@@ -10,8 +10,10 @@ export const AIClient = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...payload,
+        mode: settings.mode,
         provider: settings.provider,
         model: settings.models[settings.provider],
+        models: settings.models,
       }),
     });
     const data = await response.json().catch(() => null) as (T & AIErrorResponse) | null;

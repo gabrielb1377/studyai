@@ -55,7 +55,7 @@ Não existe banco de dados. As chaves atuais são:
 | `studyai:quizzes` | Questões geradas e resultados. |
 | `studyai:notes` | Notas em Markdown básico. |
 | `studyai-theme` | Preferência visual. |
-| `studyai:ai-settings` | Provider selecionado para todas as ferramentas de IA. |
+| `studyai:ai-settings` | Modo manual/automático, provider preferencial e modelos selecionados. |
 | `studyai:extracted-content` | Texto, metadados e status produzidos pelo pipeline. |
 | `studyai:content-chunks` | Chunks versionados com proveniência, prontos para futura indexação. |
 | `studyai:embeddings` | Vetores locais versionados, status e data da última indexação. |
@@ -102,6 +102,8 @@ TutorWorkspace
   → PromptBuilder
   → ContextBuilder
   → AIService
+  → ProviderManager
+  → ProviderRegistry / HealthService / LatencyService
   → AIProvider
   → GeminiProvider | OllamaProvider
   → Gemini API | Ollama local
@@ -109,7 +111,9 @@ TutorWorkspace
 
 O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. `PromptBuilder` e `ContextBuilder` são executados no servidor. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`; nenhuma feature conhece a implementação Gemini.
 
-`AIProvider` define o contrato comum. `GeminiProvider` e `OllamaProvider` são funcionais; OpenRouter e Groq permanecem stubs seguros. O provider e o modelo escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama consulta dinamicamente `/api/tags`, verifica `/api/version` e conversa por `/api/chat`, com timeout, cancelamento e suporte a resposta completa ou NDJSON. O navegador nunca acessa o processo local diretamente.
+`AIProvider` define o contrato comum. `GeminiProvider` e `OllamaProvider` são funcionais; OpenRouter e Groq permanecem stubs seguros. `ProviderRegistry` é o único catálogo server-only, `HealthService` mantém verificações recentes em cache e `LatencyService` mede health e geração. `ProviderManager` resolve a seleção, registra tentativas e executa fallback na ordem Ollama, Gemini, Groq e OpenRouter. No modo automático, providers online são ordenados pela menor latência antes da cadeia de fallback.
+
+O modo, provider preferencial e modelos escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama consulta dinamicamente `/api/tags`, verifica `/api/version` e `/api/ps`, e conversa por `/api/chat`, com timeout, cancelamento e suporte a resposta completa ou NDJSON. O navegador nunca acessa o processo local diretamente. Logs e métricas ficam em um singleton efêmero do processo servidor, limitado às 200 tentativas mais recentes. O Dashboard consulta somente o endpoint agregado do Manager para mostrar provider atual, modelo e métricas de uso.
 
 Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interface exibe: `Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.` Nenhuma mensagem artificial é criada para substituir o provedor.
 
@@ -124,6 +128,7 @@ Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões.
 | `POST /api/tutor/flashcards` | Flashcards gerados somente de chunks reais. |
 | `POST /api/tutor/quiz` | Questões geradas somente de chunks reais. |
 | `GET /api/ai/providers/[provider]` | Disponibilidade, versão, latência e modelos do provider pelo AI Core. |
+| `GET /api/ai/manager` | Health agregado, métricas de geração e logs recentes dos providers. |
 | `GET /api/ocr/assets/[asset]` | Worker e núcleo WebAssembly locais do Tesseract.js. |
 | `GET /api/ocr/languages/[language]` | Dados locais de idioma usados pelo OCR. |
 

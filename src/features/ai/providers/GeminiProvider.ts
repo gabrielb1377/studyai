@@ -1,16 +1,22 @@
 import "server-only";
 
 import { AIError } from "../AIErrors";
-import type { AIProvider, AIResponse } from "../AIProvider";
+import type { AIProvider, AIProviderStatus, AIResponse } from "../AIProvider";
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL = "gemini-3.7-flash";
 const REQUEST_TIMEOUT_MS = 20_000;
+const HEALTH_TIMEOUT_MS = 5_000;
 
 type GeminiContent = { role: "model" | "user"; parts: Array<{ text: string }> };
 type GeminiResponse = {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
   error?: { message?: string };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+  };
 };
 
 function toGeminiContent(history: Parameters<AIProvider["generate"]>[0]["history"]): GeminiContent[] {
@@ -26,6 +32,50 @@ export const GeminiProvider: AIProvider = {
   id: "gemini",
   name: "Gemini",
   available: true,
+
+  async inspect(signal): Promise<AIProviderStatus> {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) {
+      return {
+        provider: this.id,
+        available: false,
+        latencyMs: 0,
+        models: [{ name: MODEL }],
+        error: "GEMINI_API_KEY não configurada.",
+      };
+    }
+
+    const timeoutController = new AbortController();
+    const timeout = setTimeout(() => timeoutController.abort(), HEALTH_TIMEOUT_MS);
+    const requestSignal = signal
+      ? AbortSignal.any([signal, timeoutController.signal])
+      : timeoutController.signal;
+    const startedAt = performance.now();
+    try {
+      const response = await fetch(API_URL, {
+        headers: { "x-goog-api-key": apiKey },
+        cache: "no-store",
+        signal: requestSignal,
+      });
+      return {
+        provider: this.id,
+        available: response.ok,
+        latencyMs: Math.round(performance.now() - startedAt),
+        models: [{ name: MODEL }],
+        error: response.ok ? undefined : "Gemini indisponível.",
+      };
+    } catch {
+      return {
+        provider: this.id,
+        available: false,
+        latencyMs: Math.round(performance.now() - startedAt),
+        models: [{ name: MODEL }],
+        error: "Gemini indisponível.",
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
 
   async generate({ history, message, signal }): Promise<AIResponse> {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -73,7 +123,16 @@ export const GeminiProvider: AIProvider = {
       if (!text) {
         throw new AIError("O provedor retornou uma resposta vazia.", "INVALID_RESPONSE", 502, this.id);
       }
-      return { provider: this.id, model: MODEL, text };
+      return {
+        provider: this.id,
+        model: MODEL,
+        text,
+        usage: {
+          inputTokens: data?.usageMetadata?.promptTokenCount,
+          outputTokens: data?.usageMetadata?.candidatesTokenCount,
+          totalTokens: data?.usageMetadata?.totalTokenCount,
+        },
+      };
     } catch (error) {
       if (error instanceof AIError) throw error;
       if (requestSignal.aborted) {

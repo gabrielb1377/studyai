@@ -1,12 +1,20 @@
-import type { AIProviderId } from "./AIProvider";
+import {
+  isAIModelPreferences,
+  isAIProviderId,
+  isAISelectionMode,
+  type AIModelPreferences,
+  type AIProviderId,
+  type AISelectionMode,
+} from "./AIProvider";
 
 const STORAGE_KEY = "studyai:ai-settings";
-const VERSION = 2;
+const VERSION = 3;
 
 export type AISettingsState = {
   version: typeof VERSION;
+  mode: AISelectionMode;
   provider: AIProviderId;
-  models: Partial<Record<AIProviderId, string>>;
+  models: AIModelPreferences;
 };
 
 export const aiProviderOptions: ReadonlyArray<{
@@ -20,23 +28,33 @@ export const aiProviderOptions: ReadonlyArray<{
   { id: "groq", label: "Groq", available: false },
 ];
 
-const DEFAULT_SETTINGS: AISettingsState = { version: VERSION, provider: "gemini", models: {} };
+const DEFAULT_SETTINGS: AISettingsState = {
+  version: VERSION,
+  mode: "manual",
+  provider: "gemini",
+  models: {},
+};
 
 function isSettings(value: unknown): value is AISettingsState {
   if (!value || typeof value !== "object") return false;
   const settings = value as Partial<AISettingsState>;
-  return settings.version === VERSION && aiProviderOptions.some(({ id }) => id === settings.provider) &&
-    Boolean(settings.models) && typeof settings.models === "object";
+  return settings.version === VERSION && isAISelectionMode(settings.mode) &&
+    isAIProviderId(settings.provider) && isAIModelPreferences(settings.models);
 }
 
 function migrateSettings(value: unknown): AISettingsState | null {
   if (!value || typeof value !== "object") return null;
-  const settings = value as { provider?: unknown; models?: unknown };
-  if (!aiProviderOptions.some(({ id }) => id === settings.provider)) return null;
-  const models = settings.models && typeof settings.models === "object"
-    ? settings.models as Partial<Record<AIProviderId, string>>
+  const settings = value as { mode?: unknown; provider?: unknown; models?: unknown };
+  if (!isAIProviderId(settings.provider)) return null;
+  const models = isAIModelPreferences(settings.models)
+    ? settings.models
     : {};
-  return { version: VERSION, provider: settings.provider as AIProviderId, models };
+  return {
+    version: VERSION,
+    mode: isAISelectionMode(settings.mode) ? settings.mode : "manual",
+    provider: settings.provider,
+    models,
+  };
 }
 
 function persist(settings: AISettingsState) {
@@ -63,6 +81,11 @@ export const AISettings = {
   save(provider: AIProviderId) {
     const current = this.load();
     return persist({ ...current, version: VERSION, provider });
+  },
+
+  saveMode(mode: AISelectionMode) {
+    const current = this.load();
+    return persist({ ...current, version: VERSION, mode });
   },
 
   saveModel(provider: AIProviderId, model: string) {

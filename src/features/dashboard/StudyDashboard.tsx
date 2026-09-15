@@ -11,6 +11,7 @@ import { ExtractionSummary } from "@/features/extraction/ExtractionSummary";
 import { EmbeddingSummary } from "@/features/retrieval/EmbeddingSummary";
 import { useMaterials } from "@/hooks/useMaterials";
 import { DashboardStats } from "./dashboard-stats";
+import { AIStatusCard } from "./ai-status-card";
 
 export function StudyDashboard() {
   const { records } = useStudyEngine();
@@ -26,9 +27,10 @@ export function StudyDashboard() {
         <ContinueStudying records={records} />
         <ImportMaterial />
       </div>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-3">
         <ExtractionSummary />
         <EmbeddingSummary />
+        <AIStatusCard />
       </div>
       <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />
     </>
