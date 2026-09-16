@@ -8,14 +8,15 @@ export type EmbeddingIndexStatus = "idle" | "indexing" | "ready" | "error";
 export type ChunkEmbedding = {
   chunkId: string;
   studyId: string;
-  embedding: number[];
+  embedding: string;
   createdAt: string;
 };
 
 export type EmbeddingStore = {
-  version: 1;
+  version: 2;
   model: typeof EMBEDDING_MODEL;
   dimensions: typeof EMBEDDING_DIMENSIONS;
+  encoding: "int8-base64";
   status: EmbeddingIndexStatus;
   embeddings: ChunkEmbedding[];
   lastIndexedAt?: string;

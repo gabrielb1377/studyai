@@ -14,6 +14,7 @@ import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
+import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
 
 export const runtime = "nodejs";
 
@@ -29,21 +30,6 @@ type TutorRequest = {
   stream?: boolean;
 };
 
-function isTutorContext(value: unknown): value is TutorStudyContext {
-  if (typeof value !== "object" || value === null) return false;
-  const context = value as Partial<TutorStudyContext>;
-  return typeof context.studyId === "string" && typeof context.title === "string" &&
-    typeof context.subject === "string" && typeof context.topic === "string" &&
-    typeof context.progress === "number" &&
-    (context.status === "not_started" || context.status === "in_progress" || context.status === "completed") &&
-    Array.isArray(context.notes) && context.notes.every((note) =>
-      typeof note === "object" && note !== null && typeof note.title === "string" && typeof note.content === "string",
-    ) && (context.summary === undefined || (
-      typeof context.summary === "object" && context.summary !== null &&
-      typeof context.summary.title === "string" && typeof context.summary.content === "string"
-    ));
-}
-
 function isTutorRequest(value: unknown): value is TutorRequest {
   if (typeof value !== "object" || value === null) return false;
   const request = value as Partial<TutorRequest>;
@@ -53,7 +39,7 @@ function isTutorRequest(value: unknown): value is TutorRequest {
     (request.mode === undefined || isAISelectionMode(request.mode)) &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.stream === undefined || typeof request.stream === "boolean") &&
-    (request.context === undefined || isTutorContext(request.context)) &&
+    (request.context === undefined || isTutorStudyContext(request.context)) &&
     (request.chunks === undefined || (
       Array.isArray(request.chunks) && request.chunks.length <= 10 &&
       request.chunks.every(isRetrievedChunk)

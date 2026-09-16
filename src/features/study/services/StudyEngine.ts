@@ -110,4 +110,20 @@ export const StudyEngine = {
       return { ...record, status, progress, updatedAt: now };
     });
   },
+
+  enrichDocument(
+    records: readonly StudyRecord[],
+    studyId: string,
+    analysis: Pick<StudyRecord, "initialSummary" | "detectedTitle" | "detectedSubject" | "detectedTopic" | "keywords" | "language">,
+    now = new Date().toISOString(),
+  ) {
+    return records.map((record) => record.studyId === studyId
+      ? {
+          ...record,
+          ...Object.fromEntries(Object.entries(analysis).filter(([, value]) => value !== undefined)),
+          updatedAt: now,
+        }
+      : record,
+    );
+  },
 };

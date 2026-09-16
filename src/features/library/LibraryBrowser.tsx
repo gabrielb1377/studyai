@@ -5,6 +5,7 @@ import { Search, Star, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMaterials } from "@/hooks/useMaterials";
+import { useExtraction } from "@/features/extraction/useExtraction";
 import type { MaterialFilter } from "@/types/material";
 import { LibraryEmptyState, LibraryLoading, LibraryNoResults } from "./LibraryStates";
 import { MaterialCard } from "./MaterialCard";
@@ -12,6 +13,7 @@ import { filterMaterials, materialFilters } from "./material-utils";
 
 export function LibraryBrowser() {
   const { materials, isLoading } = useMaterials();
+  const { records: extractedContents } = useExtraction();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("all");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -100,7 +102,11 @@ export function LibraryBrowser() {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {results.map((material) => (
-              <MaterialCard key={material.id} material={material} />
+              <MaterialCard
+                key={material.id}
+                material={material}
+                content={extractedContents.find((content) => content.fileId === material.fileId)}
+              />
             ))}
           </div>
         )}

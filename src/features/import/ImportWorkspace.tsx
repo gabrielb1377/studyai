@@ -90,6 +90,7 @@ export function ImportWorkspace() {
         phase={phase}
         progress={overallProgress}
         fileCount={files.length}
+        errorCount={files.filter((file) => file.status === "error").length}
       />
     </div>
   );

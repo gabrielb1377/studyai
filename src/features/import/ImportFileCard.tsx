@@ -79,6 +79,22 @@ export function ImportFileCard({
         value={item.progress}
         aria-label={`Progresso de ${item.file.name}`}
       />
+      {item.message && item.status === "processing" ? (
+        <p className="text-xs text-muted-foreground">{item.message}</p>
+      ) : null}
+      {item.errorDetails ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+          <p className="font-medium">{item.errorDetails.reason}</p>
+          <p className="mt-1 opacity-80">Etapa: {item.errorDetails.stage}</p>
+          <p className="mt-1 opacity-80">{item.errorDetails.suggestedAction}</p>
+          {item.errorDetails.simplifiedStack && (
+            <details className="mt-2">
+              <summary className="cursor-pointer font-medium">Detalhes técnicos</summary>
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-[10px] opacity-75">{item.errorDetails.simplifiedStack}</pre>
+            </details>
+          )}
+        </div>
+      ) : null}
     </Card>
   );
 }

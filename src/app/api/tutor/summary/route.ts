@@ -14,6 +14,7 @@ import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
+import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ function isSummaryRequest(value: unknown): value is SummaryRequest {
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     isAIModelPreferences(request.models) &&
     (request.mode === undefined || isAISelectionMode(request.mode)) &&
-    Boolean(request.context) && typeof request.context?.studyId === "string" &&
+    isTutorStudyContext(request.context) &&
     Array.isArray(request.chunks) && request.chunks.length > 0 && request.chunks.length <= 20 &&
     request.chunks.every((chunk) => Boolean(chunk) && typeof chunk.text === "string" && chunk.text.length <= 8_000 && chunk.studyId === request.context?.studyId);
 }

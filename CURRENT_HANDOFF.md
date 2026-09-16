@@ -1,12 +1,27 @@
-# Handoff Atual — Sprint 23
+# Handoff Atual — Sprint 23: Provider Manager + Intelligent Ingestion Pipeline
 
-Atualizado em 14 de setembro de 2026.
+Atualizado em 15 de setembro de 2026.
 
 ## Estado entregue
 
 O StudyAI utiliza exclusivamente dados criados pelo usuário. A importação cria o registro oficial, infere matéria e tema, cria ou reutiliza um Study, executa a extração e atualiza Biblioteca, Organização e Dashboard sem depender de uma organização manual posterior.
 
 A camada de IA agora é centralizada em `src/features/ai`. Tutor, resumo, flashcards e quiz não conhecem Gemini nem acessam o Retrieval Service diretamente.
+
+A ingestão agora processa cada documento por etapas observáveis. PDF.js é sempre consultado primeiro e o OCR é executado somente quando nenhuma camada de texto foi encontrada. Todo texto passa por normalização antes de chunks e embeddings. DOCX preserva títulos, parágrafos, listas, tabelas, cabeçalhos, rodapés e notas; PPTX preserva slides e notas; TXT detecta encoding; áudio e vídeo registram transcrição, timestamps e capítulos quando o runtime local consegue decodificá-los.
+
+```text
+Documento
+  → Extração / OCR ou Whisper quando necessário
+  → Normalização
+  → DocumentAnalyzer
+  → Metadados inteligentes e resumo inicial
+  → Chunks do texto normalizado
+  → Embeddings compactados
+  → Índice local
+```
+
+Cada registro de conteúdo possui status por etapa e logs. Falhas incluem motivo, arquivo, etapa, stack simplificada e ação sugerida. Dashboard, Biblioteca e Tutor consomem os metadados analisados; a organização manual continua sendo a fonte oficial quando diverge da detecção.
 
 ```text
 Feature cliente
@@ -116,7 +131,7 @@ Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico �
 | `studyai:tutor-conversations:v2` | Conversas criadas pelo usuário. |
 | `studyai:extracted-content` | Texto e metadados extraídos. |
 | `studyai:content-chunks` | Chunks por arquivo e estudo. |
-| `studyai:embeddings` | Índice semântico local. |
+| `studyai:embeddings` | Índice semântico local V2, quantizado em Int8 e codificado em Base64. |
 | `studyai:summaries` | Resumos por estudo. |
 | `studyai:flashcards` | Flashcards por estudo. |
 | `studyai:quizzes` | Questões e resultados por estudo. |
@@ -142,7 +157,7 @@ npm run test:e2e
 npm run build
 ```
 
-Na Sprint 23, os 33 cenários E2E validam seleção manual, modo automático por latência, health agregado, persistência V3, propagação de modelos, erro seguro e cartão de IA do Dashboard. A prova operacional real iniciou pelo Groq indisponível, aplicou fallback para `qwen3:4b` no Ollama e registrou a falha, o fallback, a mensagem e 333 tokens no singleton efêmero do servidor.
+Na Sprint 23, os 36 cenários E2E validam seleção manual, modo automático por latência, health agregado, persistência V3, OCR, transcrição, PDF com e sem texto, DOCX, PPTX, TXT com múltiplos encodings, mídia inválida, normalização, análise documental, pipeline, Biblioteca, Tutor e indexação. A prova operacional real iniciou pelo Groq indisponível, aplicou fallback para `qwen3:4b` no Ollama e registrou a falha, o fallback, a mensagem e 333 tokens no singleton efêmero do servidor.
 
 ## Próximo passo seguro
 

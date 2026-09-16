@@ -1,7 +1,9 @@
 import type {
-  AutomaticSpeechRecognitionOutput,
   AutomaticSpeechRecognitionPipeline,
 } from "@huggingface/transformers";
+import { DocumentAnalyzer } from "./DocumentAnalyzer";
+import { TextNormalizationService } from "./TextNormalizationService";
+import type { MediaChapter, TranscriptionSegment } from "./ExtractionTypes";
 
 export const TRANSCRIPTION_MODEL = "onnx-community/whisper-tiny";
 const TARGET_SAMPLE_RATE = 16_000;
@@ -12,6 +14,19 @@ export type MediaTranscriptionResult = {
   text: string;
   duration: number;
   model: typeof TRANSCRIPTION_MODEL;
+  language?: string;
+  confidence?: number;
+  segments: TranscriptionSegment[];
+  chapters: MediaChapter[];
+};
+
+type WhisperOutput = {
+  text: string;
+  chunks?: Array<{
+    text?: string;
+    timestamp?: [number | null, number | null];
+    confidence?: number;
+  }>;
 };
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | undefined;
@@ -62,6 +77,37 @@ async function decodeToMono(file: File, onProgress?: TranscriptionProgress) {
   }
 }
 
+function normalizeSegments(output: WhisperOutput, duration: number): TranscriptionSegment[] {
+  const source = output.chunks ?? [];
+  if (source.length === 0) {
+    const text = TextNormalizationService.normalizeSentence(output.text);
+    return text ? [{ start: 0, end: duration, text }] : [];
+  }
+  return source.flatMap((chunk, index) => {
+    const text = TextNormalizationService.normalizeSentence(chunk.text ?? "");
+    if (!text) return [];
+    const start = chunk.timestamp?.[0] ?? (index === 0 ? 0 : source[index - 1]?.timestamp?.[1] ?? 0);
+    const end = chunk.timestamp?.[1] ?? Math.min(duration, start + 30);
+    return [{ start, end, text, confidence: chunk.confidence }];
+  });
+}
+
+function buildChapters(segments: readonly TranscriptionSegment[], duration: number) {
+  if (segments.length === 0) return [];
+  const chapterLength = 300;
+  const chapters: MediaChapter[] = [];
+  for (let start = 0; start < duration; start += chapterLength) {
+    const end = Math.min(duration, start + chapterLength);
+    const first = segments.find((segment) => segment.start >= start && segment.start < end);
+    chapters.push({
+      title: first?.text.replace(/[.!?].*$/, "").slice(0, 72) || `Capítulo ${chapters.length + 1}`,
+      start,
+      end,
+    });
+  }
+  return chapters;
+}
+
 export const MediaTranscriptionService = {
   async transcribe(
     file: File,
@@ -81,12 +127,21 @@ export const MediaTranscriptionService = {
         stride_length_s: 5,
         task: "transcribe",
         return_timestamps: true,
-      }) as AutomaticSpeechRecognitionOutput;
+      }) as WhisperOutput;
       onProgress?.(100);
+      const segments = normalizeSegments(output, audio.duration);
+      const text = segments.map((segment) => segment.text).join(" ").trim();
+      const confidences = segments.flatMap((segment) => segment.confidence === undefined ? [] : [segment.confidence]);
       return {
-        text: output.text.replace(/\s+/g, " ").trim(),
+        text,
         duration: audio.duration,
         model: TRANSCRIPTION_MODEL,
+        language: DocumentAnalyzer.detectLanguage(text),
+        confidence: confidences.length > 0
+          ? confidences.reduce((total, value) => total + value, 0) / confidences.length
+          : undefined,
+        segments,
+        chapters: buildChapters(segments, audio.duration),
       };
     } finally {
       currentProgress = undefined;

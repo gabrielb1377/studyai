@@ -22,7 +22,11 @@ function isChunkMetadata(value: unknown): value is ChunkMetadata {
     extractionFileTypes.includes(metadata.fileType as typeof extractionFileTypes[number]) &&
     typeof metadata.mimeType === "string" && typeof metadata.size === "number" &&
     isOptionalNumber(metadata.pageCount) && isOptionalNumber(metadata.duration) &&
-    isOptionalString(metadata.language);
+    isOptionalString(metadata.language) && isOptionalString(metadata.title) &&
+    isOptionalString(metadata.subject) && isOptionalString(metadata.topic) &&
+    (metadata.keywords === undefined || (
+      Array.isArray(metadata.keywords) && metadata.keywords.every((keyword) => typeof keyword === "string")
+    ));
 }
 
 function isContentChunk(value: unknown): value is ContentChunk {

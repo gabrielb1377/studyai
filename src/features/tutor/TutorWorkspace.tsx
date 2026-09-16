@@ -171,6 +171,23 @@ export function TutorWorkspace() {
             </Button>
           </div>
         )}
+        {context?.document && (
+          <aside className="mb-4 rounded-xl border bg-secondary/30 p-4" aria-label="Contexto identificado do documento">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <span><strong>Tema:</strong> {context.document.topic ?? context.topic}</span>
+              {context.document.subject && <span><strong>Disciplina:</strong> {context.document.subject}</span>}
+              {context.document.language && <span><strong>Idioma:</strong> {context.document.language}</span>}
+            </div>
+            {context.document.summaryPreview && (
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{context.document.summaryPreview}</p>
+            )}
+            {context.document.keywords.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                <strong className="text-foreground">Palavras-chave:</strong> {context.document.keywords.join(", ")}
+              </p>
+            )}
+          </aside>
+        )}
         {activeConversation ? (
           <>
             <TutorConversation messages={activeConversation.messages} isLoading={isLoading} />

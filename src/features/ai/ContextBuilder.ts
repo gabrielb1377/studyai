@@ -23,6 +23,17 @@ export const ContextBuilder = {
     if (context.summary) {
       blocks.push(`Resumo salvo (${context.summary.title}):\n${context.summary.content}`);
     }
+    if (context.document) {
+      blocks.push([
+        "Análise automática do documento:",
+        context.document.title ? `Título identificado: ${context.document.title}` : "",
+        context.document.subject ? `Disciplina identificada: ${context.document.subject}` : "",
+        context.document.topic ? `Tema identificado: ${context.document.topic}` : "",
+        context.document.language ? `Idioma: ${context.document.language}` : "",
+        context.document.keywords.length > 0 ? `Palavras-chave: ${context.document.keywords.join(", ")}` : "",
+        context.document.summaryPreview ? `Resumo inicial: ${context.document.summaryPreview}` : "",
+      ].filter(Boolean).join("\n"));
+    }
     if (context.notes.length > 0) {
       blocks.push(
         `Notas do estudante:\n${context.notes.map((note) => `- ${note.title}: ${note.content}`).join("\n")}`,

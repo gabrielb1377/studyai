@@ -12,9 +12,10 @@ import type { ContentChunk } from "./RetrievalTypes";
 const STORAGE_KEY = "studyai:embeddings";
 export const EMBEDDINGS_UPDATE_EVENT = "studyai:embeddings-updated";
 const EMPTY_STORE: EmbeddingStore = {
-  version: 1,
+  version: 2,
   model: EMBEDDING_MODEL,
   dimensions: EMBEDDING_DIMENSIONS,
+  encoding: "int8-base64",
   status: "idle",
   embeddings: [],
 };
@@ -27,16 +28,14 @@ function isEmbedding(value: unknown): value is ChunkEmbedding {
   if (typeof value !== "object" || value === null) return false;
   const item = value as Partial<ChunkEmbedding>;
   return typeof item.chunkId === "string" && typeof item.studyId === "string" &&
-    typeof item.createdAt === "string" && Array.isArray(item.embedding) &&
-    item.embedding.length === EMBEDDING_DIMENSIONS &&
-    item.embedding.every((number) => typeof number === "number" && Number.isFinite(number));
+    typeof item.createdAt === "string" && typeof item.embedding === "string";
 }
 
 function isEmbeddingStore(value: unknown): value is EmbeddingStore {
   if (typeof value !== "object" || value === null) return false;
   const store = value as Partial<EmbeddingStore>;
-  return store.version === 1 && store.model === EMBEDDING_MODEL &&
-    store.dimensions === EMBEDDING_DIMENSIONS && isStatus(store.status) &&
+  return store.version === 2 && store.model === EMBEDDING_MODEL &&
+    store.dimensions === EMBEDDING_DIMENSIONS && store.encoding === "int8-base64" && isStatus(store.status) &&
     Array.isArray(store.embeddings) && store.embeddings.every(isEmbedding) &&
     (store.lastIndexedAt === undefined || typeof store.lastIndexedAt === "string") &&
     (store.error === undefined || typeof store.error === "string");
@@ -57,7 +56,33 @@ function saveError(embeddings: readonly ChunkEmbedding[], error: unknown) {
 
 export const EmbeddingStorage = {
   load(): EmbeddingStore {
-    return readLocalStorage(STORAGE_KEY, isEmbeddingStore) ?? EMPTY_STORE;
+    const current = readLocalStorage(STORAGE_KEY, isEmbeddingStore);
+    if (current) return current;
+    const legacy = readLocalStorage(STORAGE_KEY, (value): value is {
+      version: 1;
+      model: typeof EMBEDDING_MODEL;
+      dimensions: typeof EMBEDDING_DIMENSIONS;
+      status: EmbeddingIndexStatus;
+      embeddings: Array<Omit<ChunkEmbedding, "embedding"> & { embedding: number[] }>;
+      lastIndexedAt?: string;
+      error?: string;
+    } => {
+      if (typeof value !== "object" || value === null) return false;
+      const store = value as { version?: unknown; embeddings?: unknown };
+      return store.version === 1 && Array.isArray(store.embeddings);
+    });
+    if (!legacy) return EMPTY_STORE;
+    return {
+      ...EMPTY_STORE,
+      status: legacy.status,
+      lastIndexedAt: legacy.lastIndexedAt,
+      error: legacy.error,
+      embeddings: legacy.embeddings.flatMap((embedding) =>
+        Array.isArray(embedding.embedding) && embedding.embedding.length === EMBEDDING_DIMENSIONS
+          ? [{ ...embedding, embedding: EmbeddingService.encode(embedding.embedding) }]
+          : [],
+      ),
+    };
   },
 
   save(store: EmbeddingStore) {

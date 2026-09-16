@@ -71,6 +71,16 @@ function normalizeVector(vector: number[]) {
   return vector.map((value) => Math.round((value / magnitude) * 1_000_000) / 1_000_000);
 }
 
+function encodeVector(vector: readonly number[]) {
+  const bytes = Uint8Array.from(vector, (value) => Math.round(Math.max(-1, Math.min(1, value)) * 127) + 128);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function decodeVector(value: string) {
+  const binary = atob(value);
+  return Array.from(binary, (character) => (character.charCodeAt(0) - 128) / 127);
+}
+
 export const EmbeddingService = {
   generate(text: string) {
     const vector = Array<number>(EMBEDDING_DIMENSIONS).fill(0);
@@ -91,10 +101,14 @@ export const EmbeddingService = {
     return {
       chunkId: chunk.id,
       studyId: chunk.studyId,
-      embedding: this.generate(`${chunk.metadata.sourceName} ${chunk.text}`),
+      embedding: encodeVector(this.generate(`${chunk.metadata.sourceName} ${chunk.text}`)),
       createdAt,
     };
   },
+
+  encode: encodeVector,
+
+  decode: decodeVector,
 
   cosineSimilarity(left: readonly number[], right: readonly number[]) {
     if (left.length !== right.length || left.length === 0) return 0;

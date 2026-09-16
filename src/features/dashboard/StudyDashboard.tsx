@@ -8,6 +8,7 @@ import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
 import { useNotes } from "@/features/notes/useNotes";
 import { ExtractionSummary } from "@/features/extraction/ExtractionSummary";
+import { IngestionPipelineStatus } from "@/features/extraction/IngestionPipelineStatus";
 import { EmbeddingSummary } from "@/features/retrieval/EmbeddingSummary";
 import { useMaterials } from "@/hooks/useMaterials";
 import { DashboardStats } from "./dashboard-stats";
@@ -32,6 +33,7 @@ export function StudyDashboard() {
         <EmbeddingSummary />
         <AIStatusCard />
       </div>
+      <IngestionPipelineStatus />
       <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />
     </>
   );

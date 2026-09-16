@@ -20,7 +20,7 @@ export const SemanticSearchService = {
         if (!chunk || (options.studyId && chunk.studyId !== options.studyId)) return null;
         const similarity = EmbeddingService.cosineSimilarity(
           questionEmbedding,
-          embedding.embedding,
+          EmbeddingService.decode(embedding.embedding),
         );
         return similarity >= MINIMUM_SIMILARITY
           ? { chunk, similarity } satisfies SemanticSearchResult

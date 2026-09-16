@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 14 de setembro de 2026.
+Atualizado em 15 de setembro de 2026.
 
 ## Propósito
 
@@ -58,7 +58,7 @@ Não existe banco de dados. As chaves atuais são:
 | `studyai:ai-settings` | Modo manual/automático, provider preferencial e modelos selecionados. |
 | `studyai:extracted-content` | Texto, metadados e status produzidos pelo pipeline. |
 | `studyai:content-chunks` | Chunks versionados com proveniência, prontos para futura indexação. |
-| `studyai:embeddings` | Vetores locais versionados, status e data da última indexação. |
+| `studyai:embeddings` | Vetores locais compactados em Int8/Base64, status e data da última indexação. |
 
 Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválidos não quebram a interface e são tratados como estado vazio.
 
@@ -74,14 +74,20 @@ File selecionado
   → ContentExtractionService
   → OCRService, quando imagem ou PDF sem camada de texto
   → MediaTranscriptionService, quando áudio ou vídeo
-  → texto + metadados
+  → TextNormalizationService
+  → DocumentAnalyzer
+  → texto normalizado + estrutura + metadados inteligentes
   → ContentStorage
   → ChunkService / ChunkStorage
   → EmbeddingService / EmbeddingStorage
   → Biblioteca / Organização / Dashboard / Workspace / Tutor
 ```
 
-PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT usa a API nativa de `File`; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs com camada de texto permanecem no resultado do PDF.js; somente PDFs sem texto são renderizados página a página e enviados ao OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador.
+PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT detecta UTF-8, UTF-16LE, UTF-16BE e Latin1/Windows-1252; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs com qualquer camada de texto ignoram OCR; somente PDFs sem texto são renderizados página a página e enviados ao OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador. A transcrição é persistida em segmentos com timestamps e capítulos de até cinco minutos.
+
+`TextNormalizationService` corrige Unicode, hifenização entre linhas, controles inválidos, espaços, listas e parágrafos antes de qualquer chunk ou embedding. `DocumentAnalyzer` identifica por heurísticas locais título, disciplina, tema, subtemas, palavras-chave, idioma, total de palavras, tempo estimado de leitura e resumo inicial. O resultado enriquece o Study, a Biblioteca e o contexto do Tutor sem substituir a organização manual do usuário.
+
+Cada documento mantém os estágios `document`, `extraction`, `ocr`, `normalization`, `analysis`, `chunks`, `embeddings` e `indexed`, além de um log cronológico. Erros registram arquivo, etapa, motivo, stack simplificada e ação sugerida. O Dashboard exibe o pipeline dos documentos mais recentes.
 
 Todo material recebe um `studyId` antes da extração. Quando existe caminho relativo, os dois últimos diretórios representam matéria e tema; hierarquias maiores também preservam curso e semestre quando disponíveis. Arquivos avulsos usam o nome real do arquivo como tema. Materiais da mesma matéria e tema compartilham um Study. O mesmo `studyId` acompanha conteúdo, chunks, embeddings, resumos, flashcards, quizzes e notas.
 
@@ -117,7 +123,7 @@ O modo, provider preferencial e modelos escolhidos em Configurações são envia
 
 Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interface exibe: `Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.` Nenhuma mensagem artificial é criada para substituir o provedor.
 
-Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões. Ele representa termos, raízes linguísticas, n-gramas e pares de palavras em um vetor normalizado. Todo o cálculo acontece no navegador, sem download de modelo, API externa ou banco vetorial. O contrato versionado permite substituir esse gerador por um modelo neural local futuramente.
+Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões. Ele representa termos, raízes linguísticas, n-gramas e pares de palavras em um vetor normalizado. Os vetores são quantizados para Int8 e persistidos em Base64 no formato V2, reduzindo substancialmente a pressão sobre a quota do navegador; dados V1 são migrados em memória na próxima sincronização. Todo o cálculo acontece no navegador, sem download de modelo, API externa ou banco vetorial.
 
 ## Endpoints existentes
 

@@ -15,4 +15,12 @@ export type TutorStudyContext = {
     title: string;
     content: string;
   }>;
+  document?: {
+    title?: string;
+    subject?: string;
+    topic?: string;
+    summaryPreview?: string;
+    keywords: string[];
+    language?: string;
+  };
 };

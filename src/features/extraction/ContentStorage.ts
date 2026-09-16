@@ -5,6 +5,7 @@ import {
   type ExtractionMetadata,
   type ExtractionStatus,
   type ExtractionStore,
+  ingestionStageIds,
 } from "./ExtractionTypes";
 
 const STORAGE_KEY = "studyai:extracted-content";
@@ -15,21 +16,66 @@ function isStatus(value: unknown): value is ExtractionStatus {
   return value === "processing" || value === "extracted" || value === "error";
 }
 
+function isOptionalString(value: unknown) {
+  return value === undefined || typeof value === "string";
+}
+
+function isOptionalNumber(value: unknown) {
+  return value === undefined || typeof value === "number";
+}
+
+function isOptionalBoolean(value: unknown) {
+  return value === undefined || typeof value === "boolean";
+}
+
+function isOptionalStringList(value: unknown) {
+  return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
 function isMetadata(value: unknown): value is ExtractionMetadata {
   if (typeof value !== "object" || value === null) return false;
   const metadata = value as Partial<ExtractionMetadata>;
   return typeof metadata.name === "string" && typeof metadata.type === "string" &&
     typeof metadata.size === "number" &&
-    (metadata.pageCount === undefined || typeof metadata.pageCount === "number") &&
-    (metadata.duration === undefined || typeof metadata.duration === "number") &&
-    (metadata.language === undefined || typeof metadata.language === "string") &&
-    (metadata.width === undefined || typeof metadata.width === "number") &&
-    (metadata.height === undefined || typeof metadata.height === "number") &&
-    (metadata.ocrPerformed === undefined || typeof metadata.ocrPerformed === "boolean") &&
-    (metadata.ocrConfidence === undefined || typeof metadata.ocrConfidence === "number") &&
-    (metadata.transcriptionPerformed === undefined || typeof metadata.transcriptionPerformed === "boolean") &&
-    (metadata.transcriptionModel === undefined || typeof metadata.transcriptionModel === "string") &&
-    (metadata.processingTimeMs === undefined || typeof metadata.processingTimeMs === "number");
+    isOptionalString(metadata.title) && isOptionalString(metadata.subject) &&
+    isOptionalString(metadata.topic) && isOptionalStringList(metadata.subtopics) &&
+    isOptionalStringList(metadata.keywords) && isOptionalString(metadata.summaryPreview) &&
+    isOptionalNumber(metadata.pageCount) && isOptionalNumber(metadata.duration) &&
+    isOptionalString(metadata.language) && isOptionalString(metadata.encoding) &&
+    isOptionalNumber(metadata.wordCount) && isOptionalNumber(metadata.readingTimeMinutes) &&
+    isOptionalNumber(metadata.width) && isOptionalNumber(metadata.height) &&
+    isOptionalBoolean(metadata.hasTextLayer) && isOptionalBoolean(metadata.ocrPerformed) &&
+    isOptionalNumber(metadata.ocrConfidence) && isOptionalBoolean(metadata.transcriptionPerformed) &&
+    isOptionalString(metadata.transcriptionModel) && isOptionalNumber(metadata.transcriptionConfidence) &&
+    isOptionalNumber(metadata.processingTimeMs) && isOptionalString(metadata.createdAt) &&
+    isOptionalString(metadata.updatedAt);
+}
+
+function isPipelineData(content: Partial<ExtractedContent>) {
+  const validStages = content.stages === undefined || (
+    Array.isArray(content.stages) && content.stages.every((stage) =>
+      typeof stage === "object" && stage !== null &&
+      ingestionStageIds.includes(stage.id) &&
+      ["pending", "processing", "completed", "skipped", "error"].includes(stage.status) &&
+      isOptionalString(stage.message) && isOptionalString(stage.startedAt) && isOptionalString(stage.completedAt),
+    )
+  );
+  const validLogs = content.logs === undefined || (
+    Array.isArray(content.logs) && content.logs.every((log) =>
+      typeof log === "object" && log !== null && typeof log.id === "string" &&
+      ingestionStageIds.includes(log.stage) &&
+      ["processing", "completed", "skipped", "error"].includes(log.status) &&
+      typeof log.message === "string" && typeof log.createdAt === "string",
+    )
+  );
+  const validError = content.errorDetails === undefined || (
+    typeof content.errorDetails === "object" && content.errorDetails !== null &&
+    typeof content.errorDetails.reason === "string" && typeof content.errorDetails.fileName === "string" &&
+    ingestionStageIds.includes(content.errorDetails.stage) &&
+    isOptionalString(content.errorDetails.simplifiedStack) &&
+    typeof content.errorDetails.suggestedAction === "string"
+  );
+  return validStages && validLogs && validError;
 }
 
 function isExtractedContent(value: unknown): value is ExtractedContent {
@@ -40,7 +86,7 @@ function isExtractedContent(value: unknown): value is ExtractedContent {
     extractionFileTypes.includes(content.fileType as typeof extractionFileTypes[number]) &&
     typeof content.extractedText === "string" && isMetadata(content.metadata) &&
     isStatus(content.status) && typeof content.createdAt === "string" &&
-    (content.error === undefined || typeof content.error === "string");
+    (content.error === undefined || typeof content.error === "string") && isPipelineData(content);
 }
 
 function isExtractionStore(value: unknown): value is ExtractionStore {

@@ -10,9 +10,10 @@ import {
 } from "./EmbeddingTypes";
 
 const initialStore: EmbeddingStore = {
-  version: 1,
+  version: 2,
   model: EMBEDDING_MODEL,
   dimensions: EMBEDDING_DIMENSIONS,
+  encoding: "int8-base64",
   status: "idle",
   embeddings: [],
 };

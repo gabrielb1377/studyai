@@ -7,10 +7,12 @@ export function ImportProgress({
   phase,
   progress,
   fileCount,
+  errorCount,
 }: {
   phase: ImportPhase;
   progress: number;
   fileCount: number;
+  errorCount: number;
 }) {
   if (!fileCount) return null;
 
@@ -18,7 +20,9 @@ export function ImportProgress({
     <Card className="gap-4 p-5 shadow-none" aria-live="polite">
       <div className="flex items-center gap-3">
         {phase === "complete" ? (
-          <CheckCircle2 className="size-5 text-primary" aria-hidden="true" />
+          errorCount > 0
+            ? <span className="flex size-5 items-center justify-center rounded-full bg-destructive/10 text-xs font-semibold text-destructive">!</span>
+            : <CheckCircle2 className="size-5 text-primary" aria-hidden="true" />
         ) : phase === "processing" ? (
           <LoaderCircle
             className="size-5 text-primary motion-safe:animate-spin"
@@ -31,7 +35,9 @@ export function ImportProgress({
           <h2 className="text-sm font-semibold">Progresso da importação</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {phase === "complete"
-              ? "Extração local concluída. Nenhum arquivo foi enviado."
+              ? errorCount > 0
+                ? `Processamento concluído com ${errorCount} ${errorCount === 1 ? "arquivo em erro" : "arquivos em erro"}. Nenhum arquivo foi enviado.`
+                : "Extração local concluída. Nenhum arquivo foi enviado."
               : phase === "processing"
                 ? "Extraindo texto e metadados localmente..."
                 : `${fileCount} ${fileCount === 1 ? "arquivo pronto" : "arquivos prontos"} para importar.`}

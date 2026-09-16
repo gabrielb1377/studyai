@@ -12,4 +12,10 @@ export type StudyRecord = {
   createdAt: string;
   updatedAt: string;
   lastAccessedAt: string;
+  initialSummary?: string;
+  detectedTitle?: string;
+  detectedSubject?: string;
+  detectedTopic?: string;
+  keywords?: string[];
+  language?: string;
 };

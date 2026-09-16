@@ -116,7 +116,7 @@ export function useImport() {
     );
 
     const results = await ExtractionPipeline.run(extractionInputs, {
-      onProgress: ({ fileId, status, progress }) => {
+      onProgress: ({ fileId, status, progress, stage, message, errorDetails }) => {
         MaterialService.update(fileId, {
           progress,
           status: status === "extracted" ? "ready" : status,
@@ -126,6 +126,9 @@ export function useImport() {
               ...file,
               status: status === "extracted" ? "complete" : status,
               progress,
+              stage,
+              message,
+              errorDetails,
             }
           : file,
         ));
@@ -138,6 +141,10 @@ export function useImport() {
           progress: 100,
           error: result.error,
         });
+        setFiles((current) => current.map((file) => file.id === result.fileId
+          ? { ...file, errorDetails: result.errorDetails }
+          : file,
+        ));
       }
     });
     setPhase("complete");

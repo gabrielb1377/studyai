@@ -9,6 +9,10 @@ export type ChunkMetadata = {
   pageCount?: number;
   duration?: number;
   language?: string;
+  title?: string;
+  subject?: string;
+  topic?: string;
+  keywords?: string[];
 };
 
 export type ContentChunk = {
