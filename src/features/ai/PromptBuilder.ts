@@ -4,6 +4,8 @@ import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { AIMessage } from "./AIProvider";
 import { ContextBuilder } from "./ContextBuilder";
+import { ContextCompressor } from "./ContextCompressor";
+import { TokenCounter } from "./TokenCounter";
 
 type ContextualPromptInput = {
   question: string;
@@ -14,7 +16,18 @@ type ContextualPromptInput = {
 
 export const PromptBuilder = {
   contextual({ question, history, studyContext, chunks = [] }: ContextualPromptInput) {
-    if (!studyContext && chunks.length === 0) return { history, message: question };
+    const compressed = ContextCompressor.compress(history, chunks);
+    if (!studyContext && compressed.chunks.length === 0) {
+      return {
+        history: compressed.history,
+        message: question,
+        metrics: {
+          ...compressed.statistics,
+          contextTokens: 0,
+          promptTokens: TokenCounter.messages(compressed.history) + TokenCounter.estimate(question),
+        },
+      };
+    }
 
     const sections = [
       "Responda à pergunta usando o contexto abaixo quando ele for relevante.",
@@ -23,11 +36,20 @@ export const PromptBuilder = {
     if (studyContext) {
       sections.push("", "Contexto do estudo:", ContextBuilder.fromStudy(studyContext));
     }
-    if (chunks.length > 0) {
-      sections.push("", "Trechos recuperados dos materiais:", ContextBuilder.fromChunks(chunks));
+    if (compressed.chunks.length > 0) {
+      sections.push("", "Trechos recuperados dos materiais:", ContextBuilder.fromChunks(compressed.chunks));
     }
     sections.push("", `Pergunta do usuário: ${question}`);
-    return { history, message: sections.join("\n") };
+    const message = sections.join("\n");
+    return {
+      history: compressed.history,
+      message,
+      metrics: {
+        ...compressed.statistics,
+        contextTokens: TokenCounter.estimate(message) - TokenCounter.estimate(question),
+        promptTokens: TokenCounter.messages(compressed.history) + TokenCounter.estimate(message),
+      },
+    };
   },
 
   summary(history: readonly AIMessage[], context: TutorStudyContext, chunks: readonly RetrievedChunk[]) {

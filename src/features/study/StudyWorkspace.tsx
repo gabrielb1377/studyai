@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Bot, BrainCircuit, ClipboardCheck, NotebookPen } from "lucide-react";
@@ -10,11 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExtraction } from "@/features/extraction/useExtraction";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
-import { FlashcardWorkspace } from "@/features/flashcards/FlashcardWorkspace";
-import { QuizWorkspace } from "@/features/quiz/QuizWorkspace";
-import { NotesWorkspace } from "@/features/notes/NotesWorkspace";
-import { SummaryList } from "@/features/summaries/SummaryList";
-import { TutorWorkspace } from "@/features/tutor/TutorWorkspace";
 import { useMaterials } from "@/hooks/useMaterials";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import type { StudyMaterial, StudyMaterialType } from "@/types/study";
@@ -24,6 +20,13 @@ import { StudyStatistics } from "./StudyStatistics";
 import { StudyNavigationSidebar } from "./StudyNavigationSidebar";
 import { useStudyEngine } from "./hooks/useStudyEngine";
 import { WorkspacePersistence, workspaceTabs, type StudyWorkspaceState, type WorkspaceTab } from "./services/WorkspacePersistence";
+
+const lazyState = <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">Carregando área de estudo…</p>;
+const TutorWorkspace = dynamic(() => import("@/features/tutor/TutorWorkspace").then((module) => module.TutorWorkspace), { loading: () => lazyState });
+const SummaryList = dynamic(() => import("@/features/summaries/SummaryList").then((module) => module.SummaryList), { loading: () => lazyState });
+const FlashcardWorkspace = dynamic(() => import("@/features/flashcards/FlashcardWorkspace").then((module) => module.FlashcardWorkspace), { loading: () => lazyState });
+const QuizWorkspace = dynamic(() => import("@/features/quiz/QuizWorkspace").then((module) => module.QuizWorkspace), { loading: () => lazyState });
+const NotesWorkspace = dynamic(() => import("@/features/notes/NotesWorkspace").then((module) => module.NotesWorkspace), { loading: () => lazyState });
 
 function toStudyMaterialType(fileType: string): StudyMaterialType {
   if (fileType === "pdf") return "pdf";
@@ -59,6 +62,8 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
         source: MaterialRuntimeStore.get(material.id)?.source,
         textContent: extracted?.extractedText,
         chapters: extracted?.metadata.chapters,
+        persistentBinary: material.persistentBinary,
+        lastModified: material.lastModified,
       };
     });
   }, [extractedContents, materials, studyId]);

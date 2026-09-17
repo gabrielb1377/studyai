@@ -13,6 +13,7 @@ export function OrganizationTree({
   selectedIds,
   onSelectedChange,
   onDropFile,
+  onCreateDestination,
 }: {
   files: Material[];
   onRename: (file: Material) => void;
@@ -21,6 +22,7 @@ export function OrganizationTree({
   selectedIds: ReadonlySet<string>;
   onSelectedChange: (fileId: string, selected: boolean) => void;
   onDropFile: (fileId: string, destination: MaterialDestination) => void;
+  onCreateDestination: (fileId: string) => void;
 }) {
   const courses = Array.from(new Set(files.map((file) => file.course ?? "Curso não informado")));
 
@@ -58,6 +60,21 @@ export function OrganizationTree({
         </p>
       </CardHeader>
       <CardContent className="p-4 sm:p-6">
+        {files.length > 0 && (
+          <div
+            className="mb-5 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-4 py-5 text-center text-sm text-muted-foreground transition-colors hover:bg-primary/10"
+            data-drop-level="new"
+            onDragOver={allowDrop}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const fileId = event.dataTransfer.getData("text/material-id") || event.dataTransfer.getData("text/plain");
+              if (fileId) onCreateDestination(fileId);
+            }}
+          >
+            Arraste um arquivo aqui para criar curso, semestre, matéria e tema
+          </div>
+        )}
         {files.length === 0 ? (
           <div className="rounded-lg border border-dashed px-5 py-10 text-center text-sm text-muted-foreground">
             Nenhum material foi importado. Importe arquivos para começar a organização.

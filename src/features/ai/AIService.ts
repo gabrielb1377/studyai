@@ -8,6 +8,10 @@ export const AIService = {
     return ProviderManager.generate(request);
   },
 
+  stream(request: AIManagerRequest) {
+    return ProviderManager.stream(request);
+  },
+
   inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
     return ProviderManager.inspect(providerId, options);
   },

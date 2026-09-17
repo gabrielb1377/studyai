@@ -1,5 +1,6 @@
 import type { Material, MaterialFileType } from "@/types/material";
 import { StorageManager } from "@/lib/storage/StorageManager";
+import { MaterialBinaryStorage } from "./material-binary-storage";
 
 export const MATERIALS_UPDATED_EVENT = "studyai:materials-updated";
 
@@ -90,6 +91,7 @@ export const MaterialService = {
   async remove(id: string) {
     const current = await StorageManager.get<Material>("documents", id);
     if (!current) return false;
+    await MaterialBinaryStorage.remove(id);
     await StorageManager.delete("documents", id);
     emitUpdate();
     return true;

@@ -24,4 +24,14 @@ export type TutorMessage = {
   list?: string[];
   code?: TutorCodeBlock;
   table?: TutorTable;
+  metadata?: {
+    provider?: string;
+    model?: string;
+    cached?: boolean;
+    inputTokens?: number;
+    outputTokens?: number;
+    contextTokens?: number;
+    historyTokens?: number;
+    chunkTokens?: number;
+  };
 };

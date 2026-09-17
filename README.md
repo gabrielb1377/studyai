@@ -31,7 +31,7 @@ OPENROUTER_API_KEY=
 GROQ_API_KEY=
 ```
 
-Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, somente o provider selecionado é utilizado; no automático, o Provider Manager prioriza o provider online mais rápido e aplica fallback. Configurações mostra endpoint, modelo, latência, tempo médio, último erro e teste de conexão individual. Nenhuma credencial ou chamada de provider é exposta ao cliente: toda comunicação passa por Route Handlers, `AIService` e `ProviderManager`.
+Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, somente o provider selecionado é utilizado; no automático, o Provider Manager prioriza o provider online mais rápido e aplica fallback. Gemini aplica retry com backoff em alta demanda, e providers OpenAI-compatible respeitam a janela de contexto descoberta para cada modelo. Configurações mostra endpoint, modelo, latência, tempo médio, último erro e teste de conexão individual. Nenhuma credencial ou chamada de provider é exposta ao cliente: toda comunicação passa por Route Handlers, `AIService` e `ProviderManager`.
 
 ## Módulos atuais
 
@@ -41,10 +41,10 @@ Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, 
 | Biblioteca | Pesquisa, filtros, seleção múltipla, tags, favoritos, ações rápidas, movimentação e exclusão confirmada sobre arquivos importados. |
 | Importar | Seleção local de arquivos ou pastas, drag and drop, extração e geração automática de Studies para PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
 | Organizar | Árvore dos materiais importados; renomear, mover ou excluir atualiza todos os dados derivados. |
-| Estudo | Navegação lateral entre matérias/temas/arquivos e abas exclusivas de Material, IA, Flashcards, Quiz e Notas, com estado restaurado. |
-| Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
-| RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
-| AI Core | Registry, health, latência, seleção automática, fallback, métricas, providers, prompts e erros normalizados. |
+| Estudo | Navegação lateral entre matérias/temas/arquivos e abas exclusivas carregadas sob demanda, com estado restaurado. |
+| Tutor IA | Streaming NDJSON, Markdown/GFM/KaTeX, conversa com scroll interno, autosave e métricas de tokens. |
+| RAG local | Chunking, embeddings locais, busca híbrida, deduplicação e somente os três melhores trechos. |
+| AI Core | Registry, health, retry, seleção, fallback, compressão de contexto, cache, tokens, streaming e erros normalizados. |
 | Storage V2 | IndexedDB transacional para documentos e dados de estudo, com migração automática do armazenamento legado. |
 | Smart Study Generator | Identificação local de disciplina, tema, subtemas, capítulos, palavras-chave, idioma e tempo de leitura após a extração. |
 | Configurações | Tema, seleção manual/automática, modelos, health, endpoint, erros, latência, métricas e teste por provider. |
@@ -65,9 +65,9 @@ src/
 
 O Smart Study Generator fica em `src/features/study-generator`. Seus detectores são independentes e determinísticos: `StudyAnalyzer` coordena estrutura, disciplina, palavras-chave e leitura; `StudyGeneratorService` é o único responsável por persistir o resultado no material e no Study Engine. PDFs da Estácio reconhecem os marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Quando a identificação não é conclusiva, o fluxo cria um estudo básico com valores explícitos de fallback e nunca bloqueia a importação.
 
-Os dados pessoais são locais por enquanto. Documentos, conteúdos, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam no IndexedDB `studyai-db`. O `localStorage` é reservado a preferências leves, como tema e configurações de IA. Ao iniciar, a aplicação migra os dados legados em uma transação e só remove as chaves antigas depois do commit. O diagnóstico interno está disponível em `/storage`. Consulte [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md) para os fluxos e limites atuais e [CURRENT_HANDOFF.md](./CURRENT_HANDOFF.md) para o próximo ponto de implementação.
+Os dados pessoais são locais por enquanto. Documentos, conteúdos, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam no IndexedDB `studyai-db`. Quando disponível, o binário original é salvo no Origin Private File System (OPFS); se o navegador não oferecer suporte, a interface permite selecionar o arquivo novamente sem perder página, zoom, capítulo ou marcadores. O `localStorage` é reservado a preferências leves. O diagnóstico interno está disponível em `/storage`, e o Dashboard concentra ingestão e métricas em um drawer lateral.
 
-O estado leve do Workspace também é persistido: estudo e arquivo atuais, aba, página/zoom/capítulo/marcadores do PDF, flashcard, questão e nota aberta. Notas usam autosave com debounce; o Tutor restaura a conversa ativa.
+O estado leve do Workspace também é persistido: estudo e arquivo atuais, aba, página/zoom/capítulo/marcadores do PDF, flashcard, questão e nota aberta. Notas, resumos e organização usam autosave. O Tutor restaura a conversa ativa.
 
 ## Limites deliberados
 

@@ -38,7 +38,7 @@ export function TutorSidebar({
   );
 
   return (
-    <aside aria-label="Conversas do Tutor IA" className="min-w-0 rounded-xl border bg-card p-3 lg:min-h-[640px]">
+    <aside aria-label="Conversas do Tutor IA" className="min-w-0 overflow-y-auto rounded-xl border bg-card p-3 max-lg:max-h-44 lg:min-h-0">
       <Button type="button" className="h-10 w-full" onClick={onNewConversation}>
         <MessageSquarePlus className="size-4" aria-hidden="true" />
         Nova conversa

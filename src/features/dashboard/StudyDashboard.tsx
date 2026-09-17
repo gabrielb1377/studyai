@@ -7,13 +7,10 @@ import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
 import { useNotes } from "@/features/notes/useNotes";
-import { ExtractionSummary } from "@/features/extraction/ExtractionSummary";
-import { IngestionPipelineStatus } from "@/features/extraction/IngestionPipelineStatus";
-import { EmbeddingSummary } from "@/features/retrieval/EmbeddingSummary";
 import { useMaterials } from "@/hooks/useMaterials";
 import { DashboardStats } from "./dashboard-stats";
-import { AIStatusCard } from "./ai-status-card";
 import { useExtraction } from "@/features/extraction/useExtraction";
+import { DiagnosticsDrawer } from "./DiagnosticsDrawer";
 
 export function StudyDashboard() {
   const { records } = useStudyEngine();
@@ -30,12 +27,7 @@ export function StudyDashboard() {
         <ContinueStudying records={records} materials={materials} />
         <ImportMaterial />
       </div>
-      <div className="grid gap-5 lg:grid-cols-3">
-        <ExtractionSummary />
-        <EmbeddingSummary />
-        <AIStatusCard />
-      </div>
-      <IngestionPipelineStatus />
+      <div className="flex justify-end"><DiagnosticsDrawer /></div>
       <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />
     </>
   );

@@ -7,6 +7,7 @@ import type {
   AIProvider,
   AIProviderStatus,
   AIResponse,
+  AIStreamEvent,
 } from "../AIProvider";
 
 const DEFAULT_BASE_URL = "http://localhost:11434";
@@ -215,6 +216,80 @@ export const OllamaProvider: AIProvider = {
         503,
         this.id,
       );
+    } finally {
+      request.clear();
+    }
+  },
+
+  async *stream({ history, message, model, signal }): AsyncGenerator<AIStreamEvent> {
+    const request = withTimeout(signal, REQUEST_TIMEOUT_MS);
+    try {
+      const selectedModel = model?.trim() || (await listModels(request.signal))[0]?.name;
+      if (!selectedModel) throw new AIError("Nenhum modelo está instalado no Ollama.", "PROVIDER_UNAVAILABLE", 503, this.id);
+      const response = await fetch(`${getBaseUrl()}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: selectedModel, messages: toOllamaMessages(history, message), stream: true }),
+        cache: "no-store",
+        signal: request.signal,
+      });
+      if (!response.ok || !response.body) {
+        const data = await response.json().catch(() => null) as OllamaChatChunk | null;
+        throw new AIError(data?.error ?? "O Ollama não conseguiu iniciar o streaming.", "PROVIDER_ERROR", response.status || 502, this.id);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let text = "";
+      let inputTokens: number | undefined;
+      let outputTokens: number | undefined;
+      const consume = (line: string) => {
+        if (!line.trim()) return null;
+        const chunk = JSON.parse(line) as OllamaChatChunk;
+        if (chunk.error) throw new AIError(chunk.error, "PROVIDER_ERROR", 502, this.id);
+        inputTokens = chunk.prompt_eval_count ?? inputTokens;
+        outputTokens = chunk.eval_count ?? outputTokens;
+        return chunk.message?.content ?? "";
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          const delta = consume(line);
+          if (delta) {
+            text += delta;
+            yield { type: "delta", text: delta };
+          }
+        }
+      }
+      const tail = consume(buffer + decoder.decode());
+      if (tail) {
+        text += tail;
+        yield { type: "delta", text: tail };
+      }
+      if (!text.trim()) throw new AIError("O Ollama retornou uma resposta vazia.", "INVALID_RESPONSE", 502, this.id);
+      yield {
+        type: "done",
+        response: {
+          provider: this.id,
+          model: selectedModel,
+          text: text.trim(),
+          usage: {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens !== undefined || outputTokens !== undefined ? (inputTokens ?? 0) + (outputTokens ?? 0) : undefined,
+          },
+        },
+      };
+    } catch (error) {
+      if (error instanceof AIError) throw error;
+      if (request.signal.aborted) throw new AIError("O Ollama demorou demais para responder.", "TIMEOUT", 504, this.id);
+      throw new AIError(`Ollama indisponível. Verifique se o serviço está ativo em ${getBaseUrl()}.`, "PROVIDER_UNAVAILABLE", 503, this.id);
     } finally {
       request.clear();
     }

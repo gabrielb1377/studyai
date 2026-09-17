@@ -15,6 +15,7 @@ import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
+import { TokenCounter } from "@/features/ai/TokenCounter";
 
 export const runtime = "nodejs";
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       studyContext: body.context,
       chunks: body.chunks,
     });
-    const response = await AIService.generate({
+    const aiRequest = {
       history: prompt.history,
       message: prompt.message,
       model: body.model,
@@ -76,8 +77,61 @@ export async function POST(request: Request) {
       signal: request.signal,
       provider: body.provider,
       stream: body.stream,
+    };
+    if (body.stream) {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          try {
+            for await (const event of AIService.stream(aiRequest)) {
+              const payload = event.type === "done"
+                ? {
+                    ...event,
+                    response: {
+                      ...event.response,
+                      usage: {
+                        ...event.response.usage,
+                        inputTokens: event.response.usage?.inputTokens ?? prompt.metrics.promptTokens,
+                        outputTokens: event.response.usage?.outputTokens ?? TokenCounter.estimate(event.response.text),
+                        totalTokens: event.response.usage?.totalTokens ?? prompt.metrics.promptTokens + TokenCounter.estimate(event.response.text),
+                        contextTokens: prompt.metrics.contextTokens,
+                        historyTokens: prompt.metrics.compressedHistoryTokens,
+                        chunkTokens: prompt.metrics.chunkTokens,
+                      },
+                    },
+                  }
+                : event;
+              controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+            }
+          } catch (error) {
+            const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
+            controller.enqueue(encoder.encode(`${JSON.stringify({ type: "error", ...normalized.body })}\n`));
+          } finally {
+            controller.close();
+          }
+        },
+      });
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+    const response = await AIService.generate(aiRequest);
+    const outputTokens = response.usage?.outputTokens ?? TokenCounter.estimate(response.text);
+    return NextResponse.json({
+      ...response,
+      usage: {
+        ...response.usage,
+        inputTokens: response.usage?.inputTokens ?? prompt.metrics.promptTokens,
+        outputTokens,
+        totalTokens: response.usage?.totalTokens ?? prompt.metrics.promptTokens + outputTokens,
+        contextTokens: prompt.metrics.contextTokens,
+        historyTokens: prompt.metrics.compressedHistoryTokens,
+        chunkTokens: prompt.metrics.chunkTokens,
+      },
     });
-    return NextResponse.json(response);
   } catch (error) {
     const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
     return NextResponse.json(normalized.body, { status: normalized.status });

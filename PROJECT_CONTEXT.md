@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 16 de setembro de 2026.
+Atualizado em 17 de setembro de 2026.
 
 ## Propósito
 
@@ -16,11 +16,13 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | Estado de layout | Zustand |
 | Tema | next-themes |
 | Visualização de PDF importado | react-pdf |
+| Respostas formatadas | react-markdown, remark-gfm, remark-math e KaTeX |
 | Documentos OOXML | JSZip |
 | OCR local | Tesseract.js com dados em português e inglês |
 | Transcrição local | Transformers.js com Whisper Tiny |
 | Testes de interface | Playwright |
 | Persistência local | IndexedDB nativo, banco `studyai-db` v1 |
+| Binários originais | Origin Private File System (OPFS), com fallback de re-seleção |
 
 ## Estrutura de módulos
 
@@ -61,7 +63,7 @@ O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 1. Nenh
 
 `StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
 
-Preferências de navegação permanecem no `localStorage`, por serem pequenas e específicas do dispositivo. `WorkspacePersistence` mantém aba, material, página e zoom do PDF, capítulo, marcadores, flashcard, quiz e nota por `studyId`. Conversas e a conversa ativa do Tutor permanecem no store `metadata` do IndexedDB.
+Preferências de navegação permanecem no `localStorage`, por serem pequenas e específicas do dispositivo. `WorkspacePersistence` mantém aba, material, página e zoom do PDF, capítulo, marcadores, flashcard, quiz e nota por `studyId`. Conversas e a conversa ativa do Tutor permanecem no store `metadata` do IndexedDB. `MaterialBinaryStorage` grava o arquivo original no OPFS usando o id estável do material; ausência de suporte degrada para a re-seleção local.
 
 Na primeira abertura, `Migration` verifica as chaves legadas, grava tudo em uma única transação e remove o legado somente depois do commit. Assim, uma falha nunca apaga a fonte anterior. O `localStorage` permanece somente para preferências leves: tema, provider/configurações de IA, idioma, sidebar, workspace e última tela. A rota interna `/storage` mostra versão, contagens, espaço estimado e data da migração.
 
@@ -113,21 +115,24 @@ TutorWorkspace
   → TutorService
   → AIClient
   → /api/tutor
+  → ContextCompressor / TokenCounter
   → PromptBuilder
   → ContextBuilder
   → AIService
   → ProviderManager
+  → AIResponseCache
   → ProviderRegistry / HealthService / LatencyService
   → AIProvider
   → GeminiProvider | OllamaProvider
   → Gemini API | Ollama local
+  → stream NDJSON para o cliente
 ```
 
-O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. `PromptBuilder` e `ContextBuilder` são executados no servidor. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`; nenhuma feature conhece a implementação Gemini.
+O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos. O RAG remove duplicações e envia somente os três melhores trechos. `ContextCompressor` resume de forma extrativa o histórico antigo, preserva as mensagens recentes e respeita orçamentos de tokens antes de `PromptBuilder` e `ContextBuilder`. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`.
 
 `AIProvider` define o contrato comum. Gemini, Ollama, OpenRouter e Groq possuem health check e geração server-only; os dois últimos usam o contrato OpenAI-compatible e só ficam online quando suas chaves estão configuradas. `ProviderRegistry` é o único catálogo, `HealthService` mantém verificações recentes em cache e `LatencyService` mede health e geração. No modo manual, o provider escolhido é estrito. No automático, providers online são ordenados pela menor latência antes da cadeia de fallback Ollama → Gemini → Groq → OpenRouter.
 
-O modo, provider preferencial e modelos escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama consulta dinamicamente `/api/tags`, verifica `/api/version` e `/api/ps`, e conversa por `/api/chat`, com timeout, cancelamento e suporte a resposta completa ou NDJSON. O navegador nunca acessa o processo local diretamente. Logs e métricas ficam em um singleton efêmero do processo servidor, limitado às 200 tentativas mais recentes. O Dashboard consulta somente o endpoint agregado do Manager para mostrar provider atual, modelo e métricas de uso.
+O modo, provider preferencial e modelos escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama conversa por NDJSON; Gemini usa SSE; OpenRouter e Groq usam SSE OpenAI-compatible. O Route Handler normaliza tudo para NDJSON. Respostas idênticas são reutilizadas por um cache LRU em memória, com TTL de 30 minutos. Logs e métricas ficam em singletons efêmeros do processo servidor. O Dashboard mostra tokens, latência, ingestão, OCR, chunks e embeddings apenas no drawer de diagnóstico.
 
 Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interface exibe: `Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.` Nenhuma mensagem artificial é criada para substituir o provedor.
 
@@ -150,15 +155,14 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 
 ## Limites conhecidos
 
-- Importação não transfere nem persiste os binários físicos; metadados, organização e resultados extraídos são salvos no IndexedDB.
-- O binário original fica disponível somente durante a sessão atual. Após recarregar, o conteúdo extraído permanece, mas o arquivo precisa ser selecionado novamente para reprodução ou visualização binária.
+- A importação continua local e não transfere binários. Quando o navegador oferece OPFS, o arquivo original é persistido no dispositivo; os dados derivados permanecem no IndexedDB.
 - O primeiro uso da transcrição requer download do modelo Whisper; o tamanho e o tempo dependem da conexão e do dispositivo. Depois disso, o cache do navegador é reutilizado.
 - A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
 - Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação ou cloud de processamento.
 - O Ollama precisa estar em execução no endereço configurado por `OLLAMA_URL` e possuir ao menos um modelo instalado.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 - A detecção de estrutura é heurística e local. Ela reconhece marcadores e vocabulário conhecidos, mas não substitui a edição manual quando o documento usa títulos ambíguos.
-- Página, zoom e seleção do PDF são restaurados, mas o binário original ainda precisa ser reimportado após fechar completamente o navegador.
+- A busca do PDF usa a camada textual do PDF.js; PDFs puramente escaneados dependem do texto OCR e podem não possuir posições exatas para destaque dentro do canvas.
 
 ## Qualidade
 

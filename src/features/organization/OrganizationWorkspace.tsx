@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, FolderTree, Save, Star, Tags, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CheckCircle2, FolderTree, LoaderCircle, Star, Tags, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -42,10 +42,19 @@ export function OrganizationWorkspace() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const [tagText, setTagText] = useState("");
   const [bulkMoveIds, setBulkMoveIds] = useState<string[]>([]);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [hasAutoSaved, setHasAutoSaved] = useState(false);
+  const lastSavedValue = useRef("");
+
+  const actionValue = action === "rename"
+    ? fileName.trim()
+    : Object.values(destination).map((value) => value.trim()).join("|");
 
   const openRename = (file: Material) => {
     setActiveFile(file);
     setFileName(file.name);
+    setHasAutoSaved(false);
+    lastSavedValue.current = file.name.trim();
     setAction("rename");
   };
 
@@ -58,14 +67,28 @@ export function OrganizationWorkspace() {
       subject: file.subject ?? "",
       topic: file.topic ?? "",
     });
+    setHasAutoSaved(false);
+    lastSavedValue.current = [file.course, file.semester, file.subject, file.topic].map((value) => value?.trim() ?? "").join("|");
     setAction("move");
   };
   const openBulkMove = () => {
     const first = materials.find((item) => selectedIds.has(item.id));
     if (!first) return;
     setBulkMoveIds([...selectedIds]);
+    setHasAutoSaved(false);
     setActiveFile(first);
     setDestination({ course: first.course ?? "", semester: first.semester ?? "", subject: first.subject ?? "", topic: first.topic ?? "" });
+    lastSavedValue.current = [first.course, first.semester, first.subject, first.topic].map((value) => value?.trim() ?? "").join("|");
+    setAction("move");
+  };
+  const openNewDestination = (fileId: string) => {
+    const file = materials.find((item) => item.id === fileId);
+    if (!file) return;
+    setBulkMoveIds([]);
+    setHasAutoSaved(false);
+    setActiveFile(file);
+    setDestination(emptyDestination);
+    lastSavedValue.current = "";
     setAction("move");
   };
 
@@ -90,8 +113,22 @@ export function OrganizationWorkspace() {
     }
 
     await refresh();
-    closeDialog();
   };
+
+  useEffect(() => {
+    if (!activeFile || !action || !actionValue || actionValue === lastSavedValue.current) return;
+    if (action === "move" && !Object.values(destination).every((value) => value.trim())) return;
+    const timeout = window.setTimeout(() => {
+      setIsAutoSaving(true);
+      void saveAction().then(() => {
+        lastSavedValue.current = actionValue;
+        setHasAutoSaved(true);
+      }).finally(() => setIsAutoSaving(false));
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  // saveAction reads the current dialog state and intentionally runs only after a valid edit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action, actionValue, activeFile, destination]);
 
   const deleteFile = async (file: Material) => {
     if (!await OrganizationService.remove(file.id)) return;
@@ -141,7 +178,7 @@ export function OrganizationWorkspace() {
 
       {selectedIds.size > 0 && <div role="toolbar" aria-label="Ações dos arquivos selecionados" className="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-lg"><strong className="mr-auto text-sm">{selectedIds.size} selecionados</strong><Button size="sm" variant="outline" onClick={openBulkMove}><FolderTree />Mover</Button><Button size="sm" variant="outline" onClick={() => void bulkFavorite()}><Star />Favoritar</Button><Button size="sm" variant="outline" onClick={() => setTagsOpen(true)}><Tags />Adicionar tags</Button><Button size="sm" variant="destructive" onClick={() => setConfirmBulkDelete(true)}><Trash2 />Excluir</Button></div>}
 
-      <OrganizationTree files={materials} onRename={openRename} onMove={openMove} onDelete={deleteFile} selectedIds={selectedIds} onSelectedChange={toggleSelected} onDropFile={(fileId, nextDestination) => { void dropFile(fileId, nextDestination); }} />
+      <OrganizationTree files={materials} onRename={openRename} onMove={openMove} onDelete={deleteFile} selectedIds={selectedIds} onSelectedChange={toggleSelected} onDropFile={(fileId, nextDestination) => { void dropFile(fileId, nextDestination); }} onCreateDestination={openNewDestination} />
 
       <div className="flex flex-col-reverse gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
@@ -191,15 +228,8 @@ export function OrganizationWorkspace() {
             </div>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeDialog}>Cancelar</Button>
-            <Button
-              type="button"
-              onClick={() => { void saveAction(); }}
-              disabled={action === "rename" ? !fileName.trim() : !destinationComplete}
-            >
-              <Save className="size-4" aria-hidden="true" />
-              Salvar alteração
-            </Button>
+            <p role="status" className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">{isAutoSaving && <LoaderCircle className="size-3.5 animate-spin" />} {isAutoSaving ? "Salvando…" : hasAutoSaved ? "Alterações salvas automaticamente" : destinationComplete || action === "rename" ? "As alterações serão salvas automaticamente" : "Preencha todos os campos"}</p>
+            <Button type="button" variant="outline" onClick={closeDialog}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

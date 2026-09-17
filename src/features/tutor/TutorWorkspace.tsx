@@ -91,12 +91,14 @@ export function TutorWorkspace() {
     clearError();
     try {
       const response = await TutorService.requestSummary(activeConversation.messages, context, chunks);
-      setSummaryDraft(SummaryService.create({
+      const created = SummaryService.create({
         conversationId: activeConversation.id,
         conversationTitle: activeConversation.title,
         content: response.text,
         studyId: context?.studyId,
-      }));
+      });
+      saveSummary(created);
+      setSummaryDraft(created);
       setIsSummaryOpen(true);
     } catch (summaryError) {
       setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao gerar o resumo.");
@@ -125,7 +127,12 @@ export function TutorWorkspace() {
     clearError();
     try {
       const response = await TutorService.requestSummary(conversation.messages, context, chunks);
-      setSummaryDraft((current) => current ? { ...current, content: response.text, updatedAt: new Date().toISOString() } : current);
+      setSummaryDraft((current) => {
+        if (!current) return current;
+        const updated = { ...current, content: response.text, updatedAt: new Date().toISOString() };
+        saveSummary(updated);
+        return updated;
+      });
     } catch (summaryError) {
       setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");
     } finally {
@@ -134,7 +141,7 @@ export function TutorWorkspace() {
   };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]">
+    <div className="grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1">
       <TutorSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -145,7 +152,7 @@ export function TutorWorkspace() {
         onRenameConversation={openRename}
         onDeleteConversation={deleteConversation}
       />
-      <section className="min-w-0">
+      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden">
         <div className="mb-5 flex items-center gap-3">
           <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary">
             <Bot className="size-5" aria-hidden="true" />

@@ -71,16 +71,18 @@ export function useTutor() {
 
     const conversation = activeConversation ?? TutorService.createConversation();
     const userMessage = TutorService.createMessage("user", nextContent);
+    const assistantMessage = TutorService.createMessage("assistant", "");
     setError(null);
     setIsLoading(true);
 
     if (!activeConversation) setActiveConversationId(conversation.id);
     updateConversations((current) => TutorService.addMessage(
-      activeConversation ? current : [conversation, ...current],
+      TutorService.addMessage(activeConversation ? current : [conversation, ...current], conversation.id, userMessage),
       conversation.id,
-      userMessage,
+      assistantMessage,
     ));
 
+    let streamedText = "";
     try {
       const retrieval = await RetrievalPipeline.forQuestion(nextContent, context?.studyId);
       const response = await TutorService.requestReply(
@@ -88,13 +90,31 @@ export function useTutor() {
         nextContent,
         context,
         retrieval.chunks,
+        {
+          onDelta: (delta) => {
+            streamedText += delta;
+            setConversations((current) => TutorService.replaceMessage(
+              current,
+              conversation.id,
+              assistantMessage.id,
+              { content: streamedText },
+            ));
+          },
+        },
       );
-      const assistantMessage = TutorService.createMessage("assistant", response.text);
       updateConversations((current) =>
-        TutorService.addMessage(current, conversation.id, assistantMessage),
+        TutorService.replaceMessage(current, conversation.id, assistantMessage.id, {
+          content: response.text,
+          metadata: response.metadata,
+        }),
       );
       return true;
     } catch (requestError) {
+      if (!streamedText) {
+        updateConversations((current) => TutorService.removeMessage(current, conversation.id, assistantMessage.id));
+      } else {
+        updateConversations((current) => TutorService.replaceMessage(current, conversation.id, assistantMessage.id, { content: streamedText }));
+      }
       setError(requestError instanceof Error ? requestError.message : "Erro inesperado no Tutor IA.");
       return false;
     } finally {

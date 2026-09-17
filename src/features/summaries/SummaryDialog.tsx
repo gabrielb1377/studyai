@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clipboard, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Clipboard, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,6 +41,14 @@ export function SummaryDialog({
     setHasCopied(false);
   }, [summary]);
 
+  useEffect(() => {
+    if (!open || !summary || !title.trim() || title.trim() === summary.title) return;
+    const timeout = window.setTimeout(() => {
+      onSave({ ...summary, title: title.trim(), updatedAt: new Date().toISOString() });
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [onSave, open, summary, title]);
+
   if (!summary) return null;
 
   const copySummary = async () => {
@@ -50,12 +58,6 @@ export function SummaryDialog({
     } catch {
       setHasCopied(false);
     }
-  };
-
-  const saveSummary = () => {
-    const nextTitle = title.trim();
-    if (!nextTitle) return;
-    onSave({ ...summary, title: nextTitle });
   };
 
   return (
@@ -90,10 +92,7 @@ export function SummaryDialog({
               </Button>
             )}
           </div>
-          <Button type="button" onClick={saveSummary} disabled={!title.trim()}>
-            <Save className="size-4" aria-hidden="true" />
-            {isSaved ? "Salvar alterações" : "Salvar resumo"}
-          </Button>
+          <p className="text-xs text-muted-foreground">Salvo automaticamente</p>
         </DialogFooter>
       </DialogContent>
     </Dialog>

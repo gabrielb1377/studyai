@@ -5,6 +5,7 @@ import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
 import { OrganizationService } from "@/features/organization/OrganizationService";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
+import { MaterialBinaryStorage } from "@/services/material-binary-storage";
 import type { ImportFile, ImportPhase } from "@/types/import";
 import type { MaterialFileType } from "@/types/material";
 import {
@@ -104,7 +105,8 @@ export function useImport() {
             item.id,
           );
       MaterialRuntimeStore.register(item.id, item.file);
-      await MaterialService.upsert(material);
+      const persistentBinary = await MaterialBinaryStorage.save(item.id, item.file);
+      await MaterialService.upsert({ ...material, persistentBinary });
       const organized = await OrganizationService.organizeImported(material.id);
       extractionInputs.push({ id: item.id, file: item.file, studyId: organized.studyId });
     }

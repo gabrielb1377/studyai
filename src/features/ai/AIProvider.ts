@@ -27,18 +27,27 @@ export type AIResponse = {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    contextTokens?: number;
+    historyTokens?: number;
+    chunkTokens?: number;
   };
   execution?: {
     attemptedProviders: AIProviderId[];
     fallbackUsed: boolean;
     latencyMs: number;
+    cached?: boolean;
   };
 };
+
+export type AIStreamEvent =
+  | { type: "delta"; text: string }
+  | { type: "done"; response: AIResponse };
 
 export type AIModel = {
   name: string;
   modifiedAt?: string;
   size?: number;
+  contextWindow?: number;
 };
 
 export type AIProviderStatus = {
@@ -94,6 +103,7 @@ export interface AIProvider {
   readonly name: string;
   readonly available: boolean;
   generate(request: AIRequest): Promise<AIResponse>;
+  stream?(request: AIRequest): AsyncGenerator<AIStreamEvent>;
   inspect?(signal?: AbortSignal): Promise<AIProviderStatus>;
 }
 

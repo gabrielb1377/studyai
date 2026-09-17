@@ -39,6 +39,7 @@ export type Material = {
   subject?: string;
   topic?: string;
   tags?: string[];
+  persistentBinary?: boolean;
 };
 
 export type MaterialFilter = "all" | MaterialCategory | "favorites";

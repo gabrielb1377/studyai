@@ -5,9 +5,12 @@ import { AIClient } from "@/features/ai/AIClient";
 import { createTutorId, getMessageText } from "../utils/message-utils";
 
 type TutorApiResponse = {
+  provider?: string;
   model?: string;
   text?: string;
   error?: string;
+  usage?: TutorMessage["metadata"];
+  execution?: { cached?: boolean };
 };
 
 export class TutorRequestError extends Error {
@@ -62,6 +65,28 @@ export const TutorService = {
     );
   },
 
+  replaceMessage(
+    conversations: readonly TutorConversation[],
+    conversationId: string,
+    messageId: string,
+    changes: Partial<TutorMessage>,
+    now = new Date().toISOString(),
+  ) {
+    return conversations.map((conversation) => conversation.id === conversationId
+      ? {
+          ...conversation,
+          messages: conversation.messages.map((message) => message.id === messageId ? { ...message, ...changes } : message),
+          updatedAt: now,
+        }
+      : conversation);
+  },
+
+  removeMessage(conversations: readonly TutorConversation[], conversationId: string, messageId: string) {
+    return conversations.map((conversation) => conversation.id === conversationId
+      ? { ...conversation, messages: conversation.messages.filter((message) => message.id !== messageId), updatedAt: new Date().toISOString() }
+      : conversation);
+  },
+
   createMessage(role: TutorMessage["role"], content: string): TutorMessage {
     return { id: createTutorId(role), role, content };
   },
@@ -71,22 +96,40 @@ export const TutorService = {
     message: string,
     context?: TutorStudyContext | null,
     chunks: readonly RetrievedChunk[] = [],
-  ): Promise<{ model: string; text: string }> {
-    const data = await AIClient.request<TutorApiResponse>(
+    options?: { onDelta?: (text: string) => void; signal?: AbortSignal },
+  ): Promise<{ model: string; text: string; provider?: string; metadata?: TutorMessage["metadata"] }> {
+    const payload = {
+      history: history.map((historyMessage) => ({
+        role: historyMessage.role,
+        content: getMessageText(historyMessage),
+      })),
+      message,
+      context: context ?? undefined,
+      chunks: chunks.length > 0 ? chunks : undefined,
+    };
+    const data = options?.onDelta
+      ? await AIClient.stream<TutorApiResponse>("/api/tutor", payload, {
+          onDelta: options.onDelta,
+          signal: options.signal,
+          fallbackMessage: "Não foi possível obter uma resposta do Tutor IA.",
+        })
+      : await AIClient.request<TutorApiResponse>(
       "/api/tutor",
-      {
-        history: history.map((historyMessage) => ({
-          role: historyMessage.role,
-          content: getMessageText(historyMessage),
-        })),
-        message,
-        context: context ?? undefined,
-        chunks: chunks.length > 0 ? chunks : undefined,
-      },
+      payload,
       "Não foi possível obter uma resposta do Tutor IA.",
     );
     if (!data.text) throw new TutorRequestError("O provider retornou uma resposta vazia.");
-    return { model: data.model ?? "IA", text: data.text };
+    return {
+      model: data.model ?? "IA",
+      provider: data.provider,
+      text: data.text,
+      metadata: {
+        ...data.usage,
+        provider: data.provider,
+        model: data.model,
+        cached: data.execution?.cached,
+      },
+    };
   },
 
   async requestSummary(

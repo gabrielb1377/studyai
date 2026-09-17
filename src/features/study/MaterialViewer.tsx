@@ -1,12 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { AudioLines, ChevronLeft, ChevronRight, FileText, Headphones, ImageIcon, Video } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AudioLines, ChevronLeft, ChevronRight, FileText, Headphones, ImageIcon, RefreshCw, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatFileSize } from "@/features/import/import-utils";
 import type { StudyMaterial } from "@/types/study";
+import { MaterialBinaryStorage } from "@/services/material-binary-storage";
+import { MaterialRuntimeStore } from "@/services/material-runtime-store";
+import { MaterialService } from "@/services/material-service";
 
 const PdfMaterialViewer = dynamic(() => import("./PdfMaterialViewer"), {
   ssr: false,
@@ -42,6 +46,36 @@ export function MaterialViewer({
   hasNext: boolean;
 }) {
   const Icon = materialIcons[material.type];
+  const [source, setSource] = useState(material.source);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [pdfView, setPdfView] = useState<"text" | "pdf">("pdf");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const runtimeSource = MaterialRuntimeStore.get(material.id)?.source ?? material.source;
+    setSource(runtimeSource);
+    setPdfView("pdf");
+    if (runtimeSource) return () => { active = false; };
+    setIsRestoring(true);
+    void MaterialBinaryStorage.load(material).then((file) => {
+      if (!active || !file) return;
+      MaterialRuntimeStore.register(material.id, file);
+      setSource(MaterialRuntimeStore.get(material.id)?.source);
+    }).finally(() => {
+      if (active) setIsRestoring(false);
+    });
+    return () => { active = false; };
+  }, [material]);
+
+  const selectAgain = async (file: File | undefined) => {
+    if (!file) return;
+    MaterialRuntimeStore.register(material.id, file);
+    const persistentBinary = await MaterialBinaryStorage.save(material.id, file);
+    await MaterialService.update(material.id, { persistentBinary });
+    setSource(MaterialRuntimeStore.get(material.id)?.source);
+    setPdfView("pdf");
+  };
 
   return (
     <Card className="gap-0 overflow-hidden py-0 shadow-none">
@@ -72,29 +106,40 @@ export function MaterialViewer({
         </div>
       </CardHeader>
       <CardContent className="p-4 sm:p-6">
-        {material.type === "pdf" && material.source && <PdfMaterialViewer key={material.id} material={material} studyId={studyId} />}
-        {material.type === "pdf" && !material.source && (
-          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-            O arquivo original não permanece no navegador após recarregar a página. Importe-o novamente para abrir o PDF.
-            {material.textContent && <pre className="mt-4 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/40 p-4 text-foreground">{material.textContent}</pre>}
+        <input ref={fileInputRef} type="file" className="sr-only" accept={material.type === "pdf" ? ".pdf,application/pdf" : undefined} onChange={(event) => { void selectAgain(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+        {material.type === "pdf" && (
+          <div className="space-y-4">
+            <div className="inline-flex rounded-lg border bg-muted p-1" role="tablist" aria-label="Visualização do material">
+              <Button type="button" size="sm" variant={pdfView === "text" ? "secondary" : "ghost"} role="tab" aria-selected={pdfView === "text"} onClick={() => setPdfView("text")}>Texto</Button>
+              <Button type="button" size="sm" variant={pdfView === "pdf" ? "secondary" : "ghost"} role="tab" aria-selected={pdfView === "pdf"} onClick={() => setPdfView("pdf")}>PDF</Button>
+            </div>
+            {pdfView === "text" && <pre className="max-h-[620px] overflow-auto whitespace-pre-wrap rounded-xl border bg-secondary/30 p-5 text-sm leading-7 text-foreground sm:p-7">{material.textContent || "Nenhum texto foi extraído deste PDF."}</pre>}
+            {pdfView === "pdf" && source && <PdfMaterialViewer key={material.id} material={{ ...material, source }} studyId={studyId} />}
+            {pdfView === "pdf" && !source && (
+              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                <p>{isRestoring ? "Procurando o PDF original neste navegador…" : "O PDF original não está disponível neste navegador."}</p>
+                {!isRestoring && <Button type="button" variant="outline" className="mt-4" onClick={() => fileInputRef.current?.click()}><RefreshCw />Selecionar novamente</Button>}
+                <p className="mt-3 text-xs">Página, zoom, capítulo e marcadores permanecem salvos.</p>
+              </div>
+            )}
           </div>
         )}
         {material.type === "video" && (
           <div className="overflow-hidden rounded-xl border bg-black/90">
             <video controls className="aspect-video w-full" aria-label={`Player de vídeo: ${material.name}`}>
-              {material.source && <source src={material.source} type="video/mp4" />}
+              {source && <source src={source} type="video/mp4" />}
             </video>
-            {!material.source && <p className="px-4 py-3 text-center text-xs text-white/60">Reimporte o arquivo para reproduzi-lo nesta sessão.</p>}
+            {!source && <p className="px-4 py-3 text-center text-xs text-white/60">Selecione novamente o arquivo para reproduzi-lo.</p>}
           </div>
         )}
         {material.type === "audio" && (
           <div className="rounded-xl border bg-secondary/40 p-5 sm:p-8">
             <div className="mb-5 flex items-center gap-3">
               <span className="flex size-12 items-center justify-center rounded-xl bg-card text-primary shadow-sm"><AudioLines className="size-6" aria-hidden="true" /></span>
-              <div><p className="text-sm font-medium">Player de áudio</p><p className="text-xs text-muted-foreground">{material.source ? "Arquivo importado" : "Reimporte para reproduzir"}</p></div>
+              <div><p className="text-sm font-medium">Player de áudio</p><p className="text-xs text-muted-foreground">{source ? "Arquivo importado" : "Selecione novamente para reproduzir"}</p></div>
             </div>
             <audio controls className="w-full" aria-label={`Player de áudio: ${material.name}`}>
-              {material.source && <source src={material.source} type={material.mimeType} />}
+              {source && <source src={source} type={material.mimeType} />}
             </audio>
           </div>
         )}
@@ -103,11 +148,11 @@ export function MaterialViewer({
             {material.textContent || "Nenhum texto foi extraído deste material."}
           </pre>
         )}
-        {material.type === "image" && material.source && (
+        {material.type === "image" && source && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={material.source} alt={material.name} className="mx-auto max-h-[620px] rounded-xl object-contain" />
+          <img src={source} alt={material.name} className="mx-auto max-h-[620px] rounded-xl object-contain" />
         )}
-        {material.type === "image" && !material.source && (
+        {material.type === "image" && !source && (
           <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Reimporte a imagem para visualizá-la nesta sessão.</p>
         )}
       </CardContent>

@@ -1,8 +1,16 @@
-# Handoff Atual — Sprint 25.1: UX, Navegação e Persistência
+# Handoff Atual — Sprint 25.2: Polish, UX e Performance
 
-Atualizado em 16 de setembro de 2026.
+Atualizado em 17 de setembro de 2026.
 
 ## Estado entregue
+
+A Sprint 25.2 conclui as pendências da 25.1. O AI Core agora possui compressão de histórico, top 3 chunks deduplicados, contagem interna de tokens, cache LRU, retry exponencial do Gemini e proteção da janela de contexto dos providers OpenAI-compatible. Tutor e providers transmitem respostas progressivamente por NDJSON, com SSE/NDJSON normalizados no servidor.
+
+O Tutor renderiza Markdown, GFM, tabelas, checklists, código, links, imagens e matemática KaTeX. A altura é fixa e somente a conversa rola, com acompanhamento automático da última mensagem. PDF.js, Tutor, Flashcards, Quiz, Markdown, OCR e Whisper são carregados somente quando necessários.
+
+Os arquivos originais são persistidos no OPFS quando disponível. O leitor oferece Texto/PDF, restaura o binário após reload, mantém estado quando a re-seleção é necessária e possui miniaturas lazy, índice, marcadores e Ctrl+F com contagem, navegação e destaque.
+
+O pipeline não ocupa mais o Dashboard: status, logs, tempo, OCR, chunks, embeddings e uso de IA ficam no drawer “Detalhes da ingestão”. Resumos e organização usam autosave; soltar um arquivo na área de nova estrutura permite criar curso, semestre, matéria e tema no mesmo fluxo.
 
 O Workspace agora possui cinco abas exclusivas (`Material`, `IA`, `Flashcards`, `Quiz` e `Notas`) e uma navegação lateral por matéria, tema e arquivo. Trocar de aba fecha visualmente a anterior e todo o estado leve é restaurado após refresh ou reabertura: arquivo, aba, PDF, capítulo, marcadores, flashcard, quiz e nota.
 
@@ -178,7 +186,7 @@ A rota interna `/storage` exibe banco, versão, contagens, espaço estimado e ú
 
 ## Limites atuais
 
-- O binário original ainda não é persistido. Depois de recarregar a página, o texto extraído permanece no IndexedDB, mas PDF, áudio, vídeo ou imagem precisam ser selecionados novamente para visualização binária.
+- O binário original é persistido no OPFS quando suportado. Navegadores sem OPFS continuam exigindo re-seleção, sem perder os dados derivados ou o estado do Workspace.
 - A primeira transcrição depende do download do modelo Whisper; indisponibilidade de rede é registrada como erro do arquivo sem interromper os demais.
 - O histórico do Tutor é local ao navegador.
 - O Ollama depende de um serviço local em execução e de pelo menos um modelo instalado.
@@ -201,6 +209,8 @@ Validação final da Sprint 25: ESLint aprovado, TypeScript aprovado, build de p
 
 Validação final da Sprint 25.1: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 47 testes Playwright aprovados. A cobertura adicional valida diagnóstico online/offline por provider, restauração do Workspace, flashcard e quiz atuais, navegação lateral, abertura direta de materiais, ações em lote e drag and drop.
 
+Validação final da Sprint 25.2: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 54 testes Playwright aprovados. Os novos cenários cobrem streaming NDJSON, Markdown/GFM/KaTeX, altura e rolagem do chat, cache de IA, compressão e métricas de tokens, persistência do PDF no OPFS, busca Ctrl+F, drawer de diagnóstico, criação de hierarquia por drag and drop e carregamento lazy do PDF.js.
+
 ## Próximo passo seguro
 
-Adicionar uma revisão manual opcional da classificação detectada, mantendo as heurísticas como sugestão e sem acoplar o gerador a um provider de IA. Persistir binários originais deve continuar sendo uma decisão separada, condicionada à experiência offline, quota e migração por versão.
+Medir a qualidade e o custo dos prompts com providers reais em materiais grandes, mantendo os limites, o cache e a compressão atuais. Uma futura persistência do cache de IA deve considerar privacidade, invalidação por modelo e quota antes de sair da memória do servidor.
