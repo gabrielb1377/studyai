@@ -1,3 +1,5 @@
+import type { StudyChapter } from "@/types/study-engine";
+
 export const extractionFileTypes = [
   "pdf",
   "docx",
@@ -22,6 +24,7 @@ export const ingestionStageIds = [
   "ocr",
   "normalization",
   "analysis",
+  "study",
   "chunks",
   "embeddings",
   "indexed",
@@ -102,6 +105,9 @@ export type ExtractionMetadata = {
   encoding?: string;
   wordCount?: number;
   readingTimeMinutes?: number;
+  chapters?: StudyChapter[];
+  analysisStatus?: "analyzed" | "fallback";
+  analyzedAt?: string;
   width?: number;
   height?: number;
   hasTextLayer?: boolean;

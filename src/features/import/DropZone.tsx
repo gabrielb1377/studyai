@@ -11,7 +11,7 @@ export function DropZone({
   onFiles,
 }: {
   disabled: boolean;
-  onFiles: (files: File[]) => void;
+  onFiles: (files: File[]) => void | Promise<unknown>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -19,7 +19,7 @@ export function DropZone({
 
   function selectFiles(fileList: FileList | null) {
     if (!fileList?.length) return;
-    onFiles(Array.from(fileList));
+    void onFiles(Array.from(fileList));
   }
 
   useEffect(() => {

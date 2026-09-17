@@ -20,12 +20,12 @@ export function useImport() {
   const [phase, setPhase] = useState<ImportPhase>("idle");
   const [feedback, setFeedback] = useState("");
 
-  function addFiles(incoming: File[]): AddFilesResult {
+  async function addFiles(incoming: File[]): Promise<AddFilesResult> {
     const unsupported = incoming.filter((file) => !isSupportedFile(file));
     const supported = incoming.filter(isSupportedFile);
     const existingIds = new Set([
       ...files.map(({ file }) => getFileIdentity(file)),
-      ...MaterialService.load().map(({ identity }) => identity),
+      ...(await MaterialService.load()).map(({ identity }) => identity),
     ]);
     const duplicates: File[] = [];
     const unique: File[] = [];
@@ -87,8 +87,9 @@ export function useImport() {
     const pendingFiles = files.filter(
       (file) => file.status === "uploaded" || file.status === "error",
     );
-    const extractionInputs = pendingFiles.map((item) => {
-      const existingMaterial = MaterialService.findById(item.id);
+    const extractionInputs = [];
+    for (const item of pendingFiles) {
+      const existingMaterial = await MaterialService.findById(item.id);
       const material = existingMaterial
         ? {
             ...existingMaterial,
@@ -103,10 +104,10 @@ export function useImport() {
             item.id,
           );
       MaterialRuntimeStore.register(item.id, item.file);
-      MaterialService.upsert(material);
-      const organized = OrganizationService.organizeImported(material.id);
-      return { id: item.id, file: item.file, studyId: organized.studyId };
-    });
+      await MaterialService.upsert(material);
+      const organized = await OrganizationService.organizeImported(material.id);
+      extractionInputs.push({ id: item.id, file: item.file, studyId: organized.studyId });
+    }
     setFiles((current) =>
       current.map((file) =>
         pendingFiles.some((pending) => pending.id === file.id)
@@ -117,7 +118,7 @@ export function useImport() {
 
     const results = await ExtractionPipeline.run(extractionInputs, {
       onProgress: ({ fileId, status, progress, stage, message, errorDetails }) => {
-        MaterialService.update(fileId, {
+        void MaterialService.update(fileId, {
           progress,
           status: status === "extracted" ? "ready" : status,
         });
@@ -134,9 +135,9 @@ export function useImport() {
         ));
       },
     });
-    results.forEach((result) => {
+    for (const result of results) {
       if (result.status === "error") {
-        MaterialService.update(result.fileId, {
+        await MaterialService.update(result.fileId, {
           status: "error",
           progress: 100,
           error: result.error,
@@ -145,8 +146,10 @@ export function useImport() {
           ? { ...file, errorDetails: result.errorDetails }
           : file,
         ));
+      } else {
+        await MaterialService.update(result.fileId, { status: "ready", progress: 100, error: undefined });
       }
-    });
+    }
     setPhase("complete");
   }
 

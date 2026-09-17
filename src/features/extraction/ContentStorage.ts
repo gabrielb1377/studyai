@@ -1,4 +1,4 @@
-import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 import {
   extractionFileTypes,
   type ExtractedContent,
@@ -8,7 +8,6 @@ import {
   ingestionStageIds,
 } from "./ExtractionTypes";
 
-const STORAGE_KEY = "studyai:extracted-content";
 export const EXTRACTION_UPDATE_EVENT = "studyai:extraction-updated";
 const EMPTY_STORE: ExtractionStore = { version: 1, records: [] };
 
@@ -97,42 +96,75 @@ function isExtractionStore(value: unknown): value is ExtractionStore {
 }
 
 export const ContentStorage = {
-  load(): ExtractionStore {
-    return readLocalStorage(STORAGE_KEY, isExtractionStore) ?? EMPTY_STORE;
+  async load(): Promise<ExtractionStore> {
+    const records = await StorageManager.getAll<unknown>("contents");
+    const store = { version: 1 as const, records };
+    return isExtractionStore(store) ? store : EMPTY_STORE;
   },
 
-  save(store: ExtractionStore) {
-    writeLocalStorage(STORAGE_KEY, store, EXTRACTION_UPDATE_EVENT);
+  async save(store: ExtractionStore) {
+    await StorageManager.replaceAll("contents", store.records);
+    window.dispatchEvent(new Event(EXTRACTION_UPDATE_EVENT));
   },
 
-  upsert(record: ExtractedContent) {
-    const store = this.load();
-    const records = store.records.some((item) => item.id === record.id)
-      ? store.records.map((item) => item.id === record.id ? record : item)
-      : [record, ...store.records];
-    this.save({ version: 1, records });
-  },
-
-  updateFile(fileId: string, changes: Partial<Pick<ExtractedContent, "studyId">> & { name?: string }) {
-    const store = this.load();
-    const records = store.records.map((record) => record.fileId === fileId
-      ? {
-          ...record,
-          ...(changes.studyId ? { studyId: changes.studyId } : {}),
-          metadata: changes.name
-            ? { ...record.metadata, name: changes.name }
-            : record.metadata,
-        }
-      : record,
-    );
-    this.save({ version: 1, records });
-  },
-
-  removeByFileId(fileId: string) {
-    const store = this.load();
-    this.save({
-      version: 1,
-      records: store.records.filter((record) => record.fileId !== fileId),
+  async upsert(record: ExtractedContent) {
+    await StorageManager.transaction(["contents", "transcriptions", "ocr"], async (storage) => {
+      await storage.put("contents", record);
+      if (record.transcription) {
+        await storage.put("transcriptions", {
+          id: `transcription-${record.id}`,
+          fileId: record.fileId,
+          studyId: record.studyId,
+          value: record.transcription,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      if (record.metadata.ocrPerformed) {
+        await storage.put("ocr", {
+          id: `ocr-${record.id}`,
+          fileId: record.fileId,
+          studyId: record.studyId,
+          text: record.extractedText,
+          confidence: record.metadata.ocrConfidence,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     });
+    window.dispatchEvent(new Event(EXTRACTION_UPDATE_EVENT));
+  },
+
+  async updateFile(fileId: string, changes: Partial<Pick<ExtractedContent, "studyId">> & { name?: string }) {
+    const store = await this.load();
+    const targets = store.records.filter((record) => record.fileId === fileId).map((record) => ({
+      ...record,
+      ...(changes.studyId ? { studyId: changes.studyId } : {}),
+      metadata: changes.name ? { ...record.metadata, name: changes.name } : record.metadata,
+    }));
+    await StorageManager.transaction(["contents", "transcriptions", "ocr"], async (storage) => {
+      for (const record of targets) {
+        await storage.put("contents", record);
+        if (!changes.studyId) continue;
+        const transcriptionKey = `transcription-${record.id}`;
+        const transcription = await storage.get<Record<string, unknown>>("transcriptions", transcriptionKey);
+        if (transcription) await storage.put("transcriptions", { ...transcription, studyId: changes.studyId });
+        const ocrKey = `ocr-${record.id}`;
+        const ocr = await storage.get<Record<string, unknown>>("ocr", ocrKey);
+        if (ocr) await storage.put("ocr", { ...ocr, studyId: changes.studyId });
+      }
+    });
+    window.dispatchEvent(new Event(EXTRACTION_UPDATE_EVENT));
+  },
+
+  async removeByFileId(fileId: string) {
+    const store = await this.load();
+    const targets = store.records.filter((record) => record.fileId === fileId);
+    await StorageManager.transaction(["contents", "transcriptions", "ocr"], async (storage) => {
+      for (const record of targets) {
+        await storage.delete("contents", record.id);
+        await storage.delete("transcriptions", `transcription-${record.id}`);
+        await storage.delete("ocr", `ocr-${record.id}`);
+      }
+    });
+    window.dispatchEvent(new Event(EXTRACTION_UPDATE_EVENT));
   },
 };

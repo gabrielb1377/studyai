@@ -1,9 +1,7 @@
-import { readLocalStorage, removeLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 import type { Material } from "@/types/material";
 import type { StudyRecord, StudyStatus } from "@/types/study-engine";
 
-const STORAGE_KEY = "studyai:study-engine:v2";
-const LEGACY_STORAGE_KEY = "studyai:study-engine";
 export const STUDY_UPDATED_EVENT = "studyai:study-updated";
 
 function isStudyRecordList(value: unknown): value is StudyRecord[] {
@@ -31,14 +29,19 @@ function isOrganized(material: Material): material is Material & Required<Pick<M
   return Boolean(material.studyId && material.subject && material.topic);
 }
 
+export function hasStructuredStudyContent(study: StudyRecord) {
+  return Boolean(study.analysisStatus && (study.wordCount ?? 0) > 0);
+}
+
 export const StudyEngine = {
-  load(): StudyRecord[] {
-    removeLocalStorage(LEGACY_STORAGE_KEY);
-    return readLocalStorage(STORAGE_KEY, isStudyRecordList) ?? [];
+  async load(): Promise<StudyRecord[]> {
+    const records = await StorageManager.getAll<unknown>("studies");
+    return isStudyRecordList(records) ? records : [];
   },
 
-  save(records: readonly StudyRecord[]) {
-    writeLocalStorage(STORAGE_KEY, records, STUDY_UPDATED_EVENT);
+  async save(records: readonly StudyRecord[]) {
+    await StorageManager.replaceAll("studies", records);
+    window.dispatchEvent(new Event(STUDY_UPDATED_EVENT));
   },
 
   syncMaterial(records: readonly StudyRecord[], material: Material, now = new Date().toISOString()) {
@@ -120,6 +123,40 @@ export const StudyEngine = {
     return records.map((record) => record.studyId === studyId
       ? {
           ...record,
+          ...Object.fromEntries(Object.entries(analysis).filter(([, value]) => value !== undefined)),
+          updatedAt: now,
+        }
+      : record,
+    );
+  },
+
+  applyAnalysis(
+    records: readonly StudyRecord[],
+    studyId: string,
+    analysis: Pick<
+      StudyRecord,
+      | "initialSummary"
+      | "detectedTitle"
+      | "detectedSubject"
+      | "detectedTopic"
+      | "keywords"
+      | "language"
+      | "subtopics"
+      | "chapters"
+      | "pageCount"
+      | "wordCount"
+      | "readingTimeMinutes"
+      | "analysisStatus"
+      | "analyzedAt"
+    >,
+    organization: { subject: string; topic: string },
+    now = new Date().toISOString(),
+  ) {
+    return records.map((record) => record.studyId === studyId
+      ? {
+          ...record,
+          title: organization.topic,
+          subject: organization.subject,
           ...Object.fromEntries(Object.entries(analysis).filter(([, value]) => value !== undefined)),
           updatedAt: now,
         }

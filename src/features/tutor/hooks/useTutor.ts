@@ -19,17 +19,18 @@ export function useTutor() {
   ) => {
     setConversations((current) => {
       const nextConversations = updater(current);
-      TutorStorage.save(nextConversations);
+      void TutorStorage.save(nextConversations);
       return nextConversations;
     });
   };
 
   useEffect(() => {
-    const storedConversations = TutorStorage.load();
-    if (storedConversations?.length) {
-      setConversations(storedConversations);
-      setActiveConversationId(storedConversations[0].id);
-    }
+    void TutorStorage.load().then((storedConversations) => {
+      if (storedConversations?.length) {
+        setConversations(storedConversations);
+        setActiveConversationId(storedConversations[0].id);
+      }
+    });
   }, []);
 
   const activeConversation = useMemo(
@@ -79,7 +80,7 @@ export function useTutor() {
     ));
 
     try {
-      const retrieval = RetrievalPipeline.forQuestion(nextContent, context?.studyId);
+      const retrieval = await RetrievalPipeline.forQuestion(nextContent, context?.studyId);
       const response = await TutorService.requestReply(
         conversation.messages,
         nextContent,

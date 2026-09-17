@@ -22,5 +22,7 @@ export type TutorStudyContext = {
     summaryPreview?: string;
     keywords: string[];
     language?: string;
+    subtopics: string[];
+    chapterCount: number;
   };
 };

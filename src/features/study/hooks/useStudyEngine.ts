@@ -13,38 +13,39 @@ export function useStudyEngine() {
   const [records, setRecords] = useState<StudyRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    setRecords(StudyEngine.load());
+  const refresh = useCallback(async () => {
+    setRecords(await StudyEngine.load());
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    refresh();
-    window.addEventListener(STUDY_UPDATED_EVENT, refresh);
-    window.addEventListener("storage", refresh);
+    void refresh();
+    const handleRefresh = () => { void refresh(); };
+    window.addEventListener(STUDY_UPDATED_EVENT, handleRefresh);
+    window.addEventListener("studyai:storage-updated", handleRefresh);
     return () => {
-      window.removeEventListener(STUDY_UPDATED_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
+      window.removeEventListener(STUDY_UPDATED_EVENT, handleRefresh);
+      window.removeEventListener("studyai:storage-updated", handleRefresh);
     };
   }, [refresh]);
 
-  const update = useCallback((change: (records: ReturnType<typeof StudyEngine.load>) => ReturnType<typeof StudyEngine.load>) => {
-    const next = change(StudyEngine.load());
-    StudyEngine.save(next);
+  const update = useCallback(async (change: (records: StudyRecord[]) => StudyRecord[]) => {
+    const next = change(await StudyEngine.load());
+    await StudyEngine.save(next);
     setRecords(next);
     setIsLoading(false);
   }, []);
 
   const recordAccess = useCallback(
-    (studyId: string) => update((items) => StudyEngine.recordAccess(items, studyId)),
+    (studyId: string) => { void update((items) => StudyEngine.recordAccess(items, studyId)); },
     [update],
   );
   const setProgress = useCallback(
-    (studyId: string, progress: number) => update((items) => StudyEngine.setProgress(items, studyId, progress)),
+    (studyId: string, progress: number) => { void update((items) => StudyEngine.setProgress(items, studyId, progress)); },
     [update],
   );
   const setStatus = useCallback(
-    (studyId: string, status: StudyStatus) => update((items) => StudyEngine.setStatus(items, studyId, status)),
+    (studyId: string, status: StudyStatus) => { void update((items) => StudyEngine.setStatus(items, studyId, status)); },
     [update],
   );
 

@@ -59,24 +59,24 @@ export function OrganizationWorkspace() {
     setActiveFile(null);
   };
 
-  const saveAction = () => {
+  const saveAction = async () => {
     if (!activeFile) return;
 
-    if (action === "rename" && OrganizationService.rename(activeFile.id, fileName)) {
+    if (action === "rename" && await OrganizationService.rename(activeFile.id, fileName)) {
       setMessage("Nome atualizado em todos os registros do material.");
     }
 
-    if (action === "move" && OrganizationService.move(activeFile.id, destination)) {
+    if (action === "move" && await OrganizationService.move(activeFile.id, destination)) {
       setMessage("Material organizado e estudo atualizado.");
     }
 
-    refresh();
+    await refresh();
     closeDialog();
   };
 
-  const deleteFile = (file: Material) => {
-    if (!OrganizationService.remove(file.id)) return;
-    refresh();
+  const deleteFile = async (file: Material) => {
+    if (!await OrganizationService.remove(file.id)) return;
+    await refresh();
     setMessage("Material e dados derivados foram removidos.");
   };
 
@@ -164,7 +164,7 @@ export function OrganizationWorkspace() {
             <Button type="button" variant="outline" onClick={closeDialog}>Cancelar</Button>
             <Button
               type="button"
-              onClick={saveAction}
+              onClick={() => { void saveAction(); }}
               disabled={action === "rename" ? !fileName.trim() : !destinationComplete}
             >
               <Save className="size-4" aria-hidden="true" />

@@ -9,6 +9,7 @@ import { SummaryStorage } from "@/features/summaries/services/SummaryStorage";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
 import type { Material } from "@/types/material";
+import type { ExtractionMetadata } from "@/features/extraction/ExtractionTypes";
 
 export type MaterialDestination = {
   course: string;
@@ -68,59 +69,78 @@ export function inferMaterialDestination(material: Pick<Material, "name" | "rela
   return { subject: "Materiais importados", topic: topicFromName };
 }
 
-function synchronizeEmbeddings() {
-  EmbeddingStorage.synchronize(ChunkStorage.load().chunks);
+async function synchronizeEmbeddings() {
+  await EmbeddingStorage.synchronize((await ChunkStorage.load()).chunks);
 }
 
-function migrateStudyData(previousStudyId: string, studyId: string) {
+async function migrateStudyData(previousStudyId: string, studyId: string) {
   if (previousStudyId === studyId) return;
-  const previousStillExists = StudyEngine.load().some((study) => study.studyId === previousStudyId);
+  const previousStillExists = (await StudyEngine.load()).some((study) => study.studyId === previousStudyId);
   if (previousStillExists) return;
 
-  NotesService.save(NotesService.load().map((note) => note.studyId === previousStudyId ? { ...note, studyId } : note));
-  FlashcardService.save(FlashcardService.load().map((card) => card.studyId === previousStudyId ? { ...card, studyId } : card));
-  const quiz = QuizService.load();
-  QuizService.save({
+  await NotesService.save((await NotesService.load()).map((note) => note.studyId === previousStudyId ? { ...note, studyId } : note));
+  await FlashcardService.save((await FlashcardService.load()).map((card) => card.studyId === previousStudyId ? { ...card, studyId } : card));
+  const quiz = await QuizService.load();
+  await QuizService.save({
     questions: quiz.questions.map((question) => question.studyId === previousStudyId ? { ...question, studyId } : question),
     results: quiz.results.map((result) => result.studyId === previousStudyId ? { ...result, studyId } : result),
   });
-  SummaryStorage.save((SummaryStorage.load() ?? []).map((summary) =>
+  await SummaryStorage.save(((await SummaryStorage.load()) ?? []).map((summary) =>
     summary.studyId === previousStudyId ? { ...summary, studyId } : summary,
   ));
 }
 
+function analysisFromMetadata(metadata: ExtractionMetadata) {
+  if (!metadata.analysisStatus || !metadata.analyzedAt) return null;
+  return {
+    initialSummary: metadata.summaryPreview,
+    detectedTitle: metadata.title,
+    detectedSubject: metadata.subject,
+    detectedTopic: metadata.topic,
+    keywords: metadata.keywords,
+    language: metadata.language,
+    subtopics: metadata.subtopics,
+    chapters: metadata.chapters,
+    pageCount: metadata.pageCount,
+    wordCount: metadata.wordCount,
+    readingTimeMinutes: metadata.readingTimeMinutes,
+    analysisStatus: metadata.analysisStatus,
+    analyzedAt: metadata.analyzedAt,
+  };
+}
+
 export const OrganizationService = {
-  organizeImported(materialId: string) {
-    const material = MaterialService.findById(materialId);
+  async organizeImported(materialId: string) {
+    const material = await MaterialService.findById(materialId);
     if (!material) throw new Error("O material importado não foi encontrado.");
 
     const destination = inferMaterialDestination(material);
-    const matchingStudy = MaterialService.load().find((candidate) =>
+    const matchingStudy = (await MaterialService.load()).find((candidate) =>
       candidate.id !== material.id && candidate.studyId && sameDestination(candidate, destination),
     );
     const studyId = material.studyId && sameDestination(material, destination)
       ? material.studyId
       : matchingStudy?.studyId ?? crypto.randomUUID();
-    const updated = MaterialService.update(material.id, { ...destination, studyId });
+    const updated = await MaterialService.update(material.id, { ...destination, studyId });
     if (!updated) throw new Error("Não foi possível vincular o material ao estudo.");
 
-    StudyEngine.save(StudyEngine.syncMaterial(StudyEngine.load(), updated));
+    await StudyEngine.save(StudyEngine.syncMaterial(await StudyEngine.load(), updated));
     return { ...updated, studyId };
   },
 
-  rename(materialId: string, name: string) {
+  async rename(materialId: string, name: string) {
     const nextName = name.trim();
     if (!nextName) return null;
 
-    const material = MaterialService.update(materialId, { name: nextName });
+    const material = await MaterialService.update(materialId, { name: nextName });
     if (!material) return null;
-    ContentStorage.updateFile(material.fileId, { name: nextName });
-    ChunkStorage.updateFile(material.fileId, { sourceName: nextName });
+    await ContentStorage.updateFile(material.fileId, { name: nextName });
+    await ChunkStorage.updateFile(material.fileId, { sourceName: nextName });
     return material;
   },
 
-  move(materialId: string, destination: MaterialDestination) {
-    const material = MaterialService.findById(materialId);
+  async move(materialId: string, destination: MaterialDestination) {
+    const material = await MaterialService.findById(materialId);
     if (!material) return null;
 
     const completeDestination = Object.fromEntries(
@@ -128,39 +148,48 @@ export const OrganizationService = {
     ) as MaterialDestination;
     if (Object.values(completeDestination).some((value) => !value)) return null;
 
-    const matchingStudy = MaterialService.load().find((candidate) =>
+    const matchingStudy = (await MaterialService.load()).find((candidate) =>
       candidate.id !== material.id && candidate.studyId && sameDestination(candidate, completeDestination),
     );
     const studyId = sameDestination(material, completeDestination) && material.studyId
       ? material.studyId
       : matchingStudy?.studyId ?? crypto.randomUUID();
-    const updated = MaterialService.update(materialId, { ...completeDestination, studyId });
+    const updated = await MaterialService.update(materialId, { ...completeDestination, studyId });
     if (!updated) return null;
 
-    ContentStorage.updateFile(material.fileId, { studyId });
-    ChunkStorage.updateFile(material.fileId, { studyId });
-    synchronizeEmbeddings();
+    const extractedContent = (await ContentStorage.load()).records.find((record) => record.fileId === material.fileId);
+    await ContentStorage.updateFile(material.fileId, { studyId });
+    await ChunkStorage.updateFile(material.fileId, { studyId });
+    await synchronizeEmbeddings();
 
     const withoutOldAssociation = StudyEngine.removeMaterial(
-      StudyEngine.load(),
+      await StudyEngine.load(),
       material.studyId,
       material.id,
     );
-    StudyEngine.save(StudyEngine.syncMaterial(withoutOldAssociation, updated));
-    if (material.studyId) migrateStudyData(material.studyId, studyId);
+    const synchronized = StudyEngine.syncMaterial(withoutOldAssociation, updated);
+    const analysis = extractedContent ? analysisFromMetadata(extractedContent.metadata) : null;
+    await StudyEngine.save(analysis
+      ? StudyEngine.applyAnalysis(synchronized, studyId, analysis, {
+          subject: completeDestination.subject,
+          topic: completeDestination.topic,
+        })
+      : synchronized,
+    );
+    if (material.studyId) await migrateStudyData(material.studyId, studyId);
     return updated;
   },
 
-  remove(materialId: string) {
-    const material = MaterialService.findById(materialId);
+  async remove(materialId: string) {
+    const material = await MaterialService.findById(materialId);
     if (!material) return false;
 
-    ContentStorage.removeByFileId(material.fileId);
-    ChunkStorage.removeByFileId(material.fileId);
-    synchronizeEmbeddings();
+    await ContentStorage.removeByFileId(material.fileId);
+    await ChunkStorage.removeByFileId(material.fileId);
+    await synchronizeEmbeddings();
     MaterialRuntimeStore.remove(material.id);
-    MaterialService.remove(material.id);
-    StudyEngine.save(StudyEngine.removeMaterial(StudyEngine.load(), material.studyId, material.id));
+    await MaterialService.remove(material.id);
+    await StudyEngine.save(StudyEngine.removeMaterial(await StudyEngine.load(), material.studyId, material.id));
     return true;
   },
 };

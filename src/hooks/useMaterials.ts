@@ -9,19 +9,20 @@ export function useMaterials() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    setMaterials(MaterialService.load());
+  const refresh = useCallback(async () => {
+    setMaterials(await MaterialService.load());
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    refresh();
-    window.addEventListener(MATERIALS_UPDATED_EVENT, refresh);
-    window.addEventListener("storage", refresh);
+    void refresh();
+    const handleRefresh = () => { void refresh(); };
+    window.addEventListener(MATERIALS_UPDATED_EVENT, handleRefresh);
+    window.addEventListener("studyai:storage-updated", handleRefresh);
 
     return () => {
-      window.removeEventListener(MATERIALS_UPDATED_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
+      window.removeEventListener(MATERIALS_UPDATED_EVENT, handleRefresh);
+      window.removeEventListener("studyai:storage-updated", handleRefresh);
     };
   }, [refresh]);
 

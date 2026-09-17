@@ -1,8 +1,7 @@
 import { extractionFileTypes } from "@/features/extraction/ExtractionTypes";
-import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 import type { ChunkMetadata, ChunkStore, ContentChunk } from "./RetrievalTypes";
 
-const STORAGE_KEY = "studyai:content-chunks";
 export const CHUNKS_UPDATE_EVENT = "studyai:content-chunks-updated";
 const EMPTY_STORE: ChunkStore = { version: 1, chunks: [] };
 
@@ -47,23 +46,26 @@ function isChunkStore(value: unknown): value is ChunkStore {
 }
 
 export const ChunkStorage = {
-  load(): ChunkStore {
-    return readLocalStorage(STORAGE_KEY, isChunkStore) ?? EMPTY_STORE;
+  async load(): Promise<ChunkStore> {
+    const chunks = await StorageManager.getAll<unknown>("chunks");
+    const store = { version: 1 as const, chunks };
+    return isChunkStore(store) ? store : EMPTY_STORE;
   },
 
-  save(store: ChunkStore) {
-    writeLocalStorage(STORAGE_KEY, store, CHUNKS_UPDATE_EVENT);
+  async save(store: ChunkStore) {
+    await StorageManager.replaceAll("chunks", store.chunks);
+    window.dispatchEvent(new Event(CHUNKS_UPDATE_EVENT));
   },
 
-  replaceForContent(extractedContentId: string, chunks: readonly ContentChunk[]) {
-    const current = this.load().chunks.filter(
+  async replaceForContent(extractedContentId: string, chunks: readonly ContentChunk[]) {
+    const current = (await this.load()).chunks.filter(
       (chunk) => chunk.metadata.extractedContentId !== extractedContentId,
     );
-    this.save({ version: 1, chunks: [...current, ...chunks] });
+    await this.save({ version: 1, chunks: [...current, ...chunks] });
   },
 
-  updateFile(fileId: string, changes: { studyId?: string; sourceName?: string }) {
-    const chunks = this.load().chunks.map((chunk) => chunk.fileId === fileId
+  async updateFile(fileId: string, changes: { studyId?: string; sourceName?: string }) {
+    const chunks = (await this.load()).chunks.map((chunk) => chunk.fileId === fileId
       ? {
           ...chunk,
           ...(changes.studyId ? { studyId: changes.studyId } : {}),
@@ -73,11 +75,11 @@ export const ChunkStorage = {
         }
       : chunk,
     );
-    this.save({ version: 1, chunks });
+    await this.save({ version: 1, chunks });
   },
 
-  removeByFileId(fileId: string) {
-    const chunks = this.load().chunks.filter((chunk) => chunk.fileId !== fileId);
-    this.save({ version: 1, chunks });
+  async removeByFileId(fileId: string) {
+    const chunks = (await this.load()).chunks.filter((chunk) => chunk.fileId !== fileId);
+    await this.save({ version: 1, chunks });
   },
 };

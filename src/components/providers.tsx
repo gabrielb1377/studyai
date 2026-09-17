@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { StorageBootstrap } from "@/lib/storage/StorageBootstrap";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       storageKey="studyai-theme"
       disableTransitionOnChange
     >
+      <StorageBootstrap />
       <TooltipProvider delayDuration={250}>{children}</TooltipProvider>
     </ThemeProvider>
   );

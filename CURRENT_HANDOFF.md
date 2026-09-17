@@ -1,8 +1,22 @@
-# Handoff Atual — Sprint 23: Provider Manager + Intelligent Ingestion Pipeline
+# Handoff Atual — Sprint 25: Smart Study Generator
 
-Atualizado em 15 de setembro de 2026.
+Atualizado em 16 de setembro de 2026.
 
 ## Estado entregue
+
+Após cada extração bem-sucedida, o StudyAI agora analisa o conteúdo normalizado e cria ou enriquece automaticamente toda a estrutura de estudo. Disciplina, tema, subtemas, capítulos, palavras-chave, idioma, número de páginas, quantidade de palavras, prévia e tempo de leitura são persistidos no mesmo fluxo, sem IA externa e sem exigir organização manual.
+
+Todo conteúdo pesado continua no IndexedDB `studyai-db` v1 por meio da fachada assíncrona `StorageManager`. A Sprint 25 não alterou o modelo de armazenamento nem criou novas dependências.
+
+```text
+Feature / Hook
+  → Service de domínio
+  → StorageManager
+  → transação IndexedDB
+  → object store
+```
+
+Na inicialização, `StorageBootstrap` executa a migração legada. Todos os registros são gravados atomicamente e as chaves antigas só são removidas depois do commit. Em erro, o IndexedDB realiza rollback, o legado permanece intacto e a interface apresenta um aviso recuperável.
 
 O StudyAI utiliza exclusivamente dados criados pelo usuário. A importação cria o registro oficial, infere matéria e tema, cria ou reutiliza um Study, executa a extração e atualiza Biblioteca, Organização e Dashboard sem depender de uma organização manual posterior.
 
@@ -14,14 +28,29 @@ A ingestão agora processa cada documento por etapas observáveis. PDF.js é sem
 Documento
   → Extração / OCR ou Whisper quando necessário
   → Normalização
-  → DocumentAnalyzer
-  → Metadados inteligentes e resumo inicial
+  → StudyAnalyzer
+  → SubjectDetector / TopicDetector / KeywordExtractor / ReadingTimeCalculator
+  → StudyGeneratorService
+  → Material e Study enriquecidos
   → Chunks do texto normalizado
   → Embeddings compactados
   → Índice local
 ```
 
 Cada registro de conteúdo possui status por etapa e logs. Falhas incluem motivo, arquivo, etapa, stack simplificada e ação sugerida. Dashboard, Biblioteca e Tutor consomem os metadados analisados; a organização manual continua sendo a fonte oficial quando diverge da detecção.
+
+## Smart Study Generator
+
+- `StudyAnalyzer.ts`: coordena a análise determinística sobre texto e seções normalizados.
+- `SubjectDetector.ts`: classifica disciplinas por vocabulário e aplica fallback explícito.
+- `TopicDetector.ts`: identifica título, tema, subtemas e capítulos/seções estruturais.
+- `KeywordExtractor.ts`: calcula palavras-chave por frequência com normalização e stop words.
+- `ReadingTimeCalculator.ts`: calcula palavras e leitura estimada a 200 palavras por minuto.
+- `StudyGeneratorService.ts`: atualiza material e Study Engine e produz os logs da geração.
+
+Para materiais avulsos, a análise substitui a classificação provisória criada antes da extração. Para caminhos organizados com matéria e tema, a estrutura de pastas é preservada. Se o usuário mover o arquivo depois, a organização escolhida permanece oficial e os metadados da análise são transportados ao novo Study.
+
+PDFs da Estácio reconhecem `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. PDFs comuns, resultados de OCR, DOCX, PPTX e TXT usam o mesmo contrato de saída. Falta de título, disciplina ou capítulos gera um Study básico em vez de interromper a importação.
 
 ```text
 Feature cliente
@@ -80,7 +109,7 @@ File selecionado
 
 ## Fonte oficial dos materiais
 
-- `studyai:materials` persiste metadados, caminho relativo, progresso, status e organização em um payload versionado.
+- `documents` persiste metadados, caminho relativo, progresso, status e organização no IndexedDB.
 - `MaterialRuntimeStore` mantém o `File` e a URL de objeto apenas durante a sessão atual.
 - `ContentStorage`, `ChunkStorage` e `EmbeddingStorage` persistem os dados derivados.
 - Não existem seeds de Biblioteca, Organização, Dashboard, Workspace ou Tutor.
@@ -100,7 +129,7 @@ Ao mover manualmente um material, `OrganizationService`:
 1. define curso, semestre, matéria e tema;
 2. reutiliza ou cria um `studyId`;
 3. atualiza conteúdo, chunks e embeddings;
-4. cria ou atualiza o registro em `studyai:study-engine:v2`;
+4. cria ou atualiza o registro no object store `studies`;
 5. preserva notas, resumos, flashcards e quizzes se o estudo anterior deixar de existir.
 
 Renomear atualiza o nome do material e a proveniência do conteúdo. Excluir remove o material e seus dados derivados.
@@ -115,36 +144,39 @@ Renomear atualiza o nome do material e a proveniência do conteúdo. Excluir rem
 
 Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico é enviado ao Gemini ou ao Ollama.
 
-## Dashboard e Biblioteca
+## Dashboard, Biblioteca e Tutor
 
-- A Biblioteca mostra somente arquivos importados, com tipo, tamanho, data, caminho relativo, progresso, status e organização.
+- A Biblioteca mostra somente arquivos importados, com tipo, tamanho, data, caminho relativo, progresso, status, disciplina, tema, capítulos, palavras-chave e tempo de leitura.
 - Todos os filtros pesquisam somente o registro persistido dos arquivos importados.
-- O Dashboard mostra arquivos, estudos, progresso médio, flashcards, quizzes, extrações, embeddings e atividade semanal a partir das persistências reais.
+- O Dashboard mostra arquivos, estudos, progresso médio, flashcards, quizzes, materiais analisados, temas criados, capítulos identificados, tempo total de leitura, extrações, embeddings e atividade semanal a partir das persistências reais.
+- O Tutor apresenta tema, disciplina, prévia, palavras-chave, subtemas e quantidade de capítulos antes da primeira pergunta.
+- Flashcards e Quiz ficam desabilitados até existir conteúdo textual estruturado; nenhuma geração é disparada automaticamente.
 - Estados vazios orientam a primeira importação sem criar conteúdo artificial.
 
 ## Persistência
 
-| Chave | Conteúdo |
+| Banco / store | Conteúdo |
 | --- | --- |
-| `studyai:materials` | Materiais importados e organização. |
-| `studyai:study-engine:v2` | Estudos derivados dos materiais. |
-| `studyai:tutor-conversations:v2` | Conversas criadas pelo usuário. |
-| `studyai:extracted-content` | Texto e metadados extraídos. |
-| `studyai:content-chunks` | Chunks por arquivo e estudo. |
-| `studyai:embeddings` | Índice semântico local V2, quantizado em Int8 e codificado em Base64. |
-| `studyai:summaries` | Resumos por estudo. |
-| `studyai:flashcards` | Flashcards por estudo. |
-| `studyai:quizzes` | Questões e resultados por estudo. |
-| `studyai:notes` | Notas por estudo. |
-| `studyai:ai-settings` | Modo de seleção, provider preferencial e modelos selecionados. |
+| `studyai-db/documents` | Materiais importados e organização. |
+| `studyai-db/contents` | Texto, estrutura, metadados e pipeline. |
+| `studyai-db/chunks` | Chunks por arquivo e estudo. |
+| `studyai-db/embeddings` | Índice semântico local V2 compactado. |
+| `studyai-db/studies` | Estudos derivados dos materiais. |
+| `studyai-db/notes`, `summaries`, `flashcards` | Recursos por estudo. |
+| `studyai-db/quizzes` | Questões e resultados. |
+| `studyai-db/transcriptions`, `ocr` | Dados pesados de mídia e OCR. |
+| `studyai-db/metadata` | Migração, status do índice e conversas. |
+| `localStorage/studyai:ai-settings`, `studyai-theme` | Apenas preferências leves. |
+
+A rota interna `/storage` exibe banco, versão, contagens, espaço estimado e última migração. A API do Storage suporta upserts, lotes, transações e paginação.
 
 ## Limites atuais
 
-- O binário original não é persistido, pois ainda não há banco, IndexedDB ou upload. Depois de recarregar a página, o texto extraído permanece, mas PDF, áudio, vídeo ou imagem precisam ser selecionados novamente para visualização binária.
+- O binário original ainda não é persistido. Depois de recarregar a página, o texto extraído permanece no IndexedDB, mas PDF, áudio, vídeo ou imagem precisam ser selecionados novamente para visualização binária.
 - A primeira transcrição depende do download do modelo Whisper; indisponibilidade de rede é registrada como erro do arquivo sem interromper os demais.
 - O histórico do Tutor é local ao navegador.
 - O Ollama depende de um serviço local em execução e de pelo menos um modelo instalado.
-- Não há banco, cloud ou sincronização.
+- Não há banco remoto, cloud ou sincronização.
 
 ## Validação
 
@@ -157,8 +189,10 @@ npm run test:e2e
 npm run build
 ```
 
-Na Sprint 23, os 36 cenários E2E validam seleção manual, modo automático por latência, health agregado, persistência V3, OCR, transcrição, PDF com e sem texto, DOCX, PPTX, TXT com múltiplos encodings, mídia inválida, normalização, análise documental, pipeline, Biblioteca, Tutor e indexação. A prova operacional real iniciou pelo Groq indisponível, aplicou fallback para `qwen3:4b` no Ollama e registrou a falha, o fallback, a mensagem e 333 tokens no singleton efêmero do servidor.
+Além dos cenários de Storage V2, a suíte cobre a geração automática a partir de PDF Estácio, PDF comum, PDF OCR, DOCX e PPTX, incluindo preservação dos metadados quando um material é movido manualmente.
+
+Validação final da Sprint 25: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 41 testes Playwright aprovados.
 
 ## Próximo passo seguro
 
-Implementar OpenRouter ou Groq dentro do contrato `AIProvider`. O novo provider precisa apenas ser registrado em `ProviderRegistry`; seleção, health, logs e fallback permanecem transparentes às features.
+Adicionar uma revisão manual opcional da classificação detectada, mantendo as heurísticas como sugestão e sem acoplar o gerador a um provider de IA. Persistir binários originais deve continuar sendo uma decisão separada, condicionada à experiência offline, quota e migração por versão.

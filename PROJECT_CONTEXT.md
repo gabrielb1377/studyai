@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 15 de setembro de 2026.
+Atualizado em 16 de setembro de 2026.
 
 ## Propósito
 
@@ -20,6 +20,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | OCR local | Tesseract.js com dados em português e inglês |
 | Transcrição local | Transformers.js com Whisper Tiny |
 | Testes de interface | Playwright |
+| Persistência local | IndexedDB nativo, banco `studyai-db` v1 |
 
 ## Estrutura de módulos
 
@@ -30,6 +31,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/components/ui` | Primitivos visuais reutilizáveis. |
 | `src/features/dashboard` | Painel inicial e indicadores. |
 | `src/features/study` | Workspace de um tema e Study Engine. |
+| `src/features/study-generator` | Análise estrutural local e criação automática de matérias, temas, subtemas e metadados de estudo. |
 | `src/features/ai` | AIService, contrato de providers, seleção, prompts, contexto, retrieval e erros. |
 | `src/features/tutor` | Conversas, persistência e interface do Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
@@ -38,35 +40,35 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
 | `src/features/extraction` | Extração de documentos e mídia, OCR, transcrição, pipeline, persistência e status. |
 | `src/features/retrieval` | Chunking, embeddings locais, buscas semântica e lexical, ranking híbrido e montagem do contexto. |
-| `src/lib/local-storage.ts` | Leitura, escrita e remoção tipadas do `localStorage`. |
+| `src/lib/storage` | Banco IndexedDB, migrações, transações, paginação, erros e diagnóstico. |
 | `src/types` | Tipos de domínio compartilhados. |
 
 ## Persistência local
 
-Não existe banco de dados. As chaves atuais são:
+O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 1. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
 
-| Chave | Conteúdo |
+| Object Store | Conteúdo |
 | --- | --- |
-| `studyai:materials` | Arquivos importados, status, progresso e organização. |
-| `studyai:study-engine:v2` | Estudos criados automaticamente na importação e refinados pela organização. |
-| `studyai:tutor-conversations:v2` | Conversas criadas pelo usuário e suas mensagens. |
-| `studyai:summaries` | Resumos gerados e, opcionalmente, seu `studyId`. |
-| `studyai:flashcards` | Flashcards e métricas de revisão. |
-| `studyai:quizzes` | Questões geradas e resultados. |
-| `studyai:notes` | Notas em Markdown básico. |
-| `studyai-theme` | Preferência visual. |
-| `studyai:ai-settings` | Modo manual/automático, provider preferencial e modelos selecionados. |
-| `studyai:extracted-content` | Texto, metadados e status produzidos pelo pipeline. |
-| `studyai:content-chunks` | Chunks versionados com proveniência, prontos para futura indexação. |
-| `studyai:embeddings` | Vetores locais compactados em Int8/Base64, status e data da última indexação. |
+| `documents` | Arquivos importados, status, progresso e organização. |
+| `contents` | Texto, seções, metadados e logs de extração. |
+| `chunks` | Trechos normalizados com proveniência. |
+| `embeddings` | Vetores Int8/Base64 relacionados pelo `chunkId`. |
+| `studies` | Estudos e progresso do Study Engine. |
+| `notes`, `summaries`, `flashcards` | Recursos relacionados ao `studyId`. |
+| `quizzes` | Questões e resultados identificados pelo campo `kind`. |
+| `transcriptions`, `ocr` | Resultados pesados separados por arquivo e estudo. |
+| `metadata` | Estado de migração, índice semântico e conversas do Tutor. |
 
-Cada serviço valida o formato persistido antes de devolvê-lo. Valores inválidos não quebram a interface e são tratados como estado vazio.
+`StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
+
+Na primeira abertura, `Migration` verifica as chaves legadas, grava tudo em uma única transação e remove o legado somente depois do commit. Assim, uma falha nunca apaga a fonte anterior. O `localStorage` permanece somente para preferências leves: tema, provider/configurações de IA, idioma, sidebar, workspace e última tela. A rota interna `/storage` mostra versão, contagens, espaço estimado e data da migração.
 
 ## Fluxo de extração
 
 ```text
 File selecionado
   → MaterialService / MaterialRuntimeStore
+  → StorageManager / documents
   → inferência de matéria e tema pelo caminho relativo
   → StudyEngine
   → ExtractionPipeline
@@ -75,19 +77,23 @@ File selecionado
   → OCRService, quando imagem ou PDF sem camada de texto
   → MediaTranscriptionService, quando áudio ou vídeo
   → TextNormalizationService
-  → DocumentAnalyzer
-  → texto normalizado + estrutura + metadados inteligentes
-  → ContentStorage
-  → ChunkService / ChunkStorage
-  → EmbeddingService / EmbeddingStorage
+  → StudyAnalyzer
+  → SubjectDetector + TopicDetector + KeywordExtractor + ReadingTimeCalculator
+  → StudyGeneratorService
+  → matéria + tema + subtemas + capítulos + prévia + metadados
+  → ContentStorage / contents / transcriptions / ocr
+  → ChunkService / ChunkStorage / chunks
+  → EmbeddingService / EmbeddingStorage / embeddings
   → Biblioteca / Organização / Dashboard / Workspace / Tutor
 ```
 
 PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT detecta UTF-8, UTF-16LE, UTF-16BE e Latin1/Windows-1252; mídia usa as APIs HTML5 e Web Audio. PNG, JPG, JPEG e WEBP passam pelo Tesseract.js. PDFs com qualquer camada de texto ignoram OCR; somente PDFs sem texto são renderizados página a página e enviados ao OCR. MP3, WAV, M4A e MP4 são convertidos para áudio mono de 16 kHz e transcritos pelo modelo `onnx-community/whisper-tiny` no navegador. A transcrição é persistida em segmentos com timestamps e capítulos de até cinco minutos.
 
-`TextNormalizationService` corrige Unicode, hifenização entre linhas, controles inválidos, espaços, listas e parágrafos antes de qualquer chunk ou embedding. `DocumentAnalyzer` identifica por heurísticas locais título, disciplina, tema, subtemas, palavras-chave, idioma, total de palavras, tempo estimado de leitura e resumo inicial. O resultado enriquece o Study, a Biblioteca e o contexto do Tutor sem substituir a organização manual do usuário.
+`TextNormalizationService` corrige Unicode, hifenização entre linhas, controles inválidos, espaços, listas e parágrafos antes de qualquer chunk ou embedding. `StudyAnalyzer` coordena detectores pequenos e puros para identificar título, disciplina, tema, subtemas, capítulos, palavras-chave, idioma, total de palavras, tempo estimado de leitura e resumo inicial. `DocumentAnalyzer` permanece apenas como fachada compatível para a transcrição existente. O `StudyGeneratorService` persiste o resultado no documento, no material e no Study Engine; uma organização manual posterior mantém o destino escolhido e transporta todos os metadados estruturados para o novo `studyId`.
 
-Cada documento mantém os estágios `document`, `extraction`, `ocr`, `normalization`, `analysis`, `chunks`, `embeddings` e `indexed`, além de um log cronológico. Erros registram arquivo, etapa, motivo, stack simplificada e ação sugerida. O Dashboard exibe o pipeline dos documentos mais recentes.
+O `TopicDetector` reconhece a estrutura comum dos PDFs da Estácio pelos marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Cada ocorrência gera um capítulo/seção tipado e ordenado, com página ou slide quando essa proveniência está disponível. Documentos sem identificação confiável recebem `Disciplina desconhecida`, `Tema desconhecido` ou um título derivado do arquivo; mesmo nesses casos, o Study básico é criado e o pipeline continua.
+
+Cada documento mantém os estágios `document`, `extraction`, `ocr`, `normalization`, `analysis`, `study`, `chunks`, `embeddings` e `indexed`, além de um log cronológico. A etapa `study` registra documento analisado, tema criado, capítulos encontrados e Study criado ou atualizado. Erros registram arquivo, etapa, motivo, stack simplificada e ação sugerida. O Dashboard exibe o pipeline dos documentos mais recentes.
 
 Todo material recebe um `studyId` antes da extração. Quando existe caminho relativo, os dois últimos diretórios representam matéria e tema; hierarquias maiores também preservam curso e semestre quando disponíveis. Arquivos avulsos usam o nome real do arquivo como tema. Materiais da mesma matéria e tema compartilham um Study. O mesmo `studyId` acompanha conteúdo, chunks, embeddings, resumos, flashcards, quizzes e notas.
 
@@ -142,13 +148,14 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 
 ## Limites conhecidos
 
-- Importação não transfere nem persiste arquivos físicos; metadados, organização e resultados extraídos são salvos localmente.
+- Importação não transfere nem persiste os binários físicos; metadados, organização e resultados extraídos são salvos no IndexedDB.
 - O binário original fica disponível somente durante a sessão atual. Após recarregar, o conteúdo extraído permanece, mas o arquivo precisa ser selecionado novamente para reprodução ou visualização binária.
 - O primeiro uso da transcrição requer download do modelo Whisper; o tamanho e o tempo dependem da conexão e do dispositivo. Depois disso, o cache do navegador é reutilizado.
 - A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
 - Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação ou cloud de processamento.
 - O Ollama precisa estar em execução no endereço configurado por `OLLAMA_URL` e possuir ao menos um modelo instalado.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
+- A detecção de estrutura é heurística e local. Ela reconhece marcadores e vocabulário conhecidos, mas não substitui a edição manual quando o documento usa títulos ambíguos.
 
 ## Qualidade
 

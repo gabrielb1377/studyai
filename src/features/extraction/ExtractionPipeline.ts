@@ -1,11 +1,10 @@
 import { MaterialService } from "@/services/material-service";
-import { StudyEngine } from "@/features/study/services/StudyEngine";
+import { StudyGeneratorService } from "@/features/study-generator/services/StudyGeneratorService";
 import { ChunkService } from "@/features/retrieval/ChunkService";
 import { ChunkStorage } from "@/features/retrieval/ChunkStorage";
 import { EmbeddingStorage } from "@/features/retrieval/EmbeddingStorage";
 import { ContentExtractionService } from "./ContentExtractionService";
 import { ContentStorage } from "./ContentStorage";
-import { DocumentAnalyzer } from "./DocumentAnalyzer";
 import {
   createExtractionError,
   createIngestionLog,
@@ -54,7 +53,7 @@ function createRecord(
   };
 }
 
-function setStage(
+async function setStage(
   record: ExtractedContent,
   stage: IngestionStageId,
   status: IngestionStageStatus,
@@ -67,19 +66,8 @@ function setStage(
       ? record.logs
       : [...(record.logs ?? []), createIngestionLog(stage, status, message)],
   };
-  ContentStorage.upsert(next);
+  await ContentStorage.upsert(next);
   return next;
-}
-
-function updateStudy(record: ExtractedContent) {
-  StudyEngine.save(StudyEngine.enrichDocument(StudyEngine.load(), record.studyId, {
-    initialSummary: record.metadata.summaryPreview,
-    detectedTitle: record.metadata.title,
-    detectedSubject: record.metadata.subject,
-    detectedTopic: record.metadata.topic,
-    keywords: record.metadata.keywords,
-    language: record.metadata.language,
-  }));
 }
 
 export const ExtractionPipeline = {
@@ -91,9 +79,9 @@ export const ExtractionPipeline = {
       const fileType = input.file.name.split(".").pop()?.toLowerCase() as ExtractionFileType;
       let currentStage: IngestionStageId = "extraction";
       let record = createRecord(input, studyId, fileType, new Date().toISOString());
-      ContentStorage.upsert(record);
-      ChunkStorage.replaceForContent(record.id, []);
-      record = setStage(record, "extraction", "processing", "Lendo conteúdo e metadados do arquivo.");
+      await ContentStorage.upsert(record);
+      await ChunkStorage.replaceForContent(record.id, []);
+      record = await setStage(record, "extraction", "processing", "Lendo conteúdo e metadados do arquivo.");
       options.onProgress?.({
         fileId: input.id,
         status: "processing",
@@ -110,54 +98,54 @@ export const ExtractionPipeline = {
             progress: Math.min(65, Math.max(10, Math.round(progress * 0.6))),
             stage: currentStage,
           }),
-          onStage: (stage, status, message) => {
+          onStage: async (stage, status, message) => {
             currentStage = stage;
-            record = setStage(record, stage, status, message);
+            record = await setStage(record, stage, status, message);
           },
         });
 
         currentStage = "normalization";
-        record = setStage(record, "normalization", "processing", "Corrigindo Unicode, espaços e quebras de linha.");
+        record = await setStage(record, "normalization", "processing", "Corrigindo Unicode, espaços e quebras de linha.");
         const normalizedText = TextNormalizationService.normalize(extraction.extractedText);
         const normalizedSections = extraction.sections?.map((section) => ({
           ...section,
           text: TextNormalizationService.normalize(section.text),
         })).filter((section) => section.text.length > 0);
-        record = setStage(record, "normalization", "completed", "Texto normalizado antes da indexação.");
+        record = await setStage(record, "normalization", "completed", "Texto normalizado antes da indexação.");
         options.onProgress?.({ fileId: input.id, status: "processing", progress: 70, stage: "normalization" });
 
         currentStage = "analysis";
-        record = setStage(record, "analysis", "processing", "Identificando título, tema, idioma e palavras-chave.");
-        const material = MaterialService.findById(input.id);
-        const analysis = DocumentAnalyzer.analyze({
-          fileName: input.file.name,
-          text: normalizedText,
-          sections: normalizedSections,
-          metadata: extraction.metadata,
-          fallbackSubject: material?.subject,
-        });
+        record = await setStage(record, "analysis", "processing", "Identificando título, disciplina, tema, capítulos e palavras-chave.");
+        const material = await MaterialService.findById(input.id);
         record = {
           ...record,
           ...extraction,
           extractedText: normalizedText,
           sections: normalizedSections,
-          metadata: {
-            ...extraction.metadata,
-            ...analysis,
-            processingTimeMs: extraction.metadata.processingTimeMs,
-          },
+          metadata: extraction.metadata,
           status: "extracted",
         };
-        record = setStage(record, "analysis", "completed", "Metadados inteligentes gerados localmente.");
-        ContentStorage.upsert(record);
-        updateStudy(record);
-        options.onProgress?.({ fileId: input.id, status: "processing", progress: 78, stage: "analysis" });
+        const generation = await StudyGeneratorService.generate(record, material);
+        record = generation.record;
+        record = await setStage(record, "analysis", "completed", "Metadados inteligentes gerados localmente.");
+        currentStage = "study";
+        record = await setStage(record, "study", "processing", "Criando a estrutura automática de estudo.");
+        record = {
+          ...record,
+          logs: [
+            ...(record.logs ?? []),
+            ...generation.logs.map((message) => createIngestionLog("study", "completed", message)),
+          ],
+        };
+        record = await setStage(record, "study", "completed", "Matéria, tema e estrutura de estudo disponíveis.");
+        await ContentStorage.upsert(record);
+        options.onProgress?.({ fileId: input.id, status: "processing", progress: 78, stage: "study" });
 
         currentStage = "chunks";
-        record = setStage(record, "chunks", "processing", "Dividindo apenas o texto normalizado.");
+        record = await setStage(record, "chunks", "processing", "Dividindo apenas o texto normalizado.");
         const chunks = ChunkService.createChunks(record);
-        ChunkStorage.replaceForContent(record.id, chunks);
-        record = setStage(
+        await ChunkStorage.replaceForContent(record.id, chunks);
+        record = await setStage(
           record,
           "chunks",
           chunks.length > 0 ? "completed" : "skipped",
@@ -167,25 +155,25 @@ export const ExtractionPipeline = {
 
         if (chunks.length > 0) {
           currentStage = "embeddings";
-          record = setStage(record, "embeddings", "processing", "Gerando índice semântico após a normalização.");
+          record = await setStage(record, "embeddings", "processing", "Gerando índice semântico após a normalização.");
           try {
-            EmbeddingStorage.synchronize(ChunkStorage.load().chunks);
-            record = setStage(record, "embeddings", "completed", "Embeddings locais gerados.");
-            record = setStage(record, "indexed", "completed", "Documento disponível para busca e Tutor IA.");
+            await EmbeddingStorage.synchronize((await ChunkStorage.load()).chunks);
+            record = await setStage(record, "embeddings", "completed", "Embeddings locais gerados.");
+            record = await setStage(record, "indexed", "completed", "Documento disponível para busca e Tutor IA.");
           } catch (embeddingError) {
             const details = createExtractionError(embeddingError, input.file.name, "embeddings");
             record = {
-              ...setStage(record, "embeddings", "error", details.reason),
+              ...await setStage(record, "embeddings", "error", details.reason),
               errorDetails: details,
             };
-            record = setStage(record, "indexed", "error", "Busca lexical disponível; índice semântico indisponível.");
+            record = await setStage(record, "indexed", "error", "Busca lexical disponível; índice semântico indisponível.");
           }
         } else {
-          record = setStage(record, "embeddings", "skipped", "Embeddings ignorados porque não há texto.");
-          record = setStage(record, "indexed", "skipped", "Documento salvo somente com metadados.");
+          record = await setStage(record, "embeddings", "skipped", "Embeddings ignorados porque não há texto.");
+          record = await setStage(record, "indexed", "skipped", "Documento salvo somente com metadados.");
         }
 
-        ContentStorage.upsert(record);
+        await ContentStorage.upsert(record);
         options.onProgress?.({
           fileId: input.id,
           status: "extracted",
@@ -198,12 +186,12 @@ export const ExtractionPipeline = {
       } catch (error) {
         const errorDetails = createExtractionError(error, input.file.name, currentStage);
         const errorRecord: ExtractedContent = {
-          ...setStage(record, currentStage, "error", errorDetails.reason),
+          ...await setStage(record, currentStage, "error", errorDetails.reason),
           status: "error",
           error: errorDetails.reason,
           errorDetails,
         };
-        ContentStorage.upsert(errorRecord);
+        await ContentStorage.upsert(errorRecord);
         options.onProgress?.({
           fileId: input.id,
           status: "error",

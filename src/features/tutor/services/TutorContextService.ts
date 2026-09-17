@@ -5,18 +5,18 @@ import { ContentStorage } from "@/features/extraction/ContentStorage";
 import type { TutorStudyContext } from "@/types/tutor-context";
 
 export const TutorContextService = {
-  loadCurrent(): TutorStudyContext | null {
-    const study = StudyEngine.load()
+  async loadCurrent(): Promise<TutorStudyContext | null> {
+    const study = (await StudyEngine.load())
       .sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
     if (!study) return null;
-    const summary = (SummaryStorage.load() ?? [])
+    const summary = ((await SummaryStorage.load()) ?? [])
       .filter((item) => item.studyId === study.studyId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-    const notes = NotesService.load()
+    const notes = (await NotesService.load())
       .filter((note) => note.studyId === study.studyId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(({ title, content }) => ({ title, content }));
-    const extracted = ContentStorage.load().records
+    const extracted = (await ContentStorage.load()).records
       .filter((record) => record.studyId === study.studyId && record.status === "extracted")
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
@@ -39,6 +39,8 @@ export const TutorContextService = {
             summaryPreview: extracted.metadata.summaryPreview,
             keywords: extracted.metadata.keywords ?? [],
             language: extracted.metadata.language,
+            subtopics: extracted.metadata.subtopics ?? [],
+            chapterCount: extracted.metadata.chapters?.length ?? 0,
           }
         : study.initialSummary
           ? {
@@ -48,6 +50,8 @@ export const TutorContextService = {
               summaryPreview: study.initialSummary,
               keywords: study.keywords ?? [],
               language: study.language,
+              subtopics: study.subtopics ?? [],
+              chapterCount: study.chapters?.length ?? 0,
             }
           : undefined,
     };

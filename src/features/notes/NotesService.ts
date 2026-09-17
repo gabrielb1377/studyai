@@ -1,7 +1,6 @@
 import type { StudyNote } from "@/types/note";
-import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 
-const STORAGE_KEY = "studyai:notes";
 const UPDATE_EVENT = "studyai:notes-updated";
 
 function isNoteList(value: unknown): value is StudyNote[] {
@@ -14,12 +13,17 @@ function isNoteList(value: unknown): value is StudyNote[] {
 }
 
 export const NotesService = {
-  load(): StudyNote[] {
-    return readLocalStorage(STORAGE_KEY, isNoteList) ?? [];
+  async load(): Promise<StudyNote[]> {
+    const notes = await StorageManager.getAll<unknown>("notes");
+    return isNoteList(notes)
+      ? notes.sort((left, right) => ((left as StudyNote & { _storageOrder?: number })._storageOrder ?? Number.MAX_SAFE_INTEGER) -
+        ((right as StudyNote & { _storageOrder?: number })._storageOrder ?? Number.MAX_SAFE_INTEGER))
+      : [];
   },
 
-  save(notes: readonly StudyNote[]) {
-    writeLocalStorage(STORAGE_KEY, notes, UPDATE_EVENT);
+  async save(notes: readonly StudyNote[]) {
+    await StorageManager.replaceAll("notes", notes.map((note, index) => ({ ...note, _storageOrder: index })));
+    window.dispatchEvent(new Event(UPDATE_EVENT));
   },
 
   create(studyId: string, now = new Date().toISOString()): StudyNote {

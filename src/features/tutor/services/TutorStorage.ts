@@ -1,12 +1,8 @@
 import type { TutorConversation } from "@/types/tutor";
-import {
-  readLocalStorage,
-  removeLocalStorage,
-  writeLocalStorage,
-} from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 
-const STORAGE_KEY = "studyai:tutor-conversations:v2";
-const LEGACY_STORAGE_KEY = "studyai:tutor-conversations";
+const STORAGE_KEY = "tutor-conversations";
+type MetadataRecord = { key: string; value: unknown; updatedAt: string };
 
 function isConversationList(value: unknown): value is TutorConversation[] {
   return Array.isArray(value) && value.every((item) =>
@@ -18,23 +14,20 @@ function isConversationList(value: unknown): value is TutorConversation[] {
 }
 
 export const TutorStorage = {
-  load(): TutorConversation[] | null {
-    const current = readLocalStorage(STORAGE_KEY, isConversationList);
-    if (current) return current;
-
-    const legacy = readLocalStorage(LEGACY_STORAGE_KEY, isConversationList) ?? [];
-    const userConversations = legacy.filter((conversation) => conversation.id.startsWith("conversation-"));
-    removeLocalStorage(LEGACY_STORAGE_KEY);
-    if (userConversations.length > 0) this.save(userConversations);
-    return userConversations.length > 0 ? userConversations : null;
+  async load(): Promise<TutorConversation[] | null> {
+    const record = await StorageManager.get<MetadataRecord>("metadata", STORAGE_KEY);
+    return isConversationList(record?.value) ? record.value : null;
   },
 
-  save(conversations: readonly TutorConversation[]) {
-    writeLocalStorage(STORAGE_KEY, conversations);
+  async save(conversations: readonly TutorConversation[]) {
+    await StorageManager.put("metadata", {
+      key: STORAGE_KEY,
+      value: conversations,
+      updatedAt: new Date().toISOString(),
+    } satisfies MetadataRecord);
   },
 
-  clear() {
-    removeLocalStorage(STORAGE_KEY);
-    removeLocalStorage(LEGACY_STORAGE_KEY);
+  async clear() {
+    await StorageManager.delete("metadata", STORAGE_KEY);
   },
 };

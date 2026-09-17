@@ -9,25 +9,26 @@ export function useSummaries(studyId?: string) {
   const [summaries, setSummaries] = useState<StudySummary[]>([]);
   const [isReady, setIsReady] = useState(false);
 
-  const reload = useCallback(() => {
-    setSummaries(SummaryStorage.load() ?? []);
+  const reload = useCallback(async () => {
+    setSummaries((await SummaryStorage.load()) ?? []);
     setIsReady(true);
   }, []);
 
   useEffect(() => {
-    reload();
-    window.addEventListener(SUMMARIES_UPDATE_EVENT, reload);
-    window.addEventListener("storage", reload);
+    void reload();
+    const handleReload = () => { void reload(); };
+    window.addEventListener(SUMMARIES_UPDATE_EVENT, handleReload);
+    window.addEventListener("studyai:storage-updated", handleReload);
     return () => {
-      window.removeEventListener(SUMMARIES_UPDATE_EVENT, reload);
-      window.removeEventListener("storage", reload);
+      window.removeEventListener(SUMMARIES_UPDATE_EVENT, handleReload);
+      window.removeEventListener("studyai:storage-updated", handleReload);
     };
   }, [reload]);
 
   const updateSummaries = (updater: (current: StudySummary[]) => StudySummary[]) => {
     setSummaries((current) => {
       const nextSummaries = updater(current);
-      SummaryStorage.save(nextSummaries);
+      void SummaryStorage.save(nextSummaries);
       return nextSummaries;
     });
   };

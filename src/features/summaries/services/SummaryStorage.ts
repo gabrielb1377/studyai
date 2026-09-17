@@ -1,7 +1,6 @@
 import type { StudySummary } from "@/types/summary";
-import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 
-const STORAGE_KEY = "studyai:summaries";
 export const SUMMARIES_UPDATE_EVENT = "studyai:summaries-updated";
 
 function isSummaryList(value: unknown): value is StudySummary[] {
@@ -15,11 +14,16 @@ function isSummaryList(value: unknown): value is StudySummary[] {
 }
 
 export const SummaryStorage = {
-  load(): StudySummary[] | null {
-    return readLocalStorage(STORAGE_KEY, isSummaryList);
+  async load(): Promise<StudySummary[] | null> {
+    const summaries = await StorageManager.getAll<unknown>("summaries");
+    return isSummaryList(summaries)
+      ? summaries.sort((left, right) => ((left as StudySummary & { _storageOrder?: number })._storageOrder ?? Number.MAX_SAFE_INTEGER) -
+        ((right as StudySummary & { _storageOrder?: number })._storageOrder ?? Number.MAX_SAFE_INTEGER))
+      : null;
   },
 
-  save(summaries: readonly StudySummary[]) {
-    writeLocalStorage(STORAGE_KEY, summaries, SUMMARIES_UPDATE_EVENT);
+  async save(summaries: readonly StudySummary[]) {
+    await StorageManager.replaceAll("summaries", summaries.map((summary, index) => ({ ...summary, _storageOrder: index })));
+    window.dispatchEvent(new Event(SUMMARIES_UPDATE_EVENT));
   },
 };

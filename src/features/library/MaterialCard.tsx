@@ -24,13 +24,18 @@ export function MaterialCard({ material, content }: { material: Material; conten
     ...(content?.metadata.pageCount !== undefined
       ? [{ label: "Páginas", value: String(content.metadata.pageCount) }]
       : []),
+    ...(content?.metadata.chapters !== undefined
+      ? [{ label: "Capítulos", value: String(content.metadata.chapters.length) }]
+      : []),
     ...(content?.metadata.readingTimeMinutes !== undefined
       ? [{ label: "Leitura", value: `${content.metadata.readingTimeMinutes} min` }]
       : []),
     {
       label: "Status IA",
-      value: content?.stages?.find((stage) => stage.id === "analysis")?.status === "completed"
+      value: content?.metadata.analysisStatus === "analyzed"
         ? "Analisado"
+        : content?.metadata.analysisStatus === "fallback"
+          ? "Análise básica"
         : content?.status === "error"
           ? "Erro"
           : "Pendente",

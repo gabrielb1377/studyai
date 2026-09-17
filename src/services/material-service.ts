@@ -1,13 +1,7 @@
 import type { Material, MaterialFileType } from "@/types/material";
+import { StorageManager } from "@/lib/storage/StorageManager";
 
-const STORAGE_KEY = "studyai:materials";
-const STORAGE_VERSION = 2;
 export const MATERIALS_UPDATED_EVENT = "studyai:materials-updated";
-
-type MaterialStore = {
-  version: typeof STORAGE_VERSION;
-  materials: Material[];
-};
 
 function isMaterialBase(value: unknown): value is Omit<Material, "relativePath"> & { relativePath?: string } {
   if (!value || typeof value !== "object") return false;
@@ -32,16 +26,9 @@ function emitUpdate() {
 }
 
 export const MaterialService = {
-  load(): Material[] {
-    if (typeof window === "undefined") return [];
-
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-
-      const store = JSON.parse(raw) as { version?: unknown; materials?: unknown[] };
-      if ((store.version !== 1 && store.version !== STORAGE_VERSION) || !Array.isArray(store.materials)) return [];
-      const materials = store.materials.filter(isMaterialBase).map((material) => {
+  async load(): Promise<Material[]> {
+    const stored = await StorageManager.getAll<unknown>("documents");
+    return stored.filter(isMaterialBase).map((material) => {
         const relativePath = material.relativePath || material.name;
         return {
           ...material,
@@ -49,19 +36,10 @@ export const MaterialService = {
           identity: `${relativePath}:${material.size}:${material.lastModified}`,
         } satisfies Material;
       });
-      if (store.version === 1) {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: STORAGE_VERSION, materials }));
-      }
-      return materials;
-    } catch {
-      return [];
-    }
   },
 
-  save(materials: Material[]) {
-    if (typeof window === "undefined") return;
-    const store: MaterialStore = { version: STORAGE_VERSION, materials };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  async save(materials: readonly Material[]) {
+    await StorageManager.replaceAll("documents", materials);
     emitUpdate();
   },
 
@@ -89,45 +67,39 @@ export const MaterialService = {
     };
   },
 
-  upsert(material: Material) {
-    const materials = this.load();
-    const index = materials.findIndex((item) => item.id === material.id);
-
-    if (index >= 0) materials[index] = material;
-    else materials.unshift(material);
-
-    this.save(materials);
+  async upsert(material: Material) {
+    await StorageManager.put("documents", material);
+    emitUpdate();
     return material;
   },
 
-  update(id: string, changes: Partial<Omit<Material, "id" | "fileId">>) {
-    const materials = this.load();
-    const index = materials.findIndex((material) => material.id === id);
-    if (index < 0) return null;
+  async update(id: string, changes: Partial<Omit<Material, "id" | "fileId">>) {
+    const current = await StorageManager.get<Material>("documents", id);
+    if (!current) return null;
 
     const updated: Material = {
-      ...materials[index],
+      ...current,
       ...changes,
       updatedAt: new Date().toISOString(),
     };
-    materials[index] = updated;
-    this.save(materials);
+    await StorageManager.put("documents", updated);
+    emitUpdate();
     return updated;
   },
 
-  remove(id: string) {
-    const materials = this.load();
-    const next = materials.filter((material) => material.id !== id);
-    if (next.length === materials.length) return false;
-    this.save(next);
+  async remove(id: string) {
+    const current = await StorageManager.get<Material>("documents", id);
+    if (!current) return false;
+    await StorageManager.delete("documents", id);
+    emitUpdate();
     return true;
   },
 
-  findById(id: string) {
-    return this.load().find((material) => material.id === id) ?? null;
+  async findById(id: string) {
+    return await StorageManager.get<Material>("documents", id) ?? null;
   },
 
-  hasIdentity(identity: string) {
-    return this.load().some((material) => material.identity === identity);
+  async hasIdentity(identity: string) {
+    return (await this.load()).some((material) => material.identity === identity);
   },
 };

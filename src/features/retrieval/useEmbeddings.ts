@@ -18,9 +18,9 @@ const initialStore: EmbeddingStore = {
   embeddings: [],
 };
 
-function synchronizeStoredChunks() {
+async function synchronizeStoredChunks() {
   try {
-    EmbeddingStorage.synchronize(ChunkStorage.load().chunks);
+    await EmbeddingStorage.synchronize((await ChunkStorage.load()).chunks);
   } catch {
     return;
   }
@@ -31,15 +31,17 @@ export function useEmbeddings() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const refresh = () => setStore(EmbeddingStorage.load());
-    synchronizeStoredChunks();
-    refresh();
-    setIsReady(true);
-    window.addEventListener(EMBEDDINGS_UPDATE_EVENT, refresh);
-    window.addEventListener("storage", refresh);
+    const refresh = async () => {
+      setStore(await EmbeddingStorage.load());
+      setIsReady(true);
+    };
+    void synchronizeStoredChunks().then(refresh);
+    const handleRefresh = () => { void refresh(); };
+    window.addEventListener(EMBEDDINGS_UPDATE_EVENT, handleRefresh);
+    window.addEventListener("studyai:storage-updated", handleRefresh);
     return () => {
-      window.removeEventListener(EMBEDDINGS_UPDATE_EVENT, refresh);
-      window.removeEventListener("storage", refresh);
+      window.removeEventListener(EMBEDDINGS_UPDATE_EVENT, handleRefresh);
+      window.removeEventListener("studyai:storage-updated", handleRefresh);
     };
   }, []);
 

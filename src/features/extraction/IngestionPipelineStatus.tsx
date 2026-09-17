@@ -11,6 +11,7 @@ const stageLabels = {
   ocr: "OCR",
   normalization: "Normalização",
   analysis: "Análise",
+  study: "Study",
   chunks: "Chunks",
   embeddings: "Embeddings",
   indexed: "Indexado",

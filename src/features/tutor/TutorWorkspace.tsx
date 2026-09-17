@@ -82,7 +82,7 @@ export function TutorWorkspace() {
       setError("Abra um estudo organizado antes de gerar um resumo.");
       return;
     }
-    const chunks = RetrievalPipeline.forStudy(context.studyId).chunks;
+    const chunks = (await RetrievalPipeline.forStudy(context.studyId)).chunks;
     if (chunks.length === 0) {
       setError("Este estudo ainda não possui conteúdo extraído para resumir.");
       return;
@@ -116,7 +116,7 @@ export function TutorWorkspace() {
       setError("Abra o estudo relacionado a este resumo para atualizá-lo.");
       return;
     }
-    const chunks = RetrievalPipeline.forStudy(context.studyId).chunks;
+    const chunks = (await RetrievalPipeline.forStudy(context.studyId)).chunks;
     if (chunks.length === 0) {
       setError("Este estudo não possui conteúdo extraído para atualizar o resumo.");
       return;
@@ -177,6 +177,7 @@ export function TutorWorkspace() {
               <span><strong>Tema:</strong> {context.document.topic ?? context.topic}</span>
               {context.document.subject && <span><strong>Disciplina:</strong> {context.document.subject}</span>}
               {context.document.language && <span><strong>Idioma:</strong> {context.document.language}</span>}
+              <span><strong>Capítulos:</strong> {context.document.chapterCount}</span>
             </div>
             {context.document.summaryPreview && (
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{context.document.summaryPreview}</p>
@@ -184,6 +185,11 @@ export function TutorWorkspace() {
             {context.document.keywords.length > 0 && (
               <p className="mt-2 text-xs text-muted-foreground">
                 <strong className="text-foreground">Palavras-chave:</strong> {context.document.keywords.join(", ")}
+              </p>
+            )}
+            {context.document.subtopics.length > 0 && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                <strong className="text-foreground">Subtemas:</strong> {context.document.subtopics.join(", ")}
               </p>
             )}
           </aside>

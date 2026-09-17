@@ -12,14 +12,16 @@ export function useFlashcards(studyId?: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setAllCards(FlashcardService.load());
-    setIsReady(true);
+    void FlashcardService.load().then((cards) => {
+      setAllCards(cards);
+      setIsReady(true);
+    });
   }, []);
 
   const updateCards = useCallback((updater: (current: Flashcard[]) => Flashcard[]) => {
     setAllCards((current) => {
       const nextCards = updater(current);
-      FlashcardService.save(nextCards);
+      void FlashcardService.save(nextCards);
       return nextCards;
     });
   }, []);
@@ -30,7 +32,9 @@ export function useFlashcards(studyId?: string) {
     setIsGenerating(true);
     try {
       const generatedCards = await FlashcardService.requestGeneration(study);
-      updateCards((current) => [...current, ...FlashcardService.create(study.studyId, generatedCards)]);
+      const nextCards = [...allCards, ...FlashcardService.create(study.studyId, generatedCards)];
+      await FlashcardService.save(nextCards);
+      setAllCards(nextCards);
       return true;
     } catch (generationError) {
       setError(generationError instanceof Error ? generationError.message : "Erro inesperado ao criar flashcards.");

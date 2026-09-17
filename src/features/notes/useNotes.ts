@@ -6,19 +6,20 @@ import { NotesService } from "./NotesService";
 
 export function useNotes(studyId?: string) {
   const [allNotes, setAllNotes] = useState<StudyNote[]>([]);
-  const reload = useCallback(() => setAllNotes(NotesService.load()), []);
+  const reload = useCallback(async () => setAllNotes(await NotesService.load()), []);
 
   useEffect(() => {
-    reload();
-    window.addEventListener("studyai:notes-updated", reload);
-    return () => window.removeEventListener("studyai:notes-updated", reload);
+    void reload();
+    const handleReload = () => { void reload(); };
+    window.addEventListener("studyai:notes-updated", handleReload);
+    return () => window.removeEventListener("studyai:notes-updated", handleReload);
   }, [reload]);
 
   const updateNotes = useCallback(
     (updater: (current: StudyNote[]) => StudyNote[]) => {
       setAllNotes((current) => {
         const nextNotes = updater(current);
-        NotesService.save(nextNotes);
+        void NotesService.save(nextNotes);
         return nextNotes;
       });
     },

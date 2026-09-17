@@ -35,14 +35,16 @@ Gemini e Ollama são providers funcionais. Sem a chave do Gemini, o Provider Man
 
 | Módulo | Estado atual |
 | --- | --- |
-| Dashboard | Progresso, temas recentes e indicadores calculados somente a partir dos dados do usuário. |
+| Dashboard | Progresso, temas recentes, materiais analisados, temas e capítulos detectados e tempo de leitura calculados somente a partir dos dados do usuário. |
 | Biblioteca | Pesquisa e filtros sobre arquivos realmente importados. |
-| Importar | Seleção local de arquivos ou pastas, drag and drop, criação automática do Study e extração de PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
+| Importar | Seleção local de arquivos ou pastas, drag and drop, extração e geração automática de Studies para PDF, DOCX, PPTX, TXT, MP3 e MP4; não envia arquivos. |
 | Organizar | Árvore dos materiais importados; renomear, mover ou excluir atualiza todos os dados derivados. |
 | Estudo | Materiais do tema, visualizadores, progresso, notas, flashcards, quizzes, resumos e Tutor contextual. |
 | Tutor IA | Conversas persistidas e respostas com contexto do tema e trechos relevantes dos materiais. |
 | RAG local | Chunking, embeddings locais, busca híbrida e contexto limitado, sem banco vetorial. |
 | AI Core | Registry, health, latência, seleção automática, fallback, métricas, providers, prompts e erros normalizados. |
+| Storage V2 | IndexedDB transacional para documentos e dados de estudo, com migração automática do armazenamento legado. |
+| Smart Study Generator | Identificação local de disciplina, tema, subtemas, capítulos, palavras-chave, idioma e tempo de leitura após a extração. |
 | Configurações | Tema visual, modos manual/automático, health dos providers, modelos, memória, latência e métricas. |
 
 ## Arquitetura
@@ -53,13 +55,15 @@ src/
 ├── components/          # Layout compartilhado e componentes UI
 ├── features/            # Módulos de domínio, incluindo o AI Core
 ├── hooks/               # Estado transversal de layout
-├── lib/                 # Utilitários e persistência local compartilhada
+├── lib/                 # Utilitários e StorageManager sobre IndexedDB
 ├── services/            # Registro persistido e referências de runtime dos materiais
 ├── styles/              # Tokens e estilos globais
 └── types/               # Contratos TypeScript compartilhados
 ```
 
-Os dados pessoais são locais por enquanto. Serviços de browser validam o conteúdo salvo no `localStorage` antes de utilizá-lo. Consulte [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md) para os fluxos e limites atuais e [CURRENT_HANDOFF.md](./CURRENT_HANDOFF.md) para o próximo ponto de implementação.
+O Smart Study Generator fica em `src/features/study-generator`. Seus detectores são independentes e determinísticos: `StudyAnalyzer` coordena estrutura, disciplina, palavras-chave e leitura; `StudyGeneratorService` é o único responsável por persistir o resultado no material e no Study Engine. PDFs da Estácio reconhecem os marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Quando a identificação não é conclusiva, o fluxo cria um estudo básico com valores explícitos de fallback e nunca bloqueia a importação.
+
+Os dados pessoais são locais por enquanto. Documentos, conteúdos, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam no IndexedDB `studyai-db`. O `localStorage` é reservado a preferências leves, como tema e configurações de IA. Ao iniciar, a aplicação migra os dados legados em uma transação e só remove as chaves antigas depois do commit. O diagnóstico interno está disponível em `/storage`. Consulte [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md) para os fluxos e limites atuais e [CURRENT_HANDOFF.md](./CURRENT_HANDOFF.md) para o próximo ponto de implementação.
 
 ## Limites deliberados
 

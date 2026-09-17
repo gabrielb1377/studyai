@@ -11,19 +11,20 @@ export function useQuiz(studyId?: string) {
   const [store, setStore] = useState<QuizStore>({ questions: [], results: [] });
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const reload = useCallback(() => setStore(QuizService.load()), []);
+  const reload = useCallback(async () => setStore(await QuizService.load()), []);
 
   useEffect(() => {
-    reload();
-    window.addEventListener("studyai:quiz-updated", reload);
-    return () => window.removeEventListener("studyai:quiz-updated", reload);
+    void reload();
+    const handleReload = () => { void reload(); };
+    window.addEventListener("studyai:quiz-updated", handleReload);
+    return () => window.removeEventListener("studyai:quiz-updated", handleReload);
   }, [reload]);
 
   const updateStore = useCallback(
     (updater: (current: QuizStore) => QuizStore) => {
       setStore((current) => {
         const nextStore = updater(current);
-        QuizService.save(nextStore);
+        void QuizService.save(nextStore);
         return nextStore;
       });
     },
@@ -50,13 +51,15 @@ export function useQuiz(studyId?: string) {
 
     try {
       const generatedQuestions = await QuizService.requestGeneration(study);
-      updateStore((current) => ({
-        ...current,
+      const nextStore = {
+        ...store,
         questions: [
-          ...current.questions,
+          ...store.questions,
           ...QuizService.createQuestions(study.studyId, generatedQuestions),
         ],
-      }));
+      };
+      await QuizService.save(nextStore);
+      setStore(nextStore);
       return true;
     } catch (generationError) {
       setError(

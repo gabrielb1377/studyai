@@ -8,18 +8,19 @@ export function useTutorContext() {
   const [context, setContext] = useState<TutorStudyContext | null>(null);
 
   useEffect(() => {
-    const reload = () => setContext(TutorContextService.loadCurrent());
-    reload();
-    window.addEventListener("studyai:study-updated", reload);
-    window.addEventListener("studyai:notes-updated", reload);
-    window.addEventListener("studyai:summaries-updated", reload);
-    window.addEventListener("studyai:extraction-updated", reload);
+    const reload = async () => setContext(await TutorContextService.loadCurrent());
+    const handleReload = () => { void reload(); };
+    void reload();
+    window.addEventListener("studyai:study-updated", handleReload);
+    window.addEventListener("studyai:notes-updated", handleReload);
+    window.addEventListener("studyai:summaries-updated", handleReload);
+    window.addEventListener("studyai:extraction-updated", handleReload);
 
     return () => {
-      window.removeEventListener("studyai:study-updated", reload);
-      window.removeEventListener("studyai:notes-updated", reload);
-      window.removeEventListener("studyai:summaries-updated", reload);
-      window.removeEventListener("studyai:extraction-updated", reload);
+      window.removeEventListener("studyai:study-updated", handleReload);
+      window.removeEventListener("studyai:notes-updated", handleReload);
+      window.removeEventListener("studyai:summaries-updated", handleReload);
+      window.removeEventListener("studyai:extraction-updated", handleReload);
     };
   }, []);
 

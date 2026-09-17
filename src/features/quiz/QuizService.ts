@@ -1,12 +1,16 @@
 import type { QuizDifficulty, QuizQuestion, QuizResult } from "@/types/quiz";
-import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 import { AIClient } from "@/features/ai/AIClient";
 import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
 
-const STORAGE_KEY = "studyai:quizzes";
 const UPDATE_EVENT = "studyai:quiz-updated";
 type GeneratedQuestion = Pick<QuizQuestion, "question" | "alternatives" | "correctAnswer" | "explanation" | "difficulty">;
 type QuizStore = { questions: QuizQuestion[]; results: QuizResult[] };
+function storageOrder(value: unknown) {
+  return typeof value === "object" && value !== null && typeof (value as { _storageOrder?: unknown })._storageOrder === "number"
+    ? (value as { _storageOrder: number })._storageOrder
+    : Number.MAX_SAFE_INTEGER;
+}
 
 function isDifficulty(value: unknown): value is QuizDifficulty {
   return value === "easy" || value === "medium" || value === "hard";
@@ -40,12 +44,25 @@ function isStore(value: unknown): value is QuizStore {
 }
 
 export const QuizService = {
-  load(): QuizStore {
-    return readLocalStorage(STORAGE_KEY, isStore) ?? { questions: [], results: [] };
+  async load(): Promise<QuizStore> {
+    const records = await StorageManager.getAll<unknown>("quizzes");
+    const store = {
+      questions: records.filter((record): record is QuizQuestion & { kind: "question" } =>
+        typeof record === "object" && record !== null && (record as { kind?: unknown }).kind === "question" && isQuestion(record),
+      ).sort((left, right) => storageOrder(left) - storageOrder(right)),
+      results: records.filter((record): record is QuizResult & { kind: "result" } =>
+        typeof record === "object" && record !== null && (record as { kind?: unknown }).kind === "result" && isResult(record),
+      ).sort((left, right) => storageOrder(left) - storageOrder(right)),
+    };
+    return isStore(store) ? store : { questions: [], results: [] };
   },
 
-  save(store: QuizStore) {
-    writeLocalStorage(STORAGE_KEY, store, UPDATE_EVENT);
+  async save(store: QuizStore) {
+    await StorageManager.replaceAll("quizzes", [
+      ...store.questions.map((question, index) => ({ ...question, kind: "question" as const, _storageOrder: index })),
+      ...store.results.map((result, index) => ({ ...result, kind: "result" as const, _storageOrder: index })),
+    ]);
+    window.dispatchEvent(new Event(UPDATE_EVENT));
   },
 
   createQuestions(studyId: string, questions: readonly GeneratedQuestion[], now = new Date().toISOString()): QuizQuestion[] {
@@ -72,7 +89,7 @@ export const QuizService = {
   },
 
   async requestGeneration({ studyId, title, subject }: { studyId: string; title: string; subject: string }) {
-    const chunks = RetrievalPipeline.forStudy(studyId).chunks;
+    const chunks = (await RetrievalPipeline.forStudy(studyId)).chunks;
     if (chunks.length === 0) {
       throw new Error("Este estudo ainda não possui conteúdo real extraído para gerar um quiz.");
     }

@@ -7,15 +7,15 @@ import { SearchService } from "./SearchService";
 import { SemanticSearchService } from "./SemanticSearchService";
 import type { RetrievalOptions, RetrievalResult } from "./RetrievalTypes";
 
-function ensureChunksAreIndexed() {
-  const store = ChunkStorage.load();
+async function ensureChunksAreIndexed() {
+  const store = await ChunkStorage.load();
   const indexedContentIds = new Set(
     store.chunks.map((chunk) => chunk.metadata.extractedContentId),
   );
   let chunks = store.chunks;
   let changed = false;
 
-  for (const content of ContentStorage.load().records) {
+  for (const content of (await ContentStorage.load()).records) {
     if (content.status !== "extracted" || !content.extractedText.trim() ||
       indexedContentIds.has(content.id)) continue;
 
@@ -24,13 +24,13 @@ function ensureChunksAreIndexed() {
     changed = true;
   }
 
-  if (changed) ChunkStorage.save({ version: 1, chunks });
+  if (changed) await ChunkStorage.save({ version: 1, chunks });
   return chunks;
 }
 
 export const RetrievalService = {
-  forStudy(studyId: string, limit = 12) {
-    const chunks = ensureChunksAreIndexed()
+  async forStudy(studyId: string, limit = 12) {
+    const chunks = (await ensureChunksAreIndexed())
       .filter((chunk) => chunk.studyId === studyId)
       .sort((a, b) => a.fileId.localeCompare(b.fileId) || a.chunkIndex - b.chunkIndex)
       .slice(0, limit)
@@ -48,8 +48,8 @@ export const RetrievalService = {
     };
   },
 
-  retrieve(question: string, options: RetrievalOptions = {}): RetrievalResult {
-    const sourceChunks = ensureChunksAreIndexed();
+  async retrieve(question: string, options: RetrievalOptions = {}): Promise<RetrievalResult> {
+    const sourceChunks = await ensureChunksAreIndexed();
     const candidateLimit = Math.max((options.limit ?? 5) * 4, 20);
     const lexicalChunks = SearchService.search(question, sourceChunks, {
       ...options,
@@ -57,7 +57,7 @@ export const RetrievalService = {
     });
 
     try {
-      const embeddings = EmbeddingStorage.synchronize(sourceChunks).embeddings;
+      const embeddings = (await EmbeddingStorage.synchronize(sourceChunks)).embeddings;
       const semanticChunks = SemanticSearchService.search(
         question,
         sourceChunks,

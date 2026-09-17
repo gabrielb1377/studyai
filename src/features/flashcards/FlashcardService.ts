@@ -1,9 +1,7 @@
 import type { Flashcard, FlashcardDifficulty } from "@/types/flashcard";
-import { readLocalStorage, writeLocalStorage } from "@/lib/local-storage";
+import { StorageManager } from "@/lib/storage/StorageManager";
 import { AIClient } from "@/features/ai/AIClient";
 import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
-
-const STORAGE_KEY = "studyai:flashcards";
 
 type GeneratedFlashcard = Pick<Flashcard, "question" | "answer" | "difficulty">;
 
@@ -23,12 +21,17 @@ function isFlashcardList(value: unknown): value is Flashcard[] {
 }
 
 export const FlashcardService = {
-  load(): Flashcard[] {
-    return readLocalStorage(STORAGE_KEY, isFlashcardList) ?? [];
+  async load(): Promise<Flashcard[]> {
+    const cards = await StorageManager.getAll<unknown>("flashcards");
+    return isFlashcardList(cards)
+      ? cards.sort((left, right) => ((left as Flashcard & { _storageOrder?: number })._storageOrder ?? Number.MAX_SAFE_INTEGER) -
+        ((right as Flashcard & { _storageOrder?: number })._storageOrder ?? Number.MAX_SAFE_INTEGER))
+      : [];
   },
 
-  save(cards: readonly Flashcard[]) {
-    writeLocalStorage(STORAGE_KEY, cards);
+  async save(cards: readonly Flashcard[]) {
+    await StorageManager.replaceAll("flashcards", cards.map((card, index) => ({ ...card, _storageOrder: index })));
+    window.dispatchEvent(new Event("studyai:flashcards-updated"));
   },
 
   create(studyId: string, cards: readonly GeneratedFlashcard[], now = new Date().toISOString()): Flashcard[] {
@@ -59,7 +62,7 @@ export const FlashcardService = {
   },
 
   async requestGeneration({ studyId, title, subject }: { studyId: string; title: string; subject: string }) {
-    const chunks = RetrievalPipeline.forStudy(studyId).chunks;
+    const chunks = (await RetrievalPipeline.forStudy(studyId)).chunks;
     if (chunks.length === 0) {
       throw new Error("Este estudo ainda não possui conteúdo real extraído para gerar flashcards.");
     }
