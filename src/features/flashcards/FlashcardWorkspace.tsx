@@ -8,17 +8,22 @@ import type { StudyRecord } from "@/types/study-engine";
 import { FlashcardCard } from "./FlashcardCard";
 import { useFlashcards } from "./useFlashcards";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
+import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
 
 export function FlashcardWorkspace({ study }: { study: StudyRecord }) {
   const { cards, error, isGenerating, reviewedCount, generate, review } = useFlashcards(study.studyId);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => WorkspacePersistence.load(study.studyId).flashcardIndex);
   const [isAnswerVisible, setIsAnswerVisible] = useState(false);
   const currentCard = cards[index];
   const canGenerate = hasStructuredStudyContent(study);
 
   useEffect(() => {
-    if (index >= cards.length) setIndex(Math.max(0, cards.length - 1));
+    if (cards.length > 0 && index >= cards.length) setIndex(cards.length - 1);
   }, [cards.length, index]);
+
+  useEffect(() => {
+    WorkspacePersistence.save(study.studyId, { flashcardIndex: index });
+  }, [index, study.studyId]);
 
   const moveTo = (nextIndex: number) => {
     setIndex((nextIndex + cards.length) % cards.length);

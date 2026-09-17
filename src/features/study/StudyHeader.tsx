@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StudyRecord } from "@/types/study-engine";
 
-export function StudyHeader({ study }: { study: StudyRecord }) {
+export function StudyHeader({ study, fileName }: { study: StudyRecord; fileName?: string }) {
   return (
     <header className="mb-8 border-b pb-7 sm:mb-10 sm:pb-8">
       <nav aria-label="Breadcrumb" className="mb-5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
@@ -16,6 +16,12 @@ export function StudyHeader({ study }: { study: StudyRecord }) {
         <span className="truncate text-foreground" aria-current="page">
           {study.title}
         </span>
+        {fileName && (
+          <>
+            <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate text-foreground" aria-current="page">{fileName}</span>
+          </>
+        )}
       </nav>
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">

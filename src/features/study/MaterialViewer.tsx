@@ -28,12 +28,14 @@ const materialIcons = {
 
 export function MaterialViewer({
   material,
+  studyId,
   onPrevious,
   onNext,
   hasPrevious,
   hasNext,
 }: {
   material: StudyMaterial;
+  studyId: string;
   onPrevious: () => void;
   onNext: () => void;
   hasPrevious: boolean;
@@ -70,7 +72,7 @@ export function MaterialViewer({
         </div>
       </CardHeader>
       <CardContent className="p-4 sm:p-6">
-        {material.type === "pdf" && material.source && <PdfMaterialViewer material={material} />}
+        {material.type === "pdf" && material.source && <PdfMaterialViewer key={material.id} material={material} studyId={studyId} />}
         {material.type === "pdf" && !material.source && (
           <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
             O arquivo original não permanece no navegador após recarregar a página. Importe-o novamente para abrir o PDF.

@@ -8,4 +8,10 @@ export type StudyMaterial = {
   size: number;
   source?: string;
   textContent?: string;
+  chapters?: Array<{
+    id: string;
+    title: string;
+    page?: number;
+    slide?: number;
+  }>;
 };

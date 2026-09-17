@@ -8,8 +8,8 @@ export const AIService = {
     return ProviderManager.generate(request);
   },
 
-  inspect(providerId: AIProviderId, signal?: AbortSignal) {
-    return ProviderManager.inspect(providerId, signal);
+  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
+    return ProviderManager.inspect(providerId, options);
   },
 
   status(options?: { force?: boolean; signal?: AbortSignal }) {

@@ -132,6 +132,7 @@ export const OllamaProvider: AIProvider = {
         version: versionData?.version,
         models,
         memoryBytes: processResponse?.models?.reduce((total, item) => total + (item.size_vram ?? 0), 0),
+        endpoint: getBaseUrl(),
       };
     } catch {
       return {
@@ -139,6 +140,7 @@ export const OllamaProvider: AIProvider = {
         available: false,
         latencyMs: Math.round(performance.now() - startedAt),
         models: [],
+        endpoint: getBaseUrl(),
         error: "Ollama indisponível",
       };
     } finally {

@@ -61,6 +61,8 @@ O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 1. Nenh
 
 `StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
 
+Preferências de navegação permanecem no `localStorage`, por serem pequenas e específicas do dispositivo. `WorkspacePersistence` mantém aba, material, página e zoom do PDF, capítulo, marcadores, flashcard, quiz e nota por `studyId`. Conversas e a conversa ativa do Tutor permanecem no store `metadata` do IndexedDB.
+
 Na primeira abertura, `Migration` verifica as chaves legadas, grava tudo em uma única transação e remove o legado somente depois do commit. Assim, uma falha nunca apaga a fonte anterior. O `localStorage` permanece somente para preferências leves: tema, provider/configurações de IA, idioma, sidebar, workspace e última tela. A rota interna `/storage` mostra versão, contagens, espaço estimado e data da migração.
 
 ## Fluxo de extração
@@ -123,7 +125,7 @@ TutorWorkspace
 
 O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos, limitando o resultado aos cinco melhores trechos. `PromptBuilder` e `ContextBuilder` são executados no servidor. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`; nenhuma feature conhece a implementação Gemini.
 
-`AIProvider` define o contrato comum. `GeminiProvider` e `OllamaProvider` são funcionais; OpenRouter e Groq permanecem stubs seguros. `ProviderRegistry` é o único catálogo server-only, `HealthService` mantém verificações recentes em cache e `LatencyService` mede health e geração. `ProviderManager` resolve a seleção, registra tentativas e executa fallback na ordem Ollama, Gemini, Groq e OpenRouter. No modo automático, providers online são ordenados pela menor latência antes da cadeia de fallback.
+`AIProvider` define o contrato comum. Gemini, Ollama, OpenRouter e Groq possuem health check e geração server-only; os dois últimos usam o contrato OpenAI-compatible e só ficam online quando suas chaves estão configuradas. `ProviderRegistry` é o único catálogo, `HealthService` mantém verificações recentes em cache e `LatencyService` mede health e geração. No modo manual, o provider escolhido é estrito. No automático, providers online são ordenados pela menor latência antes da cadeia de fallback Ollama → Gemini → Groq → OpenRouter.
 
 O modo, provider preferencial e modelos escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama consulta dinamicamente `/api/tags`, verifica `/api/version` e `/api/ps`, e conversa por `/api/chat`, com timeout, cancelamento e suporte a resposta completa ou NDJSON. O navegador nunca acessa o processo local diretamente. Logs e métricas ficam em um singleton efêmero do processo servidor, limitado às 200 tentativas mais recentes. O Dashboard consulta somente o endpoint agregado do Manager para mostrar provider atual, modelo e métricas de uso.
 
@@ -156,6 +158,7 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 - O Ollama precisa estar em execução no endereço configurado por `OLLAMA_URL` e possuir ao menos um modelo instalado.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 - A detecção de estrutura é heurística e local. Ela reconhece marcadores e vocabulário conhecidos, mas não substitui a edição manual quando o documento usa títulos ambíguos.
+- Página, zoom e seleção do PDF são restaurados, mas o binário original ainda precisa ser reimportado após fechar completamente o navegador.
 
 ## Qualidade
 

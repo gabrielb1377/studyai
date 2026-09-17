@@ -24,8 +24,8 @@ export const aiProviderOptions: ReadonlyArray<{
 }> = [
   { id: "gemini", label: "Gemini", available: true },
   { id: "ollama", label: "Ollama", available: true },
-  { id: "openrouter", label: "OpenRouter", available: false },
-  { id: "groq", label: "Groq", available: false },
+  { id: "openrouter", label: "OpenRouter", available: true },
+  { id: "groq", label: "Groq", available: true },
 ];
 
 const DEFAULT_SETTINGS: AISettingsState = {

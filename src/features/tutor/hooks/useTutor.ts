@@ -25,10 +25,10 @@ export function useTutor() {
   };
 
   useEffect(() => {
-    void TutorStorage.load().then((storedConversations) => {
+    void Promise.all([TutorStorage.load(), TutorStorage.loadActive()]).then(([storedConversations, storedActive]) => {
       if (storedConversations?.length) {
         setConversations(storedConversations);
-        setActiveConversationId(storedConversations[0].id);
+        setActiveConversationId(storedConversations.some((item) => item.id === storedActive) ? storedActive! : storedConversations[0].id);
       }
     });
   }, []);
@@ -42,6 +42,7 @@ export function useTutor() {
     const conversation = TutorService.createConversation();
     updateConversations((current) => [conversation, ...current]);
     setActiveConversationId(conversation.id);
+    void TutorStorage.saveActive(conversation.id);
     return conversation;
   };
 
@@ -58,6 +59,7 @@ export function useTutor() {
       const nextConversations = TutorService.deleteConversation(current, conversationId);
       if (conversationId === activeConversationId) {
         setActiveConversationId(nextConversations[0]?.id ?? "");
+        if (nextConversations[0]) void TutorStorage.saveActive(nextConversations[0].id);
       }
       return nextConversations;
     });
@@ -112,7 +114,10 @@ export function useTutor() {
     createConversation,
     renameConversation,
     deleteConversation,
-    selectConversation: setActiveConversationId,
+    selectConversation: (conversationId: string) => {
+      setActiveConversationId(conversationId);
+      void TutorStorage.saveActive(conversationId);
+    },
     sendMessage,
   };
 }

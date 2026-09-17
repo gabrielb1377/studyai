@@ -6,8 +6,8 @@ export const metadata: Metadata = { title: "Estudo" };
 export default async function StudyPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tema?: string }>;
+  searchParams: Promise<{ tema?: string; arquivo?: string; aba?: string }>;
 }) {
-  const { tema } = await searchParams;
-  return <StudyWorkspace requestedStudyId={tema} />;
+  const { tema, arquivo, aba } = await searchParams;
+  return <StudyWorkspace requestedStudyId={tema} requestedMaterialId={arquivo} requestedTab={aba} />;
 }

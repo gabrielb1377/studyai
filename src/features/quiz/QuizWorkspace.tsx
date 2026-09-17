@@ -9,11 +9,14 @@ import { QuizService } from "./QuizService";
 import { QuizQuestion } from "./QuizQuestion";
 import { useQuiz } from "./useQuiz";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
+import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
 
 export function QuizWorkspace({ study }: { study: StudyRecord }) {
   const { questions, results, error, isGenerating, generate, saveResult } = useQuiz(study.studyId);
-  const [index, setIndex] = useState(0); const [answers, setAnswers] = useState<number[]>([]); const [isFinished, setIsFinished] = useState(false);
-  useEffect(() => { if (index >= questions.length) setIndex(0); }, [index, questions.length]);
+  const stored = WorkspacePersistence.load(study.studyId).quiz;
+  const [index, setIndex] = useState(stored.index); const [answers, setAnswers] = useState<number[]>(stored.answers); const [isFinished, setIsFinished] = useState(stored.isFinished);
+  useEffect(() => { if (questions.length > 0 && index >= questions.length) setIndex(0); }, [index, questions.length]);
+  useEffect(() => { WorkspacePersistence.save(study.studyId, { quiz: { index, answers, isFinished } }); }, [answers, index, isFinished, study.studyId]);
   const currentQuestion = questions[index];
   const answer = (selected: number) => { const next = [...answers, selected]; setAnswers(next); };
   const next = () => { if (index + 1 < questions.length) setIndex((current) => current + 1); else { const correct = questions.reduce((total, question, questionIndex) => total + (answers[questionIndex] === question.correctAnswer ? 1 : 0), 0); saveResult(QuizService.createResult(study.studyId, questions.map((question) => question.id), correct, questions.length - correct)); setIsFinished(true); } };

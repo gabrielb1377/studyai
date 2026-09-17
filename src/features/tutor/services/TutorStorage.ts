@@ -2,6 +2,7 @@ import type { TutorConversation } from "@/types/tutor";
 import { StorageManager } from "@/lib/storage/StorageManager";
 
 const STORAGE_KEY = "tutor-conversations";
+const ACTIVE_KEY = "tutor-active-conversation";
 type MetadataRecord = { key: string; value: unknown; updatedAt: string };
 
 function isConversationList(value: unknown): value is TutorConversation[] {
@@ -29,5 +30,18 @@ export const TutorStorage = {
 
   async clear() {
     await StorageManager.delete("metadata", STORAGE_KEY);
+  },
+
+  async loadActive() {
+    const record = await StorageManager.get<MetadataRecord>("metadata", ACTIVE_KEY);
+    return typeof record?.value === "string" ? record.value : null;
+  },
+
+  async saveActive(conversationId: string) {
+    await StorageManager.put("metadata", {
+      key: ACTIVE_KEY,
+      value: conversationId,
+      updatedAt: new Date().toISOString(),
+    } satisfies MetadataRecord);
   },
 };

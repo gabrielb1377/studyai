@@ -32,6 +32,7 @@ export function AISettingsPanel() {
   const [managerStatus, setManagerStatus] = useState<AIManagerStatus | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [testingProvider, setTestingProvider] = useState<AIProviderId | null>(null);
 
   useEffect(() => {
     const settings = AISettings.load();
@@ -40,6 +41,21 @@ export function AISettingsPanel() {
     setModels(settings.models);
     setIsReady(true);
   }, []);
+
+  const testProvider = async (providerId: AIProviderId) => {
+    setTestingProvider(providerId);
+    try {
+      const response = await fetch(`/api/ai/providers/${providerId}?refresh=true`, { cache: "no-store" });
+      const status = await response.json().catch(() => null) as AIManagerStatus["providers"][number] | null;
+      if (status) {
+        setManagerStatus((current) => current
+          ? { ...current, providers: current.providers.map((item) => item.provider === providerId ? status : item) }
+          : current);
+      }
+    } finally {
+      setTestingProvider(null);
+    }
+  };
 
   const refreshStatus = useCallback(async (force = false) => {
     setIsRefreshing(true);
@@ -133,17 +149,17 @@ export function AISettingsPanel() {
           </select>
         </label>
 
-        {provider === "ollama" && mode === "manual" && (
+        {mode === "manual" && (
           <label className="grid gap-2 text-sm font-medium sm:max-w-md">
-            Modelo do Ollama
+            Modelo do provider
             <select
-              aria-label="Modelo do Ollama"
-              value={models.ollama ?? activeStatus?.models[0]?.name ?? ""}
+              aria-label={provider === "ollama" ? "Modelo do Ollama" : `Modelo do ${provider}`}
+              value={models[provider] ?? activeStatus?.models[0]?.name ?? ""}
               disabled={!activeStatus?.available || activeStatus.models.length === 0}
               onChange={(event) => {
-                const nextModels = { ...models, ollama: event.target.value };
+                const nextModels = { ...models, [provider]: event.target.value };
                 setModels(nextModels);
-                AISettings.saveModel("ollama", event.target.value);
+                AISettings.saveModel(provider, event.target.value);
               }}
               className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -180,11 +196,18 @@ export function AISettingsPanel() {
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                   <div><dt className="text-muted-foreground">Latência</dt><dd>{status ? `${status.latencyMs} ms` : "—"}</dd></div>
+                  <div><dt className="text-muted-foreground">Tempo médio</dt><dd>{status ? `${status.averageResponseTimeMs ?? status.latencyMs} ms` : "—"}</dd></div>
                   <div><dt className="text-muted-foreground">Modelo ativo</dt><dd className="truncate" title={selectedModel}>{selectedModel}</dd></div>
                   <div><dt className="text-muted-foreground">Memória</dt><dd>{formatMemory(status?.memoryBytes)}</dd></div>
                   <div><dt className="text-muted-foreground">Versão</dt><dd>{status?.version ?? "—"}</dd></div>
                   <div><dt className="text-muted-foreground">Última verificação</dt><dd>{status?.checkedAt ? dateFormatter.format(new Date(status.checkedAt)) : "—"}</dd></div>
+                  <div className="col-span-2"><dt className="text-muted-foreground">Endpoint utilizado</dt><dd className="break-all">{status?.endpoint ?? "—"}</dd></div>
+                  <div className="col-span-2"><dt className="text-muted-foreground">Último erro</dt><dd className={status?.lastError || status?.error ? "text-destructive" : undefined}>{status?.lastError ?? status?.error ?? "Nenhum erro registrado"}</dd></div>
                 </dl>
+                <Button type="button" variant="outline" size="sm" className="mt-4 w-full" disabled={testingProvider === option.id} onClick={() => void testProvider(option.id)}>
+                  <RefreshCw className={testingProvider === option.id ? "animate-spin" : undefined} />
+                  {testingProvider === option.id ? "Testando..." : "Testar conexão"}
+                </Button>
               </div>
             );
           })}

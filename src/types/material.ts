@@ -38,6 +38,7 @@ export type Material = {
   semester?: string;
   subject?: string;
   topic?: string;
+  tags?: string[];
 };
 
 export type MaterialFilter = "all" | MaterialCategory | "favorites";

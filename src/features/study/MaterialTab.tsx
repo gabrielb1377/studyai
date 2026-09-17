@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { FileText, Headphones, ImageIcon, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,8 +17,8 @@ const materialIcons = {
   image: ImageIcon,
 };
 
-export function MaterialTab({ materials }: { materials: readonly StudyMaterial[] }) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+export function MaterialTab({ studyId, materials, selectedMaterialId, onMaterialChange }: { studyId: string; materials: readonly StudyMaterial[]; selectedMaterialId?: string; onMaterialChange: (materialId: string) => void }) {
+  const selectedIndex = Math.max(0, materials.findIndex((material) => material.id === selectedMaterialId));
   const selectedMaterial = materials[selectedIndex] ?? materials[0];
 
   if (!selectedMaterial) {
@@ -35,10 +34,11 @@ export function MaterialTab({ materials }: { materials: readonly StudyMaterial[]
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <MaterialViewer
           material={selectedMaterial}
+          studyId={studyId}
           hasPrevious={selectedIndex > 0}
           hasNext={selectedIndex < materials.length - 1}
-          onPrevious={() => setSelectedIndex((current) => Math.max(0, current - 1))}
-          onNext={() => setSelectedIndex((current) => Math.min(materials.length - 1, current + 1))}
+          onPrevious={() => onMaterialChange(materials[Math.max(0, selectedIndex - 1)].id)}
+          onNext={() => onMaterialChange(materials[Math.min(materials.length - 1, selectedIndex + 1)].id)}
         />
         <Card className="gap-0 py-0 shadow-none">
           <CardHeader className="border-b px-5 py-5">
@@ -56,7 +56,7 @@ export function MaterialTab({ materials }: { materials: readonly StudyMaterial[]
                   variant="ghost"
                   aria-pressed={isSelected}
                   className={`h-auto w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left ${isSelected ? "bg-accent text-accent-foreground" : ""}`}
-                  onClick={() => setSelectedIndex(index)}
+                  onClick={() => onMaterialChange(material.id)}
                 >
                   <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
                   <span className="min-w-0 flex-1">

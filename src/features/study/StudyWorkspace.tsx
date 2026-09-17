@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, GraduationCap } from "lucide-react";
+import { BookOpen, Bot, BrainCircuit, ClipboardCheck, NotebookPen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useExtraction } from "@/features/extraction/useExtraction";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
+import { FlashcardWorkspace } from "@/features/flashcards/FlashcardWorkspace";
+import { QuizWorkspace } from "@/features/quiz/QuizWorkspace";
+import { NotesWorkspace } from "@/features/notes/NotesWorkspace";
+import { SummaryList } from "@/features/summaries/SummaryList";
 import { TutorWorkspace } from "@/features/tutor/TutorWorkspace";
 import { useMaterials } from "@/hooks/useMaterials";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
@@ -17,8 +21,9 @@ import type { StudyMaterial, StudyMaterialType } from "@/types/study";
 import { MaterialTab } from "./MaterialTab";
 import { StudyHeader } from "./StudyHeader";
 import { StudyStatistics } from "./StudyStatistics";
-import { StudyToolsTab } from "./StudyToolsTab";
+import { StudyNavigationSidebar } from "./StudyNavigationSidebar";
 import { useStudyEngine } from "./hooks/useStudyEngine";
+import { WorkspacePersistence, workspaceTabs, type StudyWorkspaceState, type WorkspaceTab } from "./services/WorkspacePersistence";
 
 function toStudyMaterialType(fileType: string): StudyMaterialType {
   if (fileType === "pdf") return "pdf";
@@ -29,7 +34,7 @@ function toStudyMaterialType(fileType: string): StudyMaterialType {
   return "document";
 }
 
-export function StudyWorkspace({ requestedStudyId }: { requestedStudyId?: string }) {
+export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string }) {
   const { records, isLoading, recordAccess, setProgress, setStatus } = useStudyEngine();
   const { materials } = useMaterials();
   const { records: extractedContents } = useExtraction();
@@ -39,6 +44,7 @@ export function StudyWorkspace({ requestedStudyId }: { requestedStudyId?: string
   const studyId = record?.studyId;
   const { cards: flashcards } = useFlashcards(studyId);
   const { results: quizzes } = useQuiz(studyId);
+  const [workspace, setWorkspace] = useState<StudyWorkspaceState | null>(null);
 
   const studyMaterials = useMemo<StudyMaterial[]>(() => {
     if (!studyId) return [];
@@ -52,6 +58,7 @@ export function StudyWorkspace({ requestedStudyId }: { requestedStudyId?: string
         size: material.size,
         source: MaterialRuntimeStore.get(material.id)?.source,
         textContent: extracted?.extractedText,
+        chapters: extracted?.metadata.chapters,
       };
     });
   }, [extractedContents, materials, studyId]);
@@ -59,6 +66,22 @@ export function StudyWorkspace({ requestedStudyId }: { requestedStudyId?: string
   useEffect(() => {
     if (studyId) recordAccess(studyId);
   }, [recordAccess, studyId]);
+
+  useEffect(() => {
+    if (!studyId) return;
+    const stored = WorkspacePersistence.load(studyId);
+    const activeTab = workspaceTabs.includes(requestedTab as WorkspaceTab)
+      ? requestedTab as WorkspaceTab
+      : stored.activeTab;
+    const next = { ...stored, activeTab, materialId: requestedMaterialId ?? stored.materialId };
+    setWorkspace(next);
+    WorkspacePersistence.save(studyId, next);
+  }, [requestedMaterialId, requestedTab, studyId]);
+
+  const updateWorkspace = (changes: Partial<StudyWorkspaceState>) => {
+    if (!studyId) return;
+    setWorkspace(WorkspacePersistence.save(studyId, changes));
+  };
 
   if (isLoading) {
     return <Card className="p-10 text-center text-sm text-muted-foreground shadow-none">Carregando estudo...</Card>;
@@ -77,20 +100,35 @@ export function StudyWorkspace({ requestedStudyId }: { requestedStudyId?: string
     );
   }
 
+  const activeMaterialId = workspace?.materialId && studyMaterials.some((material) => material.id === workspace.materialId)
+    ? workspace.materialId
+    : studyMaterials[0]?.id;
+  const activeMaterial = studyMaterials.find((material) => material.id === activeMaterialId);
+  const activeTab = workspace?.activeTab ?? "material";
+
   return (
     <>
-      <StudyHeader study={record} />
-      <Tabs defaultValue="material" className="gap-6">
-        <TabsList aria-label="Áreas de estudo" className="w-full justify-start overflow-x-auto sm:w-fit">
-          <TabsTrigger value="material" className="min-w-28"><BookOpen aria-hidden="true" />Material</TabsTrigger>
-          <TabsTrigger value="ia" className="min-w-24"><Bot aria-hidden="true" />IA</TabsTrigger>
-          <TabsTrigger value="study" className="min-w-28"><GraduationCap aria-hidden="true" />Estudar</TabsTrigger>
-        </TabsList>
-        <TabsContent value="material" forceMount className="data-[state=inactive]:hidden"><MaterialTab materials={studyMaterials} /></TabsContent>
-        <TabsContent value="ia" forceMount className="data-[state=inactive]:hidden"><TutorWorkspace /></TabsContent>
-        <TabsContent value="study" forceMount className="data-[state=inactive]:hidden"><StudyToolsTab study={record} /></TabsContent>
-        <StudyStatistics record={record} flashcardCount={flashcards.length} quizCount={quizzes.length} onProgressChange={(progress) => setProgress(record.studyId, progress)} onStatusChange={(status) => setStatus(record.studyId, status)} />
-      </Tabs>
+      <StudyHeader study={record} fileName={activeMaterial?.name} />
+      <div className="grid items-start gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
+        <StudyNavigationSidebar studies={records} materials={materials} activeStudyId={record.studyId} activeMaterialId={activeMaterialId} />
+        <div className="min-w-0 space-y-7">
+          <Tabs value={activeTab} onValueChange={(value) => updateWorkspace({ activeTab: value as WorkspaceTab })} className="gap-6">
+            <TabsList aria-label="Áreas de estudo" className="w-full justify-start overflow-x-auto">
+              <TabsTrigger value="material" className="min-w-28"><BookOpen />Material</TabsTrigger>
+              <TabsTrigger value="ia" className="min-w-20"><Bot />IA</TabsTrigger>
+              <TabsTrigger value="flashcards" className="min-w-28"><BrainCircuit />Flashcards</TabsTrigger>
+              <TabsTrigger value="quiz" className="min-w-20"><ClipboardCheck />Quiz</TabsTrigger>
+              <TabsTrigger value="notes" className="min-w-24"><NotebookPen />Notas</TabsTrigger>
+            </TabsList>
+            <TabsContent value="material"><MaterialTab studyId={record.studyId} materials={studyMaterials} selectedMaterialId={activeMaterialId} onMaterialChange={(materialId) => updateWorkspace({ materialId })} /></TabsContent>
+            <TabsContent value="ia" className="space-y-5"><TutorWorkspace /><SummaryList studyId={record.studyId} /></TabsContent>
+            <TabsContent value="flashcards"><FlashcardWorkspace study={record} /></TabsContent>
+            <TabsContent value="quiz"><QuizWorkspace study={record} /></TabsContent>
+            <TabsContent value="notes"><NotesWorkspace study={record} /></TabsContent>
+          </Tabs>
+          <StudyStatistics record={record} flashcardCount={flashcards.length} quizCount={quizzes.length} onProgressChange={(progress) => setProgress(record.studyId, progress)} onStatusChange={(status) => setStatus(record.studyId, status)} />
+        </div>
+      </div>
     </>
   );
 }

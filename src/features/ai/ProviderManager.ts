@@ -31,10 +31,6 @@ function addLog(log: Omit<AIProviderLog, "id" | "timestamp">) {
   if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
 }
 
-function orderFrom(preferred: AIProviderId): AIProviderId[] {
-  return [preferred, ...FALLBACK_ORDER.filter((provider) => provider !== preferred)];
-}
-
 async function automaticOrder(signal?: AbortSignal): Promise<AIProviderId[]> {
   const statuses = await HealthService.checkAll({ signal });
   const online = statuses
@@ -63,7 +59,7 @@ export const ProviderManager = {
     const preferred = request.provider ?? "gemini";
     const candidates: AIProviderId[] = request.mode === "automatic"
       ? await automaticOrder(request.signal)
-      : orderFrom(preferred);
+      : [preferred];
     const attemptedProviders: AIProviderId[] = [];
     let lastError: unknown;
 
@@ -116,13 +112,24 @@ export const ProviderManager = {
     );
   },
 
-  inspect(providerId: AIProviderId, signal?: AbortSignal) {
-    return HealthService.check(providerId, { signal });
+  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
+    return HealthService.check(providerId, options);
   },
 
   async status(options?: { force?: boolean; signal?: AbortSignal }): Promise<AIManagerStatus> {
+    const statuses = await HealthService.checkAll(options);
     return {
-      providers: await HealthService.checkAll(options),
+      providers: statuses.map((status) => {
+        const providerLogs = logs.filter((log) => log.provider === status.provider);
+        const successes = providerLogs.filter((log) => log.success);
+        return {
+          ...status,
+          averageResponseTimeMs: successes.length
+            ? Math.round(successes.reduce((total, log) => total + log.latencyMs, 0) / successes.length)
+            : status.latencyMs,
+          lastError: providerLogs.find((log) => !log.success)?.error ?? status.error,
+        };
+      }),
       statistics: statistics(),
       logs: logs.slice(0, 30),
     };

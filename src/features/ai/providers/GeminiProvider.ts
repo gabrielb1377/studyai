@@ -41,6 +41,7 @@ export const GeminiProvider: AIProvider = {
         available: false,
         latencyMs: 0,
         models: [{ name: MODEL }],
+        endpoint: API_URL,
         error: "GEMINI_API_KEY não configurada.",
       };
     }
@@ -62,6 +63,7 @@ export const GeminiProvider: AIProvider = {
         available: response.ok,
         latencyMs: Math.round(performance.now() - startedAt),
         models: [{ name: MODEL }],
+        endpoint: API_URL,
         error: response.ok ? undefined : "Gemini indisponível.",
       };
     } catch {
@@ -70,6 +72,7 @@ export const GeminiProvider: AIProvider = {
         available: false,
         latencyMs: Math.round(performance.now() - startedAt),
         models: [{ name: MODEL }],
+        endpoint: API_URL,
         error: "Gemini indisponível.",
       };
     } finally {

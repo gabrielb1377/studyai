@@ -32,16 +32,21 @@ export function OrganizationFileItem({
   onRename,
   onMove,
   onDelete,
+  selected = false,
+  onSelectedChange,
 }: {
   file: Material;
   onRename: (file: Material) => void;
   onMove: (file: Material) => void;
   onDelete: (file: Material) => void;
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }) {
   const Icon = fileIcons[file.fileType];
 
   return (
-    <li className="group flex min-w-0 items-center gap-3 rounded-lg border bg-card px-3 py-3 transition-colors hover:border-primary/30 sm:px-4">
+    <li draggable onDragStart={(event) => { event.dataTransfer.setData("text/material-id", file.id); event.dataTransfer.setData("text/plain", file.id); event.dataTransfer.effectAllowed = "move"; }} className="group flex min-w-0 cursor-grab items-center gap-3 rounded-lg border bg-card px-3 py-3 transition-colors hover:border-primary/30 active:cursor-grabbing sm:px-4">
+      <input type="checkbox" checked={selected} onChange={(event) => onSelectedChange?.(event.target.checked)} aria-label={`Selecionar ${file.name}`} className="size-4 accent-primary" />
       <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
         <Icon className="size-4" strokeWidth={1.75} aria-hidden="true" />
       </span>

@@ -1,13 +1,10 @@
 import "server-only";
 
-import { AIError } from "../AIErrors";
-import type { AIProvider } from "../AIProvider";
+import { createOpenAICompatibleProvider } from "./OpenAICompatibleProvider";
 
-export const OpenRouterProvider: AIProvider = {
+export const OpenRouterProvider = createOpenAICompatibleProvider({
   id: "openrouter",
   name: "OpenRouter",
-  available: false,
-  async generate() {
-    throw new AIError("O provider OpenRouter ainda não está disponível.", "PROVIDER_UNAVAILABLE", 503, this.id);
-  },
-};
+  baseUrl: "https://openrouter.ai/api/v1",
+  apiKey: () => process.env.OPENROUTER_API_KEY,
+});

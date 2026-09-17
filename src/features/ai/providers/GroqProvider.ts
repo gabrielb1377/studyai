@@ -1,13 +1,10 @@
 import "server-only";
 
-import { AIError } from "../AIErrors";
-import type { AIProvider } from "../AIProvider";
+import { createOpenAICompatibleProvider } from "./OpenAICompatibleProvider";
 
-export const GroqProvider: AIProvider = {
+export const GroqProvider = createOpenAICompatibleProvider({
   id: "groq",
   name: "Groq",
-  available: false,
-  async generate() {
-    throw new AIError("O provider Groq ainda não está disponível.", "PROVIDER_UNAVAILABLE", 503, this.id);
-  },
-};
+  baseUrl: "https://api.groq.com/openai/v1",
+  apiKey: () => process.env.GROQ_API_KEY,
+});

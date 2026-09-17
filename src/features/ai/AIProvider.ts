@@ -50,6 +50,9 @@ export type AIProviderStatus = {
   checkedAt?: string;
   memoryBytes?: number;
   error?: string;
+  endpoint?: string;
+  averageResponseTimeMs?: number;
+  lastError?: string;
 };
 
 export type AIModelPreferences = Partial<Record<AIProviderId, string>>;

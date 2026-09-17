@@ -1,8 +1,14 @@
-# Handoff Atual — Sprint 25: Smart Study Generator
+# Handoff Atual — Sprint 25.1: UX, Navegação e Persistência
 
 Atualizado em 16 de setembro de 2026.
 
 ## Estado entregue
+
+O Workspace agora possui cinco abas exclusivas (`Material`, `IA`, `Flashcards`, `Quiz` e `Notas`) e uma navegação lateral por matéria, tema e arquivo. Trocar de aba fecha visualmente a anterior e todo o estado leve é restaurado após refresh ou reabertura: arquivo, aba, PDF, capítulo, marcadores, flashcard, quiz e nota.
+
+A Biblioteca ganhou ações rápidas, seleção múltipla, favoritos, tags, movimentação e exclusão em lote com confirmação. A tela Organizar aceita drag and drop entre temas e também oferece seleção múltipla. Notas são salvas automaticamente, sem botão de salvar.
+
+O diagnóstico de IA mostra status, modelo, endpoint, latência, tempo médio e último erro de Gemini, Ollama, OpenRouter e Groq, com teste de conexão individual. O modo manual agora respeita estritamente o provider escolhido; fallback existe somente no modo automático.
 
 Após cada extração bem-sucedida, o StudyAI agora analisa o conteúdo normalizado e cria ou enriquece automaticamente toda a estrutura de estudo. Disciplina, tema, subtemas, capítulos, palavras-chave, idioma, número de páginas, quantidade de palavras, prévia e tempo de leitura são persistidos no mesmo fluxo, sem IA externa e sem exigir organização manual.
 
@@ -62,7 +68,7 @@ Feature cliente
   → ProviderManager
   → ProviderRegistry / HealthService / LatencyService
   → AIProvider
-  → GeminiProvider | OllamaProvider | OpenRouterProvider (stub) | GroqProvider (stub)
+  → GeminiProvider | OllamaProvider | OpenRouterProvider | GroqProvider
 ```
 
 ## AI Core
@@ -80,9 +86,9 @@ Feature cliente
 - `LatencyService.ts`: medição compartilhada de latência.
 - `ProviderManager.ts`: seleção manual/automática, fallback, logs e métricas.
 
-Gemini e Ollama são providers funcionais. OpenRouter e Groq são stubs seguros. A página de Configurações lista o health de todos, permite seleção manual ou automática e mostra status, latência, modelo, memória, versão, última verificação e métricas de geração.
+Gemini, Ollama, OpenRouter e Groq são providers funcionais quando suas respectivas configurações estão disponíveis. A página de Configurações lista health, endpoint, último erro, latência, tempo médio, modelo, memória, versão e última verificação, além de testar cada conexão separadamente.
 
-No modo manual, o provider preferencial é a primeira tentativa. No modo automático, o Manager seleciona o provider online de menor latência. Qualquer falha inicia a cadeia Ollama → Gemini → Groq → OpenRouter, sem exigir alterações no Tutor, Resumos, Flashcards, Quiz ou RAG. Se todos falharem, a interface recebe um erro normalizado e preserva a pergunta do usuário.
+No modo manual, somente o provider selecionado é usado. No modo automático, o Manager seleciona o provider online de menor latência e uma falha inicia a cadeia Ollama → Gemini → Groq → OpenRouter. Se todos falharem, a interface recebe um erro normalizado e preserva a pergunta do usuário.
 
 ```text
 Configurações / Feature
@@ -192,6 +198,8 @@ npm run build
 Além dos cenários de Storage V2, a suíte cobre a geração automática a partir de PDF Estácio, PDF comum, PDF OCR, DOCX e PPTX, incluindo preservação dos metadados quando um material é movido manualmente.
 
 Validação final da Sprint 25: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 41 testes Playwright aprovados.
+
+Validação final da Sprint 25.1: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 47 testes Playwright aprovados. A cobertura adicional valida diagnóstico online/offline por provider, restauração do Workspace, flashcard e quiz atuais, navegação lateral, abertura direta de materiais, ações em lote e drag and drop.
 
 ## Próximo passo seguro
 

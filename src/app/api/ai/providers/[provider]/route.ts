@@ -14,7 +14,11 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Provider de IA inválido." }, { status: 400 });
   }
 
-  const status = await AIService.inspect(provider, request.signal);
+  const url = new URL(request.url);
+  const status = await AIService.inspect(provider, {
+    force: url.searchParams.get("refresh") === "true",
+    signal: request.signal,
+  });
   return NextResponse.json(status, {
     headers: { "Cache-Control": "no-store" },
   });

@@ -36,13 +36,19 @@ export function useNotes(studyId?: string) {
     updateNotes((current) => [note, ...current]);
     return note;
   };
+  const save = useCallback(
+    (note: StudyNote) => updateNotes((current) => NotesService.upsert(current, note)),
+    [updateNotes],
+  );
+  const remove = useCallback(
+    (noteId: string) => updateNotes((current) => NotesService.remove(current, noteId)),
+    [updateNotes],
+  );
 
   return {
     notes,
     create,
-    save: (note: StudyNote) =>
-      updateNotes((current) => NotesService.upsert(current, note)),
-    remove: (noteId: string) =>
-      updateNotes((current) => NotesService.remove(current, noteId)),
+    save,
+    remove,
   };
 }

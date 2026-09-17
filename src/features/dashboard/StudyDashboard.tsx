@@ -27,7 +27,7 @@ export function StudyDashboard() {
     <>
       <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} />
       <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
-        <ContinueStudying records={records} />
+        <ContinueStudying records={records} materials={materials} />
         <ImportMaterial />
       </div>
       <div className="grid gap-5 lg:grid-cols-3">
