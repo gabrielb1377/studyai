@@ -12,6 +12,15 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     (context.document.language === undefined || typeof context.document.language === "string") &&
     Array.isArray(context.document.keywords) && context.document.keywords.every((keyword) => typeof keyword === "string")
   );
+  const validLearning = context.learning === undefined || (
+    typeof context.learning === "object" && context.learning !== null &&
+    typeof context.learning.knowledge === "number" &&
+    typeof context.learning.confidence === "number" &&
+    (context.learning.mastery === "Iniciante" || context.learning.mastery === "Intermediário" || context.learning.mastery === "Avançado") &&
+    (context.learning.classification === "difficult" || context.learning.classification === "forgotten" || context.learning.classification === "strong" || context.learning.classification === "never_studied" || context.learning.classification === "developing") &&
+    (context.learning.priority === "Alta" || context.learning.priority === "Média" || context.learning.priority === "Baixa") &&
+    Array.isArray(context.learning.reasons) && context.learning.reasons.every((reason) => typeof reason === "string")
+  );
 
   return typeof context.studyId === "string" && typeof context.title === "string" &&
     typeof context.subject === "string" && typeof context.topic === "string" &&
@@ -22,5 +31,5 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     ) && (context.summary === undefined || (
       typeof context.summary === "object" && context.summary !== null &&
       typeof context.summary.title === "string" && typeof context.summary.content === "string"
-    )) && validDocument;
+    )) && validDocument && validLearning;
 }

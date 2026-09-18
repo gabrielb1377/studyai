@@ -6,6 +6,7 @@ import type { TutorConversation } from "@/types/tutor";
 import { TutorService } from "../services/TutorService";
 import { TutorStorage } from "../services/TutorStorage";
 import { useTutorContext } from "./useTutorContext";
+import { LearningService } from "@/features/learning/LearningService";
 
 export function useTutor() {
   const context = useTutorContext();
@@ -108,6 +109,7 @@ export function useTutor() {
           metadata: response.metadata,
         }),
       );
+      if (context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: context.studyId });
       return true;
     } catch (requestError) {
       if (!streamedText) {

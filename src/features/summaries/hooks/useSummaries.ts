@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { StudySummary } from "@/types/summary";
 import { SummaryService } from "../services/SummaryService";
 import { SUMMARIES_UPDATE_EVENT, SummaryStorage } from "../services/SummaryStorage";
+import { LearningService } from "@/features/learning/LearningService";
 
 export function useSummaries(studyId?: string) {
   const [summaries, setSummaries] = useState<StudySummary[]>([]);
@@ -40,7 +41,11 @@ export function useSummaries(studyId?: string) {
   return {
     summaries: visibleSummaries,
     isReady,
-    saveSummary: (summary: StudySummary) => updateSummaries((current) => SummaryService.save(current, summary)),
+    saveSummary: (summary: StudySummary) => {
+      const isNew = !summaries.some((item) => item.id === summary.id);
+      updateSummaries((current) => SummaryService.save(current, summary));
+      if (isNew && summary.studyId) LearningService.enqueueActivity({ type: "summary", studyId: summary.studyId });
+    },
     deleteSummary: (summaryId: string) => updateSummaries((current) => SummaryService.remove(current, summaryId)),
   };
 }

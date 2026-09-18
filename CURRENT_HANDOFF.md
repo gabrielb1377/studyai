@@ -1,8 +1,30 @@
-# Handoff Atual — Sprint 25.2: Polish, UX e Performance
+# Handoff Atual — Sprint 26: Learning Engine
 
 Atualizado em 17 de setembro de 2026.
 
 ## Estado entregue
+
+A Sprint 26 adiciona o primeiro Learning Engine do StudyAI sem remover o fluxo existente. Toda leitura, conversa, revisão de flashcard, resultado de quiz, resumo e nota alimenta um perfil local persistido. O Dashboard passa a mostrar plano do dia, revisões, tempo, maior dificuldade, maior progresso, último estudo, streak, calor de estudo, retenção e Knowledge Score por tema.
+
+O conhecimento é calculado com evidências reais de quiz, flashcards, tempo, frequência e recência. O motor de prioridade explica a classificação com erros, dias sem revisão, cartões vencidos e domínio estimado. Flashcards usam SM-2 e persistem próxima revisão, intervalo, facilidade e repetições, mantendo o contrato preparado para FSRS. O Tutor recebe conhecimento, confiança, domínio e prioridade antes de montar o prompt e adapta a didática sem acessar arquivos físicos.
+
+```text
+Atividade real
+  → LearningService
+  → LearningStorage / IndexedDB metadata
+  → KnowledgeEngine
+  → StudyPriorityEngine
+  → Plano diário / Dashboard / Tutor / Revisões
+```
+
+### Serviços do Learning Engine
+
+- `LearningService`: entrada única dos eventos e fila serializada em background.
+- `LearningStorage`: perfil versionado no IndexedDB.
+- `LearningCalculator`: streak, plano diário, calor de estudo e estatísticas.
+- `KnowledgeEngine`: Knowledge Score, domínio, dificuldade e insights de quiz.
+- `StudyPriorityEngine`: prioridade e motivos por tema.
+- `ReviewScheduler`: SM-2 e fronteira futura para FSRS.
 
 A Sprint 25.2 conclui as pendências da 25.1. O AI Core agora possui compressão de histórico, top 3 chunks deduplicados, contagem interna de tokens, cache LRU, retry exponencial do Gemini e proteção da janela de contexto dos providers OpenAI-compatible. Tutor e providers transmitem respostas progressivamente por NDJSON, com SSE/NDJSON normalizados no servidor.
 
@@ -211,6 +233,8 @@ Validação final da Sprint 25.1: ESLint aprovado, TypeScript aprovado, build de
 
 Validação final da Sprint 25.2: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 54 testes Playwright aprovados. Os novos cenários cobrem streaming NDJSON, Markdown/GFM/KaTeX, altura e rolagem do chat, cache de IA, compressão e métricas de tokens, persistência do PDF no OPFS, busca Ctrl+F, drawer de diagnóstico, criação de hierarquia por drag and drop e carregamento lazy do PDF.js.
 
+Validação final da Sprint 26: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 62 testes Playwright aprovados. A cobertura nova valida Knowledge Score, SM-2, prioridade explicável, plano diário, Dashboard inteligente, contexto adaptativo do Tutor, persistência do agendamento dos Flashcards e insights do Quiz.
+
 ## Próximo passo seguro
 
-Medir a qualidade e o custo dos prompts com providers reais em materiais grandes, mantendo os limites, o cache e a compressão atuais. Uma futura persistência do cache de IA deve considerar privacidade, invalidação por modelo e quota antes de sair da memória do servidor.
+Calibrar os pesos do Knowledge Score com uso real e amostras maiores, mantendo as explicações de prioridade auditáveis. FSRS pode ser introduzido posteriormente pela fronteira do `ReviewScheduler`, sem alterar Flashcards, Dashboard ou LearningService.

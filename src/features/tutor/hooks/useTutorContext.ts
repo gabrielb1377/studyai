@@ -15,12 +15,14 @@ export function useTutorContext() {
     window.addEventListener("studyai:notes-updated", handleReload);
     window.addEventListener("studyai:summaries-updated", handleReload);
     window.addEventListener("studyai:extraction-updated", handleReload);
+    window.addEventListener("studyai:learning-updated", handleReload);
 
     return () => {
       window.removeEventListener("studyai:study-updated", handleReload);
       window.removeEventListener("studyai:notes-updated", handleReload);
       window.removeEventListener("studyai:summaries-updated", handleReload);
       window.removeEventListener("studyai:extraction-updated", handleReload);
+      window.removeEventListener("studyai:learning-updated", handleReload);
     };
   }, []);
 

@@ -7,6 +7,14 @@ export type TutorStudyContext = {
   topic: string;
   status: StudyStatus;
   progress: number;
+  learning?: {
+    knowledge: number;
+    confidence: number;
+    mastery: "Iniciante" | "Intermediário" | "Avançado";
+    classification: "difficult" | "forgotten" | "strong" | "never_studied" | "developing";
+    priority: "Alta" | "Média" | "Baixa";
+    reasons: string[];
+  };
   summary?: {
     title: string;
     content: string;

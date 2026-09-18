@@ -1,4 +1,5 @@
 export type FlashcardDifficulty = "easy" | "medium" | "hard";
+export type ReviewAlgorithm = "sm2" | "fsrs";
 
 export type Flashcard = {
   id: string;
@@ -11,4 +12,9 @@ export type Flashcard = {
   correctAnswers: number;
   wrongAnswers: number;
   lastReviewedAt?: string;
+  nextReviewAt?: string;
+  reviewIntervalDays?: number;
+  easeFactor?: number;
+  repetitions?: number;
+  reviewAlgorithm?: ReviewAlgorithm;
 };

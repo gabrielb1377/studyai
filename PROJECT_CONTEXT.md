@@ -37,6 +37,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/ai` | AIService, contrato de providers, seleção, prompts, contexto, retrieval e erros. |
 | `src/features/tutor` | Conversas, persistência e interface do Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
+| `src/features/learning` | Perfil de aprendizagem, Knowledge Score, prioridade, SM-2, plano diário, estatísticas e adaptação do Tutor. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
 | `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
@@ -60,6 +61,8 @@ O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 1. Nenh
 | `quizzes` | Questões e resultados identificados pelo campo `kind`. |
 | `transcriptions`, `ocr` | Resultados pesados separados por arquivo e estudo. |
 | `metadata` | Estado de migração, índice semântico e conversas do Tutor. |
+
+O perfil local do Learning Engine também utiliza `metadata`, sob a chave versionada `learning-profile:v1`. Ele mantém somente métricas e até mil eventos recentes; materiais e conteúdo extraído continuam em seus stores próprios.
 
 `StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
 
@@ -128,7 +131,22 @@ TutorWorkspace
   → stream NDJSON para o cliente
 ```
 
-O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo relacionado e notas do mesmo tema. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos. O RAG remove duplicações e envia somente os três melhores trechos. `ContextCompressor` resume de forma extrativa o histórico antigo, preserva as mensagens recentes e respeita orçamentos de tokens antes de `PromptBuilder` e `ContextBuilder`. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`.
+O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo, notas e o perfil calculado pelo Learning Engine. Conhecimento, confiança, domínio, classificação e prioridade orientam o PromptBuilder a aprofundar, revisar fundamentos ou propor desafios sem alterar os materiais recuperados. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos. O RAG remove duplicações e envia somente os três melhores trechos. `ContextCompressor` resume de forma extrativa o histórico antigo, preserva as mensagens recentes e respeita orçamentos de tokens antes de `PromptBuilder` e `ContextBuilder`. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`.
+
+## Learning Engine
+
+```text
+Leitura | Tutor | Quiz | Flashcard | Resumo | Nota
+  → LearningService
+  → fila assíncrona / LearningStorage
+  → perfil e métricas por tema
+  → KnowledgeEngine + StudyPriorityEngine
+  → plano diário + Dashboard + Tutor adaptativo
+```
+
+`KnowledgeEngine` combina quiz, retenção dos flashcards, tempo, frequência e recência. O resultado classifica temas difíceis, esquecidos, fortes, nunca estudados ou em desenvolvimento. `StudyPriorityEngine` pondera lacuna de conhecimento, tempo sem revisão, erros e flashcards vencidos, sempre expondo os motivos. `ReviewScheduler` implementa SM-2 e persiste próxima revisão, intervalo, facilidade e repetições em cada flashcard; o campo de algoritmo permite a futura adoção de FSRS sem mudar os consumidores.
+
+O plano diário é determinístico e criado a partir dos estudos, prioridades, revisões pendentes e atividades do dia. Cálculos são pequenos e memoizados; persistência e atualização do perfil ocorrem fora da interação principal por IndexedDB e `requestIdleCallback`.
 
 `AIProvider` define o contrato comum. Gemini, Ollama, OpenRouter e Groq possuem health check e geração server-only; os dois últimos usam o contrato OpenAI-compatible e só ficam online quando suas chaves estão configuradas. `ProviderRegistry` é o único catálogo, `HealthService` mantém verificações recentes em cache e `LatencyService` mede health e geração. No modo manual, o provider escolhido é estrito. No automático, providers online são ordenados pela menor latência antes da cadeia de fallback Ollama → Gemini → Groq → OpenRouter.
 

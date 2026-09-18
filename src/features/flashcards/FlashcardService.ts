@@ -2,6 +2,7 @@ import type { Flashcard, FlashcardDifficulty } from "@/types/flashcard";
 import { StorageManager } from "@/lib/storage/StorageManager";
 import { AIClient } from "@/features/ai/AIClient";
 import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
+import { ReviewScheduler } from "@/features/learning/ReviewScheduler";
 
 type GeneratedFlashcard = Pick<Flashcard, "question" | "answer" | "difficulty">;
 
@@ -45,6 +46,10 @@ export const FlashcardService = {
       updatedAt: now,
       correctAnswers: 0,
       wrongAnswers: 0,
+      easeFactor: 2.5,
+      repetitions: 0,
+      reviewIntervalDays: 0,
+      reviewAlgorithm: "sm2",
     }));
   },
 
@@ -56,6 +61,7 @@ export const FlashcardService = {
         wrongAnswers: card.wrongAnswers + (wasCorrect ? 0 : 1),
         lastReviewedAt: now,
         updatedAt: now,
+        ...ReviewScheduler.schedule(card, wasCorrect, new Date(now)),
       }
       : card,
     );

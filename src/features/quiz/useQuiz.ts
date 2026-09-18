@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { QuizQuestion, QuizResult } from "@/types/quiz";
 import type { StudyRecord } from "@/types/study-engine";
 import { QuizService } from "./QuizService";
+import { LearningService } from "@/features/learning/LearningService";
 
 type QuizStore = { questions: QuizQuestion[]; results: QuizResult[] };
 
@@ -79,11 +80,19 @@ export function useQuiz(studyId?: string) {
     isGenerating,
     error,
     generate,
-    saveResult: (result: QuizResult) =>
+    saveResult: (result: QuizResult) => {
       updateStore((current) => ({
         ...current,
         results: [result, ...current.results],
-      })),
+      }));
+      LearningService.enqueueActivity({
+        type: "quiz",
+        studyId: result.studyId,
+        correctAnswers: result.correctAnswers,
+        wrongAnswers: result.wrongAnswers,
+        score: result.score,
+      });
+    },
     clearError: () => setError(null),
   };
 }

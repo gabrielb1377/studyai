@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Flashcard } from "@/types/flashcard";
 import type { StudyRecord } from "@/types/study-engine";
 import { FlashcardService } from "./FlashcardService";
+import { LearningService } from "@/features/learning/LearningService";
 
 export function useFlashcards(studyId?: string) {
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -54,7 +55,16 @@ export function useFlashcards(studyId?: string) {
     error,
     reviewedCount,
     generate,
-    review: (cardId: string, wasCorrect: boolean) => updateCards((current) => FlashcardService.review(current, cardId, wasCorrect)),
+    review: (cardId: string, wasCorrect: boolean) => {
+      const card = allCards.find((item) => item.id === cardId);
+      updateCards((current) => FlashcardService.review(current, cardId, wasCorrect));
+      if (card) LearningService.enqueueActivity({
+        type: "flashcard",
+        studyId: card.studyId,
+        correctAnswers: wasCorrect ? 1 : 0,
+        wrongAnswers: wasCorrect ? 0 : 1,
+      });
+    },
     clearError: () => setError(null),
   };
 }

@@ -23,6 +23,24 @@ export const ContextBuilder = {
     if (context.summary) {
       blocks.push(`Resumo salvo (${context.summary.title}):\n${context.summary.content}`);
     }
+    if (context.learning) {
+      const guidance = context.learning.classification === "difficult"
+        ? "Adapte a resposta: explique passo a passo, use exemplos concretos e proponha uma verificação curta."
+        : context.learning.classification === "forgotten"
+          ? "Adapte a resposta: faça uma retomada breve dos fundamentos antes de avançar."
+          : context.learning.classification === "strong"
+            ? "Adapte a resposta: seja conciso e proponha conexões ou desafios mais avançados."
+            : "Adapte a resposta ao nível atual e confirme a compreensão antes de aprofundar.";
+      blocks.push([
+        "Perfil de aprendizagem do tema:",
+        `Conhecimento estimado: ${context.learning.knowledge}%`,
+        `Confiança da estimativa: ${context.learning.confidence}%`,
+        `Domínio: ${context.learning.mastery}`,
+        `Prioridade: ${context.learning.priority}`,
+        `Sinais: ${context.learning.reasons.join("; ")}`,
+        guidance,
+      ].join("\n"));
+    }
     if (context.document) {
       blocks.push([
         "Análise automática do documento:",

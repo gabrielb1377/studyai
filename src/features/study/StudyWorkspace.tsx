@@ -20,6 +20,7 @@ import { StudyStatistics } from "./StudyStatistics";
 import { StudyNavigationSidebar } from "./StudyNavigationSidebar";
 import { useStudyEngine } from "./hooks/useStudyEngine";
 import { WorkspacePersistence, workspaceTabs, type StudyWorkspaceState, type WorkspaceTab } from "./services/WorkspacePersistence";
+import { useLearningSession } from "@/features/learning/hooks/useLearningSession";
 
 const lazyState = <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">Carregando área de estudo…</p>;
 const TutorWorkspace = dynamic(() => import("@/features/tutor/TutorWorkspace").then((module) => module.TutorWorkspace), { loading: () => lazyState });
@@ -48,6 +49,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   const { cards: flashcards } = useFlashcards(studyId);
   const { results: quizzes } = useQuiz(studyId);
   const [workspace, setWorkspace] = useState<StudyWorkspaceState | null>(null);
+  useLearningSession(studyId);
 
   const studyMaterials = useMemo<StudyMaterial[]>(() => {
     if (!studyId) return [];
@@ -131,7 +133,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
             <TabsContent value="quiz"><QuizWorkspace study={record} /></TabsContent>
             <TabsContent value="notes"><NotesWorkspace study={record} /></TabsContent>
           </Tabs>
-          <StudyStatistics record={record} flashcardCount={flashcards.length} quizCount={quizzes.length} onProgressChange={(progress) => setProgress(record.studyId, progress)} onStatusChange={(status) => setStatus(record.studyId, status)} />
+          <StudyStatistics record={record} flashcards={flashcards} quizzes={quizzes} onProgressChange={(progress) => setProgress(record.studyId, progress)} onStatusChange={(status) => setStatus(record.studyId, status)} />
         </div>
       </div>
     </>

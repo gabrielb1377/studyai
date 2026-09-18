@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowUpRight, Search } from "lucide-react";
 import {
   Dialog,
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { navigation } from "@/lib/navigation";
 
 export function SearchDialog() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const normalize = (value: string) =>
@@ -74,7 +76,11 @@ export function SearchDialog() {
             <Link
               key={href}
               href={href}
-              onClick={() => setOpen(false)}
+              onClick={(event) => {
+                event.preventDefault();
+                setOpen(false);
+                router.push(href);
+              }}
               className="flex items-center gap-3 rounded-lg p-3 hover:bg-accent"
             >
               <Icon className="size-5 text-muted-foreground" />
