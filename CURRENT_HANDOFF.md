@@ -1,8 +1,37 @@
-# Handoff Atual — Sprint 27: Semantic Knowledge Engine
+# Handoff Atual — Sprint 28: Workspace 2.0
 
-Atualizado em 18 de setembro de 2026.
+Atualizado em 21 de setembro de 2026.
 
-## Estado entregue na Sprint 27
+## Estado entregue na Sprint 28
+
+O ambiente de Estudo deixou de ser uma sequência de ferramentas isoladas e passou a ser um Workspace multipainel. Material, Tutor, resumos, flashcards, quiz, notas, mapa de conhecimento e estatísticas podem permanecer abertos simultaneamente, com redimensionamento por ponteiro ou teclado, minimizar, maximizar, fechar, criar instâncias adicionais e restaurar o estado após reabrir o navegador.
+
+```text
+StudyWorkspace
+  → WorkspaceCanvas
+  → WorkspaceManager
+  → LayoutManager + PanelManager
+  → WorkspaceStorage (estado leve versionado)
+  → painéis lazy / ferramentas existentes
+  → SessionTracker / Learning Engine
+```
+
+Layouts nativos (`Leitura`, `Revisão`, `Exercícios`, `Tutor` e `Planejamento`) convivem com layouts personalizados. A navegação lateral usa a hierarquia Curso → Semestre → Matéria → Tema → Arquivo. O Tutor mantém a conversa ativa por instância de painel; notas mantêm a seleção por painel; listas extensas de materiais são virtualizadas; componentes ocultos não são montados.
+
+O PDF Pro mantém zoom, página, capítulo e favoritos e adiciona marca-texto colorido, comentários, desenhos, links internos e histórico de páginas. As notas usam links Wiki para notas, materiais, capítulos e conceitos. O Mapa de Conhecimento expõe progresso e dificuldade do Learning Engine. A Pesquisa Global 2.0 busca, em uma única interface, materiais, notas, resumos, flashcards, quizzes, conceitos e relações, usando snapshot curto em cache.
+
+Sessões do Workspace registram início, fim, foco, pausas, arquivos e ferramentas utilizadas no IndexedDB; ao concluir, o tempo é enviado ao Learning Engine. Apenas preferências leves de layout, dimensões, scroll, abas abertas e anotações de visualização ficam no `localStorage`, conforme o contrato do Storage V2.
+
+### Serviços do Workspace
+
+- `WorkspaceManager`: fachada para carregar, salvar, abrir ferramentas e aplicar layouts.
+- `LayoutManager`: layouts padrão e personalizados.
+- `PanelManager`: criação, remoção, redimensionamento, minimizar e maximizar.
+- `WorkspaceStorage`: persistência versionada do estado leve por estudo.
+- `WorkspaceState`: fábrica e contratos iniciais.
+- `SessionTracker`: sessões persistentes e integração com o Learning Engine.
+
+## Contexto preservado da Sprint 27
 
 O StudyAI passa a transformar cada conteúdo extraído em uma estrutura de conhecimento persistente. O novo módulo `src/features/semantic` identifica conceitos, definições, entidades, palavras-chave, termos técnicos, siglas, fórmulas, tecnologias, pessoas, organizações, exemplos e observações. Relações explícitas e por coocorrência formam um grafo navegável por documento e Study.
 
@@ -64,7 +93,7 @@ Os arquivos originais são persistidos no OPFS quando disponível. O leitor ofer
 
 O pipeline não ocupa mais o Dashboard: status, logs, tempo, OCR, chunks, embeddings e uso de IA ficam no drawer “Detalhes da ingestão”. Resumos e organização usam autosave; soltar um arquivo na área de nova estrutura permite criar curso, semestre, matéria e tema no mesmo fluxo.
 
-O Workspace agora possui cinco abas exclusivas (`Material`, `IA`, `Flashcards`, `Quiz` e `Notas`) e uma navegação lateral por matéria, tema e arquivo. Trocar de aba fecha visualmente a anterior e todo o estado leve é restaurado após refresh ou reabertura: arquivo, aba, PDF, capítulo, marcadores, flashcard, quiz e nota.
+O Workspace preserva os atalhos das áreas `Material`, `IA`, `Mapa de Conhecimento`, `Flashcards`, `Quiz` e `Notas`, agora como entradas para painéis independentes. Todo o estado leve continua restaurado após refresh ou reabertura: layout, painéis, arquivo, PDF, capítulo, marcadores, flashcard, quiz e nota.
 
 A Biblioteca ganhou ações rápidas, seleção múltipla, favoritos, tags, movimentação e exclusão em lote com confirmação. A tela Organizar aceita drag and drop entre temas e também oferece seleção múltipla. Notas são salvas automaticamente, sem botão de salvar.
 
@@ -267,6 +296,8 @@ Validação final da Sprint 26: ESLint aprovado, TypeScript aprovado, build de p
 
 Validação final da Sprint 27: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 67 testes Playwright aprovados. A cobertura semântica valida extração de conceitos, relações, preservação de definições nos chunks, expansão de busca, pré-requisitos do Learning Engine, persistência do grafo, Biblioteca, Dashboard, Mapa de Conhecimento e contexto enviado ao Tutor.
 
+Validação final da Sprint 28: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 70 testes Playwright aprovados. `tests/workspace-v2.spec.ts` cobre painéis, redimensionamento por teclado, restauração, layouts, lazy rendering, Tutor, notas Wiki, pesquisa global, sessões e PDF Pro.
+
 ## Próximo passo seguro
 
-Calibrar regras de extração e relações com documentos reais maiores, mantendo cada evidência auditável. Uma futura evolução pode executar parsing muito volumoso em Web Worker e adicionar edição manual do grafo sem alterar o contrato persistido.
+Validar ergonomia dos layouts com acervos reais extensos e diferentes densidades de tela. Uma evolução segura é mover cálculos de grafos muito grandes para Web Worker e permitir edição manual de relações, preservando os contratos do Workspace e do grafo.

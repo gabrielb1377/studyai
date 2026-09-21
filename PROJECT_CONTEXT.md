@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 18 de setembro de 2026.
+Atualizado em 21 de setembro de 2026.
 
 ## Propósito
 
@@ -39,6 +39,8 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/learning` | Perfil de aprendizagem, Knowledge Score, prioridade, SM-2, plano diário, estatísticas e adaptação do Tutor. |
 | `src/features/semantic` | Parser semântico, conceitos, relações, grafo de conhecimento, busca conceitual, chunking semântico e integração com aprendizagem. |
+| `src/features/workspace` | Canvas multipainel, layouts, persistência leve, virtualização e sessões de estudo. |
+| `src/features/search` | Pesquisa global unificada sobre os registros estruturados do IndexedDB. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
 | `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
@@ -68,7 +70,13 @@ O perfil local do Learning Engine também utiliza `metadata`, sob a chave versio
 
 `StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
 
-Preferências de navegação permanecem no `localStorage`, por serem pequenas e específicas do dispositivo. `WorkspacePersistence` mantém aba, material, página e zoom do PDF, capítulo, marcadores, flashcard, quiz e nota por `studyId`. Conversas e a conversa ativa do Tutor permanecem no store `metadata` do IndexedDB. `MaterialBinaryStorage` grava o arquivo original no OPFS usando o id estável do material; ausência de suporte degrada para a re-seleção local.
+Preferências de navegação permanecem no `localStorage`, por serem pequenas e específicas do dispositivo. `WorkspaceStorage` mantém o layout versionado, dimensões, posição lógica, painéis, recursos abertos, scroll e filtros por `studyId`. `WorkspacePersistence` preserva o contrato legado e o estado específico do PDF, incluindo zoom, página, capítulo, favoritos, anotações e histórico. Conversas, sessões e a conversa ativa do Tutor permanecem no store `metadata` do IndexedDB. `MaterialBinaryStorage` grava o arquivo original no OPFS usando o id estável do material; ausência de suporte degrada para a re-seleção local.
+
+## Workspace 2.0
+
+O `WorkspaceCanvas` compõe as features existentes sem duplicar regras de negócio. Painéis são instâncias independentes, renderizados sob demanda e limitados para preservar desempenho. Layouts nativos e personalizados são reconstruídos por fábricas tipadas. Materiais extensos usam virtualização; buscas globais reutilizam um snapshot curto em cache; painéis minimizados não montam suas ferramentas.
+
+O `SessionTracker` persiste sessões no IndexedDB e registra foco no Learning Engine. A Sidebar reflete Curso → Semestre → Matéria → Tema → Arquivo. O PDF Pro e as notas Wiki persistem somente estado derivado e nunca duplicam o arquivo físico. A pesquisa global consulta `documents`, `notes`, `summaries`, `flashcards`, `quizzes` e `knowledge` exclusivamente por `StorageManager`.
 
 Na primeira abertura, `Migration` verifica as chaves legadas, grava tudo em uma única transação e remove o legado somente depois do commit. Assim, uma falha nunca apaga a fonte anterior. O `localStorage` permanece somente para preferências leves: tema, provider/configurações de IA, idioma, sidebar, workspace e última tela. A rota interna `/storage` mostra versão, contagens, espaço estimado e data da migração.
 

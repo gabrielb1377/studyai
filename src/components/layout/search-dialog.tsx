@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, Search } from "lucide-react";
+import { ArrowUpRight, BookOpen, BrainCircuit, FileText, Network, NotebookPen, Search, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +13,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { navigation } from "@/lib/navigation";
-import { SemanticSearchService } from "@/features/semantic/SemanticSearchService";
-import type { ConceptSearchMatch } from "@/features/semantic/types";
+import { GlobalSearchService, type GlobalSearchResult } from "@/features/search/GlobalSearchService";
 
 export function SearchDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [concepts, setConcepts] = useState<ConceptSearchMatch[]>([]);
+  const [workspaceResults, setWorkspaceResults] = useState<GlobalSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const normalize = (value: string) =>
     value
       .normalize("NFD")
@@ -43,14 +43,16 @@ export function SearchDialog() {
 
   useEffect(() => {
     if (!open || query.trim().length < 2) {
-      setConcepts([]);
+      setWorkspaceResults([]);
+      setIsSearching(false);
       return;
     }
     let active = true;
+    setIsSearching(true);
     const timer = window.setTimeout(() => {
-      void SemanticSearchService.search(query, { limit: 5 }).then((result) => {
-        if (active) setConcepts(result.concepts);
-      }).catch(() => active && setConcepts([]));
+      void GlobalSearchService.search(query).then((result) => {
+        if (active) setWorkspaceResults(result);
+      }).catch(() => active && setWorkspaceResults([])).finally(() => active && setIsSearching(false));
     }, 180);
     return () => { active = false; window.clearTimeout(timer); };
   }, [open, query]);
@@ -78,13 +80,13 @@ export function SearchDialog() {
         </button>
       </DialogTrigger>
       <DialogContent>
-        <DialogTitle>Onde você quer ir?</DialogTitle>
+        <DialogTitle>Pesquisa Global</DialogTitle>
         <DialogDescription>
-          Encontre uma página do seu workspace.
+          Encontre materiais, notas, resumos, flashcards, quizzes e conceitos.
         </DialogDescription>
         <Input
           aria-label="Pesquisar páginas"
-          placeholder="Digite o nome de uma página..."
+          placeholder="Pesquisar em todo o StudyAI..."
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -108,20 +110,24 @@ export function SearchDialog() {
               <ArrowUpRight className="size-4 text-muted-foreground" />
             </Link>
           ))}
-          {concepts.length > 0 && <p className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Conceitos encontrados</p>}
-          {concepts.map((match) => (
+          {workspaceResults.length > 0 && <p className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Conhecimento encontrado</p>}
+          {workspaceResults.map((result) => {
+            const category = { material: [FileText, "Material"], note: [NotebookPen, "Nota"], summary: [Sparkles, "Resumo"], flashcard: [BrainCircuit, "Flashcard"], quiz: [BookOpen, "Quiz"], concept: [Network, "Conceito"], knowledge: [Network, "Relação"] }[result.category] as [typeof FileText, string];
+            const Icon = category[0];
+            return (
             <Link
-              key={match.concept.id}
-              href={`/estudo?tema=${encodeURIComponent(match.concept.studyId)}&aba=knowledge`}
+              key={`${result.category}:${result.id}`}
+              href={result.href}
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-lg p-3 hover:bg-accent"
             >
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">{Math.round(match.score)}</span>
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{match.concept.name}</p><p className="line-clamp-1 text-xs text-muted-foreground">{match.concept.description}</p></div>
+              <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary"><Icon className="size-4" /></span>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{result.title}</p><p className="line-clamp-1 text-xs text-muted-foreground">{category[1]} · {result.preview || `${Math.round(result.score)}% de correspondência`}</p></div>
               <ArrowUpRight className="size-4 text-muted-foreground" />
             </Link>
-          ))}
-          {results.length === 0 && concepts.length === 0 && (
+          );})}
+          {isSearching && <p className="py-6 text-center text-sm text-muted-foreground">Pesquisando em todo o workspace…</p>}
+          {!isSearching && results.length === 0 && workspaceResults.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               Nenhuma página encontrada. Tente “Biblioteca”.
             </p>

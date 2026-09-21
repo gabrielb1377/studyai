@@ -32,14 +32,14 @@ export const TutorStorage = {
     await StorageManager.delete("metadata", STORAGE_KEY);
   },
 
-  async loadActive() {
-    const record = await StorageManager.get<MetadataRecord>("metadata", ACTIVE_KEY);
+  async loadActive(instanceId?: string) {
+    const record = await StorageManager.get<MetadataRecord>("metadata", instanceId ? `${ACTIVE_KEY}:${instanceId}` : ACTIVE_KEY);
     return typeof record?.value === "string" ? record.value : null;
   },
 
-  async saveActive(conversationId: string) {
+  async saveActive(conversationId: string, instanceId?: string) {
     await StorageManager.put("metadata", {
-      key: ACTIVE_KEY,
+      key: instanceId ? `${ACTIVE_KEY}:${instanceId}` : ACTIVE_KEY,
       value: conversationId,
       updatedAt: new Date().toISOString(),
     } satisfies MetadataRecord);

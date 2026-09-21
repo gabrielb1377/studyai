@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useKnowledgeGraphs } from "./useKnowledgeGraphs";
+import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
+import { useFlashcards } from "@/features/flashcards/useFlashcards";
+import { useQuiz } from "@/features/quiz/useQuiz";
+import { useLearningEngine } from "@/features/learning/hooks/useLearningEngine";
 
 const kindLabels = {
   concept: "Conceito", entity: "Entidade", technical_term: "Termo técnico", acronym: "Sigla", formula: "Fórmula",
@@ -20,6 +24,10 @@ const relationLabels = {
 
 export function KnowledgeMapView({ studyId }: { studyId: string }) {
   const { graphs, isLoading } = useKnowledgeGraphs(studyId);
+  const { records } = useStudyEngine();
+  const { cards } = useFlashcards(studyId);
+  const { results } = useQuiz(studyId);
+  const learning = useLearningEngine(records, cards, results);
   const [query, setQuery] = useState("");
   const [chapter, setChapter] = useState("Todos");
   const [selectedId, setSelectedId] = useState<string>();
@@ -29,13 +37,16 @@ export function KnowledgeMapView({ studyId }: { studyId: string }) {
   const filtered = concepts.filter((concept) => (chapter === "Todos" || concept.chapter === chapter) && [concept.name, concept.description, ...concept.aliases].join(" ").toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")));
   const selected = concepts.find((concept) => concept.id === selectedId) ?? filtered[0];
   const selectedRelations = selected ? relations.filter((relation) => relation.sourceId === selected.id || relation.targetId === selected.id) : [];
+  const study = records.find((record) => record.studyId === studyId);
+  const score = learning.knowledge.find((item) => item.studyId === studyId);
+  const difficulty = score?.classification === "difficult" ? "Alta" : score?.classification === "strong" ? "Baixa" : "Média";
 
   if (isLoading) return <Card className="p-8 text-center text-sm text-muted-foreground shadow-none">Carregando mapa de conhecimento…</Card>;
   if (concepts.length === 0) return <Card className="items-center gap-3 p-10 text-center shadow-none"><Network className="size-9 text-muted-foreground" /><h2 className="font-semibold">Mapa ainda não disponível</h2><p className="max-w-md text-sm text-muted-foreground">Reimporte ou processe um material com conteúdo textual para identificar conceitos e relações.</p></Card>;
 
   return (
     <section aria-labelledby="knowledge-map-title" className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="knowledge-map-title" className="text-lg font-semibold">Mapa de Conhecimento</h2><p className="text-sm text-muted-foreground">Explore conceitos, dependências e exemplos extraídos dos seus materiais.</p></div><div className="flex gap-2"><Badge variant="secondary">{concepts.length} conceitos</Badge><Badge variant="outline">{relations.length} relações</Badge></div></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 id="knowledge-map-title" className="text-lg font-semibold">Mapa de Conhecimento</h2><p className="text-sm text-muted-foreground">Explore conceitos, dependências e exemplos extraídos dos seus materiais.</p></div><div className="flex flex-wrap gap-2"><Badge variant="secondary">{concepts.length} conceitos</Badge><Badge variant="outline">{relations.length} relações</Badge><Badge variant="outline">Progresso {study?.progress ?? 0}%</Badge><Badge variant={difficulty === "Alta" ? "destructive" : "secondary"}>Dificuldade {difficulty}</Badge></div></div>
       <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
         <div className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar conceito, sigla ou definição…" className="pl-9" /></div>
         <div className="flex max-w-full gap-2 overflow-x-auto">{chapters.map((item) => <Button key={item} size="sm" variant={chapter === item ? "secondary" : "ghost"} onClick={() => setChapter(item)}>{item}</Button>)}</div>

@@ -1,11 +1,30 @@
 export const workspaceTabs = ["material", "ia", "knowledge", "flashcards", "quiz", "notes"] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
+export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
+
+export type PdfAnnotation = {
+  id: string;
+  kind: PdfAnnotationKind;
+  page: number;
+  color: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  targetPage?: number;
+  points?: Array<{ x: number; y: number }>;
+  createdAt: string;
+};
+
 export type PdfViewState = {
   page: number;
   zoom: number;
   chapterIndex: number;
   bookmarks: number[];
+  annotations?: PdfAnnotation[];
+  pageHistory?: number[];
 };
 
 export type QuizViewState = {

@@ -37,6 +37,7 @@ export function MaterialViewer({
   onNext,
   hasPrevious,
   hasNext,
+  compact = false,
 }: {
   material: StudyMaterial;
   studyId: string;
@@ -44,6 +45,7 @@ export function MaterialViewer({
   onNext: () => void;
   hasPrevious: boolean;
   hasNext: boolean;
+  compact?: boolean;
 }) {
   const Icon = materialIcons[material.type];
   const [source, setSource] = useState(material.source);
@@ -114,7 +116,7 @@ export function MaterialViewer({
               <Button type="button" size="sm" variant={pdfView === "pdf" ? "secondary" : "ghost"} role="tab" aria-selected={pdfView === "pdf"} onClick={() => setPdfView("pdf")}>PDF</Button>
             </div>
             {pdfView === "text" && <pre className="max-h-[620px] overflow-auto whitespace-pre-wrap rounded-xl border bg-secondary/30 p-5 text-sm leading-7 text-foreground sm:p-7">{material.textContent || "Nenhum texto foi extraído deste PDF."}</pre>}
-            {pdfView === "pdf" && source && <PdfMaterialViewer key={material.id} material={{ ...material, source }} studyId={studyId} />}
+            {pdfView === "pdf" && source && <PdfMaterialViewer key={material.id} material={{ ...material, source }} studyId={studyId} compact={compact} />}
             {pdfView === "pdf" && !source && (
               <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                 <p>{isRestoring ? "Procurando o PDF original neste navegador…" : "O PDF original não está disponível neste navegador."}</p>

@@ -21,6 +21,7 @@ export function TutorSidebar({
   onNewConversation,
   onRenameConversation,
   onDeleteConversation,
+  compact = false,
 }: {
   conversations: readonly TutorConversation[];
   activeConversationId: string;
@@ -30,6 +31,7 @@ export function TutorSidebar({
   onNewConversation: () => void;
   onRenameConversation: (conversation: TutorConversation) => void;
   onDeleteConversation: (conversationId: string) => void;
+  compact?: boolean;
 }) {
   const visibleConversations = conversations.filter((conversation) =>
     `${conversation.title} ${getConversationPreview(conversation.messages)}`
@@ -38,7 +40,7 @@ export function TutorSidebar({
   );
 
   return (
-    <aside aria-label="Conversas do Tutor IA" className="min-w-0 overflow-y-auto rounded-xl border bg-card p-3 max-lg:max-h-44 lg:min-h-0">
+    <aside aria-label="Conversas do Tutor IA" className={`min-w-0 overflow-y-auto rounded-xl border bg-card p-3 ${compact ? "max-h-40 2xl:max-h-none 2xl:min-h-0" : "max-lg:max-h-44 lg:min-h-0"}`}>
       <Button type="button" className="h-10 w-full" onClick={onNewConversation}>
         <MessageSquarePlus className="size-4" aria-hidden="true" />
         Nova conversa

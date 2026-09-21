@@ -24,7 +24,7 @@ import { TutorComposer } from "./TutorComposer";
 import { TutorConversation } from "./TutorConversation";
 import { TutorSidebar } from "./TutorSidebar";
 
-export function TutorWorkspace() {
+export function TutorWorkspace({ compact = false, instanceId }: { compact?: boolean; instanceId?: string } = {}) {
   const {
     activeConversation,
     activeConversationId,
@@ -39,7 +39,7 @@ export function TutorWorkspace() {
     deleteConversation,
     selectConversation,
     sendMessage,
-  } = useTutor();
+  } = useTutor(instanceId);
   const { summaries, saveSummary, deleteSummary } = useSummaries();
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
@@ -141,8 +141,9 @@ export function TutorWorkspace() {
   };
 
   return (
-    <div className="grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1">
+    <div className={compact ? "grid min-h-[34rem] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden 2xl:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-rows-1" : "grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1"}>
       <TutorSidebar
+        compact={compact}
         conversations={conversations}
         activeConversationId={activeConversationId}
         query={query}

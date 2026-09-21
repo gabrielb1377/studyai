@@ -8,7 +8,7 @@ import { TutorStorage } from "../services/TutorStorage";
 import { useTutorContext } from "./useTutorContext";
 import { LearningService } from "@/features/learning/LearningService";
 
-export function useTutor() {
+export function useTutor(instanceId?: string) {
   const context = useTutorContext();
   const [conversations, setConversations] = useState<TutorConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState("");
@@ -26,13 +26,13 @@ export function useTutor() {
   };
 
   useEffect(() => {
-    void Promise.all([TutorStorage.load(), TutorStorage.loadActive()]).then(([storedConversations, storedActive]) => {
+    void Promise.all([TutorStorage.load(), TutorStorage.loadActive(instanceId)]).then(([storedConversations, storedActive]) => {
       if (storedConversations?.length) {
         setConversations(storedConversations);
         setActiveConversationId(storedConversations.some((item) => item.id === storedActive) ? storedActive! : storedConversations[0].id);
       }
     });
-  }, []);
+  }, [instanceId]);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? conversations[0],
@@ -43,7 +43,7 @@ export function useTutor() {
     const conversation = TutorService.createConversation();
     updateConversations((current) => [conversation, ...current]);
     setActiveConversationId(conversation.id);
-    void TutorStorage.saveActive(conversation.id);
+    void TutorStorage.saveActive(conversation.id, instanceId);
     return conversation;
   };
 
@@ -60,7 +60,7 @@ export function useTutor() {
       const nextConversations = TutorService.deleteConversation(current, conversationId);
       if (conversationId === activeConversationId) {
         setActiveConversationId(nextConversations[0]?.id ?? "");
-        if (nextConversations[0]) void TutorStorage.saveActive(nextConversations[0].id);
+        if (nextConversations[0]) void TutorStorage.saveActive(nextConversations[0].id, instanceId);
       }
       return nextConversations;
     });
@@ -152,7 +152,7 @@ export function useTutor() {
     deleteConversation,
     selectConversation: (conversationId: string) => {
       setActiveConversationId(conversationId);
-      void TutorStorage.saveActive(conversationId);
+      void TutorStorage.saveActive(conversationId, instanceId);
     },
     sendMessage,
   };
