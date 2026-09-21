@@ -52,6 +52,17 @@ export const ContextBuilder = {
         context.document.summaryPreview ? `Resumo inicial: ${context.document.summaryPreview}` : "",
       ].filter(Boolean).join("\n"));
     }
+    if (context.knowledge?.matchedConcepts.length) {
+      blocks.push([
+        "Mapa de conhecimento relevante:",
+        ...context.knowledge.matchedConcepts.map((concept) => [
+          `- ${concept.name}: ${concept.description}`,
+          concept.aliases.length ? `  Equivalentes: ${concept.aliases.join(", ")}` : "",
+          concept.relatedConcepts.length ? `  Relacionado a: ${concept.relatedConcepts.join(", ")}` : "",
+        ].filter(Boolean).join("\n")),
+        `Relações consultadas: ${context.knowledge.relationshipCount}`,
+      ].join("\n"));
+    }
     if (context.notes.length > 0) {
       blocks.push(
         `Notas do estudante:\n${context.notes.map((note) => `- ${note.title}: ${note.content}`).join("\n")}`,

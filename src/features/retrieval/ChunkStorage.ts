@@ -25,7 +25,10 @@ function isChunkMetadata(value: unknown): value is ChunkMetadata {
     isOptionalString(metadata.subject) && isOptionalString(metadata.topic) &&
     (metadata.keywords === undefined || (
       Array.isArray(metadata.keywords) && metadata.keywords.every((keyword) => typeof keyword === "string")
-    ));
+    )) && (metadata.semanticType === undefined || metadata.semanticType === "semantic") &&
+    (metadata.conceptIds === undefined || (Array.isArray(metadata.conceptIds) && metadata.conceptIds.every((id) => typeof id === "string"))) &&
+    (metadata.relationIds === undefined || (Array.isArray(metadata.relationIds) && metadata.relationIds.every((id) => typeof id === "string"))) &&
+    isOptionalString(metadata.chapter) && isOptionalString(metadata.section);
 }
 
 function isContentChunk(value: unknown): value is ContentChunk {

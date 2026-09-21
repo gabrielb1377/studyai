@@ -12,6 +12,7 @@ const stageLabels = {
   normalization: "Normalização",
   analysis: "Análise",
   study: "Study",
+  semantic: "Semântica",
   chunks: "Chunks",
   embeddings: "Embeddings",
   indexed: "Indexado",

@@ -33,4 +33,13 @@ export type TutorStudyContext = {
     subtopics: string[];
     chapterCount: number;
   };
+  knowledge?: {
+    matchedConcepts: Array<{
+      name: string;
+      description: string;
+      aliases: string[];
+      relatedConcepts: string[];
+    }>;
+    relationshipCount: number;
+  };
 };

@@ -10,6 +10,7 @@ import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
 import type { Material } from "@/types/material";
 import type { ExtractionMetadata } from "@/features/extraction/ExtractionTypes";
+import { KnowledgeStorage } from "@/features/semantic/KnowledgeStorage";
 
 export type MaterialDestination = {
   course: string;
@@ -136,6 +137,7 @@ export const OrganizationService = {
     if (!material) return null;
     await ContentStorage.updateFile(material.fileId, { name: nextName });
     await ChunkStorage.updateFile(material.fileId, { sourceName: nextName });
+    await KnowledgeStorage.updateFile(material.fileId, { documentName: nextName });
     return material;
   },
 
@@ -160,6 +162,7 @@ export const OrganizationService = {
     const extractedContent = (await ContentStorage.load()).records.find((record) => record.fileId === material.fileId);
     await ContentStorage.updateFile(material.fileId, { studyId });
     await ChunkStorage.updateFile(material.fileId, { studyId });
+    await KnowledgeStorage.updateFile(material.fileId, { studyId });
     await synchronizeEmbeddings();
 
     const withoutOldAssociation = StudyEngine.removeMaterial(
@@ -186,6 +189,7 @@ export const OrganizationService = {
 
     await ContentStorage.removeByFileId(material.fileId);
     await ChunkStorage.removeByFileId(material.fileId);
+    await KnowledgeStorage.removeByFileId(material.fileId);
     await synchronizeEmbeddings();
     MaterialRuntimeStore.remove(material.id);
     await MaterialService.remove(material.id);

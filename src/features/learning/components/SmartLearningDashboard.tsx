@@ -12,6 +12,8 @@ import { ReviewScheduler } from "../ReviewScheduler";
 import { useLearningEngine } from "../hooks/useLearningEngine";
 import { KnowledgeCard } from "./KnowledgeCard";
 import { StudyHeatmap } from "./StudyHeatmap";
+import { useKnowledgeGraphs } from "@/features/semantic/useKnowledgeGraphs";
+import { LearningKnowledgeBridge } from "@/features/semantic/LearningKnowledgeBridge";
 
 export function SmartLearningDashboard({ studies, flashcards, quizzes }: {
   studies: readonly StudyRecord[];
@@ -19,6 +21,7 @@ export function SmartLearningDashboard({ studies, flashcards, quizzes }: {
   quizzes: readonly QuizResult[];
 }) {
   const { profile, knowledge, priorities, dailyPlan, statistics } = useLearningEngine(studies, flashcards, quizzes);
+  const { graphs } = useKnowledgeGraphs();
   if (studies.length === 0) return null;
   const dueReviews = flashcards.filter((card) => ReviewScheduler.isDue(card)).length;
   const hardest = knowledge.filter((score) => score.classification !== "never_studied").sort((left, right) => left.knowledge - right.knowledge)[0];
@@ -32,6 +35,7 @@ export function SmartLearningDashboard({ studies, flashcards, quizzes }: {
     { label: "Último estudo", value: latestStudy?.title ?? "—", icon: CalendarCheck2 },
     { label: "Streak", value: `${profile.streak} ${profile.streak === 1 ? "dia" : "dias"}`, icon: Flame },
   ];
+  const prerequisites = LearningKnowledgeBridge.recommend(graphs, knowledge);
 
   return (
     <section aria-labelledby="learning-dashboard-title" className="space-y-4">
@@ -47,6 +51,7 @@ export function SmartLearningDashboard({ studies, flashcards, quizzes }: {
         <Card className="gap-4 p-4 shadow-none"><div><h3 className="font-semibold">Estatísticas</h3><p className="text-xs text-muted-foreground">{statistics.activeDays} dias ativos · horário {statistics.preferredHour}</p></div><StudyHeatmap statistics={statistics} /><div className="grid grid-cols-2 gap-3 text-sm"><p><strong>{statistics.averageSessionMinutes} min</strong><br /><span className="text-xs text-muted-foreground">Tempo médio</span></p><p><strong>{statistics.averageQuizScore}%</strong><br /><span className="text-xs text-muted-foreground">Quiz médio</span></p><p><strong>{statistics.flashcardsAnswered}</strong><br /><span className="text-xs text-muted-foreground">Flashcards</span></p><p><strong>{statistics.retention}%</strong><br /><span className="text-xs text-muted-foreground">Retenção</span></p></div></Card>
       </div>
       {knowledge.length > 0 && <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{knowledge.slice().sort((left, right) => priorities.findIndex((priority) => priority.studyId === left.studyId) - priorities.findIndex((priority) => priority.studyId === right.studyId)).slice(0, 3).map((score) => <KnowledgeCard key={score.studyId} score={score} priority={priorities.find((priority) => priority.studyId === score.studyId)!} />)}</div>}
+      {prerequisites.length > 0 && <Card className="gap-3 p-4 shadow-none"><div><h3 className="font-semibold">Pré-requisitos recomendados</h3><p className="text-xs text-muted-foreground">Sugestões baseadas nas dependências do mapa de conhecimento.</p></div><div className="grid gap-2 md:grid-cols-3">{prerequisites.map((item) => <Link key={`${item.studyId}-${item.concept}-${item.prerequisite}`} href={`/estudo?studyId=${encodeURIComponent(item.studyId)}&aba=knowledge`} className="rounded-lg border p-3 text-sm transition-colors hover:bg-accent"><strong>{item.prerequisite}</strong><p className="mt-1 text-xs leading-5 text-muted-foreground">{item.reason}</p></Link>)}</div></Card>}
     </section>
   );
 }

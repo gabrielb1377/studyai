@@ -1,6 +1,6 @@
 export const STORAGE_DATABASE_NAME = "studyai-db";
-export const STORAGE_DATABASE_VERSION = 1;
-export const STORAGE_SCHEMA_VERSION = 1;
+export const STORAGE_DATABASE_VERSION = 2;
+export const STORAGE_SCHEMA_VERSION = 2;
 export const STORAGE_MIGRATION_KEY = "storage-migration";
 
 export const STORAGE_STORES = [
@@ -15,6 +15,7 @@ export const STORAGE_STORES = [
   "quizzes",
   "transcriptions",
   "ocr",
+  "knowledge",
   "metadata",
 ] as const;
 

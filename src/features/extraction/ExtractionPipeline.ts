@@ -13,6 +13,7 @@ import {
 } from "./IngestionState";
 import { MediaExtractionPipeline } from "./MediaExtractionPipeline";
 import { TextNormalizationService } from "./TextNormalizationService";
+import { KnowledgeService } from "@/features/semantic/KnowledgeService";
 import type {
   ExtractedContent,
   ExtractionFileType,
@@ -141,9 +142,33 @@ export const ExtractionPipeline = {
         await ContentStorage.upsert(record);
         options.onProgress?.({ fileId: input.id, status: "processing", progress: 78, stage: "study" });
 
+        currentStage = "semantic";
+        record = await setStage(record, "semantic", "processing", "Extraindo conceitos, relações e estrutura semântica.");
+        let semanticChunks: ReturnType<typeof ChunkService.createChunks> = [];
+        try {
+          const knowledge = await KnowledgeService.process(record);
+          semanticChunks = knowledge.graph.chunks;
+          record = await setStage(
+            record,
+            "semantic",
+            "completed",
+            knowledge.reused
+              ? "Estrutura semântica preservada: o conteúdo não mudou."
+              : `${knowledge.graph.statistics.conceptCount} conceitos e ${knowledge.graph.statistics.relationCount} relações identificados.`,
+          );
+        } catch (semanticError) {
+          record = await setStage(
+            record,
+            "semantic",
+            "error",
+            semanticError instanceof Error ? semanticError.message : "Não foi possível estruturar o conhecimento; o chunking convencional será usado.",
+          );
+        }
+        options.onProgress?.({ fileId: input.id, status: "processing", progress: 84, stage: "semantic" });
+
         currentStage = "chunks";
-        record = await setStage(record, "chunks", "processing", "Dividindo apenas o texto normalizado.");
-        const chunks = ChunkService.createChunks(record);
+        record = await setStage(record, "chunks", "processing", "Criando chunks que preservam definições, exemplos, listas e fórmulas.");
+        const chunks = semanticChunks.length > 0 ? semanticChunks : ChunkService.createChunks(record);
         await ChunkStorage.replaceForContent(record.id, chunks);
         record = await setStage(
           record,

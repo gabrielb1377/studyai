@@ -13,10 +13,12 @@ import { filterMaterials, materialFilters } from "./material-utils";
 import { OrganizationService, type MaterialDestination } from "@/features/organization/OrganizationService";
 import { MaterialService } from "@/services/material-service";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useKnowledgeGraphs } from "@/features/semantic/useKnowledgeGraphs";
 
 export function LibraryBrowser() {
   const { materials, isLoading, refresh } = useMaterials();
   const { records: extractedContents } = useExtraction();
+  const { graphs: knowledgeGraphs } = useKnowledgeGraphs();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("all");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -155,6 +157,7 @@ export function LibraryBrowser() {
                 key={material.id}
                 material={material}
                 content={extractedContents.find((content) => content.fileId === material.fileId)}
+                knowledge={knowledgeGraphs.find((graph) => graph.fileId === material.fileId)}
                 selected={selectedIds.has(material.id)}
                 onSelectedChange={(selected) => toggleSelected(material.id, selected)}
                 onMove={() => openMove([material.id])}

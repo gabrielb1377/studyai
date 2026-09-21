@@ -11,8 +11,9 @@ import { formatFileSize } from "@/features/import/import-utils";
 import type { Material } from "@/types/material";
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
 import { formatMaterialDate, materialTypes } from "./material-utils";
+import type { KnowledgeGraph } from "@/features/semantic/types";
 
-export function MaterialCard({ material, content, selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
+export function MaterialCard({ material, content, knowledge, selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
   const [showDetails, setShowDetails] = useState(false);
   const { icon: Icon, label } = materialTypes[material.fileType];
   const details = [
@@ -36,6 +37,11 @@ export function MaterialCard({ material, content, selected = false, onSelectedCh
     ...(content?.metadata.readingTimeMinutes !== undefined
       ? [{ label: "Leitura", value: `${content.metadata.readingTimeMinutes} min` }]
       : []),
+    ...(knowledge ? [
+      { label: "Conceitos", value: String(knowledge.statistics.conceptCount) },
+      { label: "Relações", value: String(knowledge.statistics.relationCount) },
+      { label: "Estrutura", value: `${knowledge.statistics.structureDegree}%` },
+    ] : []),
     {
       label: "Status IA",
       value: content?.metadata.analysisStatus === "analyzed"
@@ -110,6 +116,7 @@ export function MaterialCard({ material, content, selected = false, onSelectedCh
             <p><strong className="text-foreground">Caminho:</strong> {material.relativePath}</p>
             <p><strong className="text-foreground">Atualizado:</strong> {formatMaterialDate(material.updatedAt)}</p>
             <p><strong className="text-foreground">Palavras:</strong> {content?.metadata.wordCount ?? 0}</p>
+            <p><strong className="text-foreground">Conceitos isolados:</strong> {knowledge?.statistics.isolatedConceptCount ?? 0}</p>
           </div>
         )}
         {content?.errorDetails ? (

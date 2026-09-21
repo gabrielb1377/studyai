@@ -1,8 +1,38 @@
-# Handoff Atual — Sprint 26: Learning Engine
+# Handoff Atual — Sprint 27: Semantic Knowledge Engine
 
-Atualizado em 17 de setembro de 2026.
+Atualizado em 18 de setembro de 2026.
 
-## Estado entregue
+## Estado entregue na Sprint 27
+
+O StudyAI passa a transformar cada conteúdo extraído em uma estrutura de conhecimento persistente. O novo módulo `src/features/semantic` identifica conceitos, definições, entidades, palavras-chave, termos técnicos, siglas, fórmulas, tecnologias, pessoas, organizações, exemplos e observações. Relações explícitas e por coocorrência formam um grafo navegável por documento e Study.
+
+O pipeline agora executa `semantic` entre `study` e `chunks`. Os chunks deixam de usar apenas janelas arbitrárias e preservam definições, listas, tabelas, fórmulas, exemplos e blocos relacionados. O grafo é armazenado no object store `knowledge` do IndexedDB v2. `sourceHash` e `parserVersion` permitem reutilizar resultados inalterados e reprocessar somente o material modificado.
+
+```text
+Documento normalizado
+  → SemanticParser
+  → ConceptExtractor + RelationExtractor
+  → KnowledgeGraphBuilder
+  → KnowledgeStorage / IndexedDB
+  → SemanticChunkService
+  → embeddings + RAG
+  → Tutor / Biblioteca / Dashboard / Busca / Learning Engine
+```
+
+O Tutor expande a pergunta com aliases, sinônimos, siglas e conceitos relacionados antes do ranking híbrido, e recebe um bloco explícito de conhecimento no PromptBuilder. A Biblioteca mostra conceitos, relações e grau de estrutura; o Dashboard resume conceitos aprendidos, dominados, esquecidos e relações; o Learning Engine recomenda pré-requisitos; e o Workspace possui a aba clicável `Mapa de Conhecimento`.
+
+### Serviços semânticos
+
+- `SemanticParser`: converte seções extraídas em blocos semânticos com proveniência.
+- `ConceptExtractor`: extrai e deduplica conceitos com ids estáveis.
+- `RelationExtractor`: cria relações tipadas com evidência e peso.
+- `KnowledgeGraphBuilder`: monta estatísticas, chunks e o grafo versionado.
+- `KnowledgeStorage` / `SemanticStorage`: persistência única via `StorageManager`.
+- `SemanticSearchService`: busca por nome, descrição, palavra-chave, sinônimo, sigla e relações.
+- `KnowledgeService`: processamento incremental e reaproveitamento por hash.
+- `LearningKnowledgeBridge`: recomenda pré-requisitos para temas difíceis ou esquecidos.
+
+## Contexto preservado da Sprint 26
 
 A Sprint 26 adiciona o primeiro Learning Engine do StudyAI sem remover o fluxo existente. Toda leitura, conversa, revisão de flashcard, resultado de quiz, resumo e nota alimenta um perfil local persistido. O Dashboard passa a mostrar plano do dia, revisões, tempo, maior dificuldade, maior progresso, último estudo, streak, calor de estudo, retenção e Knowledge Score por tema.
 
@@ -235,6 +265,8 @@ Validação final da Sprint 25.2: ESLint aprovado, TypeScript aprovado, build de
 
 Validação final da Sprint 26: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 62 testes Playwright aprovados. A cobertura nova valida Knowledge Score, SM-2, prioridade explicável, plano diário, Dashboard inteligente, contexto adaptativo do Tutor, persistência do agendamento dos Flashcards e insights do Quiz.
 
+Validação final da Sprint 27: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 67 testes Playwright aprovados. A cobertura semântica valida extração de conceitos, relações, preservação de definições nos chunks, expansão de busca, pré-requisitos do Learning Engine, persistência do grafo, Biblioteca, Dashboard, Mapa de Conhecimento e contexto enviado ao Tutor.
+
 ## Próximo passo seguro
 
-Calibrar os pesos do Knowledge Score com uso real e amostras maiores, mantendo as explicações de prioridade auditáveis. FSRS pode ser introduzido posteriormente pela fronteira do `ReviewScheduler`, sem alterar Flashcards, Dashboard ou LearningService.
+Calibrar regras de extração e relações com documentos reais maiores, mantendo cada evidência auditável. Uma futura evolução pode executar parsing muito volumoso em Web Worker e adicionar edição manual do grafo sem alterar o contrato persistido.

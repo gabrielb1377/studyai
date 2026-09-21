@@ -21,6 +21,16 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     (context.learning.priority === "Alta" || context.learning.priority === "Média" || context.learning.priority === "Baixa") &&
     Array.isArray(context.learning.reasons) && context.learning.reasons.every((reason) => typeof reason === "string")
   );
+  const validKnowledge = context.knowledge === undefined || (
+    typeof context.knowledge === "object" && context.knowledge !== null &&
+    typeof context.knowledge.relationshipCount === "number" &&
+    Array.isArray(context.knowledge.matchedConcepts) && context.knowledge.matchedConcepts.every((concept) =>
+      typeof concept === "object" && concept !== null &&
+      typeof concept.name === "string" && typeof concept.description === "string" &&
+      Array.isArray(concept.aliases) && concept.aliases.every((alias) => typeof alias === "string") &&
+      Array.isArray(concept.relatedConcepts) && concept.relatedConcepts.every((related) => typeof related === "string"),
+    )
+  );
 
   return typeof context.studyId === "string" && typeof context.title === "string" &&
     typeof context.subject === "string" && typeof context.topic === "string" &&
@@ -31,5 +41,5 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     ) && (context.summary === undefined || (
       typeof context.summary === "object" && context.summary !== null &&
       typeof context.summary.title === "string" && typeof context.summary.content === "string"
-    )) && validDocument && validLearning;
+    )) && validDocument && validLearning && validKnowledge;
 }

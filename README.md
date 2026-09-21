@@ -48,6 +48,7 @@ Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, 
 | Storage V2 | IndexedDB transacional para documentos e dados de estudo, com migração automática do armazenamento legado. |
 | Smart Study Generator | Identificação local de disciplina, tema, subtemas, capítulos, palavras-chave, idioma e tempo de leitura após a extração. |
 | Learning Engine | Perfil local, tempo por matéria/tema, domínio, prioridade, SM-2, plano diário, retenção e adaptação do Tutor. |
+| Semantic Knowledge Engine | Conceitos, definições, siglas, entidades, relações e chunks semânticos persistidos como grafo local. |
 | Configurações | Tema, seleção manual/automática, modelos, health, endpoint, erros, latência, métricas e teste por provider. |
 
 ## Arquitetura
@@ -66,11 +67,13 @@ src/
 
 O Smart Study Generator fica em `src/features/study-generator`. Seus detectores são independentes e determinísticos: `StudyAnalyzer` coordena estrutura, disciplina, palavras-chave e leitura; `StudyGeneratorService` é o único responsável por persistir o resultado no material e no Study Engine. PDFs da Estácio reconhecem os marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Quando a identificação não é conclusiva, o fluxo cria um estudo básico com valores explícitos de fallback e nunca bloqueia a importação.
 
-Os dados pessoais são locais por enquanto. Documentos, conteúdos, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam no IndexedDB `studyai-db`. Quando disponível, o binário original é salvo no Origin Private File System (OPFS); se o navegador não oferecer suporte, a interface permite selecionar o arquivo novamente sem perder página, zoom, capítulo ou marcadores. O `localStorage` é reservado a preferências leves. O diagnóstico interno está disponível em `/storage`, e o Dashboard concentra ingestão e métricas em um drawer lateral.
+Os dados pessoais são locais por enquanto. Documentos, conteúdos, grafos de conhecimento, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam no IndexedDB `studyai-db`. Quando disponível, o binário original é salvo no Origin Private File System (OPFS); se o navegador não oferecer suporte, a interface permite selecionar o arquivo novamente sem perder página, zoom, capítulo ou marcadores. O `localStorage` é reservado a preferências leves. O diagnóstico interno está disponível em `/storage`, e o Dashboard concentra ingestão e métricas em um drawer lateral.
 
 O estado leve do Workspace também é persistido: estudo e arquivo atuais, aba, página/zoom/capítulo/marcadores do PDF, flashcard, questão e nota aberta. Notas, resumos e organização usam autosave. O Tutor restaura a conversa ativa.
 
 O Learning Engine registra leitura, Tutor, Quiz, Flashcards, Resumos e Notas de forma assíncrona. O perfil fica no store `metadata` do IndexedDB e produz um Knowledge Score por tema a partir de quiz, revisões, tempo, frequência e recência. A prioridade explica seus motivos, o plano diário reutiliza os módulos existentes e o agendamento dos flashcards usa SM-2 com contrato preparado para FSRS.
+
+O Semantic Knowledge Engine fica em `src/features/semantic`. Após a normalização e a criação do Study, ele identifica conceitos, definições, termos técnicos, siglas, fórmulas, exemplos e entidades; cria relações auditáveis; preserva blocos semânticos no chunking; e grava um grafo por arquivo no store `knowledge`. O hash da fonte e a versão do parser evitam reprocessamento quando o conteúdo não mudou. Tutor, RAG, busca global, Biblioteca, Dashboard, Learning Engine, Flashcards e Quiz reutilizam a mesma representação estruturada.
 
 ## Limites deliberados
 

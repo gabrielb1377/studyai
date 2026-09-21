@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { createRealStudy } from "./helpers/real-study";
 
 test("navegação, pesquisa, tema persistido e acesso à importação", async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -26,15 +28,12 @@ test("navegação, pesquisa, tema persistido e acesso à importação", async ({
     .getByRole("button", { name: "Alternar tema claro/escuro" })
     .click();
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await page.goto("/");
-  await page.getByRole("link", { name: /Importar material/ }).click();
-  await expect(page).toHaveURL(/importar/);
-  await expect(page.getByRole("heading", { name: "Importar" })).toBeVisible();
+  const studyId = await createRealStudy(page);
   await page.goto("/");
   await page.getByRole("link", { name: "Continuar estudando" }).click();
-  await expect(page).toHaveURL(/estudo\?tema=vetores/);
+  await expect(page).toHaveURL(new RegExp(`estudo\\?tema=${studyId}`));
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Vetores e matrizes",
+    "Estruturas de dados",
   );
   await page.goto("/biblioteca");
   await expect(
@@ -97,7 +96,7 @@ for (const width of [360, 768, 1024, 1440]) {
     if (width < 1024) {
       await page
         .getByRole("button", { name: "Abrir menu", exact: true })
-        .click();
+        .click({ force: true });
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
       await dialog

@@ -86,10 +86,24 @@ export function useTutor() {
     let streamedText = "";
     try {
       const retrieval = await RetrievalPipeline.forQuestion(nextContent, context?.studyId);
+      const contextualized = context && retrieval.knowledge?.hasContext
+        ? {
+            ...context,
+            knowledge: {
+              matchedConcepts: retrieval.knowledge.concepts.map((match) => ({
+                name: match.concept.name,
+                description: match.concept.description,
+                aliases: match.concept.aliases,
+                relatedConcepts: match.related.map((concept) => concept.name),
+              })),
+              relationshipCount: retrieval.knowledge.relationCount,
+            },
+          }
+        : context;
       const response = await TutorService.requestReply(
         conversation.messages,
         nextContent,
-        context,
+        contextualized,
         retrieval.chunks,
         {
           onDelta: (delta) => {

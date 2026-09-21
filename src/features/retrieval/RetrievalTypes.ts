@@ -1,4 +1,5 @@
 import type { ExtractionFileType } from "@/features/extraction/ExtractionTypes";
+import type { KnowledgeContext } from "@/features/semantic/types";
 
 export type ChunkMetadata = {
   extractedContentId: string;
@@ -13,6 +14,11 @@ export type ChunkMetadata = {
   subject?: string;
   topic?: string;
   keywords?: string[];
+  semanticType?: "semantic";
+  conceptIds?: string[];
+  relationIds?: string[];
+  chapter?: string;
+  section?: string;
 };
 
 export type ContentChunk = {
@@ -45,4 +51,5 @@ export type RetrievalResult = {
   hasContext: boolean;
   strategy: "hybrid" | "lexical";
   warning?: string;
+  knowledge?: KnowledgeContext;
 };

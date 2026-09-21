@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, BrainCircuit, ClipboardCheck, NotebookPen } from "lucide-react";
+import { BookOpen, Bot, BrainCircuit, ClipboardCheck, Network, NotebookPen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +28,7 @@ const SummaryList = dynamic(() => import("@/features/summaries/SummaryList").the
 const FlashcardWorkspace = dynamic(() => import("@/features/flashcards/FlashcardWorkspace").then((module) => module.FlashcardWorkspace), { loading: () => lazyState });
 const QuizWorkspace = dynamic(() => import("@/features/quiz/QuizWorkspace").then((module) => module.QuizWorkspace), { loading: () => lazyState });
 const NotesWorkspace = dynamic(() => import("@/features/notes/NotesWorkspace").then((module) => module.NotesWorkspace), { loading: () => lazyState });
+const KnowledgeMapView = dynamic(() => import("@/features/semantic/KnowledgeMapView").then((module) => module.KnowledgeMapView), { loading: () => lazyState });
 
 function toStudyMaterialType(fileType: string): StudyMaterialType {
   if (fileType === "pdf") return "pdf";
@@ -123,12 +124,14 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
             <TabsList aria-label="Áreas de estudo" className="w-full justify-start overflow-x-auto">
               <TabsTrigger value="material" className="min-w-28"><BookOpen />Material</TabsTrigger>
               <TabsTrigger value="ia" className="min-w-20"><Bot />IA</TabsTrigger>
+              <TabsTrigger value="knowledge" className="min-w-44"><Network />Mapa de Conhecimento</TabsTrigger>
               <TabsTrigger value="flashcards" className="min-w-28"><BrainCircuit />Flashcards</TabsTrigger>
               <TabsTrigger value="quiz" className="min-w-20"><ClipboardCheck />Quiz</TabsTrigger>
               <TabsTrigger value="notes" className="min-w-24"><NotebookPen />Notas</TabsTrigger>
             </TabsList>
             <TabsContent value="material"><MaterialTab studyId={record.studyId} materials={studyMaterials} selectedMaterialId={activeMaterialId} onMaterialChange={(materialId) => updateWorkspace({ materialId })} /></TabsContent>
             <TabsContent value="ia" className="space-y-5"><TutorWorkspace /><SummaryList studyId={record.studyId} /></TabsContent>
+            <TabsContent value="knowledge"><KnowledgeMapView studyId={record.studyId} /></TabsContent>
             <TabsContent value="flashcards"><FlashcardWorkspace study={record} /></TabsContent>
             <TabsContent value="quiz"><QuizWorkspace study={record} /></TabsContent>
             <TabsContent value="notes"><NotesWorkspace study={record} /></TabsContent>

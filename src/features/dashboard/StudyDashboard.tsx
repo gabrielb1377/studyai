@@ -12,6 +12,7 @@ import { DashboardStats } from "./dashboard-stats";
 import { useExtraction } from "@/features/extraction/useExtraction";
 import { DiagnosticsDrawer } from "./DiagnosticsDrawer";
 import { SmartLearningDashboard } from "@/features/learning/components/SmartLearningDashboard";
+import { KnowledgeDashboard } from "@/features/semantic/KnowledgeDashboard";
 
 export function StudyDashboard() {
   const { records } = useStudyEngine();
@@ -25,6 +26,7 @@ export function StudyDashboard() {
     <>
       <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} />
       <SmartLearningDashboard studies={records} flashcards={cards} quizzes={quizzes} />
+      <KnowledgeDashboard studies={records} />
       <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
         <ContinueStudying records={records} materials={materials} />
         <ImportMaterial />

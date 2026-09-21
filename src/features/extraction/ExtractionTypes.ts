@@ -25,6 +25,7 @@ export const ingestionStageIds = [
   "normalization",
   "analysis",
   "study",
+  "semantic",
   "chunks",
   "embeddings",
   "indexed",

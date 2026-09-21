@@ -17,6 +17,7 @@ const storeDefinitions: Record<StorageStoreName, { keyPath: string; indexes?: Ar
   quizzes: { keyPath: "id", indexes: [["studyId", "studyId"], ["kind", "kind"]] },
   transcriptions: { keyPath: "id", indexes: [["fileId", "fileId"], ["studyId", "studyId"]] },
   ocr: { keyPath: "id", indexes: [["fileId", "fileId"], ["studyId", "studyId"]] },
+  knowledge: { keyPath: "id", indexes: [["fileId", "fileId"], ["studyId", "studyId"], ["sourceHash", "sourceHash"]] },
   metadata: { keyPath: "key" },
 };
 

@@ -1,4 +1,4 @@
-export const workspaceTabs = ["material", "ia", "flashcards", "quiz", "notes"] as const;
+export const workspaceTabs = ["material", "ia", "knowledge", "flashcards", "quiz", "notes"] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
 export type PdfViewState = {
@@ -88,4 +88,3 @@ export const WorkspacePersistence = {
     return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_STUDY_KEY);
   },
 };
-

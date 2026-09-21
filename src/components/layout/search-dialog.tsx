@@ -13,11 +13,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { navigation } from "@/lib/navigation";
+import { SemanticSearchService } from "@/features/semantic/SemanticSearchService";
+import type { ConceptSearchMatch } from "@/features/semantic/types";
 
 export function SearchDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [concepts, setConcepts] = useState<ConceptSearchMatch[]>([]);
   const normalize = (value: string) =>
     value
       .normalize("NFD")
@@ -37,6 +40,20 @@ export function SearchDialog() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!open || query.trim().length < 2) {
+      setConcepts([]);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void SemanticSearchService.search(query, { limit: 5 }).then((result) => {
+        if (active) setConcepts(result.concepts);
+      }).catch(() => active && setConcepts([]));
+    }, 180);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [open, query]);
 
   return (
     <Dialog
@@ -91,7 +108,20 @@ export function SearchDialog() {
               <ArrowUpRight className="size-4 text-muted-foreground" />
             </Link>
           ))}
-          {results.length === 0 && (
+          {concepts.length > 0 && <p className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Conceitos encontrados</p>}
+          {concepts.map((match) => (
+            <Link
+              key={match.concept.id}
+              href={`/estudo?tema=${encodeURIComponent(match.concept.studyId)}&aba=knowledge`}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-3 rounded-lg p-3 hover:bg-accent"
+            >
+              <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">{Math.round(match.score)}</span>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{match.concept.name}</p><p className="line-clamp-1 text-xs text-muted-foreground">{match.concept.description}</p></div>
+              <ArrowUpRight className="size-4 text-muted-foreground" />
+            </Link>
+          ))}
+          {results.length === 0 && concepts.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               Nenhuma página encontrada. Tente “Biblioteca”.
             </p>

@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 17 de setembro de 2026.
+Atualizado em 18 de setembro de 2026.
 
 ## Propósito
 
@@ -21,7 +21,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | OCR local | Tesseract.js com dados em português e inglês |
 | Transcrição local | Transformers.js com Whisper Tiny |
 | Testes de interface | Playwright |
-| Persistência local | IndexedDB nativo, banco `studyai-db` v1 |
+| Persistência local | IndexedDB nativo, banco `studyai-db` v2 |
 | Binários originais | Origin Private File System (OPFS), com fallback de re-seleção |
 
 ## Estrutura de módulos
@@ -38,6 +38,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/tutor` | Conversas, persistência e interface do Tutor. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/learning` | Perfil de aprendizagem, Knowledge Score, prioridade, SM-2, plano diário, estatísticas e adaptação do Tutor. |
+| `src/features/semantic` | Parser semântico, conceitos, relações, grafo de conhecimento, busca conceitual, chunking semântico e integração com aprendizagem. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
 | `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
@@ -48,7 +49,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 
 ## Persistência local
 
-O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 1. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
+O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 2. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
 
 | Object Store | Conteúdo |
 | --- | --- |
@@ -60,6 +61,7 @@ O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 1. Nenh
 | `notes`, `summaries`, `flashcards` | Recursos relacionados ao `studyId`. |
 | `quizzes` | Questões e resultados identificados pelo campo `kind`. |
 | `transcriptions`, `ocr` | Resultados pesados separados por arquivo e estudo. |
+| `knowledge` | Um grafo versionado por arquivo, com conceitos, relações, blocos e chunks semânticos. |
 | `metadata` | Estado de migração, índice semântico e conversas do Tutor. |
 
 O perfil local do Learning Engine também utiliza `metadata`, sob a chave versionada `learning-profile:v1`. Ele mantém somente métricas e até mil eventos recentes; materiais e conteúdo extraído continuam em seus stores próprios.
@@ -89,7 +91,9 @@ File selecionado
   → StudyGeneratorService
   → matéria + tema + subtemas + capítulos + prévia + metadados
   → ContentStorage / contents / transcriptions / ocr
-  → ChunkService / ChunkStorage / chunks
+  → SemanticParser + ConceptExtractor + RelationExtractor
+  → KnowledgeGraphBuilder / knowledge
+  → SemanticChunkService / ChunkStorage / chunks
   → EmbeddingService / EmbeddingStorage / embeddings
   → Biblioteca / Organização / Dashboard / Workspace / Tutor
 ```
@@ -100,7 +104,7 @@ PDF usa PDF.js; DOCX e PPTX são lidos como pacotes OOXML com JSZip; TXT detecta
 
 O `TopicDetector` reconhece a estrutura comum dos PDFs da Estácio pelos marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Cada ocorrência gera um capítulo/seção tipado e ordenado, com página ou slide quando essa proveniência está disponível. Documentos sem identificação confiável recebem `Disciplina desconhecida`, `Tema desconhecido` ou um título derivado do arquivo; mesmo nesses casos, o Study básico é criado e o pipeline continua.
 
-Cada documento mantém os estágios `document`, `extraction`, `ocr`, `normalization`, `analysis`, `study`, `chunks`, `embeddings` e `indexed`, além de um log cronológico. A etapa `study` registra documento analisado, tema criado, capítulos encontrados e Study criado ou atualizado. Erros registram arquivo, etapa, motivo, stack simplificada e ação sugerida. O Dashboard exibe o pipeline dos documentos mais recentes.
+Cada documento mantém os estágios `document`, `extraction`, `ocr`, `normalization`, `analysis`, `study`, `semantic`, `chunks`, `embeddings` e `indexed`, além de um log cronológico. A etapa `study` registra documento analisado, tema criado, capítulos encontrados e Study criado ou atualizado; `semantic` registra conceitos e relações. Erros registram arquivo, etapa, motivo, stack simplificada e ação sugerida. O Dashboard exibe o pipeline dos documentos mais recentes.
 
 Todo material recebe um `studyId` antes da extração. Quando existe caminho relativo, os dois últimos diretórios representam matéria e tema; hierarquias maiores também preservam curso e semestre quando disponíveis. Arquivos avulsos usam o nome real do arquivo como tema. Materiais da mesma matéria e tema compartilham um Study. O mesmo `studyId` acompanha conteúdo, chunks, embeddings, resumos, flashcards, quizzes e notas.
 
