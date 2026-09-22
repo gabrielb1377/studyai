@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Bot, BrainCircuit, ClipboardCheck, FileText, Gauge, LayoutGrid, Network, NotebookPen, Pause, Play, Plus, Save, Sparkles, Square } from "lucide-react";
+import { BookOpen, Bot, BrainCircuit, ClipboardCheck, FileText, Gauge, GraduationCap, LayoutGrid, Network, NotebookPen, Pause, Play, Plus, Save, Sparkles, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,7 @@ import type { StudyStatus } from "@/types/study-engine";
 const tools: Array<{ type: WorkspacePanelType; label: string; icon: typeof BookOpen }> = [
   { type: "material", label: "Material", icon: BookOpen },
   { type: "tutor", label: "IA", icon: Bot },
+  { type: "mentor", label: "Mentor", icon: GraduationCap },
   { type: "knowledge", label: "Mapa", icon: Network },
   { type: "flashcards", label: "Flashcards", icon: BrainCircuit },
   { type: "quiz", label: "Quiz", icon: ClipboardCheck },
@@ -67,7 +68,7 @@ export function WorkspaceToolbar({ layouts, activeLayoutId, activeTool, session,
         </div>
       </div>
       <div role="tablist" aria-label="Ferramentas do Workspace" className="flex gap-1 overflow-x-auto pb-1">
-        {tools.slice(0, 6).map(({ type, label, icon: Icon }) => <button key={type} type="button" role="tab" data-state={activeTool === type ? "active" : "inactive"} aria-selected={activeTool === type} onClick={() => onOpenTool(type)} className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors ${activeTool === type ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><Icon className="size-3.5" />{label === "Mapa" ? "Mapa de Conhecimento" : label}</button>)}
+        {tools.slice(0, 7).map(({ type, label, icon: Icon }) => <button key={type} type="button" role="tab" data-state={activeTool === type ? "active" : "inactive"} aria-selected={activeTool === type} onClick={() => onOpenTool(type)} className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors ${activeTool === type ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><Icon className="size-3.5" />{label === "Mapa" ? "Mapa de Conhecimento" : label}</button>)}
       </div>
       {session?.status === "completed" && <p role="status" className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400"><Sparkles className="size-3.5" />Sessão concluída: {formatSeconds(session.focusSeconds)} de foco, {session.pauseCount} pausa(s).</p>}
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}><DialogContent><DialogHeader><DialogTitle>Salvar layout personalizado</DialogTitle><DialogDescription>O conjunto e o tamanho atual dos painéis serão reutilizados em qualquer tema.</DialogDescription></DialogHeader><Input aria-label="Nome do layout" value={layoutName} onChange={(event) => setLayoutName(event.target.value)} placeholder="Ex.: Revisão para prova" /><DialogFooter><Button variant="outline" onClick={() => setSaveOpen(false)}>Cancelar</Button><Button onClick={() => { onSaveLayout(layoutName); setLayoutName(""); setSaveOpen(false); }} disabled={!layoutName.trim()}>Salvar</Button></DialogFooter></DialogContent></Dialog>

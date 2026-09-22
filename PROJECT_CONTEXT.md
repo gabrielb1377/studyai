@@ -40,6 +40,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/learning` | Perfil de aprendizagem, Knowledge Score, prioridade, SM-2, plano diário, estatísticas e adaptação do Tutor. |
 | `src/features/semantic` | Parser semântico, conceitos, relações, grafo de conhecimento, busca conceitual, chunking semântico e integração com aprendizagem. |
 | `src/features/workspace` | Canvas multipainel, layouts, persistência leve, virtualização e sessões de estudo. |
+| `src/features/mentor` | Sessões guiadas, método socrático, metas, correção, recomendações adaptativas e memória do Mentor. |
 | `src/features/search` | Pesquisa global unificada sobre os registros estruturados do IndexedDB. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
@@ -67,6 +68,8 @@ O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 2. Nenh
 | `metadata` | Estado de migração, índice semântico e conversas do Tutor. |
 
 O perfil local do Learning Engine também utiliza `metadata`, sob a chave versionada `learning-profile:v1`. Ele mantém somente métricas e até mil eventos recentes; materiais e conteúdo extraído continuam em seus stores próprios.
+
+O Mentor utiliza a chave versionada `mentor:v1` no mesmo store `metadata`. Nela ficam apenas sessões guiadas, metas e recomendações derivadas; materiais, conceitos, flashcards e resultados continuam em seus stores oficiais e são consultados novamente antes de cada interação.
 
 `StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
 
@@ -160,6 +163,22 @@ Leitura | Tutor | Quiz | Flashcard | Resumo | Nota
 
 O plano diário é determinístico e criado a partir dos estudos, prioridades, revisões pendentes e atividades do dia. Cálculos são pequenos e memoizados; persistência e atualização do perfil ocorrem fora da interação principal por IndexedDB e `requestIdleCallback`.
 
+## AI Mentor
+
+```text
+Tema selecionado
+  → LearningStorage + Flashcards + Quiz
+  → KnowledgeEngine + StudyPriorityEngine
+  → Knowledge Graph
+  → SessionEngine + SocraticEngine
+  → plano, pergunta e correção explicável
+  → MentorStorage / IndexedDB metadata
+```
+
+O Mentor é uma camada de coordenação e não uma nova fonte de verdade. Antes de iniciar ou continuar uma sessão, `MentorService` consulta os dados persistidos do Study, do Learning Engine, do grafo, dos flashcards e dos quizzes. `SessionEngine` cria a sequência de leitura, explicação, revisão e prática; `SocraticEngine` seleciona conceitos reais, adapta a dificuldade ao nível Iniciante, Intermediário ou Avançado e só avança o plano quando a resposta apresenta evidência suficiente. Em caso de erro, a sessão permanece na etapa, explica o motivo, indica onde revisar e propõe uma pergunta de acompanhamento. Quando o aluno solicita uma nova explicação, o Mentor reutiliza `RetrievalPipeline` e `TutorService`, portanto a chamada continua passando por RAG, Route Handler, AI Core e provider selecionado.
+
+`RecommendationEngine` calcula revisões, prática e avanço durante períodos ociosos da interface. `GoalManager` mantém metas de prova, trabalho, revisão ou tempo de estudo. Sessões concluídas formam a memória local por tema; mensagens motivacionais só aparecem quando existe uma interação real que as sustente.
+
 `AIProvider` define o contrato comum. Gemini, Ollama, OpenRouter e Groq possuem health check e geração server-only; os dois últimos usam o contrato OpenAI-compatible e só ficam online quando suas chaves estão configuradas. `ProviderRegistry` é o único catálogo, `HealthService` mantém verificações recentes em cache e `LatencyService` mede health e geração. No modo manual, o provider escolhido é estrito. No automático, providers online são ordenados pela menor latência antes da cadeia de fallback Ollama → Gemini → Groq → OpenRouter.
 
 O modo, provider preferencial e modelos escolhidos em Configurações são enviados às rotas internas pelo `AIClient`. O Ollama conversa por NDJSON; Gemini usa SSE; OpenRouter e Groq usam SSE OpenAI-compatible. O Route Handler normaliza tudo para NDJSON. Respostas idênticas são reutilizadas por um cache LRU em memória, com TTL de 30 minutos. Logs e métricas ficam em singletons efêmeros do processo servidor. O Dashboard mostra tokens, latência, ingestão, OCR, chunks e embeddings apenas no drawer de diagnóstico.
@@ -197,3 +216,5 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 ## Qualidade
 
 O projeto usa `strict` no TypeScript, aliases `@/*`, componentes de rota do App Router e testes Playwright para rotas, responsividade e fluxos locais principais.
+
+Na Sprint 29, ESLint e TypeScript passaram sem avisos, o build de produção foi aprovado e os 72 testes Playwright passaram. A cobertura do Mentor inclui sessão guiada, método socrático, correção, explicação baseada no material, metas, recomendações, memória e persistência após recarregar.

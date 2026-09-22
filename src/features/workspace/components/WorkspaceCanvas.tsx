@@ -19,6 +19,7 @@ import { WorkspacePersistence, type WorkspaceTab } from "@/features/study/servic
 const tabToPanel: Record<WorkspaceTab, WorkspacePanelType> = {
   material: "material",
   ia: "tutor",
+  mentor: "mentor",
   knowledge: "knowledge",
   flashcards: "flashcards",
   quiz: "quiz",
@@ -28,6 +29,7 @@ const tabToPanel: Record<WorkspaceTab, WorkspacePanelType> = {
 const panelToTab: Partial<Record<WorkspacePanelType, WorkspaceTab>> = {
   material: "material",
   tutor: "ia",
+  mentor: "mentor",
   knowledge: "knowledge",
   flashcards: "flashcards",
   quiz: "quiz",

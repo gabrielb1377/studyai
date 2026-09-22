@@ -1,6 +1,7 @@
 export const workspacePanelTypes = [
   "material",
   "tutor",
+  "mentor",
   "summaries",
   "flashcards",
   "quiz",

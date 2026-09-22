@@ -8,6 +8,7 @@ export const BUILT_IN_LAYOUTS: WorkspaceLayout[] = [
   { id: "review", name: "Revisão", builtIn: true, panels: [{ type: "flashcards", title: "Flashcards", size: 50 }, { type: "notes", title: "Notas", size: 50 }], createdAt: now, updatedAt: now },
   { id: "exercises", name: "Exercícios", builtIn: true, panels: [{ type: "quiz", title: "Quiz", size: 62 }, { type: "tutor", title: "Tutor IA", size: 38 }], createdAt: now, updatedAt: now },
   { id: "tutor", name: "Tutor", builtIn: true, panels: [{ type: "tutor", title: "Tutor IA", size: 60 }, { type: "knowledge", title: "Mapa de Conhecimento", size: 40 }], createdAt: now, updatedAt: now },
+  { id: "mentor", name: "Mentor", builtIn: true, panels: [{ type: "mentor", title: "Mentor", size: 58 }, { type: "material", title: "Material", size: 42 }], createdAt: now, updatedAt: now },
   { id: "planning", name: "Planejamento", builtIn: true, panels: [{ type: "dashboard", title: "Dashboard do tema", size: 45 }, { type: "notes", title: "Notas", size: 55 }], createdAt: now, updatedAt: now },
 ];
 

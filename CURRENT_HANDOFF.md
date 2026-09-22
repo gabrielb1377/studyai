@@ -1,8 +1,39 @@
-# Handoff Atual — Sprint 28: Workspace 2.0
+# Handoff Atual — Sprint 29: AI Mentor
 
 Atualizado em 21 de setembro de 2026.
 
-## Estado entregue na Sprint 28
+## Estado entregue na Sprint 29
+
+O Workspace possui um novo modo `Mentor`, sem substituir o Tutor. O Tutor continua atendendo perguntas livres por meio do AI Core; o Mentor coordena sessões guiadas com base em evidências do Learning Engine, Knowledge Graph, flashcards, quizzes e histórico real do tema.
+
+```text
+Study selecionado
+  → MentorService
+  → Learning Engine + Knowledge Graph + Flashcards + Quiz
+  → SessionEngine
+  → SocraticEngine + RecommendationEngine + GoalManager
+  → MentorStorage / StorageManager / IndexedDB
+  → painel Mentor no Workspace
+```
+
+Cada sessão cria um plano adaptativo com leitura, explicação, revisão e prática conforme a necessidade. O nível Iniciante, Intermediário ou Avançado altera a formulação das perguntas. Respostas recebem resultado, justificativa, orientação de melhoria e localização para revisão; uma resposta insuficiente interrompe a progressão e gera uma pergunta de acompanhamento antes de avançar. A explicação adicional reutiliza o `TutorService` e o `RetrievalPipeline`, mantendo o mesmo AI Core, provider selecionado e isolamento de arquivos físicos.
+
+Metas de prova, trabalho, revisão e tempo de estudo são persistidas. Recomendações e próximas revisões são calculadas em `requestIdleCallback`, com fallback assíncrono, sem bloquear a interface. A memória mostra sessões concluídas por tema e a motivação só usa resultados reais da sessão.
+
+### Serviços do Mentor
+
+- `MentorService`: fachada que recarrega todas as evidências antes de coordenar a ação.
+- `SessionEngine`: plano, estado e progressão da sessão guiada.
+- `SocraticEngine`: perguntas adaptativas e avaliação explicável.
+- `RecommendationEngine`: revisões e próximos passos em background.
+- `GoalManager`: criação, atualização, conclusão e exclusão de metas.
+- `MentorStorage`: persistência versionada exclusivamente via `StorageManager`.
+
+### Validação
+
+ESLint e TypeScript aprovados, build de produção aprovado e 72 testes Playwright aprovados. Os novos cenários cobrem sessão socrática, erro e nova explicação, memória, metas, recomendações e persistência após refresh.
+
+## Contexto preservado da Sprint 28
 
 O ambiente de Estudo deixou de ser uma sequência de ferramentas isoladas e passou a ser um Workspace multipainel. Material, Tutor, resumos, flashcards, quiz, notas, mapa de conhecimento e estatísticas podem permanecer abertos simultaneamente, com redimensionamento por ponteiro ou teclado, minimizar, maximizar, fechar, criar instâncias adicionais e restaurar o estado após reabrir o navegador.
 

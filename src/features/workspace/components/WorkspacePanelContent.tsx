@@ -12,6 +12,7 @@ import { StudyStatistics } from "@/features/study/StudyStatistics";
 
 const loading = () => <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Carregando ferramenta…</p>;
 const TutorWorkspace = dynamic(() => import("@/features/tutor/TutorWorkspace").then((module) => module.TutorWorkspace), { loading });
+const MentorWorkspace = dynamic(() => import("@/features/mentor/components/MentorWorkspace").then((module) => module.MentorWorkspace), { loading });
 const SummaryList = dynamic(() => import("@/features/summaries/SummaryList").then((module) => module.SummaryList), { loading });
 const FlashcardWorkspace = dynamic(() => import("@/features/flashcards/FlashcardWorkspace").then((module) => module.FlashcardWorkspace), { loading });
 const QuizWorkspace = dynamic(() => import("@/features/quiz/QuizWorkspace").then((module) => module.QuizWorkspace), { loading });
@@ -30,6 +31,7 @@ export const WorkspacePanelContent = memo(function WorkspacePanelContent({ panel
 }) {
   if (panel.type === "material") return <MaterialTab studyId={study.studyId} materials={materials} selectedMaterialId={panel.resourceId ?? materials[0]?.id} onMaterialChange={onMaterialChange} compact />;
   if (panel.type === "tutor") return <div className="space-y-5"><TutorWorkspace compact instanceId={panel.id} /><SummaryList studyId={study.studyId} /></div>;
+  if (panel.type === "mentor") return <MentorWorkspace study={study} />;
   if (panel.type === "summaries") return <SummaryList studyId={study.studyId} />;
   if (panel.type === "flashcards") return <FlashcardWorkspace study={study} />;
   if (panel.type === "quiz") return <QuizWorkspace study={study} />;

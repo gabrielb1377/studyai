@@ -3,6 +3,7 @@ import type { WorkspacePanel, WorkspacePanelType, WorkspaceRuntimeState } from "
 const panelTitles: Record<WorkspacePanelType, string> = {
   material: "Material",
   tutor: "Tutor IA",
+  mentor: "Mentor",
   summaries: "Resumos",
   flashcards: "Flashcards",
   quiz: "Quiz",

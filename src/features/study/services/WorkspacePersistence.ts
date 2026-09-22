@@ -1,4 +1,4 @@
-export const workspaceTabs = ["material", "ia", "knowledge", "flashcards", "quiz", "notes"] as const;
+export const workspaceTabs = ["material", "ia", "mentor", "knowledge", "flashcards", "quiz", "notes"] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
 export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
