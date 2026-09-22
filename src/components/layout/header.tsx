@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Menu, Settings, UserRound } from "lucide-react";
+import { LogOut, Menu, Settings, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,9 +14,11 @@ import {
 import { useLayoutStore } from "@/hooks/use-layout-store";
 import { SearchDialog } from "./search-dialog";
 import { ThemeToggle } from "./theme-toggle";
+import { useAuth } from "@/features/account/AuthProvider";
 
 export function Header() {
   const setMenuOpen = useLayoutStore((state) => state.setMenuOpen);
+  const { session, logout } = useAuth();
   return (
     <header className="flex h-[76px] shrink-0 items-center gap-2 border-b bg-background px-4 sm:px-7 lg:px-10">
       <Button
@@ -45,14 +47,16 @@ export function Header() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Meu espaço pessoal</DropdownMenuLabel>
+            <DropdownMenuLabel>{session?.user.profile?.name ?? "Meu espaço pessoal"}{session?.user.email && <span className="mt-0.5 block max-w-44 truncate text-xs font-normal text-muted-foreground">{session.user.email}</span>}</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild><Link href="/conta"><UserRound className="size-4" />Conta e sincronização</Link></DropdownMenuItem>
             <DropdownMenuItem asChild>
               <Link href="/configuracoes">
                 <Settings className="size-4" />
                 Configurações
               </Link>
             </DropdownMenuItem>
+            {session && <><DropdownMenuSeparator /><DropdownMenuItem onSelect={() => { void logout(); }}><LogOut className="size-4" />Sair</DropdownMenuItem></>}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -1,6 +1,44 @@
-# Handoff Atual — Sprint 29: AI Mentor
+# Handoff Atual — Sprint 30: Cloud Sync + Conta
 
-Atualizado em 21 de setembro de 2026.
+Atualizado em 22 de setembro de 2026.
+
+## Estado entregue na Sprint 30
+
+O StudyAI agora possui conta e sincronização cloud sem substituir a arquitetura offline-first. IndexedDB e OPFS continuam atendendo todas as features imediatamente; após autenticação, um sincronizador em background replica somente registros alterados, tombstones e binários cujo hash mudou.
+
+```text
+IndexedDB / OPFS
+  → manifesto + fila offline
+  → Route Handlers protegidos
+  → SyncService / ConflictResolver
+  → PostgreSQL
+  → cursor incremental
+  → IndexedDB / OPFS sob demanda
+```
+
+Cadastro, login, logout, verificação, recuperação, alteração de senha/email, sessão persistente e renovação automática estão disponíveis. O perfil sincroniza nome, foto, idioma, tema e preferências; Workspace, Mentor, Learning Engine, Knowledge Graph, estudos, notas, resumos, flashcards, quizzes e histórico percorrem o mesmo contrato de sync. A página `/conta` centraliza dispositivos, último sync, espaço enviado, backups, conflitos, compartilhamentos, segurança e histórico.
+
+### Serviços cloud
+
+- `AuthService`: credenciais, sessões curtas, refresh rotativo, verificação e recuperação.
+- `CloudDatabase`: fachada única para PostgreSQL e fallback em memória de desenvolvimento.
+- `SyncService`: push/pull incremental e restauração de snapshots.
+- `ConflictResolver`: valida versão-base e impede sobrescrita silenciosa.
+- `CloudSyncManager`: hashes, manifesto, fila offline, compressão, pull, aplicação e uploads.
+- `CloudFileService`: upload por hash e download sob demanda para OPFS.
+- `EmailService`: envio SMTP de verificação e recuperação.
+
+### Segurança
+
+Senhas usam `scrypt`; refresh tokens e tokens de conta ficam somente como hash; JWTs expiram rapidamente e são renovados em cookies `HttpOnly`, `SameSite=Strict`. Mutações exigem CSRF, endpoints sensíveis possuem rate limit, uploads e sync possuem limites, e o middleware aplica CSP com nonce, HSTS em produção, `nosniff`, bloqueio de framing e políticas de navegador. Nenhuma credencial do banco ou token de sessão é exposta às features.
+
+### Operação
+
+Produção exige `DATABASE_URL` e `AUTH_SECRET`. SMTP é obrigatório em produção para os fluxos de verificação e recuperação. Sem PostgreSQL, o modo de desenvolvimento usa memória e informa claramente que os dados cloud são voláteis. O schema está em `src/server/database/schema.sql` e é inicializado idempotentemente pela conexão server-only.
+
+### Validação específica
+
+Os cenários da Sprint 30 cobrem conta e recuperação, persistência da sessão, fila offline, sincronização incremental, backup, compartilhamento, arquivo binário e conflito entre dois contextos de navegador. ESLint e TypeScript passaram sem erros, o build de produção foi aprovado e os 75 testes Playwright passaram.
 
 ## Estado entregue na Sprint 29
 
@@ -298,11 +336,11 @@ A rota interna `/storage` exibe banco, versão, contagens, espaço estimado e ú
 
 ## Limites atuais
 
-- O binário original é persistido no OPFS quando suportado. Navegadores sem OPFS continuam exigindo re-seleção, sem perder os dados derivados ou o estado do Workspace.
+- O binário original é persistido no OPFS quando suportado. Com conta, um binário ausente é baixado sob demanda; sem conta e sem OPFS, a re-seleção continua disponível sem perder dados derivados ou estado do Workspace.
 - A primeira transcrição depende do download do modelo Whisper; indisponibilidade de rede é registrada como erro do arquivo sem interromper os demais.
 - O histórico do Tutor é local ao navegador.
 - O Ollama depende de um serviço local em execução e de pelo menos um modelo instalado.
-- Não há banco remoto, cloud ou sincronização.
+- O processamento de materiais permanece local; banco remoto e sincronização armazenam dados já estruturados e binários do usuário, sem mover OCR, embeddings ou RAG para o servidor.
 
 ## Validação
 

@@ -1,4 +1,4 @@
-import { BookOpen, Bot, FolderTree, House, Library, Settings, Upload } from "lucide-react";
+import { BookOpen, Bot, FolderTree, House, Library, Settings, Upload, UserRound } from "lucide-react";
 
 export const navigation = [
   {
@@ -42,5 +42,11 @@ export const navigation = [
     label: "Configurações",
     icon: Settings,
     description: "Deixe o espaço com a sua cara",
+  },
+  {
+    href: "/conta",
+    label: "Conta",
+    icon: UserRound,
+    description: "Sincronização e segurança",
   },
 ];

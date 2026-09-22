@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 21 de setembro de 2026.
+Atualizado em 22 de setembro de 2026.
 
 ## Propósito
 
@@ -23,6 +23,10 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | Testes de interface | Playwright |
 | Persistência local | IndexedDB nativo, banco `studyai-db` v2 |
 | Binários originais | Origin Private File System (OPFS), com fallback de re-seleção |
+| Backend cloud | Route Handlers Next.js e serviços `server-only` |
+| Banco cloud | PostgreSQL via `pg` |
+| Email transacional | Nodemailer/SMTP |
+| Autenticação | JWT curto, refresh token rotativo e cookies `HttpOnly` |
 
 ## Estrutura de módulos
 
@@ -43,6 +47,12 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/mentor` | Sessões guiadas, método socrático, metas, correção, recomendações adaptativas e memória do Mentor. |
 | `src/features/search` | Pesquisa global unificada sobre os registros estruturados do IndexedDB. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
+| `src/features/account` | Sessão, perfil, tela Conta e cliente de autenticação. |
+| `src/features/sync` | Fila incremental, manifesto, conflitos, arquivos e sincronização em background. |
+| `src/server/auth` | Regras de conta, sessões e email, exclusivas do servidor. |
+| `src/server/cloud` | Persistência cloud, resolução de conflitos, backups e compartilhamentos. |
+| `src/server/database` | Pool PostgreSQL, transações e schema versionável. |
+| `src/server/security` | Senhas, JWT, hashes, comparações constantes e rate limit. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
 | `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
 | `src/features/extraction` | Extração de documentos e mídia, OCR, transcrição, pipeline, persistência e status. |
@@ -72,6 +82,26 @@ O perfil local do Learning Engine também utiliza `metadata`, sob a chave versio
 O Mentor utiliza a chave versionada `mentor:v1` no mesmo store `metadata`. Nela ficam apenas sessões guiadas, metas e recomendações derivadas; materiais, conceitos, flashcards e resultados continuam em seus stores oficiais e são consultados novamente antes de cada interação.
 
 `StorageManager` oferece get, getAll, upsert, escrita em lote, substituição atômica, transações, paginação e diagnóstico. Falhas de quota e indisponibilidade são normalizadas em mensagens amigáveis. Transações abortadas executam rollback nativo.
+
+## Cloud Sync e contas
+
+O IndexedDB permanece como cache offline e garante que nenhuma feature dependa de conectividade. Quando existe uma sessão autenticada, `CloudSyncProvider` observa mudanças persistentes, agrupa eventos, executa sincronização inicial, periódica e ao recuperar a conexão. `CloudSyncManager` calcula hashes canônicos, compara um manifesto local, envia somente deltas e tombstones, avança um cursor incremental e aplica alterações remotas pelos mesmos stores oficiais.
+
+```text
+Feature → StorageManager → IndexedDB
+                         ↓ evento
+                   CloudSyncManager
+                         ↓
+                    /sync + /api/files/:id
+                         ↓
+              SyncService / PostgreSQL
+```
+
+O banco PostgreSQL possui usuários, perfis, refresh tokens, tokens de verificação/recuperação, registros versionados, log incremental, backups, compartilhamentos e arquivos. As tabelas de domínio solicitadas (`materials`, `studies`, `workspace`, `mentor`, `learning`, `knowledge`, `flashcards`, `quizzes`, `summaries` e `notes`) espelham os registros oficiais sem acoplar as features ao banco. `CloudDatabase` é a única fachada de persistência no servidor. Em desenvolvimento, a fachada usa memória quando `DATABASE_URL` não existe; a página Conta deixa essa limitação visível.
+
+O sync limita payloads, aceita compressão gzip, envia binários em paralelo e só repete upload quando o hash muda. Materiais cloud são baixados sob demanda pelo `MaterialViewer`. Conflitos usam versão-base: edições concorrentes não são sobrescritas silenciosamente e podem ser resolvidas na interface. Backups são criados diariamente ou manualmente; links públicos são revogáveis; o histórico registra entidade, operação, dispositivo e horário.
+
+A autenticação usa senha com `scrypt`, JWT de acesso com duração curta, refresh token rotativo armazenado apenas como hash, cookie `HttpOnly`, CSRF por double-submit, rate limit e expiração de sessão. O middleware aplica CSP com nonce, HSTS em produção, `nosniff`, bloqueio de frame e políticas restritivas. Email de produção depende de SMTP; em desenvolvimento, tokens de verificação e recuperação são mostrados apenas para facilitar testes locais.
 
 Preferências de navegação permanecem no `localStorage`, por serem pequenas e específicas do dispositivo. `WorkspaceStorage` mantém o layout versionado, dimensões, posição lógica, painéis, recursos abertos, scroll e filtros por `studyId`. `WorkspacePersistence` preserva o contrato legado e o estado específico do PDF, incluindo zoom, página, capítulo, favoritos, anotações e histórico. Conversas, sessões e a conversa ativa do Tutor permanecem no store `metadata` do IndexedDB. `MaterialBinaryStorage` grava o arquivo original no OPFS usando o id estável do material; ausência de suporte degrada para a re-seleção local.
 
@@ -204,10 +234,11 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 
 ## Limites conhecidos
 
-- A importação continua local e não transfere binários. Quando o navegador oferece OPFS, o arquivo original é persistido no dispositivo; os dados derivados permanecem no IndexedDB.
+- A importação e a extração continuam locais. Sem conta, binários ficam apenas no OPFS; com uma sessão autenticada, arquivos novos ou alterados são enviados por hash para permitir abertura sob demanda em outros dispositivos.
 - O primeiro uso da transcrição requer download do modelo Whisper; o tamanho e o tempo dependem da conexão e do dispositivo. Depois disso, o cache do navegador é reutilizado.
 - A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
-- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; não há banco, autenticação ou cloud de processamento.
+- Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; autenticação e sincronização existem, mas a extração e o processamento de conhecimento continuam locais.
+- Sem `DATABASE_URL`, contas e cloud usam memória volátil apenas para desenvolvimento. Produção requer PostgreSQL e `AUTH_SECRET`; verificação e recuperação por email requerem SMTP.
 - O Ollama precisa estar em execução no endereço configurado por `OLLAMA_URL` e possuir ao menos um modelo instalado.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 - A detecção de estrutura é heurística e local. Ela reconhece marcadores e vocabulário conhecidos, mas não substitui a edição manual quando o documento usa títulos ambíguos.
@@ -217,4 +248,4 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 
 O projeto usa `strict` no TypeScript, aliases `@/*`, componentes de rota do App Router e testes Playwright para rotas, responsividade e fluxos locais principais.
 
-Na Sprint 29, ESLint e TypeScript passaram sem avisos, o build de produção foi aprovado e os 72 testes Playwright passaram. A cobertura do Mentor inclui sessão guiada, método socrático, correção, explicação baseada no material, metas, recomendações, memória e persistência após recarregar.
+Na Sprint 30 foram adicionados cenários Playwright para cadastro, sessão persistente, logout/login, recuperação, sync incremental, fila offline, backup, compartilhamento, upload/download por hash e conflito entre dois dispositivos. ESLint, TypeScript e o build de produção foram aprovados; os 75 testes Playwright passaram. O conjunto continua cobrindo Workspace, Mentor, Learning Engine, ingestão, OCR/RAG, Tutor e persistência local.

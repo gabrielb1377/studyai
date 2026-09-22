@@ -11,6 +11,7 @@ import type { StudyMaterial } from "@/types/study";
 import { MaterialBinaryStorage } from "@/services/material-binary-storage";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
+import { CloudFileService } from "@/features/sync/CloudFileService";
 
 const PdfMaterialViewer = dynamic(() => import("./PdfMaterialViewer"), {
   ssr: false,
@@ -60,7 +61,8 @@ export function MaterialViewer({
     setPdfView("pdf");
     if (runtimeSource) return () => { active = false; };
     setIsRestoring(true);
-    void MaterialBinaryStorage.load(material).then((file) => {
+    void MaterialBinaryStorage.load(material).then(async (localFile) => {
+      const file = localFile ?? await CloudFileService.download(material).catch(() => null);
       if (!active || !file) return;
       MaterialRuntimeStore.register(material.id, file);
       setSource(MaterialRuntimeStore.get(material.id)?.source);
@@ -119,7 +121,7 @@ export function MaterialViewer({
             {pdfView === "pdf" && source && <PdfMaterialViewer key={material.id} material={{ ...material, source }} studyId={studyId} compact={compact} />}
             {pdfView === "pdf" && !source && (
               <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                <p>{isRestoring ? "Procurando o PDF original neste navegador…" : "O PDF original não está disponível neste navegador."}</p>
+                <p>{isRestoring ? "Procurando o PDF neste dispositivo e na nuvem…" : "O PDF original não está disponível neste dispositivo."}</p>
                 {!isRestoring && <Button type="button" variant="outline" className="mt-4" onClick={() => fileInputRef.current?.click()}><RefreshCw />Selecionar novamente</Button>}
                 <p className="mt-3 text-xs">Página, zoom, capítulo e marcadores permanecem salvos.</p>
               </div>

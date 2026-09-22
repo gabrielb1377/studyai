@@ -43,10 +43,17 @@ function normalizeError(error: unknown) {
   );
 }
 
-function emit(store: StorageStoreName) {
+function emit(store: StorageStoreName, key?: IDBValidKey) {
   if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(STORAGE_UPDATED_EVENT, { detail: { store } }));
+    window.dispatchEvent(new CustomEvent(STORAGE_UPDATED_EVENT, { detail: { store, key } }));
   }
+}
+
+function valueKey(value: unknown): IDBValidKey | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const key = record.id ?? record.studyId ?? record.chunkId ?? record.key;
+  return typeof key === "string" || typeof key === "number" ? key : undefined;
 }
 
 async function ready() {
@@ -88,11 +95,11 @@ export const StorageManager = {
     }
   },
 
-  async put<T>(store: StorageStoreName, value: T) {
+  async put<T>(store: StorageStoreName, value: T, options: { notify?: boolean } = {}) {
     await ready();
     try {
       const key = await IndexedDB.transaction([store], "readwrite", (storage) => storage.put(store, value));
-      emit(store);
+      if (options.notify !== false) emit(store, valueKey(value));
       return key;
     } catch (error) {
       throw normalizeError(error);

@@ -1,6 +1,6 @@
 # StudyAI
 
-Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação, extração e recuperação híbrida local de materiais, um ambiente de estudo, recursos de revisão e um Tutor IA desacoplado por providers.
+Workspace pessoal de estudos construído com Next.js 15, React, TypeScript e Tailwind CSS. O projeto reúne importação, extração e recuperação híbrida local de materiais, um ambiente de estudo, recursos de revisão, Tutor IA e sincronização incremental entre dispositivos.
 
 ## Início rápido
 
@@ -29,6 +29,9 @@ GEMINI_API_KEY=
 OLLAMA_URL=http://localhost:11434
 OPENROUTER_API_KEY=
 GROQ_API_KEY=
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/studyai
+AUTH_SECRET=gere-uma-chave-aleatoria-com-pelo-menos-32-caracteres
+SMTP_HOST=
 ```
 
 Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, somente o provider selecionado é utilizado; no automático, o Provider Manager prioriza o provider online mais rápido e aplica fallback. Gemini aplica retry com backoff em alta demanda, e providers OpenAI-compatible respeitam a janela de contexto descoberta para cada modelo. Configurações mostra endpoint, modelo, latência, tempo médio, último erro e teste de conexão individual. Nenhuma credencial ou chamada de provider é exposta ao cliente: toda comunicação passa por Route Handlers, `AIService` e `ProviderManager`.
@@ -52,6 +55,7 @@ Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, 
 | Semantic Knowledge Engine | Conceitos, definições, siglas, entidades, relações e chunks semânticos persistidos como grafo local. |
 | Pesquisa Global 2.0 | Busca unificada em materiais, notas, resumos, flashcards, quizzes, conceitos e relações. |
 | Configurações | Tema, seleção manual/automática, modelos, health, endpoint, erros, latência, métricas e teste por provider. |
+| Conta e Cloud Sync | Cadastro, login, recuperação, perfil, sessões, sync incremental, conflitos, backups, compartilhamentos e histórico. |
 
 ## Arquitetura
 
@@ -62,6 +66,7 @@ src/
 ├── features/            # Módulos de domínio, incluindo o AI Core
 ├── hooks/               # Estado transversal de layout
 ├── lib/                 # Utilitários e StorageManager sobre IndexedDB
+├── server/              # Auth, segurança, PostgreSQL e serviços cloud server-only
 ├── services/            # Registro persistido e referências de runtime dos materiais
 ├── styles/              # Tokens e estilos globais
 └── types/               # Contratos TypeScript compartilhados
@@ -69,7 +74,23 @@ src/
 
 O Smart Study Generator fica em `src/features/study-generator`. Seus detectores são independentes e determinísticos: `StudyAnalyzer` coordena estrutura, disciplina, palavras-chave e leitura; `StudyGeneratorService` é o único responsável por persistir o resultado no material e no Study Engine. PDFs da Estácio reconhecem os marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Quando a identificação não é conclusiva, o fluxo cria um estudo básico com valores explícitos de fallback e nunca bloqueia a importação.
 
-Os dados pessoais são locais por enquanto. Documentos, conteúdos, grafos de conhecimento, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam no IndexedDB `studyai-db`. Quando disponível, o binário original é salvo no Origin Private File System (OPFS); se o navegador não oferecer suporte, a interface permite selecionar o arquivo novamente sem perder página, zoom, capítulo ou marcadores. O `localStorage` é reservado a preferências leves. O diagnóstico interno está disponível em `/storage`, e o Dashboard concentra ingestão e métricas em um drawer lateral.
+Documentos, conteúdos, grafos de conhecimento, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados continuam no IndexedDB `studyai-db`, que funciona como cache offline e fonte de trabalho imediata. Quando disponível, o binário original é salvo no Origin Private File System (OPFS). Para usuários autenticados, mudanças são sincronizadas incrementalmente com PostgreSQL e os binários são enviados separadamente por hash. O `localStorage` permanece reservado a preferências leves e cursores de infraestrutura.
+
+## Conta, backend e sincronização
+
+O backend fica em `src/server` e só é acessado por Route Handlers. API keys, hashes de senha, refresh tokens e conexão PostgreSQL nunca chegam ao navegador. Senhas usam `scrypt`; refresh tokens e tokens de conta são armazenados apenas como hash; JWTs de acesso expiram em 15 minutos e são renovados por refresh token rotativo em cookie `HttpOnly`. Requisições mutáveis autenticadas usam proteção CSRF, cookies `SameSite=Strict`, rate limit e limites de payload. Em produção, HTTPS é reforçado por HSTS e o middleware aplica CSP, proteção contra framing, MIME sniffing e políticas restritivas do navegador.
+
+```text
+IndexedDB / OPFS
+  → CloudSyncManager
+  → /sync e /api/files/:id
+  → SyncService + ConflictResolver
+  → PostgreSQL
+```
+
+Cada registro sincronizado possui entidade, id, versão, timestamp, hash, operação e dispositivo. O cliente mantém manifesto, cursor e fila offline; somente alterações, exclusões e arquivos com hash novo são enviados. O servidor detecta edições concorrentes pela versão-base. Conflitos não mescláveis aparecem em `/conta`, onde é possível manter a versão local, usar a remota ou mesclar objetos compatíveis. O Workspace continua funcionando offline e sincroniza novamente ao recuperar a conexão.
+
+Backups preservam snapshots versionados dos registros cloud e podem ser restaurados pela página Conta. Compartilhamentos usam tokens revogáveis. Downloads de binários são sob demanda: um material ausente no OPFS é solicitado somente quando o visualizador precisa abri-lo. Sem `DATABASE_URL`, o desenvolvimento usa um backend em memória explicitamente sinalizado na interface; esse modo não é persistente e não deve ser usado em produção.
 
 O estado leve do Workspace também é persistido: estudo e arquivo atuais, aba, página/zoom/capítulo/marcadores do PDF, flashcard, questão e nota aberta. Notas, resumos e organização usam autosave. O Tutor restaura a conversa ativa.
 
@@ -83,7 +104,7 @@ O Semantic Knowledge Engine fica em `src/features/semantic`. Após a normalizaç
 
 ## Limites deliberados
 
-Esta versão não tem banco vetorial, banco remoto, autenticação ou sincronização. O RAG combina embeddings linguísticos locais com ranking lexical: o provider selecionado recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual; nunca recebe arquivos físicos nem todo o acervo.
+Não existe banco vetorial externo nem processamento cloud dos materiais. O RAG continua local e combina embeddings linguísticos com ranking lexical; o provider selecionado recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual. O modo em memória do backend serve apenas ao desenvolvimento. A persistência cloud real requer PostgreSQL, e envio de verificação/recuperação em produção requer SMTP configurado.
 
 ## Referências
 
