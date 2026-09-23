@@ -176,6 +176,47 @@ test("seleciona, remove e processa arquivos localmente", async ({ page }) => {
   await expect(diagnostics.getByLabel("Embeddings: 1")).toBeVisible();
 });
 
+test("reimporta arquivo ausente localmente sem duplicar o material restaurado", async ({ page }) => {
+  const name = "material-restaurado.txt";
+  const content = "Conteúdo real para recuperação do arquivo.";
+  const lastModified = 1_700_000_000_000;
+  const input = page.getByLabel("Selecionar arquivos do dispositivo");
+  const selectFile = async () => input.evaluate((node, details) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([details.content], details.name, { type: "text/plain", lastModified: details.lastModified }));
+    (node as HTMLInputElement).files = transfer.files;
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+  }, { name, content, lastModified });
+  await page.goto("/importar");
+  await selectFile();
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible();
+  const originalMaterials = await readIndexedDBStore<Array<{ id: string; name: string }>[number]>(page, "documents");
+  const original = originalMaterials.find((material) => material.name === name);
+  expect(original).toBeDefined();
+
+  await page.evaluate(async (id) => {
+    const root = await navigator.storage.getDirectory();
+    const directory = await root.getDirectoryHandle("studyai-materials");
+    await directory.removeEntry(id);
+  }, original!.id);
+  await page.goto("/importar");
+  await selectFile();
+  await expect(page.locator("p[role='alert']")).toContainText("material sem cópia local será restaurado");
+  await page.getByRole("button", { name: "Importar", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible();
+
+  const restoredMaterials = await readIndexedDBStore<Array<{ id: string; name: string }>[number]>(page, "documents");
+  expect(restoredMaterials.filter((material) => material.name === name)).toHaveLength(1);
+  expect(restoredMaterials.find((material) => material.name === name)?.id).toBe(original!.id);
+  const recoveredContent = await page.evaluate(async (id) => {
+    const root = await navigator.storage.getDirectory();
+    const directory = await root.getDirectoryHandle("studyai-materials");
+    return (await (await directory.getFileHandle(id)).getFile()).text();
+  }, original!.id);
+  expect(recoveredContent).toBe(content);
+});
+
 test("aceita arquivo por arrastar e soltar e evita duplicatas", async ({
   page,
 }) => {

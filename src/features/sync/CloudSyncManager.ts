@@ -2,6 +2,7 @@ import { AuthClient } from "@/features/account/AuthClient";
 import { StorageManager } from "@/lib/storage/StorageManager";
 import { STORAGE_MIGRATION_KEY, type StorageStoreName } from "@/lib/storage/StorageVersion";
 import { MaterialBinaryStorage } from "@/services/material-binary-storage";
+import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import type { Material } from "@/types/material";
 import { CloudFileService } from "./CloudFileService";
 import type { ClientCloudRecord, ClientConflict, ClientSyncEntity, SyncMetadata } from "./types";
@@ -41,11 +42,20 @@ async function scan(meta: SyncMetadata) {
   return { ...meta, queue: [...queue.values()] };
 }
 
-async function apply(record: ClientCloudRecord) {
+async function apply(record: ClientCloudRecord, meta?: SyncMetadata) {
   if (record.entity === "workspace") { if (record.operation === "delete") return; for (const [key, value] of Object.entries(record.data as Record<string, string> ?? {})) localStorage.setItem(key, value); return; }
   const store = record.entity === "mentor" || record.entity === "learning" ? "metadata" : record.entity as StorageStoreName;
   if (!stores.includes(store as typeof stores[number])) return;
-  if (record.operation === "delete") await StorageManager.delete(store, record.recordId); else await StorageManager.put(store, record.data);
+  if (record.operation === "delete") {
+    await StorageManager.delete(store, record.recordId);
+    if (record.entity === "documents") {
+      await MaterialBinaryStorage.remove(record.recordId);
+      MaterialRuntimeStore.remove(record.recordId);
+      if (meta) delete meta.fileManifest[record.recordId];
+    }
+  } else {
+    await StorageManager.put(store, record.data);
+  }
 }
 
 async function uploadFiles(meta: SyncMetadata) {
@@ -75,7 +85,7 @@ export const CloudSyncManager = {
           meta.queue = meta.queue.filter((item) => conflictKeys.has(`${item.entity}:${item.recordId}`)); meta.conflicts = pushed.conflicts;
         }
         const pulled = await AuthClient.request<{ changes: ClientCloudRecord[]; cursor: number }>(`/sync?since=${meta.state.cursor}`);
-        for (const item of pulled.changes) { if (item.deviceId !== AuthClient.deviceId()) await apply(item); const key=`${item.entity}:${item.recordId}`; if(item.operation==="delete")delete meta.manifest[key];else meta.manifest[key] = { hash: item.hash, version: item.version }; }
+        for (const item of pulled.changes) { if (item.deviceId !== AuthClient.deviceId()) await apply(item, meta); const key=`${item.entity}:${item.recordId}`; if(item.operation==="delete")delete meta.manifest[key];else meta.manifest[key] = { hash: item.hash, version: item.version }; }
         const uploadedBytes = await uploadFiles(meta);
         meta = await saveMeta({ ...meta, state: { ...meta.state, status: "syncing", cursor: pulled.cursor, lastSyncAt: new Date().toISOString(), uploadedBytes: meta.state.uploadedBytes + uploadedBytes } });
         const lastBackup = localStorage.getItem("studyai:last-cloud-backup"); if (!lastBackup || Date.now() - new Date(lastBackup).getTime() > 24 * 60 * 60 * 1000) { await AuthClient.request("/backup", { method: "POST", body: JSON.stringify({ action: "create" }) }); localStorage.setItem("studyai:last-cloud-backup", new Date().toISOString()); }
@@ -96,5 +106,5 @@ export const CloudSyncManager = {
     })().finally(() => { running = undefined; });
     return running;
   },
-  async resolve(conflict: ClientConflict, choice: "local" | "remote" | "merge") { const meta = await loadMeta(); if (choice === "remote") { await apply(conflict.remote); meta.manifest[`${conflict.entity}:${conflict.recordId}`] = { hash: conflict.remote.hash, version: conflict.remote.version }; meta.queue = meta.queue.filter((item) => `${item.entity}:${item.recordId}` !== `${conflict.entity}:${conflict.recordId}`); } else { meta.queue = meta.queue.map((item) => { if (`${item.entity}:${item.recordId}` !== `${conflict.entity}:${conflict.recordId}`) return item; const data = choice === "merge" && typeof conflict.remote.data === "object" && conflict.remote.data && typeof item.data === "object" && item.data ? { ...conflict.remote.data, ...item.data } : item.data; return { ...item, data, baseVersion: conflict.remote.version }; }); } meta.conflicts = meta.conflicts.filter((item) => item.id !== conflict.id); await saveMeta(meta); return this.syncNow(); },
+  async resolve(conflict: ClientConflict, choice: "local" | "remote" | "merge") { const meta = await loadMeta(); if (choice === "remote") { await apply(conflict.remote, meta); meta.manifest[`${conflict.entity}:${conflict.recordId}`] = { hash: conflict.remote.hash, version: conflict.remote.version }; meta.queue = meta.queue.filter((item) => `${item.entity}:${item.recordId}` !== `${conflict.entity}:${conflict.recordId}`); } else { meta.queue = meta.queue.map((item) => { if (`${item.entity}:${item.recordId}` !== `${conflict.entity}:${conflict.recordId}`) return item; const data = choice === "merge" && typeof conflict.remote.data === "object" && conflict.remote.data && typeof item.data === "object" && item.data ? { ...conflict.remote.data, ...item.data } : item.data; return { ...item, data, baseVersion: conflict.remote.version }; }); } meta.conflicts = meta.conflicts.filter((item) => item.id !== conflict.id); await saveMeta(meta); return this.syncNow(); },
 };

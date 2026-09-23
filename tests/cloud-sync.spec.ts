@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { readIndexedDBStore } from "./helpers/indexed-db";
 
 const password = "StudyAI2026secure";
 const uniqueEmail = (label: string) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
@@ -105,6 +106,21 @@ test("sync incremental mantém fila offline, backup, compartilhamento e arquivo"
 
   await page.getByRole("button", { name: "Criar backup agora" }).click();
   await expect(page.getByRole("button", { name: "Restaurar" }).first()).toBeVisible();
+  const backupResponse = await page.request.get("/backup");
+  const backups = await backupResponse.json() as { backups: Array<{ id: string }> };
+  const backupId = backups.backups[0]?.id;
+  expect(backupId).toBeTruthy();
+  await note(page, "cloud-note-1", "Versão posterior ao backup");
+  await sync(page);
+  const restoreStatus = await page.evaluate(async (id) => {
+    const csrf = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? "";
+    const response = await fetch("/backup", { method: "POST", headers: { "content-type": "application/json", "x-csrf-token": csrf }, body: JSON.stringify({ action: "restore", backupId: id, deviceId: "browser-restore" }) });
+    return response.status;
+  }, backupId!);
+  expect(restoreStatus).toBe(200);
+  await sync(page);
+  const restoredNotes = await readIndexedDBStore<Array<{ id: string; content: string }>[number]>(page, "notes");
+  expect(restoredNotes.find((item) => item.id === "cloud-note-1")?.content).toBe("Primeira versão real");
   await page.getByLabel("ID para compartilhar").fill("cloud-note-1");
   await page.getByRole("button", { name: "Compartilhar", exact: true }).click();
   await expect(page.getByText("notes · cloud-note-1").last()).toBeVisible();
@@ -140,4 +156,85 @@ test("conflito entre dois dispositivos oferece versão local, remota e mesclagem
     await expect(secondPage.getByRole("button", { name: "Usar versão remota" })).toBeVisible();
     await expect(secondPage.getByRole("button", { name: "Mesclar" })).toBeVisible();
   } finally { await first.close(); await second.close(); }
+});
+
+test("exclusão sincronizada remove o documento e o binário OPFS do outro dispositivo", async ({ browser }) => {
+  const email = uniqueEmail("delete-device");
+  const first: BrowserContext = await browser.newContext();
+  const second: BrowserContext = await browser.newContext();
+  const firstPage = await first.newPage();
+  const secondPage = await second.newPage();
+  const materialId = `material-${Date.now()}`;
+  try {
+    await register(firstPage, email);
+    const timestamp = new Date().toISOString();
+    await putRecord(firstPage, "documents", {
+      id: materialId,
+      fileId: materialId,
+      name: "material-remoto.txt",
+      relativePath: "material-remoto.txt",
+      fileType: "txt",
+      mimeType: "text/plain",
+      size: 17,
+      lastModified: Date.now(),
+      importedAt: timestamp,
+      updatedAt: timestamp,
+      status: "ready",
+    });
+    await firstPage.evaluate(async (id) => {
+      const root = await navigator.storage.getDirectory();
+      const directory = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const handle = await directory.getFileHandle(id, { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(new File(["conteúdo material"], "material-remoto.txt", { type: "text/plain" }));
+      await writable.close();
+    }, materialId);
+    await sync(firstPage);
+
+    await login(secondPage, email);
+    await sync(secondPage);
+    await expect.poll(async () => (await secondPage.evaluate(async (id) => {
+      const root = await navigator.storage.getDirectory();
+      const directory = await root.getDirectoryHandle("studyai-materials", { create: false }).catch(() => null);
+      return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
+    }, materialId))).toBe(false);
+    const remoteFile = await secondPage.request.get(`/api/files/${materialId}`);
+    expect(remoteFile.ok()).toBe(true);
+    await secondPage.evaluate(async ({ id, bytes }) => {
+      const root = await navigator.storage.getDirectory();
+      const directory = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const handle = await directory.getFileHandle(id, { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(new Uint8Array(bytes));
+      await writable.close();
+    }, { id: materialId, bytes: [...new Uint8Array(await remoteFile.body())] });
+    const cachedBeforeDelete = await secondPage.evaluate(async (id) => {
+      const root = await navigator.storage.getDirectory();
+      const directory = await root.getDirectoryHandle("studyai-materials");
+      return directory.getFileHandle(id).then(() => true).catch(() => false);
+    }, materialId);
+    expect(cachedBeforeDelete).toBe(true);
+
+    const csrf = await firstPage.evaluate(() => document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? "");
+    const deletedFile = await firstPage.request.delete(`/api/files/${materialId}`, { headers: { "x-csrf-token": csrf } });
+    expect(deletedFile.ok()).toBe(true);
+    await firstPage.evaluate(async ({ id }) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
+      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 2);
+      const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      await new Promise<void>((resolve, reject) => { const transaction = database.transaction("documents", "readwrite"); transaction.objectStore("documents").delete(id); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); });
+      database.close();
+    }, { id: materialId });
+    await sync(firstPage);
+    await sync(secondPage);
+    const cachedAfterDelete = await secondPage.evaluate(async (id) => {
+      const root = await navigator.storage.getDirectory();
+      const directory = await root.getDirectoryHandle("studyai-materials").catch(() => null);
+      return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
+    }, materialId);
+    expect(cachedAfterDelete).toBe(false);
+  } finally {
+    await first.close();
+    await second.close();
+  }
 });

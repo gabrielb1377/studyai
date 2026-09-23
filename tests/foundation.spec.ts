@@ -42,7 +42,7 @@ test("navegação, pesquisa, tema persistido e acesso à importação", async ({
   expect(errors).toEqual([]);
 });
 
-for (const width of [360, 768, 1024, 1440]) {
+for (const width of [360, 390, 768, 1024, 1366, 1440, 2560]) {
   test(`rotas sem overflow horizontal em ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     for (const path of [

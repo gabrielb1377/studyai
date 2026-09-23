@@ -1,8 +1,16 @@
-# Handoff Atual — Sprint 32: Product Polish + UX + Escalabilidade
+# Handoff Atual — Sprint 32.5: Auditoria Geral + Estabilização + Polimento
 
 Atualizado em 23 de setembro de 2026.
 
-## Estado entregue na Sprint 32
+## Resultado da Sprint 32.5
+
+Auditoria documentada em `docs/AUDITORIA_SPRINT_32_5.md`, com inventário em `docs/INVENTARIO_PROJETO.md`, arquitetura e fluxos em `docs/ARQUITETURA_E_FLUXOS.md`, e backlog em `docs/BACKLOG_SPRINT_32_5.md`.
+
+Foram corrigidos três problemas: exclusão remota agora também limpa o binário OPFS e referências locais; reimportar um material cujo binário local desapareceu recupera o documento existente sem duplicá-lo; telemetria rejeita payload inválido ou acima de 4 KiB e limita por endereço de rede, não por identidade fornecida pelo cliente. Cobertura E2E expandida a sete viewports. Resultado final: 92 testes Playwright aprovados, além de lint, TypeScript e build aprovados.
+
+Limitações abertas: `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas (advisory em `adm-zip` e `sharp`/libvips); Docker não está instalado neste ambiente, então PostgreSQL, MinIO/S3 e Compose não foram iniciados; restauração de backup não contém o payload dos binários S3; providers foram verificados por health/model discovery, sem geração real de texto. Ver backlog Sprint 32.5 antes da Sprint 33.
+
+## Base preservada da Sprint 32
 
 O StudyAI possui agora duas camadas de experiência sobre as mesmas features: o modo Simples, padrão, expõe somente as jornadas de estudo; o modo Avançado revela grafo, diagnóstico, pipeline, métricas e controles técnicos. A alternância é imediata, persistida e sincronizada. Sidebar compactável no desktop, navegação inferior mobile, Header adaptativo, componentes mais densos e tokens de foco/hover reduzem ruído sem remover funcionalidades.
 

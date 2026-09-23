@@ -20,6 +20,8 @@ npm run test:e2e
 npm run build
 ```
 
+O resultado da auditoria e inventário da Sprint 32.5 estão em [`docs/AUDITORIA_SPRINT_32_5.md`](docs/AUDITORIA_SPRINT_32_5.md), [`docs/INVENTARIO_PROJETO.md`](docs/INVENTARIO_PROJETO.md), [`docs/ARQUITETURA_E_FLUXOS.md`](docs/ARQUITETURA_E_FLUXOS.md) e [`docs/BACKLOG_SPRINT_32_5.md`](docs/BACKLOG_SPRINT_32_5.md).
+
 ## Configuração de IA
 
 Copie o conteúdo de `.env.example` para `.env.local` e informe uma chave válida:

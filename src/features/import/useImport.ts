@@ -24,26 +24,38 @@ export function useImport() {
   async function addFiles(incoming: File[]): Promise<AddFilesResult> {
     const unsupported = incoming.filter((file) => !isSupportedFile(file));
     const supported = incoming.filter(isSupportedFile);
-    const existingIds = new Set([
-      ...files.map(({ file }) => getFileIdentity(file)),
-      ...(await MaterialService.load()).map(({ identity }) => identity),
-    ]);
+    const queuedIds = new Set(files.map(({ file }) => getFileIdentity(file)));
+    const existingMaterials = await MaterialService.load();
+    const existingByIdentity = new Map(existingMaterials.map((material) => [material.identity, material]));
     const duplicates: File[] = [];
-    const unique: File[] = [];
-    supported.forEach((file) => {
+    const recoveries: File[] = [];
+    const unique: Array<{ file: File; id: string }> = [];
+    for (const file of supported) {
       const identity = getFileIdentity(file);
-      if (existingIds.has(identity)) {
+      if (queuedIds.has(identity)) {
         duplicates.push(file);
-        return;
+        continue;
       }
-      existingIds.add(identity);
-      unique.push(file);
-    });
+      queuedIds.add(identity);
+      const existing = existingByIdentity.get(identity);
+      if (existing) {
+        const runtimeFile = MaterialRuntimeStore.get(existing.id);
+        const localFile = await MaterialBinaryStorage.load(existing);
+        if (!runtimeFile && !localFile) {
+          unique.push({ file, id: existing.id });
+          recoveries.push(file);
+        } else {
+          duplicates.push(file);
+        }
+        continue;
+      }
+      unique.push({ file, id: crypto.randomUUID() });
+    }
 
     setFiles((current) => [
       ...current,
-      ...unique.map((file) => ({
-        id: crypto.randomUUID(),
+      ...unique.map(({ file, id }) => ({
+        id,
         file,
         extension: getFileExtension(file.name),
         progress: 0,
@@ -61,6 +73,11 @@ export function useImport() {
     if (duplicates.length) {
       messages.push(
         `${duplicates.length} ${duplicates.length === 1 ? "arquivo repetido não foi adicionado" : "arquivos repetidos não foram adicionados"}`,
+      );
+    }
+    if (recoveries.length) {
+      messages.push(
+        `${recoveries.length} ${recoveries.length === 1 ? "material sem cópia local será restaurado" : "materiais sem cópia local serão restaurados"}`,
       );
     }
     setFeedback(messages.join(". "));

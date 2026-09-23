@@ -86,3 +86,17 @@ test("produção possui Object Storage, HTTPS, containers e entrega contínua", 
   expect(health.ok()).toBe(true);
   await expect(health.json()).resolves.toEqual(expect.objectContaining({ status: "ok", objectStorage: expect.objectContaining({ mode: "database" }) }));
 });
+
+test("endpoint de telemetria rejeita corpos grandes e JSON inválido", async ({ request }) => {
+  const tooLarge = await request.post("/api/telemetry", {
+    headers: { "content-type": "application/json", "x-device-id": "id-rotativo" },
+    data: JSON.stringify({ name: "LCP", value: 1, padding: "x".repeat(5_000) }),
+  });
+  expect(tooLarge.status()).toBe(413);
+
+  const invalid = await request.post("/api/telemetry", {
+    headers: { "content-type": "application/json", "x-device-id": "outro-id" },
+    data: "{invalid-json",
+  });
+  expect(invalid.status()).toBe(400);
+});
