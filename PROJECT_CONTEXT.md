@@ -27,6 +27,9 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | Banco cloud | PostgreSQL via `pg` |
 | Email transacional | Nodemailer/SMTP |
 | Autenticação | JWT curto, refresh token rotativo e cookies `HttpOnly` |
+| Desktop | Electron 44 e electron-builder/NSIS |
+| Mobile | Capacitor 8 para Android e iOS |
+| PWA | Web App Manifest, Service Worker e Cache Storage nativos |
 
 ## Estrutura de módulos
 
@@ -49,6 +52,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/features/account` | Sessão, perfil, tela Conta e cliente de autenticação. |
 | `src/features/sync` | Fila incremental, manifesto, conflitos, arquivos e sincronização em background. |
+| `src/features/platform` | Detecção de dispositivo, bridges Electron/Capacitor, PWA, cache, notificações e atualizações. |
 | `src/server/auth` | Regras de conta, sessões e email, exclusivas do servidor. |
 | `src/server/cloud` | Persistência cloud, resolução de conflitos, backups e compartilhamentos. |
 | `src/server/database` | Pool PostgreSQL, transações e schema versionável. |
@@ -217,6 +221,25 @@ Sem `GEMINI_API_KEY`, os endpoints retornam uma resposta controlada e a interfac
 
 Os embeddings usam o modelo interno `local-feature-hash-v1`, com 192 dimensões. Ele representa termos, raízes linguísticas, n-gramas e pares de palavras em um vetor normalizado. Os vetores são quantizados para Int8 e persistidos em Base64 no formato V2, reduzindo substancialmente a pressão sobre a quota do navegador; dados V1 são migrados em memória na próxima sincronização. Todo o cálculo acontece no navegador, sem download de modelo, API externa ou banco vetorial.
 
+## Plataforma e distribuição
+
+`PlatformProvider` inicializa somente capacidades transversais: service worker, monitor de revisão e bridge mobile. As features continuam dependendo de contratos web e de `StorageManager`; nenhuma regra do Workspace, Mentor, RAG ou Learning Engine conhece Electron ou Capacitor.
+
+```text
+Workspace / Learning / Mentor
+  → StorageManager + IndexedDB / OPFS
+  → Platform services
+      ├─ PWAService / CacheManager
+      ├─ DesktopManager / preload Electron
+      ├─ MobileBridge / Capacitor
+      └─ NotificationService / UpdateManager
+  → CloudSyncManager quando online
+```
+
+O Desktop empacota o output standalone do Next.js e o executa apenas em `127.0.0.1`, preservando Route Handlers e funcionamento offline. A PWA possui precache resiliente, cache por finalidade, atualização automática e recepção de arquivos pelo Web Share Target. Android aceita `SEND`, `SEND_MULTIPLE` e `VIEW`; iOS declara os tipos de documentos. Configurações adapta os controles ao dispositivo e exibe uso/limpeza de cache.
+
+Distribuição mobile requer uma URL HTTPS em `CAPACITOR_SERVER_URL`, Android Studio/SDK para Android e macOS/Xcode para assinar iOS. Push remoto e atualização assinada exigem credenciais externas; o código atual entrega notificações locais e a fronteira de atualização, sem versionar segredos.
+
 ## Endpoints existentes
 
 | Endpoint | Finalidade |
@@ -249,3 +272,5 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 O projeto usa `strict` no TypeScript, aliases `@/*`, componentes de rota do App Router e testes Playwright para rotas, responsividade e fluxos locais principais.
 
 Na Sprint 30 foram adicionados cenários Playwright para cadastro, sessão persistente, logout/login, recuperação, sync incremental, fila offline, backup, compartilhamento, upload/download por hash e conflito entre dois dispositivos. ESLint, TypeScript e o build de produção foram aprovados; os 75 testes Playwright passaram. O conjunto continua cobrindo Workspace, Mentor, Learning Engine, ingestão, OCR/RAG, Tutor e persistência local.
+
+Na Sprint 31 a suíte passou a possuir 80 cenários, incluindo os contratos PWA, Electron e Capacitor. A PWA foi exercitada offline sob controle do service worker, o servidor standalone do Desktop respondeu localmente e o APK Android de depuração foi compilado com sucesso. A validação binária do iOS permanece obrigatoriamente reservada a macOS/Xcode.

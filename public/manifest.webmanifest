@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "StudyAI — Workspace de Estudos",
+  "short_name": "StudyAI",
+  "description": "Workspace pessoal de estudos, disponível online e offline.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#fafbf9",
+  "theme_color": "#29664d",
+  "categories": ["education", "productivity"],
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Importar material", "short_name": "Importar", "url": "/importar", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Continuar estudando", "short_name": "Estudar", "url": "/estudo", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [{ "name": "files", "accept": ["application/pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", "image/*", "audio/*", "video/*"] }]
+    }
+  },
+  "file_handlers": [
+    { "action": "/importar", "accept": { "application/pdf": [".pdf"], "text/plain": [".txt"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"], "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"], "image/*": [".png", ".jpg", ".jpeg", ".webp"], "audio/*": [".mp3", ".wav", ".m4a"], "video/*": [".mp4", ".webm", ".mov"] } }
+  ]
+}

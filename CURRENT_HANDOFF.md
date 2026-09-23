@@ -1,6 +1,40 @@
-# Handoff Atual — Sprint 30: Cloud Sync + Conta
+# Handoff Atual — Sprint 31: Desktop + Mobile + PWA
 
 Atualizado em 22 de setembro de 2026.
+
+## Estado entregue na Sprint 31
+
+O StudyAI agora possui uma camada multiplataforma isolada das features de estudo. O navegador pode instalar uma PWA com shell offline, cache segmentado, atualização automática, atalhos e recepção de materiais pelo menu Compartilhar. O Windows possui aplicativo Electron que inclui o servidor standalone do Next.js, portanto mantém Route Handlers, IndexedDB, OPFS, OCR, RAG, Workspace e Mentor sem depender de hospedagem externa.
+
+```text
+Web / PWA / Electron / Android / iOS
+  → DeviceManager
+  → PlatformProvider
+  → Cache + notificações + updates + entrada de arquivos
+  → aplicação existente
+  → IndexedDB / OPFS
+  → Cloud Sync incremental quando online
+```
+
+O Electron inclui splash screen, bandeja, menu nativo, atalhos, inicialização opcional, minimizar para bandeja, seleção de pasta, associação de materiais e canal IPC isolado por preload. O instalador NSIS `StudyAI-Setup-0.4.0.exe` foi gerado localmente em `dist-desktop/`, que permanece ignorado pelo Git. Atualizações estão conectadas ao `electron-updater`, mas exigem um feed assinado antes da publicação.
+
+Os projetos Capacitor foram criados em `android/` e `ios/`. Android recebe arquivos por `SEND`, `SEND_MULTIPLE` e `VIEW`; iOS registra os tipos de documentos e abertura no próprio local. Ambos reutilizam a aplicação implantada definida por `CAPACITOR_SERVER_URL`, o cache local, IndexedDB e o Cloud Sync. Notificações locais funcionam por Capacitor; notificações de revisão também são monitoradas na PWA/Desktop enquanto a aplicação está ativa.
+
+### Serviços de plataforma
+
+- `DeviceManager`: identifica plataforma, sistema e fator de forma usados também na lista de dispositivos cloud.
+- `PWAService`: instalação, service worker, atualização e consumo de arquivos compartilhados.
+- `DesktopManager`: fachada do preload Electron para preferências nativas.
+- `MobileBridge`: URLs, compartilhamento e leitura de arquivos Capacitor.
+- `CacheManager`: diagnóstico, persistência e limpeza segura dos caches temporários.
+- `NotificationService`: notificações Web, Electron e Capacitor e lembretes de revisão.
+- `UpdateManager`: verificação uniforme de atualização PWA/Desktop.
+
+### Validação específica
+
+ESLint, TypeScript e build de produção foram aprovados. A suíte possui 80 cenários Playwright; os cinco novos validam manifest/share target, service worker, preferências persistidas, empacotamento Electron e contratos Android/iOS. A PWA foi validada em produção: Biblioteca abriu offline com status 200 e service worker controlador. O servidor incluído no pacote Desktop respondeu HTTP 200 e o instalador Windows foi gerado. O projeto Android compilou com o JBR 21 do Android Studio e produziu `android/app/build/outputs/apk/debug/app-debug.apk`. O projeto iOS está sincronizado, mas sua compilação e assinatura exigem macOS/Xcode e uma conta Apple.
+
+O `npm audit --omit=dev` ainda informa quatro vulnerabilidades altas transitivas em `adm-zip` e `sharp`, trazidas pela cadeia `@huggingface/transformers`/`onnxruntime-node`. Elas não foram corrigidas automaticamente nesta Sprint para evitar uma atualização destrutiva do pipeline local de embeddings; devem ser tratadas em uma atualização isolada com regressão completa de OCR/RAG.
 
 ## Estado entregue na Sprint 30
 

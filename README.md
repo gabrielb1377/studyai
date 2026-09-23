@@ -56,6 +56,7 @@ Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, 
 | Pesquisa Global 2.0 | Busca unificada em materiais, notas, resumos, flashcards, quizzes, conceitos e relações. |
 | Configurações | Tema, seleção manual/automática, modelos, health, endpoint, erros, latência, métricas e teste por provider. |
 | Conta e Cloud Sync | Cadastro, login, recuperação, perfil, sessões, sync incremental, conflitos, backups, compartilhamentos e histórico. |
+| Multiplataforma | PWA instalável/offline, aplicativo Electron para Windows, projetos Capacitor Android/iOS, cache, notificações e reconhecimento do dispositivo no Cloud Sync. |
 
 ## Arquitetura
 
@@ -97,6 +98,17 @@ O estado leve do Workspace também é persistido: estudo e arquivo atuais, aba, 
 O Workspace 2.0 adiciona layouts de Leitura, Revisão, Exercícios, Tutor, Mentor e Planejamento, além de layouts personalizados. Cada estudo restaura painéis, tamanhos, scroll, arquivos e ferramentas abertas. O PDF mantém anotações coloridas, comentários, desenhos, links internos e histórico; notas conectam outras notas, materiais, capítulos e conceitos por links Wiki. Sessões registram foco, pausas, arquivos e ferramentas no IndexedDB e alimentam o Learning Engine.
 
 O AI Mentor coordena o Learning Engine, o grafo semântico, flashcards, quizzes e metas sem duplicar suas regras. Ele cria um plano curto por tema, formula perguntas com base nos conceitos extraídos, avalia a resposta de forma explicável, interrompe o avanço quando a compreensão ainda é insuficiente e mantém sessões, objetivos e recomendações no store `metadata` por meio do `StorageManager`. Os cálculos de recomendação são executados em período ocioso e não bloqueiam a interface.
+
+## Desktop, PWA e mobile
+
+A mesma aplicação possui fronteiras de plataforma em `src/features/platform`. `DeviceManager` identifica Web, PWA, Electron, Android e iOS; `CacheManager`, `NotificationService` e `UpdateManager` mantêm comportamento consistente sem levar APIs nativas às features de estudo. Preferências de plataforma são leves, persistidas localmente e entram no sync do Workspace.
+
+- PWA: manifest completo, ícones `any` e `maskable`, atalhos, file/share target, service worker com app shell, network-first para navegação, stale-while-revalidate para assets e cache separado para materiais.
+- Windows: Electron com servidor Next.js standalone restrito ao loopback, splash, bandeja, menu, atalhos, inicialização opcional, associação de arquivos, leitura segura por preload isolado e instalador NSIS.
+- Android/iOS: projetos Capacitor, abertura/compartilhamento de documentos, IndexedDB, notificações locais e preferências mobile. O endereço HTTPS implantado é informado por `CAPACITOR_SERVER_URL`.
+- Offline: dados de estudo continuam no IndexedDB/OPFS; o PWA restaura rotas visitadas e o Desktop inclui o servidor completo. Ao recuperar a rede, o `CloudSyncProvider` processa a fila incremental.
+
+Os comandos, requisitos de assinatura e limites de distribuição estão em [MULTIPLATFORM.md](./MULTIPLATFORM.md).
 
 O Learning Engine registra leitura, Tutor, Quiz, Flashcards, Resumos e Notas de forma assíncrona. O perfil fica no store `metadata` do IndexedDB e produz um Knowledge Score por tema a partir de quiz, revisões, tempo, frequência e recência. A prioridade explica seus motivos, o plano diário reutiliza os módulos existentes e o agendamento dos flashcards usa SM-2 com contrato preparado para FSRS.
 

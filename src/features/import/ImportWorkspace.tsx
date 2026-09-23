@@ -1,11 +1,14 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { CheckCircle2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropZone } from "./DropZone";
 import { ImportFileCard } from "./ImportFileCard";
 import { ImportProgress } from "./ImportProgress";
 import { useImport } from "./useImport";
+import { MOBILE_FILES_EVENT, MobileBridge } from "@/features/platform/MobileBridge";
+import { PWAService } from "@/features/platform/PWAService";
 
 export function ImportWorkspace() {
   const {
@@ -18,9 +21,31 @@ export function ImportWorkspace() {
     importFiles,
   } = useImport();
   const processing = phase === "processing";
+  const addFilesRef = useRef(addFiles);
+  addFilesRef.current = addFiles;
   const hasPendingFiles = files.some(
     (file) => file.status === "uploaded" || file.status === "error",
   );
+
+  useEffect(() => {
+    void PWAService.consumeSharedFiles().then(async (shared) => { if (shared.length) await addFilesRef.current(shared); });
+    const receiveNativeFiles = (event: Event) => {
+      const urls = (event as CustomEvent<{ urls: string[] }>).detail.urls;
+      void Promise.all(urls.map(async (url) => {
+        const blob = await MobileBridge.readSharedFile(url);
+        const name = decodeURIComponent(url.split("/").pop() || "material");
+        return new File([blob], name, { lastModified: Date.now() });
+      })).then((items) => addFilesRef.current(items));
+    };
+    window.addEventListener(MOBILE_FILES_EVENT, receiveNativeFiles);
+    const stopDesktop = window.studyaiDesktop?.onOpenFiles((paths) => {
+      void Promise.all(paths.map(async (path) => {
+        const item = await window.studyaiDesktop!.readFile(path);
+        return new File([new Uint8Array(item.data).buffer], item.name, { lastModified: item.lastModified });
+      })).then((items) => addFilesRef.current(items));
+    });
+    return () => { window.removeEventListener(MOBILE_FILES_EVENT, receiveNativeFiles); stopDesktop?.(); };
+  }, []);
 
   return (
     <div className="space-y-6">

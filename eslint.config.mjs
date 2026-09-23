@@ -11,7 +11,14 @@ const config = [
       "next-env.d.ts",
       "test-results/**",
       "playwright-report/**",
+      "dist-desktop/**",
+      "android/**",
+      "ios/**",
     ],
+  },
+  {
+    files: ["electron/**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   },
 ];
 

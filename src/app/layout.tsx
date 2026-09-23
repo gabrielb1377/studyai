@@ -8,6 +8,24 @@ export const metadata: Metadata = {
   title: { default: "Dashboard · StudyAI", template: "%s · StudyAI" },
   description:
     "Seu workspace pessoal de estudos. Um espaço tranquilo para aprender no seu ritmo.",
+  manifest: "/manifest.webmanifest",
+  applicationName: "StudyAI",
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "StudyAI" },
+  formatDetection: { telephone: false },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", type: "image/png" }],
+    apple: [{ url: "/icons/icon-192.png" }],
+  },
+};
+
+export const viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafbf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#161b18" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({

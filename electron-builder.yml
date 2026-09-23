@@ -1,0 +1,35 @@
+appId: com.studyai.desktop
+productName: StudyAI
+artifactName: StudyAI-Setup-${version}.${ext}
+asar: true
+directories:
+  output: dist-desktop
+files:
+  - electron/**/*
+  - package.json
+extraResources:
+  - from: .next/standalone
+    to: server
+    filter: ["**/*"]
+  - from: .next/static
+    to: server/.next/static
+    filter: ["**/*"]
+  - from: public
+    to: server/public
+    filter: ["**/*"]
+win:
+  icon: public/icons/icon-512.png
+  target:
+    - target: nsis
+      arch: [x64]
+  fileAssociations:
+    - ext: [pdf, doc, docx, ppt, pptx, txt, png, jpg, jpeg, webp, mp3, wav, m4a, mp4, webm, mov]
+      name: Material de estudo
+      role: Viewer
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: StudyAI
+publish: null

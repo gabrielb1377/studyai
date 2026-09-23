@@ -1,4 +1,5 @@
 import type { AccountSession } from "./types";
+import { DeviceManager } from "@/features/platform/DeviceManager";
 
 function deviceId() {
   const key = "studyai:device-id";
@@ -7,7 +8,7 @@ function deviceId() {
   return value;
 }
 
-function deviceName() { return `${navigator.platform || "Navegador"} · ${navigator.userAgent.includes("Mobile") ? "Celular" : "Computador"}`; }
+function deviceName() { return DeviceManager.detect().name; }
 function csrf() { return document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? ""; }
 function hasSessionMarker() { return document.cookie.split(";").some((item) => item.trim() === "studyai_session=1"); }
 
