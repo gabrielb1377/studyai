@@ -6,6 +6,8 @@ import { StorageBootstrap } from "@/lib/storage/StorageBootstrap";
 import { AuthProvider } from "@/features/account/AuthProvider";
 import { CloudSyncProvider } from "@/features/sync/CloudSyncProvider";
 import { PlatformProvider } from "@/features/platform/PlatformProvider";
+import { ExperienceProvider } from "@/features/preferences/ExperienceProvider";
+import { ClientObservability } from "@/features/observability/ClientObservability";
 
 export function Providers({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   return (
@@ -18,6 +20,8 @@ export function Providers({ children, nonce }: { children: React.ReactNode; nonc
       nonce={nonce}
     >
       <StorageBootstrap />
+      <ExperienceProvider />
+      <ClientObservability />
       <PlatformProvider />
       <AuthProvider>
         <CloudSyncProvider />

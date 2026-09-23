@@ -1,4 +1,14 @@
-import { BookOpen, Bot, FolderTree, House, Library, Settings, Upload, UserRound } from "lucide-react";
+import { BookOpen, Bot, Database, FolderTree, House, Library, Settings, Upload, UserRound } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+
+export type NavigationItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  description: string;
+  advanced?: boolean;
+  compact?: boolean;
+};
 
 export const navigation = [
   {
@@ -30,12 +40,21 @@ export const navigation = [
     label: "Importar",
     icon: Upload,
     description: "Adicionar materiais à biblioteca",
+    compact: true,
   },
   {
     href: "/organizar",
     label: "Organizar",
     icon: FolderTree,
     description: "Revisar a estrutura dos materiais",
+    advanced: true,
+  },
+  {
+    href: "/storage",
+    label: "Diagnóstico",
+    icon: Database,
+    description: "Armazenamento e dados técnicos",
+    advanced: true,
   },
   {
     href: "/configuracoes",
@@ -49,4 +68,4 @@ export const navigation = [
     icon: UserRound,
     description: "Sincronização e segurança",
   },
-];
+] satisfies NavigationItem[];

@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { hasPostgres, query, transaction } from "@/server/database/Postgres";
+import { ObjectStorage } from "@/server/storage/ObjectStorage";
 import type { Backup, CloudRecord, CloudUser, DeviceSession, Share, SyncEntity, UserProfile } from "./types";
 
 type MemoryState = {
@@ -12,7 +13,7 @@ type MemoryState = {
   logs: CloudRecord[];
   backups: Backup[];
   shares: Share[];
-  files: Map<string, { userId: string; id: string; name: string; mimeType: string; hash: string; sizeBytes: number; content: Buffer; updatedAt: string }>;
+  files: Map<string, { userId: string; id: string; name: string; mimeType: string; hash: string; sizeBytes: number; content: Buffer; storageProvider: "memory"; updatedAt: string }>;
 };
 
 const serverGlobal = globalThis as typeof globalThis & { __studyAiCloudMemory?: MemoryState };
@@ -82,6 +83,7 @@ export const CloudDatabase = {
   async saveSession(session: DeviceSession) { if (!hasPostgres()) { memory.sessions.set(session.id, session); return; } await query("INSERT INTO refresh_tokens (id,user_id,token_hash,device_id,device_name,expires_at,last_used_at) VALUES ($1,$2,$3,$4,$5,$6,$7)", [session.id, session.userId, session.tokenHash, session.deviceId, session.deviceName, session.expiresAt, session.lastUsedAt]); },
   async sessionByHash(hash: string) { if (!hasPostgres()) return [...memory.sessions.values()].find((item) => item.tokenHash === hash && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE token_hash=$1 AND revoked_at IS NULL", [hash]); const row = result.rows[0]; return row ? { id: String(row.id), userId: String(row.user_id), tokenHash: String(row.token_hash), deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : undefined } satisfies DeviceSession : undefined; },
   async revokeSession(id: string) { if (!hasPostgres()) { const item = memory.sessions.get(id); if (item) memory.sessions.set(id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE id=$1", [id]); },
+  async revokeUserSession(userId: string, id: string) { if (!hasPostgres()) { const item = memory.sessions.get(id); if (item?.userId === userId) memory.sessions.set(id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE id=$1 AND user_id=$2", [id, userId]); },
   async revokeUserSessions(userId: string) { if (!hasPostgres()) { for (const item of memory.sessions.values()) if (item.userId === userId) memory.sessions.set(item.id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE user_id=$1", [userId]); },
   async devices(userId: string) { if (!hasPostgres()) return [...memory.sessions.values()].filter((item) => item.userId === userId && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL ORDER BY last_used_at DESC", [userId]); return result.rows.map((row) => ({ id: String(row.id), userId, tokenHash: "", deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString() })); },
 
@@ -112,6 +114,35 @@ export const CloudDatabase = {
   async revokeShare(userId:string,id:string){if(!hasPostgres()){const index=memory.shares.findIndex((item)=>item.userId===userId&&item.id===id);if(index>=0)memory.shares[index]={...memory.shares[index],revokedAt:now()};return;}await query("UPDATE shares SET revoked_at=NOW() WHERE user_id=$1 AND id=$2",[userId,id]);},
   async shareByToken(token: string) { const share = hasPostgres() ? (await query<Record<string,unknown>>("SELECT * FROM shares WHERE token=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>NOW())",[token])).rows[0] : memory.shares.find((item)=>item.token===token&&!item.revokedAt&&(!item.expiresAt||new Date(item.expiresAt)>new Date())); if(!share)return; const normalized = hasPostgres()?{id:String((share as Record<string,unknown>).id),userId:String((share as Record<string,unknown>).user_id),token,entity:String((share as Record<string,unknown>).entity) as SyncEntity,recordId:String((share as Record<string,unknown>).record_id),createdAt:new Date(String((share as Record<string,unknown>).created_at)).toISOString()}:share as Share; return { share: normalized, record: await this.record(normalized.userId,normalized.entity,normalized.recordId) }; },
 
-  async saveFile(userId:string,id:string,name:string,mimeType:string,hash:string,content:Buffer){const item={userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,updatedAt:now()};if(!hasPostgres()){memory.files.set(`${userId}:${id}`,item);return item;}await query("INSERT INTO files (id,user_id,name,mime_type,hash,size_bytes,content) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (user_id,id) DO UPDATE SET name=EXCLUDED.name,mime_type=EXCLUDED.mime_type,hash=EXCLUDED.hash,size_bytes=EXCLUDED.size_bytes,content=EXCLUDED.content,updated_at=NOW()",[id,userId,name,mimeType,hash,content.byteLength,content]);return item;},
-  async file(userId:string,id:string){if(!hasPostgres())return memory.files.get(`${userId}:${id}`);const result=await query<Record<string,unknown>>("SELECT * FROM files WHERE user_id=$1 AND id=$2",[userId,id]);const row=result.rows[0];return row?{userId,id,name:String(row.name),mimeType:String(row.mime_type),hash:String(row.hash),sizeBytes:Number(row.size_bytes),content:row.content as Buffer,updatedAt:new Date(String(row.updated_at)).toISOString()}:undefined;},
+  async saveFile(userId:string,id:string,name:string,mimeType:string,hash:string,content:Buffer){
+    const timestamp=now();
+    if(!hasPostgres()){
+      const item={userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,storageProvider:"memory" as const,updatedAt:timestamp};
+      memory.files.set(`${userId}:${id}`,item);
+      return item;
+    }
+    const previous=await query<{storage_key:string|null}>("SELECT storage_key FROM files WHERE user_id=$1 AND id=$2",[userId,id]);
+    const previousStorageKey=previous.rows[0]?.storage_key??undefined;
+    const storageProvider=ObjectStorage.mode();
+    const storageKey=storageProvider==="s3"?ObjectStorage.key(userId,id,hash):undefined;
+    if(storageKey)await ObjectStorage.put(storageKey,content,mimeType,{userId,materialId:id,hash});
+    await query("INSERT INTO files (id,user_id,name,mime_type,hash,size_bytes,content,storage_key,storage_provider) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (user_id,id) DO UPDATE SET name=EXCLUDED.name,mime_type=EXCLUDED.mime_type,hash=EXCLUDED.hash,size_bytes=EXCLUDED.size_bytes,content=EXCLUDED.content,storage_key=EXCLUDED.storage_key,storage_provider=EXCLUDED.storage_provider,updated_at=NOW()",[id,userId,name,mimeType,hash,content.byteLength,storageProvider==="database"?content:null,storageKey??null,storageProvider]);
+    if(previousStorageKey&&previousStorageKey!==storageKey&&storageProvider==="s3")await ObjectStorage.delete(previousStorageKey);
+    return {userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,storageProvider,storageKey,updatedAt:timestamp};
+  },
+  async file(userId:string,id:string){
+    if(!hasPostgres())return memory.files.get(`${userId}:${id}`);
+    const result=await query<Record<string,unknown>>("SELECT * FROM files WHERE user_id=$1 AND id=$2",[userId,id]);
+    const row=result.rows[0];
+    if(!row)return undefined;
+    const storageKey=row.storage_key?String(row.storage_key):undefined;
+    const content=storageKey?await ObjectStorage.get(storageKey):row.content as Buffer;
+    return {userId,id,name:String(row.name),mimeType:String(row.mime_type),hash:String(row.hash),sizeBytes:Number(row.size_bytes),content,storageKey,storageProvider:String(row.storage_provider??"database"),updatedAt:new Date(String(row.updated_at)).toISOString()};
+  },
+  async deleteFile(userId:string,id:string){
+    if(!hasPostgres()){memory.files.delete(`${userId}:${id}`);return;}
+    const result=await query<{storage_key:string|null}>("DELETE FROM files WHERE user_id=$1 AND id=$2 RETURNING storage_key",[userId,id]);
+    const storageKey=result.rows[0]?.storage_key;
+    if(storageKey)await ObjectStorage.delete(storageKey);
+  },
 };

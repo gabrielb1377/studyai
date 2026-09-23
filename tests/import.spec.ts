@@ -3,6 +3,9 @@ import JSZip from "jszip";
 import { createTextPdf, TEXT_PDF } from "./helpers/pdf-file";
 import { readIndexedDBStore } from "./helpers/indexed-db";
 import type { ExtractedContent } from "../src/features/extraction/ExtractionTypes";
+import { enableAdvancedMode } from "./helpers/experience";
+
+test.beforeEach(async ({ page }) => enableAdvancedMode(page));
 
 async function createOoxmlFixture(path: string, text: string) {
   const archive = new JSZip();

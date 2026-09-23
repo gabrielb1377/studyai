@@ -25,7 +25,7 @@ function formatMemory(bytes?: number) {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
-export function AISettingsPanel() {
+export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
   const [mode, setMode] = useState<AISelectionMode>("manual");
   const [provider, setProvider] = useState<AIProviderId>("gemini");
   const [models, setModels] = useState<AIModelPreferences>({});
@@ -126,7 +126,7 @@ export function AISettingsPanel() {
           <p className="text-xs text-muted-foreground">
             {mode === "automatic"
               ? "O menor tempo de resposta entre os providers online define a primeira tentativa."
-              : "O provider escolhido é usado primeiro; o fallback continua ativo em caso de falha."}
+              : "Somente o provider escolhido será utilizado."}
           </p>
         </fieldset>
 
@@ -181,7 +181,7 @@ export function AISettingsPanel() {
           </Button>
         </div>
 
-        <section aria-label="Status dos providers" className="grid gap-3 sm:grid-cols-2">
+        {advanced && <section aria-label="Status dos providers" className="grid gap-3 sm:grid-cols-2">
           {aiProviderOptions.map((option) => {
             const status = managerStatus?.providers.find((item) => item.provider === option.id);
             const selectedModel = models[option.id] ?? status?.models[0]?.name ?? "—";
@@ -211,14 +211,14 @@ export function AISettingsPanel() {
               </div>
             );
           })}
-        </section>
+        </section>}
 
-        <div className="grid gap-3 rounded-lg border bg-muted/15 p-4 text-sm sm:grid-cols-4">
+        {advanced && <div className="grid gap-3 rounded-lg border bg-muted/15 p-4 text-sm sm:grid-cols-4">
           <div><p className="text-xs text-muted-foreground">Tempo médio</p><p className="mt-1 font-medium">{managerStatus?.statistics.averageResponseTimeMs ?? 0} ms</p></div>
           <div><p className="text-xs text-muted-foreground">Mensagens</p><p className="mt-1 font-medium">{managerStatus?.statistics.messages ?? 0}</p></div>
           <div><p className="text-xs text-muted-foreground">Tokens</p><p className="mt-1 font-medium">{managerStatus?.statistics.tokens?.toLocaleString("pt-BR") ?? "—"}</p></div>
           <div><p className="text-xs text-muted-foreground">Fallbacks</p><p className="mt-1 font-medium">{managerStatus?.statistics.fallbacks ?? 0}</p></div>
-        </div>
+        </div>}
       </CardContent>
     </Card>
   );

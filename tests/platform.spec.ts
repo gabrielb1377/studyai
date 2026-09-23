@@ -26,6 +26,7 @@ test("service worker separa shell, materiais, offline e atualizações", async (
 
 test("configurações da plataforma persistem e expõem diagnóstico de cache", async ({ page }) => {
   await page.goto("/configuracoes");
+  await page.getByRole("button", { name: "Downloads", exact: true }).click();
   await expect(page.getByText("Aplicativo e dispositivo", { exact: true })).toBeVisible();
   await expect(page.getByText(/Navegador/)).toBeVisible();
   const autoDownload = page.getByLabel("Downloads automáticos");

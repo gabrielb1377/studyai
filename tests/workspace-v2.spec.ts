@@ -2,6 +2,9 @@ import { expect, test } from "@playwright/test";
 import { createRealStudy } from "./helpers/real-study";
 import { readIndexedDBStore } from "./helpers/indexed-db";
 import { createTextPdf } from "./helpers/pdf-file";
+import { enableAdvancedMode } from "./helpers/experience";
+
+test.beforeEach(async ({ page }) => enableAdvancedMode(page));
 
 test("Workspace 2.0 redimensiona, restaura, troca layouts e registra a sessão", async ({ page }) => {
   const studyId = await createRealStudy(page);

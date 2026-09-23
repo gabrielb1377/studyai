@@ -23,7 +23,8 @@ async function login(page: Page, email: string) {
 
 async function putRecord(page: Page, store: string, value: Record<string, unknown>) {
   await page.evaluate(async ({ store, value }) => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("studyai-db", 2);
+    const scope = localStorage.getItem("studyai:storage-scope") || "guest";
+    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 2);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;

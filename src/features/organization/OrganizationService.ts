@@ -7,6 +7,7 @@ import { NotesService } from "@/features/notes/NotesService";
 import { QuizService } from "@/features/quiz/QuizService";
 import { SummaryStorage } from "@/features/summaries/services/SummaryStorage";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
+import { CloudFileService } from "@/features/sync/CloudFileService";
 import { MaterialService } from "@/services/material-service";
 import type { Material } from "@/types/material";
 import type { ExtractionMetadata } from "@/features/extraction/ExtractionTypes";
@@ -192,6 +193,7 @@ export const OrganizationService = {
     await KnowledgeStorage.removeByFileId(material.fileId);
     await synchronizeEmbeddings();
     MaterialRuntimeStore.remove(material.id);
+    await CloudFileService.remove(material.id).catch(() => false);
     await MaterialService.remove(material.id);
     await StudyEngine.save(StudyEngine.removeMaterial(await StudyEngine.load(), material.studyId, material.id));
     return true;

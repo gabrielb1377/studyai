@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { PageHeading } from "@/components/page-heading";
-import { AppearanceSettings } from "@/features/settings/appearance-settings";
-import { AISettingsPanel } from "@/features/settings/ai-settings-panel";
-import { PlatformSettings } from "@/features/settings/platform-settings";
+import { SettingsHub } from "@/features/settings/SettingsHub";
 
 export const metadata: Metadata = { title: "Configurações" };
 
@@ -14,11 +12,7 @@ export default function SettingsPage() {
         title="Do seu jeito."
         description="Pequenos ajustes para deixar seu espaço mais confortável."
       />
-      <div className="space-y-5">
-        <AppearanceSettings />
-        <AISettingsPanel />
-        <PlatformSettings />
-      </div>
+      <SettingsHub />
     </>
   );
 }

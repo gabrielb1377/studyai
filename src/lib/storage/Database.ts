@@ -22,13 +22,23 @@ const storeDefinitions: Record<StorageStoreName, { keyPath: string; indexes?: Ar
 };
 
 let databasePromise: Promise<IDBDatabase> | undefined;
+const STORAGE_SCOPE_KEY = "studyai:storage-scope";
+let databaseScope = typeof localStorage === "undefined" ? "guest" : localStorage.getItem(STORAGE_SCOPE_KEY) || "guest";
+
+function scopedDatabaseName() {
+  return databaseScope === "guest" ? STORAGE_DATABASE_NAME : `${STORAGE_DATABASE_NAME}:${databaseScope}`;
+}
+
+export function currentDatabaseName() {
+  return scopedDatabaseName();
+}
 
 export function openStudyDatabase() {
   if (typeof indexedDB === "undefined") {
     return Promise.reject(new Error("O IndexedDB não está disponível neste navegador."));
   }
   databasePromise ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(STORAGE_DATABASE_NAME, STORAGE_DATABASE_VERSION);
+    const request = indexedDB.open(scopedDatabaseName(), STORAGE_DATABASE_VERSION);
     request.onerror = () => reject(request.error ?? new Error("Não foi possível abrir o banco local."));
     request.onblocked = () => reject(new Error("O banco local está bloqueado por outra aba. Feche outras abas do StudyAI e tente novamente."));
     request.onupgradeneeded = () => {
@@ -60,5 +70,15 @@ export function openStudyDatabase() {
 }
 
 export function resetDatabaseConnection() {
+  void databasePromise?.then((database) => database.close()).catch(() => undefined);
   databasePromise = undefined;
+}
+
+export function setStudyDatabaseScope(scope: string) {
+  const next = scope.trim() || "guest";
+  if (next === databaseScope) return false;
+  resetDatabaseConnection();
+  databaseScope = next;
+  if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_SCOPE_KEY, next);
+  return true;
 }

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { createRealStudy } from "./helpers/real-study";
 import { readIndexedDBStore } from "./helpers/indexed-db";
+import { enableAdvancedMode } from "./helpers/experience";
 
 const checkedAt = "2026-09-16T12:00:00.000Z";
 
@@ -25,6 +26,7 @@ async function importFolderMaterials(page: Page) {
 }
 
 test("diagnóstico testa providers online e offline individualmente", async ({ page }) => {
+  await enableAdvancedMode(page);
   const providers = [
     { provider: "gemini", available: true, latencyMs: 42, averageResponseTimeMs: 65, models: [{ name: "gemini-test" }], endpoint: "https://gemini.test", checkedAt },
     { provider: "ollama", available: false, latencyMs: 5, models: [], endpoint: "http://localhost:11434", error: "Ollama indisponível", lastError: "Ollama indisponível", checkedAt },
@@ -37,6 +39,7 @@ test("diagnóstico testa providers online e offline individualmente", async ({ p
   }));
   await page.route("**/api/ai/providers/gemini*", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify(providers[0]) }));
   await page.goto("/configuracoes");
+  await page.getByRole("button", { name: "IA", exact: true }).click();
   await expect(page.getByRole("region", { name: "Status dos providers" })).toContainText("https://gemini.test");
   await expect(page.getByRole("region", { name: "Status dos providers" })).toContainText("Ollama indisponível");
   await page.getByRole("button", { name: "Testar conexão" }).first().click();

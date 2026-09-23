@@ -1,6 +1,44 @@
-# Handoff Atual — Sprint 31: Desktop + Mobile + PWA
+# Handoff Atual — Sprint 32: Product Polish + UX + Escalabilidade
 
-Atualizado em 22 de setembro de 2026.
+Atualizado em 23 de setembro de 2026.
+
+## Estado entregue na Sprint 32
+
+O StudyAI possui agora duas camadas de experiência sobre as mesmas features: o modo Simples, padrão, expõe somente as jornadas de estudo; o modo Avançado revela grafo, diagnóstico, pipeline, métricas e controles técnicos. A alternância é imediata, persistida e sincronizada. Sidebar compactável no desktop, navegação inferior mobile, Header adaptativo, componentes mais densos e tokens de foco/hover reduzem ruído sem remover funcionalidades.
+
+```text
+ExperienceProvider
+  → modo + densidade + consentimento
+  → AppShell adaptativo
+      ├─ Sidebar desktop
+      ├─ navegação mobile
+      ├─ busca universal / Ctrl+K
+      ├─ Central de Ajuda
+      └─ onboarding e guias contextuais
+```
+
+A Central de Ajuda é pesquisável e possui tutoriais para importação, Workspace, Tutor, Mentor, Flashcards, Quiz, pesquisa e Cloud. O onboarding opcional conduz o primeiro material e registra conclusão; guias contextuais aparecem somente na primeira visita. Configurações virou um hub por categorias e centraliza Interface, IA, Workspace, Notificações, Downloads, Armazenamento, Conta, Cloud e Segurança.
+
+### Isolamento e arquivos grandes
+
+Cada identidade abre um banco IndexedDB próprio (`studyai-db:user-{id}`); convidados usam `studyai-db:guest`. A troca acontece no `AuthProvider`, impedindo mistura local entre contas. No servidor, arquivos grandes são enviados ao Object Storage S3 compatível e o PostgreSQL guarda somente metadados e a chave. MinIO é usado no Compose local. Substituição e exclusão removem os objetos associados; o fallback em `BYTEA` permanece apenas para desenvolvimento sem S3.
+
+### Produção
+
+- `Dockerfile` standalone e usuário não-root.
+- `docker-compose.yml` com aplicação, PostgreSQL, MinIO e Caddy.
+- Caddy com HTTPS automático, compressão e HSTS.
+- CI com lint, typecheck, build e Playwright; publicação opcional no GHCR.
+- `/api/health` protegido para diagnóstico detalhado e `/api/telemetry` allowlisted.
+- Web Vitals e long tasks somente após consentimento explícito.
+
+O repositório está preparado para produção, mas domínio/DNS, certificados públicos, bucket/credenciais, SMTP, secrets e webhook de deploy precisam ser provisionados no ambiente. Docker não estava instalado no host desta Sprint; por isso a composição foi validada por contrato automatizado, não iniciada localmente. Consulte `PRODUCTION.md`.
+
+### Validação da Sprint 32
+
+Foram adicionados seis cenários Playwright, totalizando 86: modos, Ajuda/atalho, onboarding, viewport mobile, isolamento por usuário e contratos de produção. Lint, TypeScript, build e todos os testes devem permanecer verdes antes do handoff final. A inspeção visual foi feita em 360 px e 1440 px, em tema claro/escuro e nas rotas principais.
+
+## Estado preservado da Sprint 31
 
 ## Estado entregue na Sprint 31
 

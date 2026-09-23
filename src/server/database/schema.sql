@@ -88,10 +88,17 @@ CREATE TABLE IF NOT EXISTS files (
   mime_type TEXT NOT NULL,
   hash TEXT NOT NULL,
   size_bytes BIGINT NOT NULL,
-  content BYTEA NOT NULL,
+  content BYTEA,
+  storage_key TEXT,
+  storage_provider TEXT NOT NULL DEFAULT 'database',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, id)
 );
+
+ALTER TABLE files ALTER COLUMN content DROP NOT NULL;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS storage_key TEXT;
+ALTER TABLE files ADD COLUMN IF NOT EXISTS storage_provider TEXT NOT NULL DEFAULT 'database';
+CREATE INDEX IF NOT EXISTS files_user_hash ON files(user_id, hash);
 
 DO $$
 DECLARE table_name TEXT;
@@ -101,4 +108,3 @@ BEGIN
     EXECUTE format('CREATE TABLE IF NOT EXISTS %I (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, id TEXT NOT NULL, payload JSONB, version BIGINT NOT NULL DEFAULT 1, hash TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ, PRIMARY KEY (user_id, id))', table_name);
   END LOOP;
 END $$;
-

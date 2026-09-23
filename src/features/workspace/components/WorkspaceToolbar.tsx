@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import type { WorkspaceLayout, WorkspacePanelType, WorkspaceStudySession } from "../types";
 import type { StudyStatus } from "@/types/study-engine";
+import { useExperiencePreferences } from "@/features/preferences/ExperiencePreferences";
 
 const tools: Array<{ type: WorkspacePanelType; label: string; icon: typeof BookOpen }> = [
   { type: "material", label: "Material", icon: BookOpen },
@@ -47,6 +48,8 @@ export function WorkspaceToolbar({ layouts, activeLayoutId, activeTool, session,
 }) {
   const [saveOpen, setSaveOpen] = useState(false);
   const [layoutName, setLayoutName] = useState("");
+  const experience = useExperiencePreferences();
+  const visibleTools = experience.mode === "advanced" ? tools : tools.filter((tool) => tool.type !== "knowledge" && tool.type !== "dashboard");
   const custom = layouts.find((layout) => layout.id === activeLayoutId && !layout.builtIn);
   return (
     <div className="space-y-3 rounded-xl border bg-card p-3 shadow-sm">
@@ -56,9 +59,9 @@ export function WorkspaceToolbar({ layouts, activeLayoutId, activeTool, session,
         <select id="workspace-layout" aria-label="Layout do Workspace" value={activeLayoutId} onChange={(event) => onApplyLayout(event.target.value)} className="h-9 max-w-44 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring">
           {layouts.map((layout) => <option key={layout.id} value={layout.id}>{layout.name}</option>)}
         </select>
-        <Button type="button" size="sm" variant="outline" onClick={() => setSaveOpen(true)}><Save />Salvar layout</Button>
-        {custom && <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => onDeleteLayout(custom.id)}>Excluir layout</Button>}
-        <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" size="sm" variant="outline"><Plus />Novo painel</Button></DropdownMenuTrigger><DropdownMenuContent align="start">{tools.map(({ type, label, icon: Icon }) => <DropdownMenuItem key={type} onSelect={() => onNewPanel(type)}><Icon />{label}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>
+        {experience.mode === "advanced" && <Button type="button" size="sm" variant="outline" onClick={() => setSaveOpen(true)}><Save />Salvar layout</Button>}
+        {experience.mode === "advanced" && custom && <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => onDeleteLayout(custom.id)}>Excluir layout</Button>}
+        {experience.mode === "advanced" && <DropdownMenu><DropdownMenuTrigger asChild><Button type="button" size="sm" variant="outline"><Plus />Novo painel</Button></DropdownMenuTrigger><DropdownMenuContent align="start">{visibleTools.map(({ type, label, icon: Icon }) => <DropdownMenuItem key={type} onSelect={() => onNewPanel(type)}><Icon />{label}</DropdownMenuItem>)}</DropdownMenuContent></DropdownMenu>}
         <label className="flex items-center gap-2 text-xs text-muted-foreground"><span className="sr-only">Progresso do estudo</span><input aria-label="Progresso do estudo" type="range" min={0} max={100} step={5} value={progress} onChange={(event) => onProgressChange(Number(event.target.value))} className="w-20 accent-primary" /><span className="w-8 tabular-nums">{progress}%</span></label>
         <select aria-label="Status do estudo" value={status} onChange={(event) => onStatusChange(event.target.value as StudyStatus)} className="h-8 rounded-md border bg-background px-2 text-xs outline-none focus:ring-2 focus:ring-ring"><option value="not_started">Não iniciado</option><option value="in_progress">Em andamento</option><option value="completed">Concluído</option></select>
         <div className="ml-auto flex items-center gap-2 rounded-lg border bg-background px-2 py-1">
@@ -68,7 +71,7 @@ export function WorkspaceToolbar({ layouts, activeLayoutId, activeTool, session,
         </div>
       </div>
       <div role="tablist" aria-label="Ferramentas do Workspace" className="flex gap-1 overflow-x-auto pb-1">
-        {tools.slice(0, 7).map(({ type, label, icon: Icon }) => <button key={type} type="button" role="tab" data-state={activeTool === type ? "active" : "inactive"} aria-selected={activeTool === type} onClick={() => onOpenTool(type)} className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors ${activeTool === type ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><Icon className="size-3.5" />{label === "Mapa" ? "Mapa de Conhecimento" : label}</button>)}
+        {visibleTools.filter((tool) => tool.type !== "dashboard").map(({ type, label, icon: Icon }) => <button key={type} type="button" role="tab" data-state={activeTool === type ? "active" : "inactive"} aria-selected={activeTool === type} onClick={() => onOpenTool(type)} className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors ${activeTool === type ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><Icon className="size-3.5" />{label === "Mapa" ? "Mapa de Conhecimento" : label}</button>)}
       </div>
       {session?.status === "completed" && <p role="status" className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400"><Sparkles className="size-3.5" />Sessão concluída: {formatSeconds(session.focusSeconds)} de foco, {session.pauseCount} pausa(s).</p>}
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}><DialogContent><DialogHeader><DialogTitle>Salvar layout personalizado</DialogTitle><DialogDescription>O conjunto e o tamanho atual dos painéis serão reutilizados em qualquer tema.</DialogDescription></DialogHeader><Input aria-label="Nome do layout" value={layoutName} onChange={(event) => setLayoutName(event.target.value)} placeholder="Ex.: Revisão para prova" /><DialogFooter><Button variant="outline" onClick={() => setSaveOpen(false)}>Cancelar</Button><Button onClick={() => { onSaveLayout(layoutName); setLayoutName(""); setSaveOpen(false); }} disabled={!layoutName.trim()}>Salvar</Button></DialogFooter></DialogContent></Dialog>

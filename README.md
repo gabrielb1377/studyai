@@ -54,9 +54,11 @@ Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, 
 | Learning Engine | Perfil local, tempo por matéria/tema, domínio, prioridade, SM-2, plano diário, retenção e adaptação do Tutor. |
 | Semantic Knowledge Engine | Conceitos, definições, siglas, entidades, relações e chunks semânticos persistidos como grafo local. |
 | Pesquisa Global 2.0 | Busca unificada em materiais, notas, resumos, flashcards, quizzes, conceitos e relações. |
-| Configurações | Tema, seleção manual/automática, modelos, health, endpoint, erros, latência, métricas e teste por provider. |
+| Configurações | Central única por categorias, modo Simples/Avançado, aparência, IA, Workspace, armazenamento, Cloud e segurança. |
 | Conta e Cloud Sync | Cadastro, login, recuperação, perfil, sessões, sync incremental, conflitos, backups, compartilhamentos e histórico. |
 | Multiplataforma | PWA instalável/offline, aplicativo Electron para Windows, projetos Capacitor Android/iOS, cache, notificações e reconhecimento do dispositivo no Cloud Sync. |
+| Ajuda e onboarding | Tour inicial, guias contextuais, busca de tutoriais, atalhos e paleta universal por `Ctrl+K`. |
+| Produção | Docker/Compose, PostgreSQL, Object Storage S3/MinIO, Caddy com HTTPS e pipelines CI/CD. |
 
 ## Arquitetura
 
@@ -75,7 +77,19 @@ src/
 
 O Smart Study Generator fica em `src/features/study-generator`. Seus detectores são independentes e determinísticos: `StudyAnalyzer` coordena estrutura, disciplina, palavras-chave e leitura; `StudyGeneratorService` é o único responsável por persistir o resultado no material e no Study Engine. PDFs da Estácio reconhecem os marcadores `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. Quando a identificação não é conclusiva, o fluxo cria um estudo básico com valores explícitos de fallback e nunca bloqueia a importação.
 
-Documentos, conteúdos, grafos de conhecimento, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados continuam no IndexedDB `studyai-db`, que funciona como cache offline e fonte de trabalho imediata. Quando disponível, o binário original é salvo no Origin Private File System (OPFS). Para usuários autenticados, mudanças são sincronizadas incrementalmente com PostgreSQL e os binários são enviados separadamente por hash. O `localStorage` permanece reservado a preferências leves e cursores de infraestrutura.
+Documentos, conteúdos, grafos de conhecimento, chunks, embeddings, estudos, notas, resumos, flashcards, quizzes, transcrições, OCR e metadados ficam em um IndexedDB isolado por conta (`studyai-db:user-{id}` ou `studyai-db:guest`), usado como cache offline e fonte de trabalho imediata. Quando disponível, o binário original é salvo no Origin Private File System (OPFS). Para usuários autenticados, mudanças são sincronizadas incrementalmente com PostgreSQL e os binários grandes são enviados por hash ao Object Storage S3 compatível. O `localStorage` permanece reservado a preferências leves e cursores de infraestrutura.
+
+## Experiência e modos de interface
+
+O modo **Simples** é o padrão e mantém somente as jornadas de estudo. O modo **Avançado** revela Knowledge Graph, diagnóstico, pipeline, métricas e controles técnicos sem reiniciar a aplicação. A preferência é aplicada imediatamente e sincronizada como configuração leve. A navegação possui Sidebar adaptativa no desktop, barra inferior no celular e busca universal com páginas, materiais, conteúdos e comandos.
+
+O primeiro uso apresenta um tour curto e opcional. Ajuda permanece acessível em qualquer tela, com tutoriais pesquisáveis e guias contextuais que aparecem uma única vez. A coleta de métricas de desempenho é desativada por padrão e só inicia mediante consentimento explícito.
+
+## Produção
+
+A implantação de referência usa `Dockerfile`, `docker-compose.yml`, PostgreSQL, MinIO/S3 e Caddy. Arquivos grandes deixam o banco relacional; o PostgreSQL armazena somente metadados e chaves, enquanto o Object Storage usa caminhos isolados por usuário. O endpoint `/api/health` expõe somente estado mínimo publicamente e exige `HEALTH_SECRET` para detalhes em produção.
+
+Consulte [PRODUCTION.md](./PRODUCTION.md) para variáveis, DNS/HTTPS, observabilidade, backup e checklist de release. A configuração prepara a infraestrutura, mas publicar um domínio e provisionar credenciais continuam sendo ações externas ao repositório.
 
 ## Conta, backend e sincronização
 
@@ -116,7 +130,7 @@ O Semantic Knowledge Engine fica em `src/features/semantic`. Após a normalizaç
 
 ## Limites deliberados
 
-Não existe banco vetorial externo nem processamento cloud dos materiais. O RAG continua local e combina embeddings linguísticos com ranking lexical; o provider selecionado recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual. O modo em memória do backend serve apenas ao desenvolvimento. A persistência cloud real requer PostgreSQL, e envio de verificação/recuperação em produção requer SMTP configurado.
+Não existe banco vetorial externo nem processamento cloud dos materiais. O RAG continua local e combina embeddings linguísticos com ranking lexical; o provider selecionado recebe somente os melhores trechos extraídos e o contexto estruturado do estudo atual. O modo em memória do backend serve apenas ao desenvolvimento. A persistência cloud real requer PostgreSQL e Object Storage configurados; verificação/recuperação requer SMTP. iOS continua exigindo macOS/Xcode, e HTTPS público exige domínio, DNS e certificados válidos.
 
 ## Referências
 

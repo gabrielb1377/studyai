@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 22 de setembro de 2026.
+Atualizado em 23 de setembro de 2026.
 
 ## Propósito
 
@@ -30,6 +30,8 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | Desktop | Electron 44 e electron-builder/NSIS |
 | Mobile | Capacitor 8 para Android e iOS |
 | PWA | Web App Manifest, Service Worker e Cache Storage nativos |
+| Object Storage | API S3 compatível via AWS SDK, com MinIO no ambiente local |
+| Observabilidade | Web Vitals com consentimento, métricas server-side e health check protegido |
 
 ## Estrutura de módulos
 
@@ -53,9 +55,14 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/account` | Sessão, perfil, tela Conta e cliente de autenticação. |
 | `src/features/sync` | Fila incremental, manifesto, conflitos, arquivos e sincronização em background. |
 | `src/features/platform` | Detecção de dispositivo, bridges Electron/Capacitor, PWA, cache, notificações e atualizações. |
+| `src/features/preferences` | Modo Simples/Avançado, densidade, consentimento e estado dos guias. |
+| `src/features/help` | Onboarding, Central de Ajuda e guias contextuais. |
+| `src/features/observability` | Coleta anônima e consentida de métricas de experiência. |
 | `src/server/auth` | Regras de conta, sessões e email, exclusivas do servidor. |
 | `src/server/cloud` | Persistência cloud, resolução de conflitos, backups e compartilhamentos. |
 | `src/server/database` | Pool PostgreSQL, transações e schema versionável. |
+| `src/server/storage` | Fachada server-only para Object Storage S3 compatível. |
+| `src/server/observability` | Métricas operacionais, erros normalizados e memória do processo. |
 | `src/server/security` | Senhas, JWT, hashes, comparações constantes e rate limit. |
 | `src/services/material-service.ts` | Fonte persistida dos metadados reais de materiais. |
 | `src/services/material-runtime-store.ts` | Referências efêmeras aos arquivos físicos durante a sessão. |
@@ -66,7 +73,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 
 ## Persistência local
 
-O Storage V2 usa um único banco IndexedDB chamado `studyai-db`, versão 2. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
+O Storage V2 usa bancos IndexedDB isolados por identidade (`studyai-db:user-{id}` e `studyai-db:guest`), versão 2. A sessão troca o escopo antes de expor os dados da conta. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
 
 | Object Store | Conteúdo |
 | --- | --- |
@@ -101,7 +108,19 @@ Feature → StorageManager → IndexedDB
               SyncService / PostgreSQL
 ```
 
-O banco PostgreSQL possui usuários, perfis, refresh tokens, tokens de verificação/recuperação, registros versionados, log incremental, backups, compartilhamentos e arquivos. As tabelas de domínio solicitadas (`materials`, `studies`, `workspace`, `mentor`, `learning`, `knowledge`, `flashcards`, `quizzes`, `summaries` e `notes`) espelham os registros oficiais sem acoplar as features ao banco. `CloudDatabase` é a única fachada de persistência no servidor. Em desenvolvimento, a fachada usa memória quando `DATABASE_URL` não existe; a página Conta deixa essa limitação visível.
+O banco PostgreSQL possui usuários, perfis, refresh tokens, tokens de verificação/recuperação, registros versionados, log incremental, backups, compartilhamentos e metadados de arquivos. Binários grandes usam Object Storage S3 compatível, com chaves `users/{userId}/materials/{materialId}/{hash}`; o banco mantém hash, tamanho e chave. Sem configuração S3, existe fallback em `BYTEA` para desenvolvimento. As tabelas de domínio solicitadas (`materials`, `studies`, `workspace`, `mentor`, `learning`, `knowledge`, `flashcards`, `quizzes`, `summaries` e `notes`) espelham os registros oficiais sem acoplar as features ao banco. `CloudDatabase` é a única fachada de persistência no servidor.
+
+## Experiência do produto
+
+`ExperienceProvider` controla o modo Simples/Avançado, densidade, consentimento de telemetria e guias já vistos. O modo Simples oculta diagnóstico, pipeline, grafo e métricas técnicas; o Avançado os revela sem desmontar os dados ou exigir reinício. O shell escolhe Sidebar expandida/compacta, navegação inferior mobile e Header adaptativo conforme espaço e ponteiro.
+
+`HelpCenter`, `Onboarding` e `ContextualGuide` compartilham conteúdo real e links internos. A busca universal também indexa comandos e ajuda. Web Vitals e long tasks só são enviados quando o usuário consente; prompts, materiais, respostas e dados pessoais nunca entram no payload de telemetria.
+
+## Produção e observabilidade
+
+O ambiente de referência usa Docker Compose com aplicação standalone, PostgreSQL, MinIO e Caddy. Caddy termina HTTPS, habilita compressão e HSTS. GitHub Actions executa lint, TypeScript, build e Playwright; outro workflow publica a imagem no GHCR e aceita um webhook de deploy opcional.
+
+`Telemetry` mantém buffers limitados de métricas e erros no servidor. `/api/health` informa disponibilidade mínima e só inclui runtime, memória, banco e Object Storage em desenvolvimento ou com `HEALTH_SECRET`. `/api/telemetry` aceita somente nomes e valores allowlisted, possui rate limit e não recebe conteúdo do usuário.
 
 O sync limita payloads, aceita compressão gzip, envia binários em paralelo e só repete upload quando o hash muda. Materiais cloud são baixados sob demanda pelo `MaterialViewer`. Conflitos usam versão-base: edições concorrentes não são sobrescritas silenciosamente e podem ser resolvidas na interface. Backups são criados diariamente ou manualmente; links públicos são revogáveis; o histórico registra entidade, operação, dispositivo e horário.
 
@@ -252,6 +271,9 @@ Distribuição mobile requer uma URL HTTPS em `CAPACITOR_SERVER_URL`, Android St
 | `GET /api/ai/manager` | Health agregado, métricas de geração e logs recentes dos providers. |
 | `GET /api/ocr/assets/[asset]` | Worker e núcleo WebAssembly locais do Tesseract.js. |
 | `GET /api/ocr/languages/[language]` | Dados locais de idioma usados pelo OCR. |
+| `GET /api/health` | Saúde pública mínima; diagnóstico detalhado protegido. |
+| `POST /api/telemetry` | Métricas anônimas de UX quando há consentimento. |
+| `DELETE /auth/sessions/[id]` | Revoga outro dispositivo pertencente ao usuário atual. |
 
 Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem nem leem arquivos físicos.
 
@@ -262,6 +284,8 @@ Todos validam o corpo recebido e normalizam erros do AI Core. Eles não recebem 
 - A extração de áudio de MP4 e M4A depende dos codecs suportados pelo navegador. Arquivos incompatíveis recebem status de erro sem interromper os demais.
 - Os embeddings atuais são linguísticos e determinísticos, não um modelo neural pré-treinado; autenticação e sincronização existem, mas a extração e o processamento de conhecimento continuam locais.
 - Sem `DATABASE_URL`, contas e cloud usam memória volátil apenas para desenvolvimento. Produção requer PostgreSQL e `AUTH_SECRET`; verificação e recuperação por email requerem SMTP.
+- Object Storage real requer bucket e credenciais S3; sem isso o backend usa o banco apenas para compatibilidade de desenvolvimento.
+- Domínio, DNS, certificados públicos, feed assinado do Electron e publicação nas lojas dependem da infraestrutura e das contas do proprietário.
 - O Ollama precisa estar em execução no endereço configurado por `OLLAMA_URL` e possuir ao menos um modelo instalado.
 - O contexto do Tutor é baseado no tema acessado mais recentemente, e não em um seletor explícito de contexto.
 - A detecção de estrutura é heurística e local. Ela reconhece marcadores e vocabulário conhecidos, mas não substitui a edição manual quando o documento usa títulos ambíguos.
@@ -274,3 +298,5 @@ O projeto usa `strict` no TypeScript, aliases `@/*`, componentes de rota do App 
 Na Sprint 30 foram adicionados cenários Playwright para cadastro, sessão persistente, logout/login, recuperação, sync incremental, fila offline, backup, compartilhamento, upload/download por hash e conflito entre dois dispositivos. ESLint, TypeScript e o build de produção foram aprovados; os 75 testes Playwright passaram. O conjunto continua cobrindo Workspace, Mentor, Learning Engine, ingestão, OCR/RAG, Tutor e persistência local.
 
 Na Sprint 31 a suíte passou a possuir 80 cenários, incluindo os contratos PWA, Electron e Capacitor. A PWA foi exercitada offline sob controle do service worker, o servidor standalone do Desktop respondeu localmente e o APK Android de depuração foi compilado com sucesso. A validação binária do iOS permanece obrigatoriamente reservada a macOS/Xcode.
+
+Na Sprint 32 a suíte passou a possuir 86 cenários. Foram adicionadas validações para modos de interface, Central de Ajuda, onboarding, navegação mobile, isolamento do IndexedDB por usuário e contratos de produção/Object Storage. A validação local aprova lint, TypeScript, build e Playwright; a composição Docker permanece sujeita a validação em host com Docker instalado.

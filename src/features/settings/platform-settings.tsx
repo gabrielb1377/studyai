@@ -21,12 +21,13 @@ function size(value: number) {
   return `${(value / 1024 / 1024).toFixed(value > 1024 ** 3 ? 1 : 0)} MB`;
 }
 
-export function PlatformSettings() {
+export function PlatformSettings({ section }: { section?: "workspace" | "notifications" | "downloads" | "storage" }) {
   const [preferences, setPreferences] = useState(defaults);
   const [cache, setCache] = useState<PlatformCacheReport>();
   const [feedback, setFeedback] = useState("");
   const [installable, setInstallable] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [cloudStorage, setCloudStorage] = useState<{ mode: "s3" | "database"; available: boolean }>();
   const profile = mounted ? DeviceManager.detect() : undefined;
 
   const refreshCache = useCallback(() => void CacheManager.report().then(setCache), []);
@@ -40,6 +41,7 @@ export function PlatformSettings() {
     window.addEventListener("studyai:pwa-installable", onInstallable);
     setMounted(true);
     refreshCache();
+    void fetch("/api/health", { cache: "no-store" }).then((response) => response.json()).then((health: { objectStorage?: { mode: "s3" | "database"; available: boolean } }) => setCloudStorage(health.objectStorage)).catch(() => undefined);
     return () => window.removeEventListener("studyai:pwa-installable", onInstallable);
   }, [refreshCache]);
 
@@ -73,7 +75,7 @@ export function PlatformSettings() {
         <CardDescription>{profile.name}. Preferências salvas e sincronizadas automaticamente.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
-        {desktop && (
+        {(!section || section === "workspace") && desktop && (
           <div className="space-y-3 rounded-lg border p-4">
             <p className="text-sm font-semibold">Desktop</p>
             <SettingToggle label="Iniciar com o Windows" checked={preferences.launchAtStartup} onChange={(value) => void toggle("launchAtStartup", value)} />
@@ -84,7 +86,7 @@ export function PlatformSettings() {
             </div>
           </div>
         )}
-        {mobile && (
+        {(!section || section === "downloads") && mobile && (
           <div className="space-y-3 rounded-lg border p-4">
             <p className="text-sm font-semibold">Mobile</p>
             <SettingToggle label="Baixar somente no Wi-Fi" checked={preferences.wifiOnly} onChange={(value) => void toggle("wifiOnly", value)} />
@@ -92,11 +94,11 @@ export function PlatformSettings() {
             <SettingToggle label="Downloads automáticos" checked={preferences.autoDownload} onChange={(value) => void toggle("autoDownload", value)} />
           </div>
         )}
-        <div className="space-y-3 rounded-lg border p-4">
-          <div className="flex items-center justify-between gap-3"><div><p className="flex items-center gap-2 text-sm font-semibold"><HardDrive className="size-4" />Armazenamento offline</p><p className="mt-1 text-xs text-muted-foreground">{size(cache?.usageBytes ?? 0)} utilizados · cache {size(cache?.cacheBytes ?? 0)}</p></div><Button type="button" size="sm" variant="outline" onClick={() => void CacheManager.clearRuntime().then((count) => { setFeedback(`${count} caches temporários removidos.`); refreshCache(); })}>Limpar cache</Button></div>
-          <SettingToggle label="Downloads automáticos" checked={preferences.autoDownload} onChange={(value) => void toggle("autoDownload", value)} />
-          <SettingToggle label="Lembretes e notificações" checked={preferences.notifications} onChange={(value) => void toggle("notifications", value)} icon={<Bell className="size-4" />} />
-        </div>
+        {(!section || section === "storage" || section === "notifications" || section === "downloads") && <div className="space-y-3 rounded-lg border p-4">
+          <div className="flex items-center justify-between gap-3"><div><p className="flex items-center gap-2 text-sm font-semibold"><HardDrive className="size-4" />Armazenamento offline</p><p className="mt-1 text-xs text-muted-foreground">{size(cache?.usageBytes ?? 0)} utilizados · cache {size(cache?.cacheBytes ?? 0)}</p>{section === "storage" && <p className="mt-1 text-xs text-muted-foreground">Nuvem: {cloudStorage?.mode === "s3" ? cloudStorage.available ? "Object Storage conectado" : "Object Storage indisponível" : "banco de dados (fallback)"}</p>}</div><Button type="button" size="sm" variant="outline" onClick={() => void CacheManager.clearRuntime().then((count) => { setFeedback(`${count} caches temporários removidos.`); refreshCache(); })}>Limpar cache</Button></div>
+          {(!section || section === "downloads") && <SettingToggle label="Downloads automáticos" checked={preferences.autoDownload} onChange={(value) => void toggle("autoDownload", value)} />}
+          {(!section || section === "notifications") && <SettingToggle label="Lembretes e notificações" checked={preferences.notifications} onChange={(value) => void toggle("notifications", value)} icon={<Bell className="size-4" />} />}
+        </div>}
         <div className="flex flex-wrap gap-2">
           {installable && <Button type="button" onClick={() => void PWAService.install().then((installed) => setFeedback(installed ? "StudyAI instalado." : "Instalação cancelada."))}><Download />Instalar aplicativo</Button>}
           <Button type="button" variant="outline" onClick={() => void UpdateManager.check().then((result) => setFeedback(result.status === "available" ? "Atualização disponível." : result.status === "error" ? result.message || "Não foi possível verificar atualizações." : result.status === "development" ? "Atualizações automáticas ficam ativas no aplicativo instalado." : "Você está na versão mais recente."))}><RefreshCw />Verificar atualizações</Button>

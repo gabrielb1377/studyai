@@ -6,6 +6,9 @@ import { SemanticSearchService } from "../src/features/semantic/SemanticSearchSe
 import type { ExtractedContent } from "../src/features/extraction/ExtractionTypes";
 import { createRealStudy } from "./helpers/real-study";
 import { readIndexedDBStore } from "./helpers/indexed-db";
+import { enableAdvancedMode } from "./helpers/experience";
+
+test.beforeEach(async ({ page }) => enableAdvancedMode(page));
 import type { KnowledgeGraph } from "../src/features/semantic/types";
 
 const content: ExtractedContent = {

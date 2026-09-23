@@ -21,5 +21,15 @@ export const CloudFileService = {
     await MaterialBinaryStorage.save(material.id, file);
     return file;
   },
+  async remove(materialId: string) {
+    const csrf = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? "";
+    const response = await fetch(`/api/files/${encodeURIComponent(materialId)}`, {
+      method: "DELETE",
+      headers: { "x-csrf-token": csrf },
+    });
+    if (response.status === 401 || response.status === 404) return false;
+    if (!response.ok) throw new Error("Não foi possível remover o material da nuvem.");
+    return true;
+  },
   auth: AuthClient,
 };

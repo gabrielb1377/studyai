@@ -1,7 +1,7 @@
 import { IndexedDB, type StorageTransaction } from "./IndexedDB";
+import { currentDatabaseName, setStudyDatabaseScope } from "./Database";
 import { Migration } from "./Migration";
 import {
-  STORAGE_DATABASE_NAME,
   STORAGE_DATABASE_VERSION,
   STORAGE_MIGRATION_KEY,
   STORAGE_STORES,
@@ -76,6 +76,16 @@ export type StorageDiagnostics = {
 
 export const StorageManager = {
   initialize: ready,
+
+  async setUserScope(userId?: string) {
+    const changed = setStudyDatabaseScope(userId ? `user-${userId}` : "guest");
+    if (!changed) return;
+    initialization = undefined;
+    await ready();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(STORAGE_UPDATED_EVENT, { detail: { scopeChanged: true } }));
+    }
+  },
 
   async get<T>(store: StorageStoreName, key: IDBValidKey) {
     await ready();
@@ -182,7 +192,7 @@ export const StorageManager = {
       ? await navigator.storage.estimate().catch(() => undefined)
       : undefined;
     return {
-      database: STORAGE_DATABASE_NAME,
+      database: currentDatabaseName(),
       version: STORAGE_DATABASE_VERSION,
       counts,
       usageBytes: estimate?.usage,

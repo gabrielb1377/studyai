@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { enableAdvancedMode } from "./helpers/experience";
 
 const checkedAt = "2026-09-14T15:30:00.000Z";
 
@@ -21,8 +22,10 @@ async function mockManager(page: Page) {
 }
 
 test("configuração manual persiste e uma falha total não remove a pergunta do Tutor", async ({ page }) => {
+  await enableAdvancedMode(page);
   await mockManager(page);
   await page.goto("/configuracoes");
+  await page.getByRole("button", { name: "IA", exact: true }).click();
   const provider = page.getByLabel("Provider de IA");
   await provider.selectOption("groq");
   await page.reload();
@@ -48,8 +51,10 @@ test("configuração manual persiste e uma falha total não remove a pergunta do
 });
 
 test("Provider Manager mostra health e envia o modelo Ollama salvo pelo AI Core", async ({ page }) => {
+  await enableAdvancedMode(page);
   await mockManager(page);
   await page.goto("/configuracoes");
+  await page.getByRole("button", { name: "IA", exact: true }).click();
   await page.getByLabel("Provider de IA").selectOption("ollama");
   await expect(page.getByText("0.32.14", { exact: true })).toBeVisible();
   await expect(page.getByText("14 ms", { exact: true }).first()).toBeVisible();
@@ -89,8 +94,10 @@ test("Provider Manager mostra health e envia o modelo Ollama salvo pelo AI Core"
 });
 
 test("modo automático escolhe o provider online de menor latência e atualiza o Dashboard", async ({ page }) => {
+  await enableAdvancedMode(page);
   await mockManager(page);
   await page.goto("/configuracoes");
+  await page.getByRole("button", { name: "IA", exact: true }).click();
   await page.getByRole("button", { name: "Automático" }).click();
   await expect(page.getByText(/Provider atual:/)).toContainText("ollama");
   await expect(page.getByLabel("Provider de IA")).toBeDisabled();

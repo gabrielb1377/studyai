@@ -34,5 +34,6 @@ export const AuthClient = {
   updateProfile: (changes: Record<string, unknown>) => request("/profile", { method: "PATCH", body: JSON.stringify(changes) }),
   changePassword: (currentPassword: string, password: string) => request("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, password }) }),
   changeEmail: (password: string, email: string) => request("/auth/change-email", { method: "POST", body: JSON.stringify({ password, email }) }),
+  revokeSession: (id: string) => request(`/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   request,
 };

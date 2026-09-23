@@ -1,0 +1,13 @@
+.git
+.github
+.next
+node_modules
+dist-desktop
+android/.gradle
+android/app/build
+ios/App/DerivedData
+test-results
+playwright-report
+*.log
+.env*
+!.env.example

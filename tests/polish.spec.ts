@@ -6,6 +6,9 @@ import { TokenCounter } from "../src/features/ai/TokenCounter";
 import type { AIManagerRequest, AIResponse } from "../src/features/ai/AIProvider";
 import type { RetrievedChunk } from "../src/features/retrieval/RetrievalTypes";
 import { readIndexedDBStore } from "./helpers/indexed-db";
+import { enableAdvancedMode } from "./helpers/experience";
+
+test.beforeEach(async ({ page }) => enableAdvancedMode(page));
 import { createTextPdf } from "./helpers/pdf-file";
 import { importTextMaterial } from "./helpers/real-study";
 

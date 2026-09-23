@@ -20,7 +20,7 @@ export function Header() {
   const setMenuOpen = useLayoutStore((state) => state.setMenuOpen);
   const { session, logout } = useAuth();
   return (
-    <header className="flex h-[76px] shrink-0 items-center gap-2 border-b bg-background px-4 sm:px-7 lg:px-10">
+    <header className="app-header sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur-xl sm:h-[68px] sm:px-6 lg:px-8">
       <Button
         id="navigation-toggle"
         variant="ghost"
