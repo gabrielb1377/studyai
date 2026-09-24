@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS shares (
   revoked_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE shares ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
+ALTER TABLE shares ADD COLUMN IF NOT EXISTS access_level TEXT NOT NULL DEFAULT 'read';
 
 CREATE TABLE IF NOT EXISTS files (
   id TEXT NOT NULL,
@@ -108,3 +110,107 @@ BEGIN
     EXECUTE format('CREATE TABLE IF NOT EXISTS %I (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, id TEXT NOT NULL, payload JSONB, version BIGINT NOT NULL DEFAULT 1, hash TEXT NOT NULL, updated_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ, PRIMARY KEY (user_id, id))', table_name);
   END LOOP;
 END $$;
+
+CREATE TABLE IF NOT EXISTS study_rooms (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL DEFAULT 'study' CHECK (kind IN ('study','classroom')),
+  owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS room_members (
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('admin','editor','commenter','reader')),
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (room_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS room_members_user ON room_members(user_id);
+
+CREATE TABLE IF NOT EXISTS room_invites (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL CHECK (role IN ('editor','commenter','reader')),
+  created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ,
+  max_uses INTEGER NOT NULL DEFAULT 25,
+  uses INTEGER NOT NULL DEFAULT 0,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS room_resources (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('material','note','flashcards','quiz','workspace','study-plan')),
+  record_id TEXT,
+  title TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}',
+  version BIGINT NOT NULL DEFAULT 1,
+  created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  updated_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS room_resources_room ON room_resources(room_id,updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS collaboration_revisions (
+  id TEXT PRIMARY KEY,
+  resource_id TEXT NOT NULL REFERENCES room_resources(id) ON DELETE CASCADE,
+  version BIGINT NOT NULL,
+  data JSONB NOT NULL,
+  edited_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS collaboration_comments (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  parent_id TEXT REFERENCES collaboration_comments(id) ON DELETE CASCADE,
+  anchor TEXT,
+  content TEXT NOT NULL,
+  author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS collaboration_comments_target ON collaboration_comments(room_id,target_type,target_id);
+
+CREATE TABLE IF NOT EXISTS collaboration_presence (
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('studying','typing','away')),
+  resource_id TEXT,
+  last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (room_id,user_id)
+);
+
+CREATE TABLE IF NOT EXISTS collaboration_activity (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  actor_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT,
+  details JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS collaboration_activity_room ON collaboration_activity(room_id,created_at DESC);
+
+CREATE TABLE IF NOT EXISTS collaboration_progress (
+  room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
+  resource_id TEXT NOT NULL REFERENCES room_resources(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL DEFAULT 'individual' CHECK (mode IN ('individual','group','teacher')),
+  completed INTEGER NOT NULL DEFAULT 0,
+  total INTEGER NOT NULL DEFAULT 0,
+  score NUMERIC,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (room_id,resource_id,user_id)
+);

@@ -53,6 +53,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/search` | Pesquisa global unificada sobre os registros estruturados do IndexedDB. |
 | `src/features/{library,import,organization}` | Registro, consulta e organização dos materiais importados. |
 | `src/features/account` | Sessão, perfil, tela Conta e cliente de autenticação. |
+| `src/features/collaboration` | Salas, interface colaborativa, recursos, comentários, presença e progresso por pessoa. |
 | `src/features/sync` | Fila incremental, manifesto, conflitos, arquivos e sincronização em background. |
 | `src/features/platform` | Detecção de dispositivo, bridges Electron/Capacitor, PWA, cache, notificações e atualizações. |
 | `src/features/preferences` | Modo Simples/Avançado, densidade, consentimento e estado dos guias. |
@@ -60,6 +61,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/observability` | Coleta anônima e consentida de métricas de experiência. |
 | `src/server/auth` | Regras de conta, sessões e email, exclusivas do servidor. |
 | `src/server/cloud` | Persistência cloud, resolução de conflitos, backups e compartilhamentos. |
+| `src/server/collaboration` | Permissões, salas, convites, presença, comentários, turmas e histórico auditável. |
 | `src/server/database` | Pool PostgreSQL, transações e schema versionável. |
 | `src/server/storage` | Fachada server-only para Object Storage S3 compatível. |
 | `src/server/observability` | Métricas operacionais, erros normalizados e memória do processo. |
@@ -302,3 +304,5 @@ Na Sprint 31 a suíte passou a possuir 80 cenários, incluindo os contratos PWA,
 Na Sprint 32 a suíte passou a possuir 86 cenários. Foram adicionadas validações para modos de interface, Central de Ajuda, onboarding, navegação mobile, isolamento do IndexedDB por usuário e contratos de produção/Object Storage. A validação local aprova lint, TypeScript, build e Playwright; a composição Docker permanece sujeita a validação em host com Docker instalado.
 
 Na Sprint 32.5, a suíte chegou a 92 cenários Playwright e passou integralmente nos sete viewports (360, 390, 768, 1024, 1366, 1440 e 2560 px). A auditoria corrigiu a limpeza de binários locais após tombstones de sincronização, a recuperação por reimportação de materiais cujo binário local foi perdido e a validação/rate limiting do endpoint de telemetria. O relatório, inventário, arquitetura/fluxos e backlog priorizado estão em `docs/`. Lint, TypeScript e build foram executados novamente no handoff. Permanecem pendentes a validação da composição em Docker/PostgreSQL/S3 reais e quatro vulnerabilidades HIGH reportadas em dependências transitivas de produção; portanto este resultado não certifica prontidão irrestrita de produção.
+
+Na Sprint 33 foi criado o domínio de colaboração: salas de estudo e turmas, convites, Administrador/Editor/Comentador/Leitor, recursos versionados, restauração, comentários encadeados, presença, progresso individual e trilha de auditoria. A interface está em `/salas`; os serviços ficam em `src/server/collaboration`, e a documentação detalhada está em `docs/COLABORACAO.md`. A consistência de edição utiliza controle otimista e retorna conflito HTTP 409. O modo de desenvolvimento usa memória do processo; produção exige PostgreSQL. A validação final aprovou lint, TypeScript, build e 95 testes Playwright.

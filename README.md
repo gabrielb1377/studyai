@@ -20,7 +20,7 @@ npm run test:e2e
 npm run build
 ```
 
-O resultado da auditoria e inventário da Sprint 32.5 estão em [`docs/AUDITORIA_SPRINT_32_5.md`](docs/AUDITORIA_SPRINT_32_5.md), [`docs/INVENTARIO_PROJETO.md`](docs/INVENTARIO_PROJETO.md), [`docs/ARQUITETURA_E_FLUXOS.md`](docs/ARQUITETURA_E_FLUXOS.md) e [`docs/BACKLOG_SPRINT_32_5.md`](docs/BACKLOG_SPRINT_32_5.md).
+O resultado da auditoria e inventário da Sprint 32.5 estão em [`docs/AUDITORIA_SPRINT_32_5.md`](docs/AUDITORIA_SPRINT_32_5.md), [`docs/INVENTARIO_PROJETO.md`](docs/INVENTARIO_PROJETO.md), [`docs/ARQUITETURA_E_FLUXOS.md`](docs/ARQUITETURA_E_FLUXOS.md) e [`docs/BACKLOG_SPRINT_32_5.md`](docs/BACKLOG_SPRINT_32_5.md). A arquitetura colaborativa da Sprint 33 está em [`docs/COLABORACAO.md`](docs/COLABORACAO.md).
 
 ## Configuração de IA
 
@@ -58,6 +58,7 @@ Gemini, Ollama, OpenRouter e Groq implementam o mesmo contrato. No modo manual, 
 | Pesquisa Global 2.0 | Busca unificada em materiais, notas, resumos, flashcards, quizzes, conceitos e relações. |
 | Configurações | Central única por categorias, modo Simples/Avançado, aparência, IA, Workspace, armazenamento, Cloud e segurança. |
 | Conta e Cloud Sync | Cadastro, login, recuperação, perfil, sessões, sync incremental, conflitos, backups, compartilhamentos e histórico. |
+| Colaboração | Salas e turmas com convites, papéis, recursos versionados, comentários, presença, progresso e auditoria. |
 | Multiplataforma | PWA instalável/offline, aplicativo Electron para Windows, projetos Capacitor Android/iOS, cache, notificações e reconhecimento do dispositivo no Cloud Sync. |
 | Ajuda e onboarding | Tour inicial, guias contextuais, busca de tutoriais, atalhos e paleta universal por `Ctrl+K`. |
 | Produção | Docker/Compose, PostgreSQL, Object Storage S3/MinIO, Caddy com HTTPS e pipelines CI/CD. |

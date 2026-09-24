@@ -1,8 +1,16 @@
-# Handoff Atual — Sprint 32.5: Auditoria Geral + Estabilização + Polimento
+# Handoff Atual — Sprint 33: Colaboração Inteligente
 
 Atualizado em 23 de setembro de 2026.
 
-## Resultado da Sprint 32.5
+## Resultado da Sprint 33
+
+O StudyAI possui agora a área `/salas`, com grupos de estudo e turmas. Pessoas entram por convites com validade e limite de uso, recebem um dos quatro papéis e colaboram sobre materiais, notas, flashcards, quizzes, Workspace e planos. Recursos são versionados, edições concorrentes retornam conflito, versões anteriores podem ser restauradas, comentários aceitam respostas e a presença é atualizada sem bloquear a interface.
+
+O backend foi isolado em `src/server/collaboration`: `CollaborationService`, `WorkspaceShareService`, `PermissionsService`, `PresenceService`, `CommentService` e `ClassroomService`. PostgreSQL recebeu tabelas específicas; sem banco, testes e desenvolvimento usam memória do processo. Consulte `docs/COLABORACAO.md`.
+
+Os testes da Sprint cobrem duas contas na mesma sala, convite, recursos, comentários, presença, conflito otimista, bloqueio de Leitor, transferência de administração e viewport de 360 px. A execução final aprovou lint, TypeScript, build de produção e os 95 testes Playwright em 10,5 minutos.
+
+## Base preservada da Sprint 32.5
 
 Auditoria documentada em `docs/AUDITORIA_SPRINT_32_5.md`, com inventário em `docs/INVENTARIO_PROJETO.md`, arquitetura e fluxos em `docs/ARQUITETURA_E_FLUXOS.md`, e backlog em `docs/BACKLOG_SPRINT_32_5.md`.
 

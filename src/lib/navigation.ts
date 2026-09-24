@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Database, FolderTree, House, Library, Settings, Upload, UserRound } from "lucide-react";
+import { BookOpen, Bot, Database, FolderTree, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
@@ -34,6 +34,12 @@ export const navigation = [
     label: "Tutor IA",
     icon: Bot,
     description: "Seu assistente de estudo",
+  },
+  {
+    href: "/salas",
+    label: "Salas",
+    icon: UsersRound,
+    description: "Estude e compartilhe em grupo",
   },
   {
     href: "/importar",
