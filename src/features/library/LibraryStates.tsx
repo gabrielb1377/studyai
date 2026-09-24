@@ -2,6 +2,7 @@ import { Library, SearchX, TriangleAlert } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ImportMaterialButton } from "./ImportMaterialButton";
 
 export function LibraryEmptyState() {
@@ -39,24 +40,24 @@ export function LibraryLoading() {
     >
       <span className="sr-only">Carregando materiais...</span>
       <div aria-hidden="true" className="space-y-6">
-        <div className="h-11 w-full max-w-md rounded-md bg-muted" />
+        <Skeleton className="h-11 w-full max-w-md" />
         <div className="flex flex-wrap gap-2">
           {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className="h-11 w-20 rounded-md bg-muted" />
+            <Skeleton key={index} className="h-11 w-20" />
           ))}
         </div>
-        <div className="h-5 w-32 rounded bg-muted" />
+        <Skeleton className="h-5 w-32" />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 6 }, (_, index) => (
-            <Card key={index} className="min-h-80 gap-5 p-5 shadow-none">
-              <div className="size-10 rounded-lg bg-muted" />
-              <div className="h-5 w-3/4 rounded bg-muted" />
+            <Card key={index} className="min-h-80 gap-5 p-5">
+              <Skeleton className="size-10" />
+              <Skeleton className="h-5 w-3/4" />
               <div className="space-y-3">
                 {Array.from({ length: 4 }, (_, row) => (
-                  <div key={row} className="h-4 w-full rounded bg-muted" />
+                  <Skeleton key={row} className="h-4 w-full" />
                 ))}
               </div>
-              <div className="mt-auto h-4 w-2/3 rounded bg-muted" />
+              <Skeleton className="mt-auto h-4 w-2/3" />
             </Card>
           ))}
         </div>

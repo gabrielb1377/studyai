@@ -13,12 +13,14 @@ export function DashboardStats({
   flashcards,
   quizzes,
   contents,
+  advanced = false,
 }: {
   materials: readonly Material[];
   studies: readonly StudyRecord[];
   flashcards: readonly Flashcard[];
   quizzes: readonly QuizResult[];
   contents: readonly ExtractedContent[];
+  advanced?: boolean;
 }) {
   const averageProgress = studies.length
     ? Math.round(studies.reduce((total, study) => total + study.progress, 0) / studies.length)
@@ -46,12 +48,13 @@ export function DashboardStats({
       icon: Clock3,
     },
   ];
+  const visibleStats = advanced ? stats : stats.slice(0, 5);
 
   return (
-    <section aria-label="Resumo dos dados de estudo" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-      {stats.map(({ label, value, icon: Icon }) => (
-        <Card key={label} className="gap-3 p-4 shadow-none">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-secondary text-primary">
+    <section aria-label="Resumo dos dados de estudo" className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+      {visibleStats.map(({ label, value, icon: Icon }) => (
+        <Card key={label} className="min-w-[10rem] snap-start gap-3 p-4 sm:min-w-0">
+          <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-primary">
             <Icon className="size-4" aria-hidden="true" />
           </span>
           <div>

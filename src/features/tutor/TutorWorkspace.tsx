@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Bot, X } from "lucide-react";
+import { AlertCircle, Bot, ChevronDown, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -76,6 +76,15 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     setDraft("");
   };
 
+  const runResponseAction = async (action: "continue" | "regenerate" | "explain", response: string) => {
+    const prompts = {
+      continue: "Continue a resposta anterior a partir de onde parou, sem repetir o conteúdo já apresentado.",
+      regenerate: "Reescreva a resposta anterior com mais clareza e precisão, mantendo o mesmo contexto.",
+      explain: `Explique de outra forma, com uma abordagem mais simples e um exemplo prático, esta resposta: ${response.slice(0, 600)}`,
+    };
+    await sendMessage(prompts[action]);
+  };
+
   const generateSummary = async () => {
     if (!activeConversation || isSummaryLoading) return;
     if (!context) {
@@ -141,7 +150,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
   };
 
   return (
-    <div className={compact ? "grid min-h-[34rem] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden 2xl:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-rows-1" : "grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-5 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1"}>
+    <div className={compact ? "grid min-h-[34rem] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden 2xl:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-rows-1" : "grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1"}>
       <TutorSidebar
         compact={compact}
         conversations={conversations}
@@ -153,9 +162,9 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
         onRenameConversation={openRename}
         onDeleteConversation={deleteConversation}
       />
-      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden">
-        <div className="mb-5 flex items-center gap-3">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-secondary text-primary">
+      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border bg-card/45 p-3 shadow-[var(--shadow-card)] sm:p-4">
+        <div className="mb-4 flex items-center gap-3 px-1">
+          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
             <Bot className="size-5" aria-hidden="true" />
           </span>
           <div>
@@ -180,7 +189,10 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
           </div>
         )}
         {context?.document && (
-          <aside className="mb-4 rounded-xl border bg-secondary/30 p-4" aria-label="Contexto identificado do documento">
+          <aside className="mb-4" aria-label="Contexto identificado do documento">
+          <details className="group rounded-xl border bg-secondary/25">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 text-xs font-medium text-primary"><Sparkles className="size-3.5" />Contexto: {context.document.topic ?? context.topic}<ChevronDown className="ml-auto size-4 transition-transform group-open:rotate-180" /></summary>
+          <div className="border-t p-4">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span><strong>Tema:</strong> {context.document.topic ?? context.topic}</span>
               {context.document.subject && <span><strong>Disciplina:</strong> {context.document.subject}</span>}
@@ -200,11 +212,13 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
                 <strong className="text-foreground">Subtemas:</strong> {context.document.subtopics.join(", ")}
               </p>
             )}
+          </div>
+          </details>
           </aside>
         )}
         {activeConversation ? (
           <>
-            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} />
+            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} onResponseAction={(action, response) => { void runResponseAction(action, response); }} />
             <TutorComposer draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
           </>
         ) : (

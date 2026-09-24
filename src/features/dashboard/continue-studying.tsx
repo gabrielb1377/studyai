@@ -21,7 +21,7 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
   const remainingMinutes = record ? Math.max(0, Math.ceil((record.readingTimeMinutes ?? 0) * (100 - record.progress) / 100)) : 0;
   return (
     <section
-      className="relative flex min-h-72 flex-col overflow-hidden rounded-xl border border-primary/15 bg-secondary/60 p-6 sm:p-8"
+      className="surface-raised relative flex min-h-72 flex-col overflow-hidden rounded-2xl border border-primary/15 bg-secondary/55 p-6 sm:p-8"
       aria-labelledby="continue-title"
     >
       <div className="relative z-10 max-w-md">
@@ -51,7 +51,7 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
           <div className="sm:col-span-2"><dt className="inline font-medium text-foreground">Último acesso: </dt><dd className="inline">{new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(record.lastAccessedAt))}</dd></div>
         </dl>
         <div className="mt-7 flex flex-wrap items-center gap-4">
-          <Button asChild className="h-11 px-5">
+          <Button asChild size="lg">
             <Link href={`/estudo?tema=${record.studyId}`}>
               Continuar estudando
               <ArrowRight className="size-4" />
@@ -71,7 +71,7 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
             <p className="mt-3 max-w-80 text-sm leading-6 text-muted-foreground">
               Importe um material para criar automaticamente o primeiro estudo.
             </p>
-            <Button asChild className="mt-7 h-11 px-5">
+            <Button asChild size="lg" className="mt-7">
               <Link href="/importar">Importar material<ArrowRight className="size-4" /></Link>
             </Button>
           </>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { FolderInput, Search, Star, Tags, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FolderInput, Grid2X2, List, Rows3, Search, Star, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMaterials } from "@/hooks/useMaterials";
@@ -14,6 +14,15 @@ import { OrganizationService, type MaterialDestination } from "@/features/organi
 import { MaterialService } from "@/services/material-service";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useKnowledgeGraphs } from "@/features/semantic/useKnowledgeGraphs";
+import { cn } from "@/lib/utils";
+
+export type LibraryView = "grid" | "list" | "compact";
+
+const libraryViews = [
+  { value: "grid", label: "Grade", icon: Grid2X2 },
+  { value: "list", label: "Lista", icon: List },
+  { value: "compact", label: "Compacta", icon: Rows3 },
+] as const;
 
 export function LibraryBrowser() {
   const { materials, isLoading, refresh } = useMaterials();
@@ -27,8 +36,19 @@ export function LibraryBrowser() {
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
   const [isTagsOpen, setIsTagsOpen] = useState(false);
   const [tagText, setTagText] = useState("");
+  const [view, setView] = useState<LibraryView>("grid");
   const [destination, setDestination] = useState<MaterialDestination>({ course: "", semester: "", subject: "", topic: "" });
-  const results = filterMaterials(materials, query, filter);
+  const results = useMemo(() => filterMaterials(materials, query, filter), [filter, materials, query]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("studyai:library-view") as LibraryView | null;
+    if (stored && libraryViews.some((item) => item.value === stored)) setView(stored);
+  }, []);
+
+  const selectView = (next: LibraryView) => {
+    setView(next);
+    localStorage.setItem("studyai:library-view", next);
+  };
 
   if (isLoading) return <LibraryLoading />;
 
@@ -71,11 +91,8 @@ export function LibraryBrowser() {
 
   return (
     <div className="space-y-6">
-      <div
-        role="search"
-        aria-label="Pesquisa de materiais"
-        className="relative max-w-md"
-      >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div role="search" aria-label="Pesquisa de materiais" className="relative w-full max-w-xl">
         <Search
           className="pointer-events-none absolute left-3.5 top-3.5 size-4 text-muted-foreground"
           aria-hidden="true"
@@ -102,6 +119,14 @@ export function LibraryBrowser() {
             <X className="size-4" />
           </Button>
         )}
+      </div>
+      <div role="group" aria-label="Visualização da biblioteca" className="flex w-fit items-center rounded-xl border bg-card/75 p-1 shadow-sm">
+        {libraryViews.map(({ value, label, icon: Icon }) => (
+          <Button key={value} type="button" size="sm" variant="ghost" aria-label={`Visualização ${label}`} aria-pressed={view === value} onClick={() => selectView(value)} className={cn("h-9 px-3 text-muted-foreground", view === value && "bg-accent text-accent-foreground shadow-sm")}>
+            <Icon className="size-4" /><span className="hidden sm:inline">{label}</span>
+          </Button>
+        ))}
+      </div>
       </div>
       {selectedIds.size > 0 && (
         <div role="toolbar" aria-label="Ações dos materiais selecionados" className="sticky top-16 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 shadow-lg">
@@ -151,11 +176,17 @@ export function LibraryBrowser() {
         ) : results.length === 0 ? (
           <LibraryNoResults onClear={clearFilters} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className={cn(
+            "content-fade",
+            view === "grid" && "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3",
+            view === "list" && "space-y-3",
+            view === "compact" && "grid grid-cols-1 gap-2 lg:grid-cols-2",
+          )}>
             {results.map((material) => (
               <MaterialCard
                 key={material.id}
                 material={material}
+                view={view}
                 content={extractedContents.find((content) => content.fileId === material.fileId)}
                 knowledge={knowledgeGraphs.find((graph) => graph.fileId === material.fileId)}
                 selected={selectedIds.has(material.id)}

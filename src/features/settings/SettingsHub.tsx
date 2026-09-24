@@ -10,6 +10,7 @@ import { AppearanceSettings } from "./appearance-settings";
 import { ExperienceSettings } from "./experience-settings";
 import { useExperiencePreferences } from "@/features/preferences/ExperiencePreferences";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const AISettingsPanel = dynamic(() => import("./ai-settings-panel").then((module) => module.AISettingsPanel), { loading: () => <SettingsLoading /> });
 const PlatformSettings = dynamic(() => import("./platform-settings").then((module) => module.PlatformSettings), { loading: () => <SettingsLoading /> });
@@ -63,5 +64,5 @@ function SettingsLinkCard({ icon: Icon, title, description, action }: { icon: ty
 }
 
 function SettingsLoading() {
-  return <div className="h-52 animate-pulse rounded-2xl border bg-muted/40" role="status" aria-label="Carregando configurações" />;
+  return <div role="status" aria-label="Carregando configurações"><Skeleton className="h-52 border" /></div>;
 }

@@ -1,20 +1,29 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Bot } from "lucide-react";
+import { useState } from "react";
+import { Bot, Check, Copy, RefreshCcw, Sparkles, StepForward } from "lucide-react";
 import type { TutorMessage as TutorMessageType } from "@/types/tutor";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const MarkdownRenderer = dynamic(() => import("./MarkdownRenderer"), {
   loading: () => <p className="whitespace-pre-wrap">Carregando resposta…</p>,
 });
 
-export function TutorMessage({ message }: { message: TutorMessageType }) {
+export function TutorMessage({ message, onResponseAction }: { message: TutorMessageType; onResponseAction?: (action: "continue" | "regenerate" | "explain", response: string) => void }) {
   const isUser = message.role === "user";
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
 
   return (
-    <article className={isUser ? "flex justify-end" : "flex gap-3"}>
-      {!isUser && <span className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary"><Bot className="size-4" aria-hidden="true" /></span>}
-      <div className={isUser ? "max-w-[90%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-6 text-primary-foreground sm:max-w-[80%]" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-md bg-secondary px-4 py-3 text-sm leading-6 text-secondary-foreground sm:max-w-[80%]"}>
+    <article className={isUser ? "group flex justify-end" : "group flex gap-3"}>
+      {!isUser && <span className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm"><Bot className="size-4" aria-hidden="true" /></span>}
+      <div className={isUser ? "max-w-[92%] rounded-2xl rounded-br-md bg-primary px-4 py-3 text-sm leading-6 text-primary-foreground shadow-sm sm:max-w-[78%]" : "min-w-0 max-w-[92%] rounded-2xl rounded-bl-md border bg-card px-4 py-3 text-sm leading-6 text-card-foreground shadow-sm sm:max-w-[85%]"}>
         {message.heading && <h3 className="mb-2 font-semibold">{message.heading}</h3>}
         {isUser ? <p className="whitespace-pre-wrap">{message.content}</p> : <MarkdownRenderer content={message.content} />}
         {message.list && <ul className="mt-3 list-disc space-y-1 pl-5">{message.list.map((item) => <li key={item}>{item}</li>)}</ul>}
@@ -32,7 +41,17 @@ export function TutorMessage({ message }: { message: TutorMessageType }) {
             {message.metadata.cached ? " · cache" : ""}
           </p>
         )}
+        {!isUser && message.content && <div className="mt-3 flex flex-wrap items-center gap-1 border-t pt-2 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <MessageAction label={copied ? "Copiado" : "Copiar"} icon={copied ? Check : Copy} onClick={() => { void copy(); }} />
+          <MessageAction label="Continuar resposta" icon={StepForward} onClick={() => onResponseAction?.("continue", message.content)} />
+          <MessageAction label="Regenerar" icon={RefreshCcw} onClick={() => onResponseAction?.("regenerate", message.content)} />
+          <MessageAction label="Explicar diferente" icon={Sparkles} onClick={() => onResponseAction?.("explain", message.content)} />
+        </div>}
       </div>
     </article>
   );
+}
+
+function MessageAction({ label, icon: Icon, onClick }: { label: string; icon: typeof Copy; onClick: () => void }) {
+  return <Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}><Icon className="size-3.5" /></Button></TooltipTrigger><TooltipContent>{label}</TooltipContent></Tooltip>;
 }

@@ -12,8 +12,10 @@ import type { Material } from "@/types/material";
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
 import { formatMaterialDate, materialTypes } from "./material-utils";
 import type { KnowledgeGraph } from "@/features/semantic/types";
+import type { LibraryView } from "./LibraryBrowser";
+import { cn } from "@/lib/utils";
 
-export function MaterialCard({ material, content, knowledge, selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
+export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
   const [showDetails, setShowDetails] = useState(false);
   const { icon: Icon, label } = materialTypes[material.fileType];
   const details = [
@@ -60,10 +62,10 @@ export function MaterialCard({ material, content, knowledge, selected = false, o
   return (
     <article
       aria-labelledby={`material-${material.id}`}
-      className="h-full min-w-0"
+      className="render-lazy h-full min-w-0"
     >
-      <Card className="h-full gap-0 p-5 shadow-none transition-colors hover:border-primary/30">
-        <div className="mb-4 flex items-center gap-3">
+      <Card className={cn("surface-hover h-full gap-0 p-5", view !== "grid" && "sm:grid sm:grid-cols-[auto_minmax(12rem,1fr)_minmax(9rem,.42fr)_auto] sm:items-center sm:gap-x-4 sm:p-4")}>
+        <div className={cn("flex items-center gap-3", view === "grid" && "mb-4")}>
           <input type="checkbox" checked={selected} onChange={(event) => onSelectedChange?.(event.target.checked)} aria-label={`Selecionar ${material.name}`} className="size-4 accent-primary" />
           <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
             <Icon className="size-5" strokeWidth={1.5} aria-hidden="true" />
@@ -83,11 +85,11 @@ export function MaterialCard({ material, content, knowledge, selected = false, o
         </div>
         <h3
           id={`material-${material.id}`}
-          className="mb-5 break-words text-sm font-semibold leading-6"
+          className={cn("break-words text-sm font-semibold leading-6", view === "grid" && "mb-5")}
         >
           {material.name}
         </h3>
-        <dl className="mb-5 space-y-2.5 text-xs leading-5">
+        {(view === "grid" || showDetails) && <dl className={cn("space-y-2.5 text-xs leading-5", view === "grid" ? "mb-5" : "col-span-full mt-4 rounded-xl border bg-secondary/20 p-4 sm:grid sm:grid-cols-2 sm:gap-x-6")}>
           {details.map((detail) => (
             <div
               key={detail.label}
@@ -97,22 +99,22 @@ export function MaterialCard({ material, content, knowledge, selected = false, o
               <dd className="break-words">{detail.value}</dd>
             </div>
           ))}
-        </dl>
-        <div className="mb-4 space-y-2 border-t pt-4">
+        </dl>}
+        <div className={cn("space-y-2", view === "grid" ? "mb-4 border-t pt-4" : "my-3 sm:my-0")}>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <span>{material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
             <span>{material.progress}%</span>
           </div>
           <Progress value={material.progress} aria-label={`Progresso de ${material.name}`} />
         </div>
-        {content?.metadata.keywords?.length ? (
+        {view === "grid" && content?.metadata.keywords?.length ? (
           <p className="mb-4 line-clamp-2 text-xs leading-5 text-muted-foreground">
             <strong className="text-foreground">Palavras-chave:</strong> {content.metadata.keywords.join(", ")}
           </p>
         ) : null}
-        {material.tags?.length ? <p className="mb-4 text-xs text-muted-foreground"><strong className="text-foreground">Tags:</strong> {material.tags.join(", ")}</p> : null}
+        {view === "grid" && material.tags?.length ? <p className="mb-4 text-xs text-muted-foreground"><strong className="text-foreground">Tags:</strong> {material.tags.join(", ")}</p> : null}
         {showDetails && (
-          <div className="mb-4 rounded-lg border bg-secondary/25 p-3 text-xs leading-5 text-muted-foreground">
+          <div className="col-span-full mb-4 rounded-xl border bg-secondary/25 p-3 text-xs leading-5 text-muted-foreground">
             <p><strong className="text-foreground">Caminho:</strong> {material.relativePath}</p>
             <p><strong className="text-foreground">Atualizado:</strong> {formatMaterialDate(material.updatedAt)}</p>
             <p><strong className="text-foreground">Palavras:</strong> {content?.metadata.wordCount ?? 0}</p>
@@ -126,7 +128,7 @@ export function MaterialCard({ material, content, knowledge, selected = false, o
             <p className="mt-1 opacity-80">{content.errorDetails.suggestedAction}</p>
           </div>
         ) : null}
-        <div className="mb-4 grid grid-cols-2 gap-2 border-t pt-4 sm:grid-cols-3">
+        <div className={cn("grid grid-cols-2 gap-2", view === "grid" ? "mb-4 border-t pt-4 sm:grid-cols-3" : "sm:flex sm:justify-end")}>
           <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
           <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>
           <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia`}><Bot />Tutor</Link></Button>
@@ -134,7 +136,7 @@ export function MaterialCard({ material, content, knowledge, selected = false, o
           <Button type="button" size="sm" variant="ghost" onClick={onMove}><FolderInput />Mover</Button>
           <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Excluir</Button>
         </div>
-        <p className="mt-auto flex items-center gap-1.5 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
+        {view === "grid" && <p className="mt-auto flex items-center gap-1.5 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
           <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
           <span>
             Importado em{" "}
@@ -142,7 +144,7 @@ export function MaterialCard({ material, content, knowledge, selected = false, o
               {formatMaterialDate(material.importedAt)}
             </time>
           </span>
-        </p>
+        </p>}
       </Card>
     </article>
   );

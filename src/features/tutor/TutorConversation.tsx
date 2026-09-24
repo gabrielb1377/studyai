@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { TutorMessage } from "./TutorMessage";
 import type { TutorMessage as TutorMessageType } from "@/types/tutor";
 
-export function TutorConversation({ messages, isLoading }: { messages: readonly TutorMessageType[]; isLoading: boolean }) {
+export function TutorConversation({ messages, isLoading, onResponseAction }: { messages: readonly TutorMessageType[]; isLoading: boolean; onResponseAction?: (action: "continue" | "regenerate" | "explain", response: string) => void }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastContent = messages.at(-1)?.content;
   useEffect(() => {
@@ -12,7 +12,7 @@ export function TutorConversation({ messages, isLoading }: { messages: readonly 
   }, [isLoading, lastContent, messages.length]);
 
   return (
-    <section aria-label="Conversa com o Tutor IA" className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain rounded-xl border bg-card p-4 sm:p-6">
+    <section aria-label="Conversa com o Tutor IA" className="premium-scroll min-h-0 flex-1 space-y-6 overflow-y-auto rounded-2xl border bg-background/55 p-4 sm:p-6">
       {messages.length === 0 && !isLoading && (
         <div className="flex min-h-[360px] items-center justify-center text-center sm:min-h-[460px]">
           <div>
@@ -21,10 +21,12 @@ export function TutorConversation({ messages, isLoading }: { messages: readonly 
           </div>
         </div>
       )}
-      {messages.map((message) => <TutorMessage key={message.id} message={message} />)}
+      {messages.map((message) => <TutorMessage key={message.id} message={message} onResponseAction={onResponseAction} />)}
       {isLoading && (
-        <div className="flex gap-2 text-sm text-muted-foreground" role="status" aria-live="polite">
+        <div className="flex items-center gap-2 rounded-xl bg-secondary/50 px-4 py-3 text-sm text-muted-foreground" role="status" aria-live="polite">
           <span className="size-2 animate-pulse rounded-full bg-primary" />
+          <span className="size-2 animate-pulse rounded-full bg-primary [animation-delay:150ms]" />
+          <span className="size-2 animate-pulse rounded-full bg-primary [animation-delay:300ms]" />
           O Tutor está preparando a resposta...
         </div>
       )}

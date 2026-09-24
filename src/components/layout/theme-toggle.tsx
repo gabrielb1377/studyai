@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
+import { Moon, MoonStar, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,10 @@ import {
 } from "@/components/ui/tooltip";
 
 export function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const cycleTheme = () => {
+    setTheme(theme === "amoled" || resolvedTheme === "dark" ? "light" : "dark");
+  };
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -19,13 +22,14 @@ export function ThemeToggle() {
           size="icon"
           className="size-10"
           aria-label="Alternar tema claro/escuro"
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          onClick={cycleTheme}
         >
           <Sun className="size-[18px] dark:hidden" />
-          <Moon className="hidden size-[18px] dark:block" />
+          <Moon className="hidden size-[18px] dark:block amoled:hidden" />
+          <MoonStar className="hidden size-[18px] amoled:block" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent>Alternar tema claro/escuro</TooltipContent>
+      <TooltipContent>Alternar entre claro, escuro e AMOLED</TooltipContent>
     </Tooltip>
   );
 }

@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 23 de setembro de 2026.
+Atualizado em 24 de setembro de 2026.
 
 ## Propósito
 
@@ -114,7 +114,9 @@ O banco PostgreSQL possui usuários, perfis, refresh tokens, tokens de verifica�
 
 ## Experiência do produto
 
-`ExperienceProvider` controla o modo Simples/Avançado, densidade, consentimento de telemetria e guias já vistos. O modo Simples oculta diagnóstico, pipeline, grafo e métricas técnicas; o Avançado os revela sem desmontar os dados ou exigir reinício. O shell escolhe Sidebar expandida/compacta, navegação inferior mobile e Header adaptativo conforme espaço e ponteiro.
+`ExperienceProvider` controla o modo Simples/Avançado, densidade, escala de fonte, alto contraste, redução de movimento, consentimento de telemetria e guias já vistos. O modo Simples oculta diagnóstico, pipeline, grafo e métricas técnicas; o Avançado os revela sem desmontar os dados ou exigir reinício. O shell escolhe Sidebar expandida/compacta, navegação inferior mobile e Header adaptativo conforme espaço e ponteiro. Claro, Escuro, AMOLED e Sistema compartilham os mesmos tokens semânticos.
+
+O Design System canônico permanece em `src/components/ui` e `src/styles/globals.css`. Biblioteca oferece Grade, Lista e Compacta sobre o mesmo componente. O Workspace preserva multipainel no desktop e mostra somente a ferramenta ativa no mobile; Tutor mantém contexto recolhível, Markdown/KaTeX e ações de resposta próximas ao conteúdo. Consulte `docs/DESIGN_SYSTEM.md`.
 
 `HelpCenter`, `Onboarding` e `ContextualGuide` compartilham conteúdo real e links internos. A busca universal também indexa comandos e ajuda. Web Vitals e long tasks só são enviados quando o usuário consente; prompts, materiais, respostas e dados pessoais nunca entram no payload de telemetria.
 

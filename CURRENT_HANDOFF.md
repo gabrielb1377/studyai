@@ -1,6 +1,16 @@
-# Handoff Atual — Sprint 33: Colaboração Inteligente
+# Handoff Atual — Sprint 33.5: UX/UI 3.0
 
-Atualizado em 23 de setembro de 2026.
+Atualizado em 24 de setembro de 2026.
+
+## Resultado da Sprint 33.5
+
+O StudyAI recebeu uma modernização transversal sem alterar regras de negócio. Tokens semânticos, superfícies, sombras, movimento, primitives e estados de loading foram unificados. A aplicação suporta Claro, Escuro, AMOLED e Sistema; escala de fonte, alto contraste e redução manual de movimento são persistidos junto às preferências de experiência.
+
+Dashboard prioriza a retomada do estudo e reduz métricas no modo Simples. Biblioteca possui Grade, Lista e Compacta persistidas sobre o mesmo card. Tutor ganhou contexto recolhível, hierarquia mais clara, Enter/Shift+Enter e ações de copiar, continuar, regenerar e explicar de outra forma. Workspace mantém multipainel no desktop, mostra uma ferramenta ativa no mobile, recolhe a navegação de matérias e preserva layout, tamanho, scroll e sessão.
+
+O contrato visual está documentado em `docs/DESIGN_SYSTEM.md`. A suíte inclui cenários para preferências acessíveis, AMOLED, visualização da Biblioteca e alvos mobile, além da regressão existente.
+
+Validação final: `npm run lint`, `npm run typecheck` e `npm run build` aprovados; 36 unidades estáticas foram geradas e as rotas dinâmicas compiladas, com bundle compartilhado de 104 kB. Os 98 testes Playwright passaram em 11,2 minutos, incluindo 360, 390, 768, 1024, 1366, 1440 e 2560 px.
 
 ## Resultado da Sprint 33
 

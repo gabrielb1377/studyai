@@ -26,8 +26,8 @@ export function TutorComposer({ draft, isLoading, isSummaryLoading, onDraftChang
           {isSummaryLoading ? "Gerando resumo..." : "Gerar resumo"}
         </Button>
       </div>
-      <form className="rounded-xl border bg-card p-2 shadow-sm" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
-        <textarea ref={textareaRef} aria-label="Mensagem para o Tutor IA" value={draft} onChange={(event) => updateDraft(event.target.value)} placeholder="Pergunte sobre o tema que está estudando..." rows={1} className="max-h-45 min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground" />
+      <form className="rounded-2xl border bg-card/95 p-2 shadow-[var(--shadow-card)] transition-shadow focus-within:border-primary/35 focus-within:shadow-md" onSubmit={(event) => { event.preventDefault(); onSend(); }}>
+        <textarea ref={textareaRef} aria-label="Mensagem para o Tutor IA" value={draft} onChange={(event) => updateDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); if (draft.trim() && !isLoading) onSend(); } }} placeholder="Pergunte sobre o tema que está estudando..." rows={1} className="max-h-45 min-h-11 w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground" />
         <div className="flex items-center justify-between gap-3 border-t px-1 pt-2">
           <Button type="button" variant="ghost" size="icon-sm" aria-label="Anexar arquivo (em breve)"><Paperclip className="size-4" aria-hidden="true" /></Button>
           <Button type="submit" size="sm" className="h-9" disabled={!draft.trim() || isLoading}>

@@ -14,6 +14,7 @@ export function Providers({ children, nonce }: { children: React.ReactNode; nonc
     <ThemeProvider
       attribute="class"
       defaultTheme="light"
+      themes={["light", "dark", "amoled", "system"]}
       enableSystem
       storageKey="studyai-theme"
       disableTransitionOnChange

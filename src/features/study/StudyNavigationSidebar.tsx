@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, FileText, FolderOpen } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, FileText, FolderOpen } from "lucide-react";
 import type { Material } from "@/types/material";
 import type { StudyRecord } from "@/types/study-engine";
 
@@ -15,10 +16,12 @@ export function StudyNavigationSidebar({ studies, materials, activeStudyId, acti
   activeMaterialId?: string;
 }) {
   const courses = Array.from(new Set(studies.map(courseOf))).sort();
+  const [mobileOpen, setMobileOpen] = useState(false);
   return (
-    <aside aria-label="Navegação dos estudos" className="rounded-xl border bg-card p-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+    <aside aria-label="Navegação dos estudos" className="rounded-2xl border bg-card/88 p-3 shadow-[var(--shadow-card)] lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+      <button type="button" aria-expanded={mobileOpen} onClick={() => setMobileOpen((current) => !current)} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-sm font-semibold lg:hidden"><FolderOpen className="size-4 text-primary" />Navegar por matérias e temas<ChevronDown className={`ml-auto size-4 transition-transform ${mobileOpen ? "rotate-180" : ""}`} /></button>
       <p className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Curso, semestre e materiais</p>
-      <ul className="space-y-3">
+      <ul className={`${mobileOpen ? "block" : "hidden"} space-y-3 lg:block`}>
         {courses.map((course) => {
           const courseStudies = studies.filter((study) => courseOf(study) === course);
           const semesters = Array.from(new Set(courseStudies.map(semesterOf))).sort();

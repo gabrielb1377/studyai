@@ -20,7 +20,7 @@ export function Header() {
   const setMenuOpen = useLayoutStore((state) => state.setMenuOpen);
   const { session, logout } = useAuth();
   return (
-    <header className="app-header sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur-xl sm:h-[68px] sm:px-6 lg:px-8">
+    <header className="app-header sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b bg-background/78 px-3 backdrop-blur-2xl sm:h-[68px] sm:px-6 lg:px-8">
       <Button
         id="navigation-toggle"
         variant="ghost"
@@ -32,7 +32,7 @@ export function Header() {
         <Menu />
       </Button>
       <SearchDialog />
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-1.5">
         <ThemeToggle />
         <div className="mx-1 h-5 w-px bg-border" />
         <DropdownMenu>
@@ -40,7 +40,7 @@ export function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="size-10 rounded-full border bg-secondary text-secondary-foreground"
+              className="size-10 rounded-full border bg-secondary/75 text-secondary-foreground shadow-sm hover:border-primary/20"
               aria-label="Abrir menu pessoal"
             >
               <UserRound className="size-[18px]" />

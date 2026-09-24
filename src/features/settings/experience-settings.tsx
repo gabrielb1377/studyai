@@ -1,14 +1,21 @@
 "use client";
 
-import { Check, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Check, Contrast, Eye, Gauge, RotateCcw, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ExperiencePreferencesService, useExperiencePreferences, type ExperienceMode } from "@/features/preferences/ExperiencePreferences";
+import { ExperiencePreferencesService, useExperiencePreferences, type ExperienceMode, type FontScale } from "@/features/preferences/ExperiencePreferences";
+
+const fontScales: Array<{ value: FontScale; label: string }> = [
+  { value: "small", label: "Pequena" },
+  { value: "default", label: "Padrão" },
+  { value: "large", label: "Grande" },
+  { value: "extra-large", label: "Extra" },
+];
 
 export function ExperienceSettings() {
   const preferences = useExperiencePreferences();
   return (
-    <Card className="shadow-none">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base"><Sparkles className="size-4 text-primary" />Experiência</CardTitle>
         <CardDescription>Escolha quanto controle e detalhe deseja ver no dia a dia.</CardDescription>
@@ -25,6 +32,24 @@ export function ExperienceSettings() {
         <label className="flex min-h-11 items-center justify-between gap-4 rounded-lg border px-4 py-3 text-sm">
           <span><span className="flex items-center gap-2 font-medium"><SlidersHorizontal className="size-4" />Densidade compacta</span><span className="mt-1 block text-xs text-muted-foreground">Mostra mais conteúdo em telas de notebook e desktop.</span></span>
           <input type="checkbox" className="size-4 accent-primary" checked={preferences.compactDensity} onChange={(event) => ExperiencePreferencesService.update({ compactDensity: event.target.checked })} />
+        </label>
+        <div className="rounded-xl border p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" />Tamanho do texto</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Tamanho do texto">
+            {fontScales.map((scale) => (
+              <button key={scale.value} type="button" aria-pressed={preferences.fontScale === scale.value} onClick={() => ExperiencePreferencesService.update({ fontScale: scale.value })} className={`min-h-10 rounded-lg border px-3 text-sm transition-colors ${preferences.fontScale === scale.value ? "border-primary bg-primary/8 font-semibold text-primary" : "hover:bg-accent"}`}>
+                {scale.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <label className="flex min-h-11 items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm">
+          <span><span className="flex items-center gap-2 font-medium"><Gauge className="size-4" />Reduzir animações</span><span className="mt-1 block text-xs text-muted-foreground">Diminui movimentos, transições e rolagem animada.</span></span>
+          <input type="checkbox" className="size-4 accent-primary" checked={preferences.reducedMotion} onChange={(event) => ExperiencePreferencesService.update({ reducedMotion: event.target.checked })} />
+        </label>
+        <label className="flex min-h-11 items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm">
+          <span><span className="flex items-center gap-2 font-medium"><Contrast className="size-4" />Alto contraste</span><span className="mt-1 block text-xs text-muted-foreground">Reforça bordas, textos secundários e foco do teclado.</span></span>
+          <input type="checkbox" className="size-4 accent-primary" checked={preferences.highContrast} onChange={(event) => ExperiencePreferencesService.update({ highContrast: event.target.checked })} />
         </label>
         <label className="flex min-h-11 items-center justify-between gap-4 rounded-lg border px-4 py-3 text-sm">
           <span><span className="font-medium">Compartilhar métricas anônimas</span><span className="mt-1 block text-xs text-muted-foreground">Envia somente desempenho e erros técnicos, sem conteúdo, arquivos ou perguntas.</span></span>

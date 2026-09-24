@@ -2,7 +2,8 @@
 @import "tw-animate-css";
 @import "katex/dist/katex.min.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *, .amoled, .amoled *));
+@custom-variant amoled (&:where(.amoled, .amoled *));
 
 :root {
   color-scheme: light;
@@ -26,6 +27,14 @@
   --ring: #4f896b;
   --radius: 0.875rem;
   --sidebar: #f2f5ef;
+  --surface-raised: rgba(255, 255, 255, 0.88);
+  --surface-subtle: rgba(242, 246, 241, 0.72);
+  --shadow-color: 20 41 29;
+  --shadow-card: 0 1px 2px rgb(var(--shadow-color) / 0.04), 0 8px 30px rgb(var(--shadow-color) / 0.035);
+  --shadow-floating: 0 18px 50px rgb(var(--shadow-color) / 0.14);
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dark {
@@ -49,6 +58,35 @@
   --input: #455147;
   --ring: #a0c9a9;
   --sidebar: #1b221d;
+  --surface-raised: rgba(29, 36, 32, 0.9);
+  --surface-subtle: rgba(37, 46, 40, 0.72);
+  --shadow-color: 0 0 0;
+}
+
+.amoled {
+  color-scheme: dark;
+  --background: #000000;
+  --foreground: #f1f5f2;
+  --card: #090c0a;
+  --card-foreground: #f1f5f2;
+  --popover: #0e120f;
+  --popover-foreground: #f1f5f2;
+  --primary: #a8dab6;
+  --primary-foreground: #07150c;
+  --secondary: #121813;
+  --secondary-foreground: #d1e4d6;
+  --muted: #111512;
+  --muted-foreground: #a9b4ac;
+  --accent: #172219;
+  --accent-foreground: #d3ead9;
+  --destructive: #ff9494;
+  --border: #252b27;
+  --input: #363d38;
+  --ring: #b4e5c0;
+  --sidebar: #050705;
+  --surface-raised: rgba(9, 12, 10, 0.96);
+  --surface-subtle: rgba(17, 21, 18, 0.82);
+  --shadow-color: 0 0 0;
 }
 
 @theme inline {
@@ -84,12 +122,18 @@
   }
   body {
     @apply min-h-dvh bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at 82% -10%, color-mix(in srgb, var(--primary) 7%, transparent), transparent 32rem),
+      linear-gradient(to bottom, color-mix(in srgb, var(--background) 96%, var(--card)), var(--background));
+    background-attachment: fixed;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     text-rendering: optimizeLegibility;
   }
   button,
   a,
-  input {
+  input,
+  textarea,
+  select {
     -webkit-tap-highlight-color: transparent;
   }
   button:not(:disabled),
@@ -97,13 +141,15 @@
     cursor: pointer;
   }
   :focus-visible {
-    @apply outline-2 outline-offset-4 outline-ring;
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
   }
   ::selection {
     @apply bg-primary/20;
   }
   html {
     scroll-behavior: smooth;
+    scrollbar-gutter: stable;
   }
   ::-webkit-scrollbar {
     width: 10px;
@@ -115,15 +161,69 @@
     background: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
     background-clip: padding-box;
   }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--muted-foreground) 62%, transparent);
+  }
 }
 
 @layer utilities {
   .page-enter {
-    animation: page-enter 180ms ease-out both;
+    animation: page-enter var(--motion-normal) var(--ease-out) both;
   }
   .surface-hover {
-    @apply transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md;
+    transition: transform var(--motion-normal) var(--ease-out), box-shadow var(--motion-normal) var(--ease-out), border-color var(--motion-fast) ease;
   }
+  .surface-hover:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+    box-shadow: var(--shadow-card);
+  }
+  .surface-raised {
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(18px) saturate(130%);
+  }
+  .premium-scroll {
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 38%, transparent) transparent;
+  }
+  .content-fade {
+    animation: content-fade var(--motion-normal) var(--ease-out) both;
+  }
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    background: var(--muted);
+  }
+  .skeleton-shimmer::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--foreground) 7%, transparent), transparent);
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+  .render-lazy {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 28rem;
+  }
+}
+
+html[data-font-scale="small"] { font-size: 15px; }
+html[data-font-scale="large"] { font-size: 17px; }
+html[data-font-scale="extra-large"] { font-size: 18px; }
+
+html[data-contrast="high"] {
+  --border: color-mix(in srgb, var(--foreground) 38%, var(--background));
+  --input: color-mix(in srgb, var(--foreground) 52%, var(--background));
+  --muted-foreground: color-mix(in srgb, var(--foreground) 76%, var(--background));
+}
+
+html[data-contrast="high"] :focus-visible {
+  outline-width: 3px;
+  outline-offset: 4px;
 }
 
 html[data-density="compact"] .app-main {
@@ -134,6 +234,15 @@ html[data-density="compact"] [data-slot="card"] {
   gap: 1rem;
   padding-top: 1rem;
   padding-bottom: 1rem;
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 @media (pointer: coarse) {
@@ -169,6 +278,15 @@ html[data-density="compact"] [data-slot="card"] {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes content-fade {
+  from { opacity: 0; transform: translateY(3px) scale(0.998); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
 }
 
 @media (prefers-reduced-motion: reduce) {

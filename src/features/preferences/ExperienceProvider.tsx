@@ -8,6 +8,9 @@ export function ExperienceProvider() {
   useEffect(() => {
     document.documentElement.dataset.experienceMode = preferences.mode;
     document.documentElement.dataset.density = preferences.compactDensity ? "compact" : "comfortable";
-  }, [preferences.compactDensity, preferences.mode]);
+    document.documentElement.dataset.reducedMotion = preferences.reducedMotion ? "true" : "false";
+    document.documentElement.dataset.contrast = preferences.highContrast ? "high" : "normal";
+    document.documentElement.dataset.fontScale = preferences.fontScale;
+  }, [preferences.compactDensity, preferences.fontScale, preferences.highContrast, preferences.mode, preferences.reducedMotion]);
   return null;
 }

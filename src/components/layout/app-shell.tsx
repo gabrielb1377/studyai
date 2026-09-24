@@ -15,12 +15,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         Pular para o conteúdo
       </a>
       <Sidebar />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 lg:pl-0">
         <Header />
         <main
           id="conteudo"
           tabIndex={-1}
-          className="app-main page-enter mx-auto w-full max-w-[1520px] px-4 pb-24 pt-6 outline-none sm:px-6 sm:pb-24 sm:pt-8 lg:px-8 lg:pb-8 xl:px-10"
+          className="app-main page-enter mx-auto w-full max-w-[1560px] px-4 pb-24 pt-5 outline-none sm:px-6 sm:pb-24 sm:pt-7 lg:px-8 lg:pb-10 xl:px-10 2xl:px-12"
         >
           {children}
         </main>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { Laptop, Moon, Sun } from "lucide-react";
+import { Laptop, Moon, MoonStar, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import {
   Card,
@@ -22,7 +22,7 @@ export function AppearanceSettings() {
     () => false,
   );
   return (
-    <Card className="max-w-2xl shadow-none">
+    <Card className="max-w-2xl">
       <CardHeader>
         <CardTitle className="text-base">Aparência</CardTitle>
         <CardDescription>
@@ -31,7 +31,7 @@ export function AppearanceSettings() {
       </CardHeader>
       <CardContent>
         <Tabs value={mounted ? theme : "light"} onValueChange={setTheme}>
-          <TabsList aria-label="Tema da interface" className="h-12 w-full">
+          <TabsList aria-label="Tema da interface" className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
             <TabsTrigger value="light" className="min-h-10 flex-1">
               <Sun className="size-4" />
               Claro
@@ -39,6 +39,10 @@ export function AppearanceSettings() {
             <TabsTrigger value="dark" className="min-h-10 flex-1">
               <Moon className="size-4" />
               Escuro
+            </TabsTrigger>
+            <TabsTrigger value="amoled" className="min-h-10 flex-1">
+              <MoonStar className="size-4" />
+              AMOLED
             </TabsTrigger>
             <TabsTrigger value="system" className="min-h-10 flex-1">
               <Laptop className="size-4" />

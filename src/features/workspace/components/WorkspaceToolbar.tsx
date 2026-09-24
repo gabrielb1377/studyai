@@ -52,7 +52,7 @@ export function WorkspaceToolbar({ layouts, activeLayoutId, activeTool, session,
   const visibleTools = experience.mode === "advanced" ? tools : tools.filter((tool) => tool.type !== "knowledge" && tool.type !== "dashboard");
   const custom = layouts.find((layout) => layout.id === activeLayoutId && !layout.builtIn);
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-3 shadow-sm">
+    <div className="sticky top-16 z-10 space-y-3 rounded-2xl border bg-card/88 p-3 shadow-[var(--shadow-card)] backdrop-blur-xl lg:static">
       <div className="flex flex-wrap items-center gap-2">
         <LayoutGrid className="size-4 text-primary" />
         <label className="sr-only" htmlFor="workspace-layout">Layout do Workspace</label>
@@ -70,8 +70,8 @@ export function WorkspaceToolbar({ layouts, activeLayoutId, activeTool, session,
           <Button type="button" variant="ghost" size="icon-xs" aria-label="Encerrar sessão de estudo" onClick={onFinishSession} disabled={!session || session.status === "completed"}><Square /></Button>
         </div>
       </div>
-      <div role="tablist" aria-label="Ferramentas do Workspace" className="flex gap-1 overflow-x-auto pb-1">
-        {visibleTools.filter((tool) => tool.type !== "dashboard").map(({ type, label, icon: Icon }) => <button key={type} type="button" role="tab" data-state={activeTool === type ? "active" : "inactive"} aria-selected={activeTool === type} onClick={() => onOpenTool(type)} className={`flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors ${activeTool === type ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><Icon className="size-3.5" />{label === "Mapa" ? "Mapa de Conhecimento" : label}</button>)}
+      <div role="tablist" aria-label="Ferramentas do Workspace" className="premium-scroll flex snap-x gap-1 overflow-x-auto pb-1">
+        {visibleTools.filter((tool) => tool.type !== "dashboard").map(({ type, label, icon: Icon }) => <button key={type} type="button" role="tab" data-state={activeTool === type ? "active" : "inactive"} aria-selected={activeTool === type} onClick={() => onOpenTool(type)} className={`flex h-9 shrink-0 snap-start items-center gap-2 rounded-lg px-3 text-xs font-medium transition-[background-color,color,transform] ${activeTool === type ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`}><Icon className="size-3.5" />{label === "Mapa" ? "Mapa de Conhecimento" : label}</button>)}
       </div>
       {session?.status === "completed" && <p role="status" className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400"><Sparkles className="size-3.5" />Sessão concluída: {formatSeconds(session.focusSeconds)} de foco, {session.pauseCount} pausa(s).</p>}
       <Dialog open={saveOpen} onOpenChange={setSaveOpen}><DialogContent><DialogHeader><DialogTitle>Salvar layout personalizado</DialogTitle><DialogDescription>O conjunto e o tamanho atual dos painéis serão reutilizados em qualquer tema.</DialogDescription></DialogHeader><Input aria-label="Nome do layout" value={layoutName} onChange={(event) => setLayoutName(event.target.value)} placeholder="Ex.: Revisão para prova" /><DialogFooter><Button variant="outline" onClick={() => setSaveOpen(false)}>Cancelar</Button><Button onClick={() => { onSaveLayout(layoutName); setLayoutName(""); setSaveOpen(false); }} disabled={!layoutName.trim()}>Salvar</Button></DialogFooter></DialogContent></Dialog>

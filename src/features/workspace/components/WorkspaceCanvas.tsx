@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import type { Flashcard } from "@/types/flashcard";
 import type { QuizResult } from "@/types/quiz";
 import type { StudyMaterial } from "@/types/study";
@@ -36,6 +36,14 @@ const panelToTab: Partial<Record<WorkspacePanelType, WorkspaceTab>> = {
   notes: "notes",
 };
 
+const mobileWorkspaceQuery = "(max-width: 1023px)";
+const subscribeMobileWorkspace = (listener: () => void) => {
+  const media = window.matchMedia(mobileWorkspaceQuery);
+  media.addEventListener("change", listener);
+  return () => media.removeEventListener("change", listener);
+};
+const getMobileWorkspace = () => window.matchMedia(mobileWorkspaceQuery).matches;
+
 export function WorkspaceCanvas({ study, materials, requestedMaterialId, requestedTab, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange }: {
   study: StudyRecord;
   materials: readonly StudyMaterial[];
@@ -49,6 +57,7 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
 }) {
   const [state, setState] = useState<WorkspaceRuntimeState>();
   const [layouts, setLayouts] = useState(() => LayoutManager.builtIn);
+  const isMobileWorkspace = useSyncExternalStore(subscribeMobileWorkspace, getMobileWorkspace, () => false);
   const stateRef = useRef<WorkspaceRuntimeState | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -113,7 +122,11 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
 
   if (!state) return <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">Restaurando Workspace…</p>;
   const maximized = state.panels.find((panel) => panel.maximized);
-  const visiblePanels = maximized ? [maximized] : state.panels;
+  const visiblePanels = maximized
+    ? [maximized]
+    : isMobileWorkspace
+      ? state.panels.filter((panel) => panel.id === state.activePanelId)
+      : state.panels;
   const activeTool = state.panels.find((panel) => panel.id === state.activePanelId)?.type;
 
   const beginResize = (event: ReactPointerEvent<HTMLDivElement>, leftId: string, rightId: string) => {
@@ -172,7 +185,8 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
       <div ref={containerRef} className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-stretch" aria-label="Painéis do Workspace">
         {visiblePanels.map((panel, index) => {
           const next = visiblePanels[index + 1];
-          return <div key={panel.id} className="contents"><div style={{ "--panel-size": panel.minimized ? "4rem" : `${panel.size}%` } as CSSProperties} className="min-w-0 basis-full lg:basis-[var(--panel-size)] lg:shrink-0"><WorkspacePanelFrame panel={panel} onActivate={() => update((current) => ({ ...current, activePanelId: panel.id }))} onMinimize={() => update((current) => ({ ...current, panels: PanelManager.minimize(current.panels, panel.id), activePanelId: panel.id }))} onMaximize={() => update((current) => ({ ...current, panels: PanelManager.maximize(current.panels, panel.id), activePanelId: panel.id }))} onClose={() => update((current) => { const panels = PanelManager.remove(current.panels, panel.id); return { ...current, panels, activePanelId: panels[0]?.id }; })} onScrollChange={(scrollTop) => update((current) => ({ ...current, panels: PanelManager.patch(current.panels, panel.id, { scrollTop }) }))}>
+          const active = panel.id === state.activePanelId;
+          return <div key={panel.id} className="contents"><div data-active={active} style={{ "--panel-size": panel.minimized ? "4rem" : `${panel.size}%` } as CSSProperties} className={`${active ? "block" : "hidden"} min-w-0 basis-full content-fade lg:block lg:basis-[var(--panel-size)] lg:shrink-0`}><WorkspacePanelFrame panel={panel} onActivate={() => update((current) => ({ ...current, activePanelId: panel.id }))} onMinimize={() => update((current) => ({ ...current, panels: PanelManager.minimize(current.panels, panel.id), activePanelId: panel.id }))} onMaximize={() => update((current) => ({ ...current, panels: PanelManager.maximize(current.panels, panel.id), activePanelId: panel.id }))} onClose={() => update((current) => { const panels = PanelManager.remove(current.panels, panel.id); return { ...current, panels, activePanelId: panels[0]?.id }; })} onScrollChange={(scrollTop) => update((current) => ({ ...current, panels: PanelManager.patch(current.panels, panel.id, { scrollTop }) }))}>
             <WorkspacePanelContent panel={panel} study={study} materials={materials} flashcards={flashcards} quizzes={quizzes} onMaterialChange={(materialId) => { update((current) => ({ ...current, panels: PanelManager.patch(current.panels, panel.id, { resourceId: materialId, title: materials.find((material) => material.id === materialId)?.name ?? panel.title }), activePanelId: panel.id })); onMaterialChange(materialId); }} onProgressChange={onProgressChange} onStatusChange={onStatusChange} />
           </WorkspacePanelFrame></div>{next && !maximized && !panel.minimized && !next.minimized && <div role="separator" aria-label={`Redimensionar painéis ${panel.title} e ${next.title}`} aria-orientation="vertical" tabIndex={0} className="hidden w-1 shrink-0 cursor-col-resize rounded-full bg-border transition-colors hover:bg-primary/60 focus:bg-primary focus:outline-none lg:block" onPointerDown={(event) => beginResize(event, panel.id, next.id)} onKeyDown={(event) => { if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return; event.preventDefault(); update((current) => ({ ...current, panels: PanelManager.resize(current.panels, panel.id, next.id, event.key === "ArrowRight" ? 2 : -2) })); }} />}</div>;
         })}

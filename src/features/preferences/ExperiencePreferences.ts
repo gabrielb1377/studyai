@@ -3,10 +3,14 @@
 import { useSyncExternalStore } from "react";
 
 export type ExperienceMode = "simple" | "advanced";
+export type FontScale = "small" | "default" | "large" | "extra-large";
 
 export type ExperiencePreferences = {
   mode: ExperienceMode;
   compactDensity: boolean;
+  reducedMotion: boolean;
+  highContrast: boolean;
+  fontScale: FontScale;
   telemetryConsent: boolean;
   onboardingCompleted: boolean;
   dismissedGuides: string[];
@@ -17,6 +21,9 @@ const EVENT = "studyai:experience-settings-changed";
 const defaults: ExperiencePreferences = {
   mode: "simple",
   compactDensity: false,
+  reducedMotion: false,
+  highContrast: false,
+  fontScale: "default",
   telemetryConsent: false,
   onboardingCompleted: false,
   dismissedGuides: [],

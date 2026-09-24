@@ -22,19 +22,19 @@ function SidebarContent({ compact = false }: { compact?: boolean }) {
   const items = navigation.filter((item) => !item.advanced || preferences.mode === "advanced");
 
   return (
-    <div className="flex h-full flex-col px-4 py-7">
+    <div className="flex h-full flex-col px-3 py-5 sm:py-6">
       <Link
         href="/"
         onClick={() => setMenuOpen(false)}
-        className={cn("mb-10 flex w-fit items-center gap-2.5 px-3 text-xl font-semibold tracking-tight", compact && "px-1")}
+        className={cn("mb-8 flex w-fit items-center gap-2.5 px-2 text-xl font-semibold tracking-[-0.04em]", compact && "mx-auto px-0")}
         aria-label="StudyAI — Dashboard"
       >
-        <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
           <BookOpen className="size-5" aria-hidden="true" />
         </span>
         {!compact && <>Study<span className="-ml-2 text-primary">AI</span></>}
       </Link>
-      <div className={cn("mb-8 flex items-center gap-3 rounded-xl border bg-card/70 px-3 py-3", compact && "justify-center px-1")}>
+      <div className={cn("mb-7 flex items-center gap-3 rounded-2xl border bg-card/60 px-3 py-3 shadow-sm backdrop-blur-sm", compact && "justify-center px-1")}>
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-xs font-semibold text-accent-foreground">
           ME
         </span>
@@ -58,11 +58,11 @@ function SidebarContent({ compact = false }: { compact?: boolean }) {
             aria-label={compact ? label : undefined}
             title={compact ? `${label} — ${description}` : undefined}
             className={cn(
-              "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
+              "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm transition-[color,background-color,transform] duration-150",
               compact && "justify-center px-2",
               pathname === href
-                ? "bg-accent font-semibold text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                ? "bg-accent font-semibold text-accent-foreground shadow-sm"
+                : "text-muted-foreground hover:translate-x-0.5 hover:bg-accent/55 hover:text-foreground",
             )}
           >
             <Icon className="size-[18px]" aria-hidden="true" />
@@ -108,7 +108,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className={cn("sticky top-0 hidden h-dvh shrink-0 border-r bg-sidebar transition-[width] duration-200 lg:block", compact ? "w-20" : "w-60")}>
+      <aside className={cn("sticky top-0 hidden h-dvh shrink-0 border-r bg-sidebar/92 backdrop-blur-xl transition-[width] duration-200 lg:block", compact ? "w-20" : "w-60")}>
         <SidebarContent compact={compact} />
         <button type="button" onClick={toggleCompact} className="absolute bottom-5 right-0 flex size-8 translate-x-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:text-foreground" aria-label={compact ? "Expandir menu" : "Recolher menu"} title={compact ? "Expandir menu" : "Recolher menu"}>
           {compact ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}

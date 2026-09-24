@@ -28,16 +28,16 @@ export function StudyDashboard() {
   const experience = useExperiencePreferences();
 
   return (
-    <>
-      <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} />
-      <SmartLearningDashboard studies={records} flashcards={cards} quizzes={quizzes} />
-      {experience.mode === "advanced" && <KnowledgeDashboard studies={records} />}
+    <div className="space-y-7">
       <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
         <ContinueStudying records={records} materials={materials} />
         <ImportMaterial />
       </div>
+      <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} advanced={experience.mode === "advanced"} />
+      <SmartLearningDashboard studies={records} flashcards={cards} quizzes={quizzes} />
+      {experience.mode === "advanced" && <KnowledgeDashboard studies={records} />}
       {experience.mode === "advanced" && <div className="flex justify-end"><DiagnosticsDrawer /></div>}
       <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />
-    </>
+    </div>
   );
 }
