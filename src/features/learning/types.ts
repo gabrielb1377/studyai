@@ -12,6 +12,7 @@ export type LearningActivity = {
   studyId: string;
   subject: string;
   topic: string;
+  chapter?: string;
   occurredAt: string;
   durationMinutes: number;
   correctAnswers: number;

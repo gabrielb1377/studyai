@@ -1,0 +1,19 @@
+import { BarChart3, BookOpenCheck, CheckCircle2, UsersRound } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import type { StudyRoomSnapshot } from "@/features/collaboration/types";
+
+export function TeacherAnalytics({ snapshot }: { snapshot: StudyRoomSnapshot }) {
+  if (snapshot.room.kind !== "classroom" || snapshot.currentRole !== "admin") return null;
+  const memberRows = snapshot.members.map((member) => {
+    const progress = snapshot.progress.filter((item) => item.userId === member.userId);
+    const completed = progress.reduce((sum, item) => sum + item.completed, 0);
+    const total = progress.reduce((sum, item) => sum + item.total, 0);
+    const scores = progress.flatMap((item) => item.score === undefined ? [] : [item.score]);
+    return { member, completed, total, percentage: total > 0 ? Math.round(completed / total * 100) : 0, average: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null };
+  });
+  const activeParticipants = new Set([...snapshot.progress.map((item) => item.userId), ...snapshot.activity.map((item) => item.actorId)]).size;
+  const totalCompleted = memberRows.reduce((sum, item) => sum + item.completed, 0);
+  const totalActivities = memberRows.reduce((sum, item) => sum + item.total, 0);
+  return <section aria-labelledby="teacher-analytics-title" className="space-y-4"><div><h2 id="teacher-analytics-title" className="font-semibold">Dashboard do professor</h2><p className="text-xs text-muted-foreground">Somente progresso compartilhado nesta turma; dados privados do aluno não são consultados.</p></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Card className="gap-2 p-4 shadow-none"><UsersRound className="size-4 text-primary"/><strong className="text-2xl">{snapshot.members.length}</strong><span className="text-xs text-muted-foreground">Alunos e participantes</span></Card><Card className="gap-2 p-4 shadow-none"><BookOpenCheck className="size-4 text-primary"/><strong className="text-2xl">{snapshot.resources.length}</strong><span className="text-xs text-muted-foreground">Materiais utilizados</span></Card><Card className="gap-2 p-4 shadow-none"><BarChart3 className="size-4 text-primary"/><strong className="text-2xl">{activeParticipants}</strong><span className="text-xs text-muted-foreground">Participantes ativos</span></Card><Card className="gap-2 p-4 shadow-none"><CheckCircle2 className="size-4 text-primary"/><strong className="text-2xl">{totalActivities ? Math.round(totalCompleted / totalActivities * 100) : 0}%</strong><span className="text-xs text-muted-foreground">Progresso compartilhado</span></Card></div><div className="overflow-x-auto rounded-xl border"><table className="w-full min-w-[34rem] text-left text-sm"><thead className="bg-muted/50 text-xs text-muted-foreground"><tr><th className="px-4 py-3 font-medium">Participante</th><th className="px-4 py-3 font-medium">Participação</th><th className="px-4 py-3 font-medium">Revisões/atividades</th><th className="px-4 py-3 font-medium">Resultado médio</th></tr></thead><tbody>{memberRows.map(({ member, completed, total, percentage, average }) => <tr key={member.userId} className="border-t"><td className="px-4 py-3"><span className="font-medium">{member.name}</span><span className="block text-xs text-muted-foreground">{member.role}</span></td><td className="px-4 py-3"><div className="flex items-center gap-2"><div className="h-2 w-20 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${percentage}%` }}/></div><span className="tabular-nums">{percentage}%</span></div></td><td className="px-4 py-3 tabular-nums">{completed}/{total}</td><td className="px-4 py-3 tabular-nums">{average === null ? "—" : `${average}%`}</td></tr>)}</tbody></table></div></section>;
+}
+

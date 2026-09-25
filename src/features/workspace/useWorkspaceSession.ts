@@ -51,6 +51,20 @@ export function useWorkspaceSession(studyId: string, fileIds: readonly string[],
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
+  useEffect(() => {
+    const onChapter = (event: Event) => {
+      const detail = (event as CustomEvent<{ studyId?: string; chapter?: string }>).detail;
+      const current = sessionRef.current;
+      if (!current || detail?.studyId !== studyId || current.status === "completed") return;
+      void SessionTracker.setChapter(current, detail.chapter).then((updated) => {
+        sessionRef.current = updated;
+        setSession(updated);
+      });
+    };
+    window.addEventListener("studyai:workspace-chapter", onChapter);
+    return () => window.removeEventListener("studyai:workspace-chapter", onChapter);
+  }, [studyId]);
+
   const pause = async () => {
     if (!sessionRef.current) return;
     const updated = await SessionTracker.pause(sessionRef.current);

@@ -59,5 +59,8 @@ export type WorkspaceStudySession = {
   activePauseStartedAt?: string;
   fileIds: string[];
   tools: WorkspacePanelType[];
+  chapterSeconds?: Record<string, number>;
+  activeChapter?: string;
+  activeChapterStartedAt?: string;
   updatedAt: string;
 };

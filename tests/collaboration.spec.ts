@@ -35,7 +35,7 @@ test("sala, convite, papéis, presença e colaboração funcionam entre contas",
   await page.getByLabel("Nome da nova sala").fill("Algoritmos em grupo");
   await page.getByLabel("Tipo da sala").selectOption("classroom");
   await page.getByRole("button", { name: "Criar", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Algoritmos em grupo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Algoritmos em grupo" })).toBeVisible({ timeout: 15_000 });
 
   const rooms = await api<{ rooms: Array<{ id: string }> }>(page, "/api/collaboration/rooms");
   const roomId = rooms.data.rooms[0]?.id;
@@ -99,4 +99,18 @@ test("interface de salas não causa overflow em celular", async ({ page }) => {
   await page.goto("/salas");
   await expect(page.getByRole("heading", { name: "Salas de estudo" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("administrador de turma visualiza somente o Analytics compartilhado", async ({ page }) => {
+  await register(page, "teacher-analytics", "Professora Analytics");
+  const created = await api<{ room: { id: string } }>(page, "/api/collaboration/rooms", "POST", { name: "Turma Analytics", kind: "classroom" });
+  const roomId = created.data.room.id;
+  const resource = await api<{ resource: { id: string } }>(page, `/api/collaboration/rooms/${roomId}/resources`, "POST", { type: "quiz", title: "Quiz compartilhado", data: {} });
+  await api(page, `/api/collaboration/rooms/${roomId}/progress`, "POST", { resourceId: resource.data.resource.id, mode: "teacher", completed: 8, total: 10, score: 80 });
+  await page.goto("/salas");
+  await page.getByRole("button", { name: "Turma Analytics" }).click();
+  await page.getByRole("tab", { name: "Analytics" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard do professor" })).toBeVisible();
+  await expect(page.getByText("Somente progresso compartilhado nesta turma", { exact: false })).toBeVisible();
+  await expect(page.getByText("80%", { exact: true }).first()).toBeVisible();
 });

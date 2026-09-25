@@ -95,6 +95,14 @@ export default function PdfMaterialViewer({ material, studyId, compact = false }
   }, [annotations, bookmarks, chapterIndex, material.id, pageHistory, pageNumber, scale, studyId]);
 
   useEffect(() => {
+    const chapter = material.chapters?.[chapterIndex]?.title;
+    const timeout = globalThis.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("studyai:workspace-chapter", { detail: { studyId, chapter } }));
+    }, 0);
+    return () => globalThis.clearTimeout(timeout);
+  }, [chapterIndex, material.chapters, studyId]);
+
+  useEffect(() => {
     const handleSearch = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "f") {
         event.preventDefault();

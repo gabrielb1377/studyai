@@ -21,6 +21,19 @@ function calculate(session: WorkspaceStudySession, at = new Date().toISOString()
   return { durationSeconds, pausedSeconds, focusSeconds: Math.max(0, durationSeconds - pausedSeconds) };
 }
 
+function commitActiveChapter(session: WorkspaceStudySession, at: string) {
+  if (session.status !== "active" || !session.activeChapter || !session.activeChapterStartedAt) return session;
+  const elapsed = secondsBetween(session.activeChapterStartedAt, at);
+  return {
+    ...session,
+    chapterSeconds: {
+      ...(session.chapterSeconds ?? {}),
+      [session.activeChapter]: (session.chapterSeconds?.[session.activeChapter] ?? 0) + elapsed,
+    },
+    activeChapterStartedAt: at,
+  };
+}
+
 async function persist(session: WorkspaceStudySession) {
   await StorageManager.put("metadata", {
     key: `${PREFIX}${session.id}`,
@@ -44,6 +57,7 @@ export const SessionTracker = {
       pauseCount: 0,
       fileIds: [...new Set(fileIds)],
       tools: [...new Set(tools)],
+      chapterSeconds: {},
       updatedAt: timestamp,
     });
   },
@@ -59,26 +73,48 @@ export const SessionTracker = {
     });
   },
 
+  async setChapter(session: WorkspaceStudySession, chapter?: string) {
+    const timestamp = new Date().toISOString();
+    const committed = commitActiveChapter(session, timestamp);
+    const nextChapter = chapter?.trim() || undefined;
+    return persist({
+      ...committed,
+      activeChapter: nextChapter,
+      activeChapterStartedAt: nextChapter && committed.status === "active" ? timestamp : undefined,
+      updatedAt: timestamp,
+    });
+  },
+
   async pause(session: WorkspaceStudySession) {
     if (session.status !== "active") return session;
     const timestamp = new Date().toISOString();
-    return persist({ ...session, ...calculate(session, timestamp), status: "paused", activePauseStartedAt: timestamp, pauseCount: session.pauseCount + 1, updatedAt: timestamp });
+    const committed = commitActiveChapter(session, timestamp);
+    return persist({ ...committed, ...calculate(committed, timestamp), status: "paused", activePauseStartedAt: timestamp, activeChapterStartedAt: undefined, pauseCount: session.pauseCount + 1, updatedAt: timestamp });
   },
 
   async resume(session: WorkspaceStudySession) {
     if (session.status !== "paused") return session;
     const timestamp = new Date().toISOString();
     const pausedSeconds = session.pausedSeconds + (session.activePauseStartedAt ? secondsBetween(session.activePauseStartedAt, timestamp) : 0);
-    return persist({ ...session, pausedSeconds, focusSeconds: Math.max(0, secondsBetween(session.startedAt, timestamp) - pausedSeconds), status: "active", activePauseStartedAt: undefined, updatedAt: timestamp });
+    return persist({ ...session, pausedSeconds, focusSeconds: Math.max(0, secondsBetween(session.startedAt, timestamp) - pausedSeconds), status: "active", activePauseStartedAt: undefined, activeChapterStartedAt: session.activeChapter ? timestamp : undefined, updatedAt: timestamp });
   },
 
   async finish(session: WorkspaceStudySession) {
     if (session.status === "completed") return session;
     const timestamp = new Date().toISOString();
-    const calculated = calculate(session, timestamp);
-    const completed = await persist({ ...session, ...calculated, status: "completed", activePauseStartedAt: undefined, endedAt: timestamp, updatedAt: timestamp });
+    const committed = commitActiveChapter(session, timestamp);
+    const calculated = calculate(committed, timestamp);
+    const completed = await persist({ ...committed, ...calculated, status: "completed", activePauseStartedAt: undefined, activeChapterStartedAt: undefined, endedAt: timestamp, updatedAt: timestamp });
     if (completed.focusSeconds >= 5) {
-      await LearningService.recordActivity({ type: "reading", studyId: completed.studyId, durationMinutes: completed.focusSeconds / 60 });
+      const chapters = Object.entries(completed.chapterSeconds ?? {}).filter(([, seconds]) => seconds > 0);
+      const rawAttributedSeconds = chapters.reduce((total, [, seconds]) => total + seconds, 0);
+      const chapterScale = rawAttributedSeconds > completed.focusSeconds ? completed.focusSeconds / rawAttributedSeconds : 1;
+      const attributedSeconds = Math.min(completed.focusSeconds, rawAttributedSeconds);
+      for (const [chapter, seconds] of chapters) {
+        await LearningService.recordActivity({ type: "reading", studyId: completed.studyId, chapter, durationMinutes: seconds * chapterScale / 60 });
+      }
+      const remainingSeconds = Math.max(0, completed.focusSeconds - attributedSeconds);
+      if (remainingSeconds >= 1) await LearningService.recordActivity({ type: "reading", studyId: completed.studyId, durationMinutes: remainingSeconds / 60 });
     }
     return completed;
   },

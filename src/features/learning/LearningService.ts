@@ -6,6 +6,7 @@ import type { LearningActivity, LearningActivityType, LearningProfile, LearningT
 export type RecordLearningActivity = {
   type: LearningActivityType;
   studyId: string;
+  chapter?: string;
   durationMinutes?: number;
   correctAnswers?: number;
   wrongAnswers?: number;
@@ -80,6 +81,7 @@ export const LearningService = {
         studyId: input.studyId,
         subject: study.subject,
         topic: study.title,
+        chapter: input.chapter?.trim() || undefined,
         occurredAt,
         durationMinutes: Math.max(0, input.durationMinutes ?? 0),
         correctAnswers: Math.max(0, input.correctAnswers ?? 0),
