@@ -32,6 +32,12 @@ export type TutorStudyContext = {
     language?: string;
     subtopics: string[];
     chapterCount: number;
+    chapters: Array<{
+      title: string;
+      marker: string;
+      page?: number;
+      slide?: number;
+    }>;
   };
   knowledge?: {
     matchedConcepts: Array<{
@@ -41,5 +47,14 @@ export type TutorStudyContext = {
       relatedConcepts: string[];
     }>;
     relationshipCount: number;
+  };
+  mentor?: {
+    lastSessionStatus?: "active" | "paused" | "completed";
+    lastSessionAt?: string;
+    recommendations: Array<{
+      title: string;
+      reason: string;
+      priority: "Alta" | "Média" | "Baixa";
+    }>;
   };
 };

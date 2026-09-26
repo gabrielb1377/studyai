@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { TutorMessage } from "./TutorMessage";
 import type { TutorMessage as TutorMessageType } from "@/types/tutor";
 
-export function TutorConversation({ messages, isLoading, onResponseAction }: { messages: readonly TutorMessageType[]; isLoading: boolean; onResponseAction?: (action: "continue" | "regenerate" | "explain", response: string) => void }) {
+export function TutorConversation({ messages, isLoading, assistantLabel = "Tutor", onResponseAction }: { messages: readonly TutorMessageType[]; isLoading: boolean; assistantLabel?: "Tutor" | "Professor"; onResponseAction?: (action: "continue" | "regenerate" | "explain", response: string) => void }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastContent = messages.at(-1)?.content;
   useEffect(() => {
@@ -17,7 +17,7 @@ export function TutorConversation({ messages, isLoading, onResponseAction }: { m
         <div className="flex min-h-[360px] items-center justify-center text-center sm:min-h-[460px]">
           <div>
             <p className="font-medium">Conversa vazia</p>
-            <p className="mt-2 max-w-sm text-sm text-muted-foreground">Envie uma pergunta. Quando houver um estudo aberto, o Tutor usará apenas o contexto real recuperado.</p>
+            <p className="mt-2 max-w-sm text-sm text-muted-foreground">Envie uma pergunta. Quando houver um estudo aberto, o {assistantLabel} usará apenas o contexto real recuperado.</p>
           </div>
         </div>
       )}
@@ -27,7 +27,7 @@ export function TutorConversation({ messages, isLoading, onResponseAction }: { m
           <span className="size-2 animate-pulse rounded-full bg-primary" />
           <span className="size-2 animate-pulse rounded-full bg-primary [animation-delay:150ms]" />
           <span className="size-2 animate-pulse rounded-full bg-primary [animation-delay:300ms]" />
-          O Tutor está preparando a resposta...
+          O {assistantLabel} está preparando a resposta...
         </div>
       )}
       <div ref={endRef} aria-hidden="true" />

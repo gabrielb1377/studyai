@@ -2,6 +2,7 @@ import type { TutorConversation, TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { AIClient } from "@/features/ai/AIClient";
+import type { TeacherRequest } from "@/features/teacher/types";
 import { createTutorId, getMessageText } from "../utils/message-utils";
 
 type TutorApiResponse = {
@@ -96,7 +97,7 @@ export const TutorService = {
     message: string,
     context?: TutorStudyContext | null,
     chunks: readonly RetrievedChunk[] = [],
-    options?: { onDelta?: (text: string) => void; signal?: AbortSignal },
+    options?: { onDelta?: (text: string) => void; signal?: AbortSignal; teaching?: TeacherRequest },
   ): Promise<{ model: string; text: string; provider?: string; metadata?: TutorMessage["metadata"] }> {
     const payload = {
       history: history.map((historyMessage) => ({
@@ -106,6 +107,7 @@ export const TutorService = {
       message,
       context: context ?? undefined,
       chunks: chunks.length > 0 ? chunks : undefined,
+      teaching: options?.teaching,
     };
     const data = options?.onDelta
       ? await AIClient.stream<TutorApiResponse>("/api/tutor", payload, {

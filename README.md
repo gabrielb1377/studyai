@@ -12,6 +12,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Organização automática de estudos e identificação de tópicos a partir do conteúdo extraído.
 - Biblioteca e Workspace com visualização de materiais, notas, resumos, flashcards, quizzes e sessões de estudo.
 - Tutor integrado a recuperação lexical e busca vetorial local sobre o material indexado.
+- Modo Professor adaptativo com níveis, métodos de ensino, aula guiada, planos, exercícios, diagramas Mermaid e explicação contextual de trechos selecionados.
 - Providers de IA selecionáveis: Gemini, Ollama, OpenRouter e Groq, com modo automático, verificação de disponibilidade e fallback.
 - Persistência local e suporte a sincronização, conta, colaboração e execução em web, PWA, Electron e projetos Capacitor.
 

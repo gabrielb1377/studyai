@@ -1,6 +1,27 @@
-# Handoff Atual — Sprint 33.5: UX/UI 3.0
+# Handoff Atual — Sprint 35: AI Teacher 2.0
 
-Atualizado em 24 de setembro de 2026.
+Atualizado em 26 de setembro de 2026.
+
+## Resultado da Sprint 35
+
+O Tutor ganhou um modo `Professor` adaptativo sem criar um novo provider ou pipeline. A interface permite selecionar nível (Iniciante, Intermediário, Avançado, Técnico ou Resumido) e método (aula tradicional, passo a passo, analogias, exemplos, perguntas e respostas, socrático ou revisão rápida). Preferências leves são persistidas localmente.
+
+O Professor oferece aula guiada, plano de aula, fluxograma e mapa mental em Mermaid, linha do tempo condicionada à existência de evidência, exercícios variados, comparação e seis formatos de resumo. Cada request carrega um contrato tipado e validado; `TeacherPromptBuilder` centraliza as instruções e exige correção com resposta, justificativa, conceito, fonte e revisão. A seleção de texto do PDF publica apenas o trecho, página, capítulo e nome do material para `Explicar este trecho`.
+
+```text
+Professor / seleção de PDF
+  → useTeacher
+  → RetrievalPipeline (chunks + Knowledge Graph)
+  → PromptBuilder + ContextBuilder
+  → AIService → ProviderManager/cache → provider selecionado
+  → conversa persistida do Tutor
+```
+
+`TutorContextService` também inclui capítulos e continuidade do Mentor, além do perfil do Learning Engine. Ações amplas recuperam o contexto do estudo; dúvidas específicas usam a busca da pergunta ou do trecho. Nenhum arquivo físico chega ao Route Handler ou ao provider.
+
+Validação final: ESLint, TypeScript e build de produção aprovados; 36 páginas geradas e 104/104 testes Playwright aprovados em 12,1 minutos. A cobertura específica inclui contrato pedagógico, contexto recuperado, seleção de PDF e viewport mobile.
+
+## Base preservada da Sprint 33.5
 
 ## Resultado da Sprint 33.5
 

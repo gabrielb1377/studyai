@@ -35,9 +35,11 @@ export default function MarkdownRenderer({ content }: { content: string }) {
           thead: ({ children }) => <thead className="bg-muted">{children}</thead>,
           th: ({ children }) => <th className="border-b px-3 py-2 font-semibold">{children}</th>,
           td: ({ children }) => <td className="border-b px-3 py-2 align-top">{children}</td>,
-          code: ({ className, children }) => className
-            ? <code className={`${className} block overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-6 text-zinc-100`}>{children}</code>
-            : <code className="rounded bg-background/80 px-1.5 py-0.5 font-mono text-[0.9em]">{children}</code>,
+          code: ({ className, children }) => className?.includes("language-mermaid")
+            ? <span className="block overflow-hidden rounded-lg border bg-background"><span className="flex items-center justify-between border-b bg-muted px-3 py-2 text-[11px] font-medium text-muted-foreground"><span>Diagrama Mermaid</span><span>Fonte editável</span></span><code className="language-mermaid block overflow-x-auto whitespace-pre p-4 text-xs leading-6">{children}</code></span>
+            : className
+              ? <code className={`${className} block overflow-x-auto rounded-lg bg-zinc-950 p-4 text-xs leading-6 text-zinc-100`}>{children}</code>
+              : <code className="rounded bg-background/80 px-1.5 py-0.5 font-mono text-[0.9em]">{children}</code>,
           pre: ({ children }) => <pre className="overflow-x-auto whitespace-pre-wrap">{children}</pre>,
           a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer" className="font-medium text-primary underline underline-offset-4">{children}</a>,
           img: MarkdownImage,

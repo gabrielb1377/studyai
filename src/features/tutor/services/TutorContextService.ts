@@ -8,19 +8,21 @@ import { QuizService } from "@/features/quiz/QuizService";
 import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
 import { LearningStorage } from "@/features/learning/LearningStorage";
 import { StudyPriorityEngine } from "@/features/learning/StudyPriorityEngine";
+import { MentorStorage } from "@/features/mentor/services/MentorStorage";
 
 export const TutorContextService = {
   async loadCurrent(): Promise<TutorStudyContext | null> {
     const study = (await StudyEngine.load())
       .sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
     if (!study) return null;
-    const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile] = await Promise.all([
+    const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile, mentor] = await Promise.all([
       SummaryStorage.load(),
       NotesService.load(),
       ContentStorage.load(),
       FlashcardService.load(),
       QuizService.load(),
       LearningStorage.load(),
+      MentorStorage.load(),
     ]);
     const summary = (storedSummaries ?? [])
       .filter((item) => item.studyId === study.studyId)
@@ -35,6 +37,13 @@ export const TutorContextService = {
 
     const knowledge = KnowledgeEngine.calculate(study, profile, flashcards, quizzes.results);
     const priority = StudyPriorityEngine.calculate(study, knowledge, profile, flashcards);
+    const lastMentorSession = mentor.sessions
+      .filter((session) => session.studyId === study.studyId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+    const mentorRecommendations = mentor.recommendations
+      .filter((recommendation) => recommendation.studyId === study.studyId)
+      .slice(0, 3)
+      .map(({ title, reason, priority: recommendationPriority }) => ({ title, reason, priority: recommendationPriority }));
 
     return {
       studyId: study.studyId,
@@ -65,6 +74,7 @@ export const TutorContextService = {
             language: extracted.metadata.language,
             subtopics: extracted.metadata.subtopics ?? [],
             chapterCount: extracted.metadata.chapters?.length ?? 0,
+            chapters: (extracted.metadata.chapters ?? []).map(({ title, marker, page, slide }) => ({ title, marker, page, slide })),
           }
         : study.initialSummary
           ? {
@@ -76,8 +86,16 @@ export const TutorContextService = {
               language: study.language,
               subtopics: study.subtopics ?? [],
               chapterCount: study.chapters?.length ?? 0,
+              chapters: (study.chapters ?? []).map(({ title, marker, page, slide }) => ({ title, marker, page, slide })),
             }
           : undefined,
+      mentor: lastMentorSession || mentorRecommendations.length > 0
+        ? {
+            lastSessionStatus: lastMentorSession?.status,
+            lastSessionAt: lastMentorSession?.updatedAt,
+            recommendations: mentorRecommendations,
+          }
+        : undefined,
     };
   },
 };

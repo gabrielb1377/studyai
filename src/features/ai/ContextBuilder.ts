@@ -50,6 +50,9 @@ export const ContextBuilder = {
         context.document.language ? `Idioma: ${context.document.language}` : "",
         context.document.keywords.length > 0 ? `Palavras-chave: ${context.document.keywords.join(", ")}` : "",
         context.document.summaryPreview ? `Resumo inicial: ${context.document.summaryPreview}` : "",
+        context.document.chapters.length > 0
+          ? `Capítulos: ${context.document.chapters.map((chapter) => chapter.title).join("; ")}`
+          : "",
       ].filter(Boolean).join("\n"));
     }
     if (context.knowledge?.matchedConcepts.length) {
@@ -67,6 +70,15 @@ export const ContextBuilder = {
       blocks.push(
         `Notas do estudante:\n${context.notes.map((note) => `- ${note.title}: ${note.content}`).join("\n")}`,
       );
+    }
+    if (context.mentor) {
+      blocks.push([
+        "Continuidade do Mentor:",
+        context.mentor.lastSessionStatus ? `Última sessão: ${context.mentor.lastSessionStatus}` : "",
+        ...context.mentor.recommendations.map((recommendation) =>
+          `- ${recommendation.title} (${recommendation.priority}): ${recommendation.reason}`,
+        ),
+      ].filter(Boolean).join("\n"));
     }
     return blocks.join("\n");
   },

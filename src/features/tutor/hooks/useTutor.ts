@@ -7,6 +7,7 @@ import { TutorService } from "../services/TutorService";
 import { TutorStorage } from "../services/TutorStorage";
 import { useTutorContext } from "./useTutorContext";
 import { LearningService } from "@/features/learning/LearningService";
+import { isBroadTeacherAction, type TeacherRequest } from "@/features/teacher/types";
 
 export function useTutor(instanceId?: string) {
   const context = useTutorContext();
@@ -66,7 +67,7 @@ export function useTutor(instanceId?: string) {
     });
   };
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, options?: { teaching?: TeacherRequest }) => {
     const nextContent = content.trim();
     if (!nextContent || isLoading) return false;
 
@@ -85,7 +86,9 @@ export function useTutor(instanceId?: string) {
 
     let streamedText = "";
     try {
-      const retrieval = await RetrievalPipeline.forQuestion(nextContent, context?.studyId);
+      const retrieval = options?.teaching && context?.studyId && isBroadTeacherAction(options.teaching.action)
+        ? await RetrievalPipeline.forStudy(context.studyId)
+        : await RetrievalPipeline.forQuestion(options?.teaching?.selection?.text ?? nextContent, context?.studyId);
       const contextualized = context && retrieval.knowledge?.hasContext
         ? {
             ...context,
@@ -115,6 +118,7 @@ export function useTutor(instanceId?: string) {
               { content: streamedText },
             ));
           },
+          teaching: options?.teaching,
         },
       );
       updateConversations((current) =>

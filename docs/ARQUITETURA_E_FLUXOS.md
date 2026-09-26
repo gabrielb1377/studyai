@@ -38,7 +38,7 @@ arquivo/pasta selecionado
 
 Se uma identidade já existir sem binário no OPFS, reimportar o original restaura o binário e reusa o id do registro. A deleção sincronizada remove também a cópia OPFS no dispositivo remoto.
 
-## Tutor, Mentor e Skills
+## Tutor, Professor, Mentor e Skills
 
 ```text
 pergunta/contexto de estudo
@@ -52,6 +52,18 @@ pergunta/contexto de estudo
 ```
 
 Arquivos físicos não são enviados ao provider. O contexto de estudo é montado a partir de registros já extraídos. Mentor combina evidências do Learning Engine e Knowledge Graph com o mesmo AI Core.
+
+O modo Professor é uma especialização do Tutor, não um serviço de IA paralelo:
+
+```text
+nível + método + ação + trecho opcional
+  → validação em /api/tutor
+  → TeacherPromptBuilder
+  → PromptBuilder / ContextBuilder
+  → AIService / cache / ProviderManager
+```
+
+Ações amplas usam `RetrievalPipeline.forStudy`; perguntas e seleções usam recuperação direcionada. Learning Engine, capítulos, Knowledge Graph e continuidade do Mentor entram apenas como objetos estruturados. Consulte [AI_TEACHER.md](./AI_TEACHER.md).
 
 ## Cloud Sync e recuperação
 

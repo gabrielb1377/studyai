@@ -16,6 +16,8 @@ import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
 import { TokenCounter } from "@/features/ai/TokenCounter";
+import type { TeacherRequest } from "@/features/teacher/types";
+import { isTeacherRequest } from "@/features/teacher/teacher-validation";
 
 export const runtime = "nodejs";
 
@@ -29,6 +31,7 @@ type TutorRequest = {
   mode?: AISelectionMode;
   provider?: AIProviderId;
   stream?: boolean;
+  teaching?: TeacherRequest;
 };
 
 function isTutorRequest(value: unknown): value is TutorRequest {
@@ -40,6 +43,7 @@ function isTutorRequest(value: unknown): value is TutorRequest {
     (request.mode === undefined || isAISelectionMode(request.mode)) &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.stream === undefined || typeof request.stream === "boolean") &&
+    (request.teaching === undefined || isTeacherRequest(request.teaching)) &&
     (request.context === undefined || isTutorStudyContext(request.context)) &&
     (request.chunks === undefined || (
       Array.isArray(request.chunks) && request.chunks.length <= 10 &&
@@ -67,6 +71,7 @@ export async function POST(request: Request) {
       history: body.history,
       studyContext: body.context,
       chunks: body.chunks,
+      teaching: body.teaching,
     });
     const aiRequest = {
       history: prompt.history,

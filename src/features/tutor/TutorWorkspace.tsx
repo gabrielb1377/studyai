@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Bot, ChevronDown, Sparkles, X } from "lucide-react";
+import { AlertCircle, Bot, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +23,9 @@ import { TutorService } from "./services/TutorService";
 import { TutorComposer } from "./TutorComposer";
 import { TutorConversation } from "./TutorConversation";
 import { TutorSidebar } from "./TutorSidebar";
+import { TeacherControls } from "@/features/teacher/components/TeacherControls";
+import { useTeacher } from "@/features/teacher/hooks/useTeacher";
+import type { TeacherAction } from "@/features/teacher/types";
 
 export function TutorWorkspace({ compact = false, instanceId }: { compact?: boolean; instanceId?: string } = {}) {
   const {
@@ -48,6 +51,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
   const [summaryDraft, setSummaryDraft] = useState<StudySummary | null>(null);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const teacher = useTeacher();
 
   const startNewConversation = () => {
     createConversation();
@@ -71,7 +75,10 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
   };
 
   const sendDraft = async () => {
-    const sent = await sendMessage(draft);
+    const teaching = teacher.mode === "teacher"
+      ? teacher.createRequest("dialogue", context).teaching
+      : undefined;
+    const sent = await sendMessage(draft, { teaching });
     if (!sent) return;
     setDraft("");
   };
@@ -82,7 +89,20 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
       regenerate: "Reescreva a resposta anterior com mais clareza e precisão, mantendo o mesmo contexto.",
       explain: `Explique de outra forma, com uma abordagem mais simples e um exemplo prático, esta resposta: ${response.slice(0, 600)}`,
     };
-    await sendMessage(prompts[action]);
+    const teaching = teacher.mode === "teacher"
+      ? teacher.createRequest("dialogue", context).teaching
+      : undefined;
+    await sendMessage(prompts[action], { teaching });
+  };
+
+  const runTeacherAction = async (action: TeacherAction) => {
+    if (!context) {
+      setError("Abra um estudo organizado antes de iniciar uma aula com o Professor.");
+      return;
+    }
+    const request = teacher.createRequest(action, context);
+    const sent = await sendMessage(request.content, { teaching: request.teaching });
+    if (sent && action === "explain_selection") teacher.clearSelection();
   };
 
   const generateSummary = async () => {
@@ -163,20 +183,28 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
         onDeleteConversation={deleteConversation}
       />
       <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border bg-card/45 p-3 shadow-[var(--shadow-card)] sm:p-4">
-        <div className="mb-4 flex items-center gap-3 px-1">
+        <div className="mb-4 flex flex-wrap items-center gap-3 px-1">
           <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <Bot className="size-5" aria-hidden="true" />
+            {teacher.mode === "teacher" ? <GraduationCap className="size-5" aria-hidden="true" /> : <Bot className="size-5" aria-hidden="true" />}
           </span>
-          <div>
+          <div className="min-w-0 flex-1">
             <h2 className="text-lg font-semibold tracking-tight">
               {activeConversation?.title ?? "Nova conversa"}
             </h2>
-            <p className="text-sm text-muted-foreground">Tutor IA · Conversas salvas neste navegador</p>
+            <p className="text-sm text-muted-foreground">{teacher.mode === "teacher" ? "Professor IA · Aula adaptada ao seu progresso" : "Tutor IA · Conversas salvas neste navegador"}</p>
             {context && (
               <p className="mt-1 text-xs font-medium text-primary">
                 Utilizando contexto do tema atual
               </p>
             )}
+          </div>
+          <div className="flex rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
+            <Button type="button" size="sm" variant={teacher.mode === "tutor" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "tutor"} onClick={() => teacher.setMode("tutor")}>
+              <Bot aria-hidden="true" />Tutor
+            </Button>
+            <Button type="button" size="sm" variant={teacher.mode === "teacher" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "teacher"} onClick={() => teacher.setMode("teacher")}>
+              <GraduationCap aria-hidden="true" />Professor
+            </Button>
           </div>
         </div>
         {error && (
@@ -216,10 +244,21 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
           </details>
           </aside>
         )}
+        {teacher.mode === "teacher" && (
+          <TeacherControls
+            context={context}
+            disabled={isLoading}
+            preferences={teacher.preferences}
+            selection={teacher.selection}
+            onPreferencesChange={teacher.updatePreferences}
+            onAction={(action) => { void runTeacherAction(action); }}
+            onClearSelection={teacher.clearSelection}
+          />
+        )}
         {activeConversation ? (
           <>
-            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} onResponseAction={(action, response) => { void runResponseAction(action, response); }} />
-            <TutorComposer draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
+            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} assistantLabel={teacher.mode === "teacher" ? "Professor" : "Tutor"} onResponseAction={(action, response) => { void runResponseAction(action, response); }} />
+            <TutorComposer mode={teacher.mode} draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
           </>
         ) : (
           <div className="rounded-xl border border-dashed p-10 text-center">

@@ -10,7 +10,15 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     (context.document.topic === undefined || typeof context.document.topic === "string") &&
     (context.document.summaryPreview === undefined || typeof context.document.summaryPreview === "string") &&
     (context.document.language === undefined || typeof context.document.language === "string") &&
-    Array.isArray(context.document.keywords) && context.document.keywords.every((keyword) => typeof keyword === "string")
+    Array.isArray(context.document.keywords) && context.document.keywords.every((keyword) => typeof keyword === "string") &&
+    Array.isArray(context.document.subtopics) && context.document.subtopics.every((subtopic) => typeof subtopic === "string") &&
+    typeof context.document.chapterCount === "number" &&
+    Array.isArray(context.document.chapters) && context.document.chapters.every((chapter) =>
+      typeof chapter === "object" && chapter !== null &&
+      typeof chapter.title === "string" && typeof chapter.marker === "string" &&
+      (chapter.page === undefined || typeof chapter.page === "number") &&
+      (chapter.slide === undefined || typeof chapter.slide === "number"),
+    )
   );
   const validLearning = context.learning === undefined || (
     typeof context.learning === "object" && context.learning !== null &&
@@ -31,6 +39,16 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
       Array.isArray(concept.relatedConcepts) && concept.relatedConcepts.every((related) => typeof related === "string"),
     )
   );
+  const validMentor = context.mentor === undefined || (
+    typeof context.mentor === "object" && context.mentor !== null &&
+    (context.mentor.lastSessionStatus === undefined || context.mentor.lastSessionStatus === "active" || context.mentor.lastSessionStatus === "paused" || context.mentor.lastSessionStatus === "completed") &&
+    (context.mentor.lastSessionAt === undefined || typeof context.mentor.lastSessionAt === "string") &&
+    Array.isArray(context.mentor.recommendations) && context.mentor.recommendations.every((recommendation) =>
+      typeof recommendation === "object" && recommendation !== null &&
+      typeof recommendation.title === "string" && typeof recommendation.reason === "string" &&
+      (recommendation.priority === "Alta" || recommendation.priority === "Média" || recommendation.priority === "Baixa"),
+    )
+  );
 
   return typeof context.studyId === "string" && typeof context.title === "string" &&
     typeof context.subject === "string" && typeof context.topic === "string" &&
@@ -41,5 +59,5 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     ) && (context.summary === undefined || (
       typeof context.summary === "object" && context.summary !== null &&
       typeof context.summary.title === "string" && typeof context.summary.content === "string"
-    )) && validDocument && validLearning && validKnowledge;
+    )) && validDocument && validLearning && validKnowledge && validMentor;
 }

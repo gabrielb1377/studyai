@@ -98,6 +98,7 @@ export const MentorService = {
         language: data.study.language,
         subtopics: data.study.subtopics ?? [],
         chapterCount: data.study.chapters?.length ?? 0,
+        chapters: (data.study.chapters ?? []).map(({ title, marker, page, slide }) => ({ title, marker, page, slide })),
       },
     };
     const response = await TutorService.requestReply(

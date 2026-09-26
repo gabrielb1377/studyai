@@ -1,6 +1,6 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 24 de setembro de 2026.
+Atualizado em 26 de setembro de 2026.
 
 ## Propósito
 
@@ -45,6 +45,7 @@ StudyAI é um workspace pessoal de estudos. A versão atual oferece extração c
 | `src/features/study-generator` | Análise estrutural local e criação automática de matérias, temas, subtemas e metadados de estudo. |
 | `src/features/ai` | AIService, contrato de providers, seleção, prompts, contexto, retrieval e erros. |
 | `src/features/tutor` | Conversas, persistência e interface do Tutor. |
+| `src/features/teacher` | Modo Professor, níveis, métodos pedagógicos, aula guiada, diagramas e prompts adaptativos sobre o mesmo AI Core. |
 | `src/features/{flashcards,quiz,notes,summaries}` | Recursos persistidos por tema. |
 | `src/features/learning` | Perfil de aprendizagem, Knowledge Score, prioridade, SM-2, plano diário, estatísticas e adaptação do Tutor. |
 | `src/features/semantic` | Parser semântico, conceitos, relações, grafo de conhecimento, busca conceitual, chunking semântico e integração com aprendizagem. |
@@ -203,7 +204,25 @@ TutorWorkspace
   → stream NDJSON para o cliente
 ```
 
-O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo, notas e o perfil calculado pelo Learning Engine. Conhecimento, confiança, domínio, classificação e prioridade orientam o PromptBuilder a aprofundar, revisar fundamentos ou propor desafios sem alterar os materiais recuperados. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos. O RAG remove duplicações e envia somente os três melhores trechos. `ContextCompressor` resume de forma extrativa o histórico antigo, preserva as mensagens recentes e respeita orçamentos de tokens antes de `PromptBuilder` e `ContextBuilder`. Tutor, resumo, flashcards e quiz usam o mesmo `AIService`.
+O `TutorContextService` seleciona o tema mais recentemente acessado e reúne `studyId`, título, matéria, status, progresso, resumo, notas e o perfil calculado pelo Learning Engine. Conhecimento, confiança, domínio, classificação e prioridade orientam o PromptBuilder a aprofundar, revisar fundamentos ou propor desafios sem alterar os materiais recuperados. O `RetrievalPipeline` é a entrada única do AI Core para o RAG e consulta exclusivamente os chunks vinculados ao estudo quando há contexto. A recuperação combina similaridade vetorial, ranking lexical, afinidade de `studyId`, nome do arquivo e frequência dos termos. O RAG remove duplicações e envia somente os três melhores trechos. `ContextCompressor` resume de forma extrativa o histórico antigo, preserva as mensagens recentes e respeita orçamentos de tokens antes de `PromptBuilder` e `ContextBuilder`. Tutor, Professor, resumo, flashcards e quiz usam o mesmo `AIService`.
+
+## AI Teacher 2.0
+
+O Tutor possui os modos `Tutor` e `Professor`. O Professor não cria outro canal de IA: ele acrescenta um contrato pedagógico tipado à chamada existente. Nível, método, ação e eventual trecho selecionado são validados no Route Handler e transformados em instruções por `TeacherPromptBuilder` antes de passarem por compressão, contexto e provider.
+
+```text
+TutorWorkspace / PDF selecionado
+  → useTeacher
+  → RetrievalPipeline
+  → /api/tutor
+  → TeacherPromptBuilder + PromptBuilder + ContextBuilder
+  → AIService / ProviderManager / cache
+  → resposta do Professor na conversa existente
+```
+
+As ações incluem aula guiada, plano automático, fluxograma e mapa mental em Mermaid, linha do tempo quando houver evidência, exercícios variados, comparação de conceitos, resumos adaptativos e explicação de trecho. A correção solicita resposta correta, justificativa, conceito, fonte e recomendação de revisão. O contexto reúne Learning Engine, Knowledge Graph, capítulos e continuidade do Mentor; arquivos físicos nunca são enviados. Seleções do PDF publicam somente texto limitado, nome, página e capítulo.
+
+Validação da Sprint 35: ESLint, TypeScript e build de produção aprovados; 104 testes Playwright aprovados.
 
 ## Learning Engine
 

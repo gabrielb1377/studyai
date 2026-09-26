@@ -225,6 +225,23 @@ export default function PdfMaterialViewer({ material, studyId, compact = false }
     setDraftPath([]);
   };
 
+  const publishTextSelection = () => {
+    if (annotationMode || !pageSurfaceRef.current) return;
+    const selection = window.getSelection();
+    const text = selection?.toString().replace(/\s+/g, " ").trim();
+    if (!selection || !text || !selection.rangeCount) return;
+    const commonAncestor = selection.getRangeAt(0).commonAncestorContainer;
+    if (!pageSurfaceRef.current.contains(commonAncestor)) return;
+    window.dispatchEvent(new CustomEvent("studyai:material-selection", {
+      detail: {
+        text: text.slice(0, 4_000),
+        sourceName: material.name,
+        page: pageNumber,
+        chapter: material.chapters?.[chapterIndex]?.title,
+      },
+    }));
+  };
+
   const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
 
   return (
@@ -290,7 +307,7 @@ export default function PdfMaterialViewer({ material, studyId, compact = false }
             </div>
           </aside>
           <div className={`flex max-h-[620px] overflow-auto p-4 sm:p-8 ${compact ? "justify-start" : "justify-center"}`}>
-            <div ref={pageSurfaceRef} className="relative h-fit w-fit shadow-lg">
+            <div ref={pageSurfaceRef} className="relative h-fit w-fit shadow-lg" onMouseUp={publishTextSelection} onKeyUp={publishTextSelection}>
               <Page pageNumber={pageNumber} scale={scale} renderTextLayer renderAnnotationLayer customTextRenderer={highlightText} className="max-w-full" />
               <div data-testid="pdf-annotation-layer" className={`absolute inset-0 z-20 ${annotationMode ? "cursor-crosshair" : "pointer-events-none"}`} onClick={addPointAnnotation} onPointerDown={(event) => { if (annotationMode !== "drawing") return; event.currentTarget.setPointerCapture(event.pointerId); const point = relativePoint(event); if (point) setDraftPath([point]); }} onPointerMove={(event) => { if (annotationMode !== "drawing" || !event.currentTarget.hasPointerCapture(event.pointerId)) return; const point = relativePoint(event); if (point) setDraftPath((current) => [...current, point]); }} onPointerUp={finishDrawing}>
                 {pageAnnotations.map((annotation) => annotation.kind === "drawing" ? <svg key={annotation.id} className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points={annotation.points?.map((point) => `${point.x},${point.y}`).join(" ")} fill="none" stroke={annotation.color} strokeWidth="0.45" vectorEffect="non-scaling-stroke" /></svg> : annotation.kind === "highlight" ? <span key={annotation.id} title="Marca-texto" className="pointer-events-none absolute rounded-sm opacity-45 mix-blend-multiply" style={{ left: `${annotation.x}%`, top: `${annotation.y}%`, width: `${annotation.width}%`, height: `${annotation.height}%`, backgroundColor: annotation.color, transform: "translate(-4%, -50%)" }} /> : <button key={annotation.id} type="button" className="absolute flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border bg-background shadow" style={{ left: `${annotation.x}%`, top: `${annotation.y}%`, color: annotation.color }} title={annotation.kind === "comment" ? annotation.text : `Ir para página ${annotation.targetPage}`} onClick={(event) => { event.stopPropagation(); if (annotation.kind === "link" && annotation.targetPage) goToPage(annotation.targetPage); }}>{annotation.kind === "comment" ? <MessageSquare className="size-3.5" /> : <Link2 className="size-3.5" />}</button>)}
