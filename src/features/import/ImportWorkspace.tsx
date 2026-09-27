@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CheckCircle2, Upload } from "lucide-react";
+import { CheckCircle2, Copy, RefreshCw, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropZone } from "./DropZone";
 import { ImportFileCard } from "./ImportFileCard";
 import { ImportProgress } from "./ImportProgress";
@@ -15,10 +16,12 @@ export function ImportWorkspace() {
     files,
     phase,
     feedback,
+    duplicateConflicts,
     overallProgress,
     addFiles,
     removeFile,
     importFiles,
+    resolveDuplicates,
   } = useImport();
   const processing = phase === "processing";
   const addFilesRef = useRef(addFiles);
@@ -116,7 +119,15 @@ export function ImportWorkspace() {
         progress={overallProgress}
         fileCount={files.length}
         errorCount={files.filter((file) => file.status === "error").length}
+        currentStage={files.find((file) => file.status === "processing")?.stage}
       />
+      <Dialog open={duplicateConflicts.length > 0} onOpenChange={(open) => !open && resolveDuplicates("ignore")}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Materiais duplicados encontrados</DialogTitle><DialogDescription>O conteúdo é igual a um material já importado, mesmo quando o nome do arquivo mudou. Escolha como continuar.</DialogDescription></DialogHeader>
+          <div className="max-h-60 space-y-2 overflow-y-auto">{duplicateConflicts.map((conflict) => <div key={conflict.id} className="rounded-lg border p-3 text-sm"><p className="font-medium">{conflict.file.name}</p><p className="mt-1 text-xs text-muted-foreground">{conflict.existingName ? `Já existe como “${conflict.existingName}”.` : "Este arquivo já está na seleção atual."}</p></div>)}</div>
+          <DialogFooter className="sm:justify-stretch"><Button variant="ghost" onClick={() => resolveDuplicates("ignore")}><XCircle />Ignorar</Button><Button variant="outline" onClick={() => resolveDuplicates("copy")}><Copy />Criar cópia</Button><Button onClick={() => resolveDuplicates("replace")}><RefreshCw />Substituir</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

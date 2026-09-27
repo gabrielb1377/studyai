@@ -9,8 +9,10 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 ## Principais funcionalidades
 
 - Importação de PDF, DOCX, PPTX, TXT, imagens, áudio e vídeo, com extração de texto, OCR ou transcrição conforme o formato suportado.
+- Primeiro acesso com sessão autenticada ou modo offline, onboarding acadêmico e preferência de experiência.
 - Organização automática de estudos e identificação de tópicos a partir do conteúdo extraído.
-- Biblioteca e Workspace com visualização de materiais, notas, resumos, flashcards, quizzes e sessões de estudo.
+- Biblioteca inteligente com detecção de duplicados por conteúdo, filtros de estudo e pesquisa sobre texto extraído, OCR, transcrições e colaboração.
+- Workspace restaurável com visualização de materiais, notas, resumos, flashcards, quizzes e sessões de estudo.
 - Tutor integrado a recuperação lexical e busca vetorial local sobre o material indexado.
 - Modo Professor adaptativo com níveis, métodos de ensino, aula guiada, planos, exercícios, diagramas Mermaid e explicação contextual de trechos selecionados.
 - Providers de IA selecionáveis: Gemini, Ollama, OpenRouter e Groq, com modo automático, verificação de disponibilidade e fallback.
@@ -60,7 +62,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Acesse `http://localhost:3000`. Preencha somente as credenciais dos serviços que pretende usar em `.env.local`; não versione esse arquivo. Gemini, OpenRouter e Groq dependem de credenciais configuradas no servidor. Ollama requer uma instância local acessível. Para o backend de sincronização/armazenamento, consulte [`PRODUCTION.md`](PRODUCTION.md) e o [`docker-compose.yml`](docker-compose.yml); os valores padrão locais do Compose não são adequados para produção e devem ser substituídos.
+Acesse `http://localhost:3000`. Preencha somente as credenciais dos serviços que pretende usar em `.env.local`; não versione esse arquivo. Gemini, OpenRouter e Groq dependem de credenciais configuradas no servidor. Ollama requer uma instância local acessível. Para o backend de sincronização/armazenamento, consulte [`PRODUCTION.md`](PRODUCTION.md) e o [`docker-compose.yml`](docker-compose.yml). O Compose exige secrets explícitos e não inicia com credenciais padrão.
 
 ## Testes e verificações
 

@@ -145,4 +145,20 @@ export const CloudDatabase = {
     const storageKey=result.rows[0]?.storage_key;
     if(storageKey)await ObjectStorage.delete(storageKey);
   },
+  async deleteAccount(userId: string) {
+    if (!hasPostgres()) {
+      memory.users.delete(userId); memory.profiles.delete(userId);
+      for (const [id, session] of memory.sessions) if (session.userId === userId) memory.sessions.delete(id);
+      for (const [token, accountToken] of memory.accountTokens) if (accountToken.userId === userId) memory.accountTokens.delete(token);
+      for (const [key, record] of memory.records) if (record.userId === userId) memory.records.delete(key);
+      memory.logs = memory.logs.filter((item) => item.userId !== userId);
+      memory.backups = memory.backups.filter((item) => item.userId !== userId);
+      memory.shares = memory.shares.filter((item) => item.userId !== userId);
+      for (const [key, file] of memory.files) if (file.userId === userId) memory.files.delete(key);
+      return;
+    }
+    const files = await query<{ storage_key: string | null }>("SELECT storage_key FROM files WHERE user_id=$1 AND storage_key IS NOT NULL", [userId]);
+    await query("DELETE FROM users WHERE id=$1", [userId]);
+    await Promise.all(files.rows.map((file) => file.storage_key ? ObjectStorage.delete(file.storage_key) : Promise.resolve()));
+  },
 };

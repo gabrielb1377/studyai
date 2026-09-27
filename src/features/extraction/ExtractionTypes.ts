@@ -97,6 +97,8 @@ export type ExtractionMetadata = {
   title?: string;
   subject?: string;
   topic?: string;
+  institution?: string;
+  professor?: string;
   subtopics?: string[];
   keywords?: string[];
   summaryPreview?: string;

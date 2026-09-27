@@ -1,6 +1,28 @@
-# Handoff Atual — Sprint 35: AI Teacher 2.0
+# Handoff Atual — Sprint 36: V1 Release Candidate
 
-Atualizado em 26 de setembro de 2026.
+Atualizado em 27 de setembro de 2026.
+
+## Resultado da Sprint 36
+
+A V1 possui agora um fluxo inicial explícito: Splash → restauração da sessão → Dashboard ou Landing. A Landing oferece login, cadastro com confirmação e validação em tempo real, modo offline, tema e apresentação curta. O onboarding coleta contexto acadêmico, objetivo e preferências e mantém o fluxo compatível com conta ou uso local.
+
+Importação detecta duplicados por caminho ou conteúdo usando fingerprint incremental de baixa memória e exige escolher substituir, ignorar ou criar cópia. O progresso exibe as etapas reais do pipeline. Biblioteca e organização preservam curso/semestre do onboarding, inferem instituição/professor quando o documento permite e oferecem filtros por uso, revisão, data, OCR, transcrição e ferramentas ainda não geradas.
+
+```text
+Landing / sessão offline
+  → Onboarding
+  → Importação + conflito de duplicados
+  → Extração/OCR/transcrição
+  → Study + Knowledge Graph + índice
+  → Biblioteca / busca universal / Workspace
+  → Dashboard / Conta / Beta Readiness
+```
+
+A busca universal consulta conteúdo extraído, OCR, transcrições, metadados, capítulos, subtópicos, salas e comentários. O Dashboard pode restaurar o último Workspace, aplicar outro layout ou criar um novo estado. Conta ganhou exportação/importação estruturada, revogação de todas as sessões e exclusão confirmada; o servidor remove a conta por cascade e os objetos S3 associados. O Compose não aceita mais secrets padrão.
+
+Validação final: ESLint, TypeScript e build de produção aprovados; 38 páginas estáticas foram geradas e todas as rotas dinâmicas compilaram. A suíte Playwright aprovou 107/107 cenários em 14,9 minutos, cobrindo também primeiro acesso, conflito de duplicados, Beta Readiness e regressão completa. O carregamento do Whisper ganhou timeout estruturado para nunca manter uma importação indefinidamente em processamento.
+
+## Base preservada da Sprint 35
 
 ## Resultado da Sprint 35
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Bell, Bot, Cloud, Download, HardDrive, LayoutDashboard, LockKeyhole, Palette, UserRound } from "lucide-react";
+import { Bell, Bot, Cloud, Download, HardDrive, LayoutDashboard, LockKeyhole, Palette, Rocket, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AppearanceSettings } from "./appearance-settings";
@@ -11,6 +11,7 @@ import { ExperienceSettings } from "./experience-settings";
 import { useExperiencePreferences } from "@/features/preferences/ExperiencePreferences";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { BetaReadinessPanel } from "@/features/release/BetaReadinessPanel";
 
 const AISettingsPanel = dynamic(() => import("./ai-settings-panel").then((module) => module.AISettingsPanel), { loading: () => <SettingsLoading /> });
 const PlatformSettings = dynamic(() => import("./platform-settings").then((module) => module.PlatformSettings), { loading: () => <SettingsLoading /> });
@@ -25,13 +26,14 @@ const categories = [
   { id: "account", label: "Conta", icon: UserRound },
   { id: "cloud", label: "Cloud", icon: Cloud },
   { id: "security", label: "Segurança", icon: LockKeyhole },
+  { id: "release", label: "Beta Ready", icon: Rocket },
 ] as const;
 type Category = (typeof categories)[number]["id"];
 
 export function SettingsHub() {
   const [category, setCategory] = useState<Category>("interface");
   const experience = useExperiencePreferences();
-  const visible = experience.mode === "advanced" ? categories : categories.filter((item) => !["workspace", "storage"].includes(item.id));
+  const visible = experience.mode === "advanced" ? categories : categories.filter((item) => !["workspace", "storage", "release"].includes(item.id));
   const platformCategories: Category[] = ["workspace", "notifications", "downloads", "storage"];
   const platformSection = platformCategories.includes(category) ? category as "workspace" | "notifications" | "downloads" | "storage" : undefined;
   useEffect(() => {
@@ -54,6 +56,7 @@ export function SettingsHub() {
         {category === "account" && <SettingsLinkCard icon={UserRound} title="Conta e perfil" description="Nome, email, idioma, dispositivos e sessão." action="Abrir Conta" />}
         {category === "cloud" && <SettingsLinkCard icon={Cloud} title="Cloud Sync" description="Sincronização, backups, conflitos e compartilhamentos." action="Gerenciar sincronização" />}
         {category === "security" && <SettingsLinkCard icon={LockKeyhole} title="Segurança" description="Senha, email, sessões ativas e recuperação da conta." action="Revisar segurança" />}
+        {category === "release" && <BetaReadinessPanel />}
       </div>
     </div>
   );

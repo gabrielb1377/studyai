@@ -21,6 +21,7 @@ export type Material = {
   id: string;
   fileId: string;
   identity: string;
+  contentHash?: string;
   name: string;
   relativePath: string;
   fileType: MaterialFileType;
@@ -38,6 +39,8 @@ export type Material = {
   semester?: string;
   subject?: string;
   topic?: string;
+  institution?: string;
+  professor?: string;
   tags?: string[];
   persistentBinary?: boolean;
 };

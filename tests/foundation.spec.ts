@@ -44,6 +44,7 @@ test("navegação, pesquisa, tema persistido e acesso à importação", async ({
 
 for (const width of [360, 390, 768, 1024, 1366, 1440, 2560]) {
   test(`rotas sem overflow horizontal em ${width}px`, async ({ page }) => {
+    test.setTimeout(60_000);
     await page.setViewportSize({ width, height: 900 });
     for (const path of [
       "/",

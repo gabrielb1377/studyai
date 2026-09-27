@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, BookOpen, Bot, BrainCircuit, CircleHelp, FileText, Network, NotebookPen, Search, Settings, Sparkles, Upload } from "lucide-react";
+import { ArrowUpRight, BookOpen, Bot, BrainCircuit, CircleHelp, FileText, MessageSquare, Network, NotebookPen, Search, Settings, Sparkles, Upload, UsersRound } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -97,7 +97,7 @@ export function SearchDialog() {
       <DialogContent>
         <DialogTitle>Pesquisa Global</DialogTitle>
         <DialogDescription>
-          Encontre materiais, notas, resumos, flashcards, quizzes e conceitos.
+          Encontre materiais, notas, resumos, flashcards, quizzes, conceitos, salas e comentários.
         </DialogDescription>
         <Input
           aria-label="Pesquisar páginas"
@@ -142,7 +142,7 @@ export function SearchDialog() {
           {guides.map((guide) => <button key={guide.id} data-command-item type="button" onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("studyai:open-help", { detail: { id: guide.id } })); }} className="flex w-full items-center gap-3 rounded-lg p-3 text-left hover:bg-accent focus:bg-accent"><CircleHelp className="size-5 text-muted-foreground" /><span className="flex-1"><span className="block text-sm font-medium">{guide.title}</span><span className="block text-xs text-muted-foreground">{guide.description}</span></span><ArrowUpRight className="size-4 text-muted-foreground" /></button>)}
           {workspaceResults.length > 0 && <p className="px-3 pt-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Conhecimento encontrado</p>}
           {workspaceResults.map((result) => {
-            const category = { material: [FileText, "Material"], note: [NotebookPen, "Nota"], summary: [Sparkles, "Resumo"], flashcard: [BrainCircuit, "Flashcard"], quiz: [BookOpen, "Quiz"], concept: [Network, "Conceito"], knowledge: [Network, "Relação"] }[result.category] as [typeof FileText, string];
+            const category = { material: [FileText, "Material"], note: [NotebookPen, "Nota"], summary: [Sparkles, "Resumo"], flashcard: [BrainCircuit, "Flashcard"], quiz: [BookOpen, "Quiz"], concept: [Network, "Conceito"], knowledge: [Network, "Relação"], room: [UsersRound, "Sala"], comment: [MessageSquare, "Comentário"] }[result.category] as [typeof FileText, string];
             const Icon = category[0];
             return (
             <Link

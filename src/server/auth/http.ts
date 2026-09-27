@@ -5,12 +5,14 @@ import { constantTimeEqual } from "@/server/security/Crypto";
 
 export const authCookies = { access: "studyai_access", refresh: "studyai_refresh", csrf: "studyai_csrf", session: "studyai_session" } as const;
 
-export function setAuthCookies(response: NextResponse, tokens: { accessToken: string; refreshToken: string; csrfToken: string; expiresIn: number }) {
+export function setAuthCookies(response: NextResponse, tokens: { accessToken: string; refreshToken: string; csrfToken: string; expiresIn: number; rememberDevice?: boolean }) {
   const secure = process.env.NODE_ENV === "production";
-  response.cookies.set(authCookies.access, tokens.accessToken, { httpOnly: true, sameSite: "strict", secure, path: "/", maxAge: tokens.expiresIn });
-  response.cookies.set(authCookies.refresh, tokens.refreshToken, { httpOnly: true, sameSite: "strict", secure, path: "/", maxAge: 30 * 24 * 60 * 60 });
-  response.cookies.set(authCookies.csrf, tokens.csrfToken, { httpOnly: false, sameSite: "strict", secure, path: "/", maxAge: 30 * 24 * 60 * 60 });
-  response.cookies.set(authCookies.session, "1", { httpOnly: false, sameSite: "strict", secure, path: "/", maxAge: 30 * 24 * 60 * 60 });
+  const persistence = tokens.rememberDevice === false ? {} : { maxAge: 30 * 24 * 60 * 60 };
+  const accessPersistence = tokens.rememberDevice === false ? {} : { maxAge: tokens.expiresIn };
+  response.cookies.set(authCookies.access, tokens.accessToken, { httpOnly: true, sameSite: "strict", secure, path: "/", ...accessPersistence });
+  response.cookies.set(authCookies.refresh, tokens.refreshToken, { httpOnly: true, sameSite: "strict", secure, path: "/", ...persistence });
+  response.cookies.set(authCookies.csrf, tokens.csrfToken, { httpOnly: false, sameSite: "strict", secure, path: "/", ...persistence });
+  response.cookies.set(authCookies.session, "1", { httpOnly: false, sameSite: "strict", secure, path: "/", ...persistence });
 }
 
 export function clearAuthCookies(response: NextResponse) { for (const name of Object.values(authCookies)) response.cookies.set(name, "", { path: "/", maxAge: 0 }); }

@@ -14,6 +14,8 @@ import { DashboardStats } from "./dashboard-stats";
 import { useExtraction } from "@/features/extraction/useExtraction";
 import { SmartLearningDashboard } from "@/features/learning/components/SmartLearningDashboard";
 import { useExperiencePreferences } from "@/features/preferences/ExperiencePreferences";
+import { WorkspaceLauncher } from "./WorkspaceLauncher";
+import { RecentActivityPanel } from "./RecentActivityPanel";
 
 const DiagnosticsDrawer = dynamic(() => import("./DiagnosticsDrawer").then((module) => module.DiagnosticsDrawer));
 const KnowledgeDashboard = dynamic(() => import("@/features/semantic/KnowledgeDashboard").then((module) => module.KnowledgeDashboard), { loading: () => <div className="h-40 animate-pulse rounded-2xl border bg-muted/30" /> });
@@ -33,8 +35,10 @@ export function StudyDashboard() {
         <ContinueStudying records={records} materials={materials} />
         <ImportMaterial />
       </div>
+      <WorkspaceLauncher studies={records} />
       <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} advanced={experience.mode === "advanced"} />
       <SmartLearningDashboard studies={records} flashcards={cards} quizzes={quizzes} />
+      <RecentActivityPanel materials={materials} studies={records} />
       {experience.mode === "advanced" && <KnowledgeDashboard studies={records} />}
       {experience.mode === "advanced" && <div className="flex justify-end"><DiagnosticsDrawer /></div>}
       <RecentTopics records={records} flashcards={cards} quizzes={quizzes} notes={notes} />

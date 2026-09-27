@@ -7,6 +7,7 @@ import type { MediaChapter, TranscriptionSegment } from "./ExtractionTypes";
 
 export const TRANSCRIPTION_MODEL = "onnx-community/whisper-tiny";
 const TARGET_SAMPLE_RATE = 16_000;
+const TRANSCRIBER_LOAD_TIMEOUT_MS = 180_000;
 
 type TranscriptionProgress = (progress: number) => void;
 
@@ -31,6 +32,18 @@ type WhisperOutput = {
 
 let transcriberPromise: Promise<AutomaticSpeechRecognitionPipeline> | undefined;
 let currentProgress: TranscriptionProgress | undefined;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 async function createTranscriber() {
   const { env, pipeline } = await import("@huggingface/transformers");
@@ -116,7 +129,11 @@ export const MediaTranscriptionService = {
     const audio = await decodeToMono(file, onProgress);
     currentProgress = onProgress;
     try {
-      transcriberPromise ??= createTranscriber().catch((error) => {
+      transcriberPromise ??= withTimeout(
+        createTranscriber(),
+        TRANSCRIBER_LOAD_TIMEOUT_MS,
+        "O modelo local de transcrição demorou demais para carregar. Tente novamente quando a conexão estiver estável.",
+      ).catch((error) => {
         transcriberPromise = undefined;
         throw error;
       });

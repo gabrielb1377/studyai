@@ -23,6 +23,8 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
     { label: "Curso", value: material.course ?? "Não informado" },
     { label: "Disciplina", value: material.subject ?? content?.metadata.subject ?? "Não informada" },
     { label: "Tema", value: material.topic ?? content?.metadata.topic ?? "Não informado" },
+    { label: "Instituição", value: material.institution ?? content?.metadata.institution ?? "Não identificada" },
+    { label: "Professor", value: material.professor ?? content?.metadata.professor ?? "Não identificado" },
     ...(
       content?.metadata.subject && content.metadata.topic &&
       (content.metadata.subject !== material.subject || content.metadata.topic !== material.topic)

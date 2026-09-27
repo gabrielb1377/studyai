@@ -1,10 +1,22 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 26 de setembro de 2026.
+Atualizado em 27 de setembro de 2026.
 
 ## Propósito
 
 StudyAI é um workspace pessoal de estudos. A versão atual oferece extração com OCR e transcrição local, recuperação híbrida dos materiais, experiências para organizar uma rotina de estudo e integrações funcionais com Gemini e Ollama.
+
+## V1 Release Candidate — Sprint 36
+
+O primeiro acesso passa por uma Splash curta e por uma Landing interna. Uma sessão autenticada abre o Dashboard; sem sessão, o usuário escolhe entrar, criar conta ou continuar offline. O cadastro inicial conduz a um onboarding com curso, instituição, semestre, objetivo, idioma, tema, provider e Modo Simples/Avançado. Preferências permanecem locais e também são copiadas para o perfil sincronizado quando existe conta.
+
+Na importação, o conteúdo é percorrido incrementalmente para produzir uma impressão digital sem carregar o arquivo inteiro na memória. Duplicados por identidade ou conteúdo mostram uma decisão explícita: substituir, ignorar ou criar cópia. O pipeline continua sendo a única fonte do progresso real de extração, OCR, criação do Study, Knowledge Graph e indexação.
+
+A Biblioteca ganhou filtros por uso, revisão, data, OCR, transcrição e ausência de resumo, quiz ou flashcards. Metadados locais incluem instituição e professor quando identificáveis; o contexto do onboarding completa curso e semestre quando o caminho importado não contém essa hierarquia. A pesquisa universal consulta também texto extraído, OCR, transcrições, capítulos, subtópicos, salas e comentários.
+
+O Dashboard abre ou recria o Workspace por tema/layout e mostra importações e atividade recentes. A Conta exporta/importa o arquivo estruturado, revoga todas as sessões e oferece exclusão permanente confirmada. O modo Avançado inclui um checklist Beta Ready para acesso, IndexedDB, PostgreSQL, Object Storage, IA, HTTPS, PWA e restauração do Workspace.
+
+Validação da Sprint 36: ESLint, TypeScript e build de produção aprovados; 107/107 testes Playwright aprovados. O runtime de transcrição possui timeout explícito de carregamento do modelo e converte indisponibilidade em erro persistido, sem deixar o pipeline preso em processamento.
 
 ## Stack
 

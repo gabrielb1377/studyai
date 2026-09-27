@@ -4,10 +4,11 @@ import { HelpCenter } from "@/features/help/HelpCenter";
 import { Onboarding } from "@/features/help/Onboarding";
 import { ContextualGuide } from "@/features/help/ContextualGuide";
 import { MobileNavigation } from "./mobile-navigation";
+import { AppEntryGate } from "@/features/account/AppEntryGate";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh">
+    <AppEntryGate><div className="flex min-h-dvh">
       <a
         href="#conteudo"
         className="fixed left-4 top-4 z-50 -translate-y-24 rounded-lg bg-primary px-4 py-3 text-primary-foreground focus:translate-y-0"
@@ -29,6 +30,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <HelpCenter />
       <Onboarding />
       <MobileNavigation />
-    </div>
+    </div></AppEntryGate>
   );
 }

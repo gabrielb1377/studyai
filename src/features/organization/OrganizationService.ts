@@ -68,7 +68,11 @@ export function inferMaterialDestination(material: Pick<Material, "name" | "rela
   if (folders.length === 1) {
     return { subject: folders[0], topic: topicFromName };
   }
-  return { subject: "Materiais importados", topic: topicFromName };
+  let onboarding: { course?: string; semester?: string } = {};
+  if (typeof localStorage !== "undefined") {
+    try { onboarding = JSON.parse(localStorage.getItem("studyai:experience-settings") ?? "{}").onboardingProfile ?? {}; } catch { onboarding = {}; }
+  }
+  return { course: onboarding.course, semester: onboarding.semester, subject: "Materiais importados", topic: topicFromName };
 }
 
 async function synchronizeEmbeddings() {

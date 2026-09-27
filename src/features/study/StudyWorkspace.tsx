@@ -27,7 +27,7 @@ function toStudyMaterialType(fileType: string): StudyMaterialType {
   return "document";
 }
 
-export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string }) {
+export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, resetWorkspace = false }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; resetWorkspace?: boolean }) {
   const { records, isLoading, recordAccess, setProgress, setStatus } = useStudyEngine();
   const { materials } = useMaterials();
   const { records: extractedContents } = useExtraction();
@@ -107,6 +107,8 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
             materials={studyMaterials}
             requestedMaterialId={requestedMaterialId ?? activeMaterialId}
             requestedTab={requestedTab}
+            requestedLayoutId={requestedLayoutId}
+            resetWorkspace={resetWorkspace}
             flashcards={flashcards}
             quizzes={quizzes}
             onMaterialChange={(materialId) => updateWorkspace({ materialId })}

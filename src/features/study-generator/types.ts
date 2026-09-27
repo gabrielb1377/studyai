@@ -8,6 +8,8 @@ export type StudyAnalysis = Pick<
   | "title"
   | "subject"
   | "topic"
+  | "institution"
+  | "professor"
   | "subtopics"
   | "keywords"
   | "summaryPreview"

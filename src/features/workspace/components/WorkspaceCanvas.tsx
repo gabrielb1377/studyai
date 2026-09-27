@@ -15,6 +15,7 @@ import { WorkspacePanelContent } from "./WorkspacePanelContent";
 import { WorkspacePanelFrame } from "./WorkspacePanelFrame";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspacePersistence, type WorkspaceTab } from "@/features/study/services/WorkspacePersistence";
+import { WorkspaceState } from "../services/WorkspaceState";
 
 const tabToPanel: Record<WorkspaceTab, WorkspacePanelType> = {
   material: "material",
@@ -44,11 +45,13 @@ const subscribeMobileWorkspace = (listener: () => void) => {
 };
 const getMobileWorkspace = () => window.matchMedia(mobileWorkspaceQuery).matches;
 
-export function WorkspaceCanvas({ study, materials, requestedMaterialId, requestedTab, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange }: {
+export function WorkspaceCanvas({ study, materials, requestedMaterialId, requestedTab, requestedLayoutId, resetWorkspace = false, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange }: {
   study: StudyRecord;
   materials: readonly StudyMaterial[];
   requestedMaterialId?: string;
   requestedTab?: string;
+  requestedLayoutId?: string;
+  resetWorkspace?: boolean;
   flashcards: readonly Flashcard[];
   quizzes: readonly QuizResult[];
   onMaterialChange: (materialId: string) => void;
@@ -62,7 +65,8 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let next = WorkspaceManager.load(study.studyId);
+    let next = resetWorkspace ? WorkspaceState.create(study.studyId) : WorkspaceManager.load(study.studyId);
+    if (requestedLayoutId) next = WorkspaceManager.applyLayout(next, requestedLayoutId);
     const requestedType = requestedTab && workspacePanelTypes.includes(requestedTab as WorkspacePanelType)
       ? requestedTab as WorkspacePanelType
       : requestedTab && requestedTab in tabToPanel
@@ -80,7 +84,7 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
     stateRef.current = next;
     setState(next);
     setLayouts(WorkspaceStorage.loadLayouts());
-  }, [requestedMaterialId, requestedTab, study.studyId]);
+  }, [requestedLayoutId, requestedMaterialId, requestedTab, resetWorkspace, study.studyId]);
 
   const update = useCallback((updater: (current: WorkspaceRuntimeState) => WorkspaceRuntimeState) => {
     setState((current) => {

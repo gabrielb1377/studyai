@@ -4,6 +4,14 @@ import { useSyncExternalStore } from "react";
 
 export type ExperienceMode = "simple" | "advanced";
 export type FontScale = "small" | "default" | "large" | "extra-large";
+export type OnboardingProfile = {
+  course: string;
+  institution: string;
+  semester: string;
+  goal: "exams" | "competition" | "entrance" | "learn" | "other";
+  language: "pt-BR" | "en";
+  provider: "gemini" | "ollama" | "openrouter" | "groq";
+};
 
 export type ExperiencePreferences = {
   mode: ExperienceMode;
@@ -13,6 +21,7 @@ export type ExperiencePreferences = {
   fontScale: FontScale;
   telemetryConsent: boolean;
   onboardingCompleted: boolean;
+  onboardingProfile: OnboardingProfile;
   dismissedGuides: string[];
 };
 
@@ -26,6 +35,7 @@ const defaults: ExperiencePreferences = {
   fontScale: "default",
   telemetryConsent: false,
   onboardingCompleted: false,
+  onboardingProfile: { course: "", institution: "", semester: "", goal: "learn", language: "pt-BR", provider: "gemini" },
   dismissedGuides: [],
 };
 

@@ -35,10 +35,10 @@ As chaves Gemini/OpenRouter/Groq são opcionais. Ollama continua apropriado apen
 ```bash
 docker compose up --build -d
 docker compose ps
-curl -H "Authorization: Bearer $HEALTH_SECRET" https://localhost/api/health
+curl -H "x-health-secret: $HEALTH_SECRET" https://localhost/api/health
 ```
 
-O Compose cria volumes duráveis para PostgreSQL, MinIO e Caddy. Troque todas as senhas padrão antes de expor o ambiente. Para um serviço S3 gerenciado, remova MinIO do ambiente e informe o endpoint/credenciais do provedor.
+O Compose cria volumes duráveis para PostgreSQL, MinIO e Caddy. Ele exige `POSTGRES_PASSWORD`, `AUTH_SECRET`, `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` explicitamente e falha antes de iniciar quando algum deles está ausente. Para um serviço S3 gerenciado, remova MinIO do ambiente e informe o endpoint/credenciais do provedor.
 
 ## DNS, HTTPS e CDN
 

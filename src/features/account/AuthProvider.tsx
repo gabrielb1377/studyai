@@ -5,7 +5,7 @@ import { AuthClient } from "./AuthClient";
 import type { AccountSession } from "./types";
 import { StorageManager } from "@/lib/storage/StorageManager";
 
-type AuthContextValue = { session: AccountSession | null; isLoading: boolean; refresh: () => Promise<void>; login: (email: string, password: string) => Promise<void>; register: (name: string, email: string, password: string) => Promise<{ verificationToken?: string }>; logout: () => Promise<void> };
+type AuthContextValue = { session: AccountSession | null; isLoading: boolean; refresh: () => Promise<void>; login: (email: string, password: string, rememberDevice?: boolean) => Promise<void>; register: (name: string, email: string, password: string) => Promise<{ verificationToken?: string }>; logout: () => Promise<void> };
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 12 * 60_000);
     return () => window.clearInterval(interval);
   }, [refresh]);
-  const value = useMemo<AuthContextValue>(() => ({ session, isLoading, refresh, login: async (email, password) => { await AuthClient.login(email, password); await refresh(); }, register: async (name, email, password) => { const result = await AuthClient.register(name, email, password); await refresh(); return result; }, logout: async () => { await AuthClient.logout(); await StorageManager.setUserScope(); setSession(null); } }), [isLoading, refresh, session]);
+  const value = useMemo<AuthContextValue>(() => ({ session, isLoading, refresh, login: async (email, password, rememberDevice) => { await AuthClient.login(email, password, rememberDevice); await refresh(); }, register: async (name, email, password) => { const result = await AuthClient.register(name, email, password); await refresh(); return result; }, logout: async () => { await AuthClient.logout(); await StorageManager.setUserScope(); setSession(null); } }), [isLoading, refresh, session]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

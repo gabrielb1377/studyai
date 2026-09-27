@@ -37,7 +37,8 @@ function isMetadata(value: unknown): value is ExtractionMetadata {
   return typeof metadata.name === "string" && typeof metadata.type === "string" &&
     typeof metadata.size === "number" &&
     isOptionalString(metadata.title) && isOptionalString(metadata.subject) &&
-    isOptionalString(metadata.topic) && isOptionalStringList(metadata.subtopics) &&
+    isOptionalString(metadata.topic) && isOptionalString(metadata.institution) &&
+    isOptionalString(metadata.professor) && isOptionalStringList(metadata.subtopics) &&
     isOptionalStringList(metadata.keywords) && isOptionalString(metadata.summaryPreview) &&
     isOptionalNumber(metadata.pageCount) && isOptionalNumber(metadata.duration) &&
     isOptionalString(metadata.language) && isOptionalString(metadata.encoding) &&

@@ -37,6 +37,8 @@ test("onboarding guiado leva uma pessoa nova até a primeira importação", asyn
   await page.getByRole("button", { name: /Modo Simples/ }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await page.getByRole("button", { name: /Importar primeiro material/ }).click();
   await expect(page).toHaveURL(/\/importar/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

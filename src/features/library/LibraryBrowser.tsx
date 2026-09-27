@@ -15,8 +15,13 @@ import { MaterialService } from "@/services/material-service";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useKnowledgeGraphs } from "@/features/semantic/useKnowledgeGraphs";
 import { cn } from "@/lib/utils";
+import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
+import { useFlashcards } from "@/features/flashcards/useFlashcards";
+import { useQuiz } from "@/features/quiz/useQuiz";
+import { useSummaries } from "@/features/summaries/hooks/useSummaries";
 
 export type LibraryView = "grid" | "list" | "compact";
+type SmartFilter = "none" | "most-studied" | "least-studied" | "never-reviewed" | "today" | "recent" | "ocr" | "transcription" | "no-summary" | "no-quiz" | "no-flashcards";
 
 const libraryViews = [
   { value: "grid", label: "Grade", icon: Grid2X2 },
@@ -28,6 +33,10 @@ export function LibraryBrowser() {
   const { materials, isLoading, refresh } = useMaterials();
   const { records: extractedContents } = useExtraction();
   const { graphs: knowledgeGraphs } = useKnowledgeGraphs();
+  const { records: studies } = useStudyEngine();
+  const { cards: flashcards } = useFlashcards();
+  const { questions: quizQuestions } = useQuiz();
+  const { summaries } = useSummaries();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("all");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -37,8 +46,23 @@ export function LibraryBrowser() {
   const [isTagsOpen, setIsTagsOpen] = useState(false);
   const [tagText, setTagText] = useState("");
   const [view, setView] = useState<LibraryView>("grid");
+  const [smartFilter, setSmartFilter] = useState<SmartFilter>("none");
   const [destination, setDestination] = useState<MaterialDestination>({ course: "", semester: "", subject: "", topic: "" });
-  const results = useMemo(() => filterMaterials(materials, query, filter), [filter, materials, query]);
+  const results = useMemo(() => {
+    const base = filterMaterials(materials, query, filter);
+    const score = (materialId: string) => studies.find((study) => study.studyId === materials.find((item) => item.id === materialId)?.studyId)?.progress ?? 0;
+    if (smartFilter === "most-studied") return [...base].sort((left, right) => score(right.id) - score(left.id)).slice(0, Math.max(1, Math.ceil(base.length / 3)));
+    if (smartFilter === "least-studied") return [...base].sort((left, right) => score(left.id) - score(right.id)).slice(0, Math.max(1, Math.ceil(base.length / 3)));
+    if (smartFilter === "never-reviewed") return base.filter((material) => !flashcards.some((card) => card.studyId === material.studyId && card.correctAnswers + card.wrongAnswers > 0) && !quizQuestions.some((question) => question.studyId === material.studyId));
+    if (smartFilter === "today") return base.filter((material) => new Date(material.importedAt).toDateString() === new Date().toDateString());
+    if (smartFilter === "recent") return base.filter((material) => Date.now() - new Date(material.updatedAt).getTime() <= 7 * 86_400_000).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    if (smartFilter === "ocr") return base.filter((material) => extractedContents.some((content) => content.fileId === material.fileId && content.metadata.ocrPerformed));
+    if (smartFilter === "transcription") return base.filter((material) => extractedContents.some((content) => content.fileId === material.fileId && content.metadata.transcriptionPerformed));
+    if (smartFilter === "no-summary") return base.filter((material) => !summaries.some((summary) => summary.studyId === material.studyId));
+    if (smartFilter === "no-quiz") return base.filter((material) => !quizQuestions.some((question) => question.studyId === material.studyId));
+    if (smartFilter === "no-flashcards") return base.filter((material) => !flashcards.some((card) => card.studyId === material.studyId));
+    return base;
+  }, [extractedContents, filter, flashcards, materials, query, quizQuestions, smartFilter, studies, summaries]);
 
   useEffect(() => {
     const stored = localStorage.getItem("studyai:library-view") as LibraryView | null;
@@ -55,6 +79,7 @@ export function LibraryBrowser() {
   function clearFilters() {
     setQuery("");
     setFilter("all");
+    setSmartFilter("none");
     searchRef.current?.focus();
   }
 
@@ -73,8 +98,11 @@ export function LibraryBrowser() {
     setMoveIds([]); setSelectedIds(new Set()); await refresh();
   };
   const deleteSelected = async () => {
-    for (const id of deleteIds) await OrganizationService.remove(id);
-    setDeleteIds([]); setSelectedIds(new Set()); await refresh();
+    const ids = [...deleteIds];
+    setDeleteIds([]);
+    setSelectedIds(new Set());
+    for (const id of ids) await OrganizationService.remove(id);
+    await refresh();
   };
   const favoriteSelected = async () => {
     for (const id of selectedIds) await MaterialService.update(id, { isFavorite: true });
@@ -156,13 +184,14 @@ export function LibraryBrowser() {
             {item.label}
           </Button>
         ))}
+        <label className="ml-auto flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground">Filtro inteligente<select aria-label="Filtro inteligente" value={smartFilter} onChange={(event) => setSmartFilter(event.target.value as SmartFilter)} className="max-w-44 bg-transparent text-foreground outline-none"><option value="none">Nenhum</option><option value="most-studied">Mais estudados</option><option value="least-studied">Menos estudados</option><option value="never-reviewed">Nunca revisados</option><option value="today">Importados hoje</option><option value="recent">Recentes</option><option value="ocr">Com OCR</option><option value="transcription">Com transcrição</option><option value="no-summary">Sem resumo</option><option value="no-quiz">Sem quiz</option><option value="no-flashcards">Sem flashcards</option></select></label>
       </div>
       <section aria-labelledby="materials-heading" className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-6">
           <h2 id="materials-heading" className="text-sm font-medium">
             <span role="status" aria-live="polite">
               {results.length} {results.length === 1 ? "material" : "materiais"}
-              {query.trim() || filter !== "all"
+              {query.trim() || filter !== "all" || smartFilter !== "none"
                 ? results.length === 1
                   ? " encontrado"
                   : " encontrados"

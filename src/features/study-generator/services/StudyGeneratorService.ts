@@ -33,7 +33,7 @@ export const StudyGeneratorService = {
 
     let updatedMaterial = material;
     if (material) {
-      updatedMaterial = await MaterialService.update(material.id, { subject, topic });
+      updatedMaterial = await MaterialService.update(material.id, { subject, topic, institution: analysis.institution, professor: analysis.professor });
       if (updatedMaterial) {
         const synchronized = StudyEngine.syncMaterial(await StudyEngine.load(), updatedMaterial);
         await StudyEngine.save(StudyEngine.applyAnalysis(synchronized, record.studyId, {

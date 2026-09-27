@@ -90,3 +90,14 @@ export function formatFileSize(size: number) {
 export function getFileIdentity(file: File) {
   return `${getFileRelativePath(file)}:${file.size}:${file.lastModified}`;
 }
+
+export async function getFileContentHash(file: File) {
+  let hash = 0x811c9dc5;
+  const reader = file.stream().getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const byte of value) hash = Math.imul(hash ^ byte, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, "0")}:${file.size}`;
+}

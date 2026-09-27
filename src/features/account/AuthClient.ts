@@ -25,7 +25,7 @@ export const AuthClient = {
   deviceId,
   session: () => request<AccountSession>("/auth/session"),
   async restoreSession() { try { return await this.session(); } catch { if (!hasSessionMarker()) return null; try { await request("/auth/refresh", { method: "POST" }); return await this.session(); } catch { return null; } } },
-  login: (email: string, password: string) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password, deviceId: deviceId(), deviceName: deviceName() }) }),
+  login: (email: string, password: string, rememberDevice = true) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password, rememberDevice, deviceId: deviceId(), deviceName: deviceName() }) }),
   register: (name: string, email: string, password: string) => request<{ verificationToken?: string }>("/auth/register", { method: "POST", body: JSON.stringify({ name, email, password, deviceId: deviceId(), deviceName: deviceName() }) }),
   logout: () => request("/auth/logout", { method: "POST" }),
   recover: (email: string) => request<{ recoveryToken?: string; message: string }>("/auth/recover", { method: "POST", body: JSON.stringify({ email }) }),

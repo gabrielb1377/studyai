@@ -44,7 +44,7 @@ export const MaterialService = {
     emitUpdate();
   },
 
-  createFromFile(file: File, fileType: MaterialFileType, id: string): Material {
+  createFromFile(file: File, fileType: MaterialFileType, id: string, contentHash?: string): Material {
     const now = new Date().toISOString();
     const relativePath = (file.webkitRelativePath || file.name)
       .replace(/\\/g, "/")
@@ -54,6 +54,7 @@ export const MaterialService = {
       id,
       fileId: id,
       identity: `${relativePath}:${file.size}:${file.lastModified}`,
+      contentHash,
       name: file.name,
       relativePath,
       fileType,

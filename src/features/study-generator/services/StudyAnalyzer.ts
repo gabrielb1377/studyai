@@ -25,6 +25,13 @@ function createSummaryPreview(text: string) {
   return preview.length > 360 ? `${preview.slice(0, 359).trimEnd()}…` : preview;
 }
 
+function detectAcademicContext(text: string) {
+  const source = text.slice(0, 12_000).replace(/\s+/g, " ");
+  const institution = source.match(/\b(Universidade\s+[\p{L}\s]{3,60}|Faculdade\s+[\p{L}\s]{3,60}|Centro\s+Universit[aá]rio\s+[\p{L}\s]{3,60}|Est[aá]cio(?:\s+de\s+S[aá])?)\b/iu)?.[1]?.trim();
+  const professor = source.match(/\b(?:professor(?:a)?|docente)\s*[:\-]?\s*([\p{L}][\p{L}\s.'-]{2,70})/iu)?.[1]?.trim();
+  return { institution, professor };
+}
+
 export const StudyAnalyzer = {
   analyze({
     fileName,
@@ -47,10 +54,12 @@ export const StudyAnalyzer = {
       fallbackSubject,
     );
     const hasContent = reading.wordCount > 0;
+    const academic = detectAcademicContext(`${fileName}\n${text}`);
 
     return {
       ...structure,
       subject,
+      ...academic,
       keywords: KeywordExtractor.extract(text),
       summaryPreview: createSummaryPreview(text),
       language: metadata.language ?? detectLanguage(text),

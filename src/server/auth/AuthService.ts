@@ -22,10 +22,10 @@ export const AuthService = {
     return { ...(await this.createSession(user.id, user.email, input.deviceId, input.deviceName)), verificationToken };
   },
 
-  async login(input: { email: string; password: string; deviceId: string; deviceName: string }) {
+  async login(input: { email: string; password: string; rememberDevice?: boolean; deviceId: string; deviceName: string }) {
     const user = await CloudDatabase.userByEmail(normalizeEmail(input.email));
     if (!user || !(await verifyPassword(input.password, user.passwordHash))) throw new Error("Email ou senha incorretos.");
-    return this.createSession(user.id, user.email, input.deviceId, input.deviceName);
+    return { ...(await this.createSession(user.id, user.email, input.deviceId, input.deviceName)), rememberDevice: input.rememberDevice !== false };
   },
 
   async createSession(userId: string, email: string, deviceId: string, deviceName: string) {
