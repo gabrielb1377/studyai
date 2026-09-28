@@ -8,6 +8,7 @@ const panelTitles: Record<WorkspacePanelType, string> = {
   flashcards: "Flashcards",
   quiz: "Quiz",
   notes: "Notas",
+  lab: "Laboratório",
   knowledge: "Mapa de Conhecimento",
   dashboard: "Dashboard do tema",
 };

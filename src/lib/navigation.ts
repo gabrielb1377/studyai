@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Database, FolderTree, GraduationCap, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
+import { BookOpen, Bot, Database, FlaskConical, FolderTree, GraduationCap, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
@@ -34,6 +34,12 @@ export const navigation = [
     label: "Academy",
     icon: GraduationCap,
     description: "Estude qualquer tema sem importar arquivos",
+  },
+  {
+    href: "/lab",
+    label: "Laboratório",
+    icon: FlaskConical,
+    description: "Pratique código, SQL e diagramas",
   },
   {
     href: "/tutor",

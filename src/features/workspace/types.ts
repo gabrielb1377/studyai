@@ -6,6 +6,7 @@ export const workspacePanelTypes = [
   "flashcards",
   "quiz",
   "notes",
+  "lab",
   "knowledge",
   "dashboard",
 ] as const;

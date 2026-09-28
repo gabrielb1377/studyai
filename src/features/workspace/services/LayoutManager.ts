@@ -10,6 +10,7 @@ export const BUILT_IN_LAYOUTS: WorkspaceLayout[] = [
   { id: "tutor", name: "Tutor", builtIn: true, panels: [{ type: "tutor", title: "Tutor IA", size: 60 }, { type: "knowledge", title: "Mapa de Conhecimento", size: 40 }], createdAt: now, updatedAt: now },
   { id: "mentor", name: "Mentor", builtIn: true, panels: [{ type: "mentor", title: "Mentor", size: 58 }, { type: "material", title: "Material", size: 42 }], createdAt: now, updatedAt: now },
   { id: "planning", name: "Planejamento", builtIn: true, panels: [{ type: "dashboard", title: "Dashboard do tema", size: 45 }, { type: "notes", title: "Notas", size: 55 }], createdAt: now, updatedAt: now },
+  { id: "laboratory", name: "Laboratório", builtIn: true, panels: [{ type: "material", title: "Material", size: 25 }, { type: "lab", title: "Laboratório", size: 25 }, { type: "tutor", title: "Professor", size: 25 }, { type: "notes", title: "Notas", size: 25 }], createdAt: now, updatedAt: now },
 ];
 
 function normalizeSizes(panels: WorkspacePanel[]) {

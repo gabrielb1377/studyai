@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, BookOpenCheck, Brain, CheckCircle2, Download, FileText, GraduationCap, ListChecks, Presentation } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, BookOpenCheck, Brain, CheckCircle2, Download, FileText, FlaskConical, GraduationCap, ListChecks, Presentation } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -59,7 +60,7 @@ export function AcademyContentViewer({ study, content, open, onOpenChange, onOpe
           </aside>
         </div>
         {exportError ? <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{exportError}</p> : null}
-        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button><Button onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button><Button variant="outline" asChild><Link href={`/lab?academyStudyId=${encodeURIComponent(study.id)}&contentId=${encodeURIComponent(content.id)}`}><FlaskConical />Abrir no Lab</Link></Button><Button onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

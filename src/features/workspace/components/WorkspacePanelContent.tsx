@@ -18,6 +18,7 @@ const FlashcardWorkspace = dynamic(() => import("@/features/flashcards/Flashcard
 const QuizWorkspace = dynamic(() => import("@/features/quiz/QuizWorkspace").then((module) => module.QuizWorkspace), { loading });
 const NotesWorkspace = dynamic(() => import("@/features/notes/NotesWorkspace").then((module) => module.NotesWorkspace), { loading });
 const KnowledgeMapView = dynamic(() => import("@/features/semantic/KnowledgeMapView").then((module) => module.KnowledgeMapView), { loading });
+const LabWorkspace = dynamic(() => import("@/features/lab/components/LabWorkspace").then((module) => module.LabWorkspace), { loading });
 
 export const WorkspacePanelContent = memo(function WorkspacePanelContent({ panel, study, materials, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange }: {
   panel: WorkspacePanel;
@@ -36,6 +37,7 @@ export const WorkspacePanelContent = memo(function WorkspacePanelContent({ panel
   if (panel.type === "flashcards") return <FlashcardWorkspace study={study} />;
   if (panel.type === "quiz") return <QuizWorkspace study={study} />;
   if (panel.type === "notes") return <NotesWorkspace study={study} panelId={panel.id} />;
+  if (panel.type === "lab") return <LabWorkspace studyId={study.studyId} compact />;
   if (panel.type === "knowledge") return <KnowledgeMapView studyId={study.studyId} />;
   return <StudyStatistics record={study} flashcards={flashcards} quizzes={quizzes} onProgressChange={onProgressChange} onStatusChange={onStatusChange} />;
 });

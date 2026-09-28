@@ -4,7 +4,8 @@ export type LearningActivityType =
   | "quiz"
   | "flashcard"
   | "summary"
-  | "note";
+  | "note"
+  | "lab";
 
 export type LearningActivity = {
   id: string;

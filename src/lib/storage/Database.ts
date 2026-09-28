@@ -19,6 +19,7 @@ const storeDefinitions: Record<StorageStoreName, { keyPath: string; indexes?: Ar
   ocr: { keyPath: "id", indexes: [["fileId", "fileId"], ["studyId", "studyId"]] },
   knowledge: { keyPath: "id", indexes: [["fileId", "fileId"], ["studyId", "studyId"], ["sourceHash", "sourceHash"]] },
   academy: { keyPath: "id", indexes: [["status", "status"], ["subject", "subject"], ["updatedAt", "updatedAt"]] },
+  lab: { keyPath: "id", indexes: [["studyId", "studyId"], ["language", "language"], ["updatedAt", "updatedAt"]] },
   metadata: { keyPath: "key" },
 };
 

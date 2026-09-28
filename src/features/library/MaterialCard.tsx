@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, Clock3, Eye, FolderInput, Sparkles, Star, Trash2 } from "lucide-react";
+import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -29,12 +29,13 @@ const academyKindLabels = {
 export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
   const [showDetails, setShowDetails] = useState(false);
   const generatedByAcademy = material.sourceType === "ai-generated";
+  const generatedByLab = material.sourceType === "lab";
   const typeInfo = materialTypes[material.fileType];
-  const Icon = generatedByAcademy ? Sparkles : typeInfo.icon;
+  const Icon = generatedByLab ? FlaskConical : generatedByAcademy ? Sparkles : typeInfo.icon;
   const generatedExportLabel = material.academyMaterialKind?.startsWith("generated-")
     ? academyKindLabels[material.academyMaterialKind]
     : undefined;
-  const label = generatedByAcademy
+  const label = generatedByLab ? "Exercício de Laboratório" : generatedByAcademy
     ? generatedExportLabel ?? "Material Gerado por IA"
     : typeInfo.label;
   const details = [
@@ -70,6 +71,8 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
       label: "Status IA",
       value: generatedByAcademy
         ? "Estrutura criada"
+        : generatedByLab
+          ? "Pronto para praticar"
         : content?.metadata.analysisStatus === "analyzed"
         ? "Analisado"
         : content?.metadata.analysisStatus === "fallback"
@@ -126,7 +129,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
         </dl>}
         <div className={cn("space-y-2", view === "grid" ? "mb-4 border-t pt-4" : "my-3 sm:my-0")}>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{generatedByAcademy ? "Pronto" : material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
+            <span>{generatedByAcademy || generatedByLab ? "Pronto" : material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
             <span>{material.progress}%</span>
           </div>
           <Progress value={material.progress} aria-label={`Progresso de ${material.name}`} />
@@ -153,7 +156,9 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
           </div>
         ) : null}
         <div className={cn("grid grid-cols-2 gap-2", view === "grid" ? "mb-4 border-t pt-4 sm:grid-cols-3" : "sm:flex sm:justify-end")}>
-          {generatedByAcademy ? (
+          {generatedByLab ? (
+            <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/lab?exercise=${material.labProjectId ?? ""}`}><FlaskConical />Abrir exercício</Link></Button>
+          ) : generatedByAcademy ? (
             <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}${material.academyContentId ? `&conteudo=${material.academyContentId}` : ""}`}><Sparkles />Abrir estudo</Link></Button>
           ) : <>
             <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
@@ -167,7 +172,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
         {view === "grid" && <p className="mt-auto flex items-center gap-1.5 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
           <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
           <span>
-            {generatedByAcademy ? "Criado em" : "Importado em"}{" "}
+            {generatedByAcademy || generatedByLab ? "Criado em" : "Importado em"}{" "}
             <time dateTime={material.importedAt}>
               {formatMaterialDate(material.importedAt)}
             </time>

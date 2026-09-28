@@ -49,7 +49,7 @@ test("Analytics calcula evolução, retenção, heatmap e previsões com dados r
 test("Dashboard mostra Analytics e exporta relatórios CSV e PDF", async ({ page }) => {
   const studyId = await createRealStudy(page);
   await page.evaluate(async ({ id }) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", 3); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", 4); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
     const timestamp = new Date().toISOString();
     const value = {
       id: "local-user", totalStudyMinutes: 45, timeBySubject: { Algoritmos: 45 },
