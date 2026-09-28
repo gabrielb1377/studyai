@@ -9,7 +9,8 @@ function isAcademyStudy(value: unknown): value is AcademyStudy {
   return typeof study.id === "string" && typeof study.topic === "string" &&
     typeof study.subject === "string" && study.sourceType === "ai-generated" &&
     typeof study.duration === "number" && typeof study.progress === "number" &&
-    Array.isArray(study.modules) && (study.contents === undefined || Array.isArray(study.contents)) && typeof study.createdAt === "string" &&
+    Array.isArray(study.modules) && (study.contents === undefined || Array.isArray(study.contents)) &&
+    (study.exports === undefined || Array.isArray(study.exports)) && typeof study.createdAt === "string" &&
     typeof study.updatedAt === "string";
 }
 
@@ -20,12 +21,12 @@ function emitUpdate() {
 export const AcademyStorage = {
   async list() {
     const studies = await StorageManager.getAll<unknown>("academy");
-    return studies.filter(isAcademyStudy).map((study) => ({ ...study, contents: study.contents ?? [] })).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return studies.filter(isAcademyStudy).map((study) => ({ ...study, contents: study.contents ?? [], exports: study.exports ?? [] })).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   },
 
   async get(id: string) {
     const study = await StorageManager.get<unknown>("academy", id);
-    return isAcademyStudy(study) ? { ...study, contents: study.contents ?? [] } : null;
+    return isAcademyStudy(study) ? { ...study, contents: study.contents ?? [], exports: study.exports ?? [] } : null;
   },
 
   async put(study: AcademyStudy) {

@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { PDFDocument } from "pdf-lib";
+import JSZip from "jszip";
 import type { LearningProfile } from "../src/features/learning/types";
 import type { AcademyStudy } from "../src/features/academy/types";
 import type { Material } from "../src/types/material";
@@ -136,6 +139,39 @@ test("gera projeto Academy e integra conteúdo, Biblioteca, estudo, grafo e ativ
   const learning = metadata.find((record) => record.key === "learning-profile:v1")?.value;
   expect(learning?.topics[academy[0].id]).toMatchObject({ difficulty: "basic", knowledgeEstimate: 0 });
   expect(learning?.topics[academy[0].id].recommendedActivities).toHaveLength(3);
+
+  const pdfDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar PDF" }).click();
+  const pdf = await pdfDownload;
+  expect(pdf.suggestedFilename()).toMatch(/-material\.pdf$/);
+  const pdfPath = await pdf.path();
+  expect(pdfPath).toBeTruthy();
+  const pdfBytes = await readFile(pdfPath!);
+  const pdfDocument = await PDFDocument.load(pdfBytes);
+  expect(pdfDocument.getPageCount()).toBeGreaterThanOrEqual(6);
+  expect(pdfDocument.getTitle()).toBe("Dashboard React na prática");
+
+  const workbookDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar apostila" }).click();
+  expect((await workbookDownload).suggestedFilename()).toMatch(/-apostila\.pdf$/);
+
+  const presentationDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Baixar apresentação" }).click();
+  const presentation = await presentationDownload;
+  expect(presentation.suggestedFilename()).toMatch(/-apresentacao\.pptx$/);
+  const presentationPath = await presentation.path();
+  expect(presentationPath).toBeTruthy();
+  const archive = await JSZip.loadAsync(await readFile(presentationPath!));
+  expect(archive.file("ppt/presentation.xml")).not.toBeNull();
+  expect(Object.keys(archive.files).filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))).toHaveLength(9);
+
+  const exportedAcademy = await readIndexedDBStore<AcademyStudy>(page, "academy");
+  expect(exportedAcademy[0].exports.map((item) => item.kind).sort()).toEqual(["pdf", "presentation", "workbook"]);
+  const exportedMaterials = await readIndexedDBStore<Material>(page, "documents");
+  expect(exportedMaterials.map((material) => material.academyMaterialKind)).toEqual(expect.arrayContaining(["generated-pdf", "generated-workbook", "generated-presentation"]));
+  const exportedContents = await readIndexedDBStore<{ fileType: string }>(page, "contents");
+  expect(exportedContents.map((item) => item.fileType)).toEqual(expect.arrayContaining(["pdf", "pptx"]));
+  expect((await readIndexedDBStore(page, "knowledge")).length).toBeGreaterThanOrEqual(4);
 
   await page.getByRole("button", { name: "Abrir no Professor" }).click();
   await expect(page).toHaveURL(/\/tutor\?modo=professor/);

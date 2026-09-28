@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { PageHeading } from "@/components/page-heading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AcademyService } from "../services/AcademyService";
-import type { AcademyContentKind } from "../types";
+import type { AcademyContentKind, AcademyExportKind } from "../types";
 import { AcademyContentViewer } from "./AcademyContentViewer";
 import { AcademyCreateDialog } from "./AcademyCreateDialog";
 import { AcademyEmptyState } from "./AcademyEmptyState";
@@ -15,7 +15,7 @@ import { useAcademyStudies } from "../hooks/useAcademyStudies";
 
 export function AcademyPage() {
   const router = useRouter();
-  const { studies, isLoading, isCreating, generatingStudyId, generationProgress, error, create, generate } = useAcademyStudies();
+  const { studies, isLoading, isCreating, generatingStudyId, generationProgress, exportingKind, error, create, generate, exportContent } = useAcademyStudies();
   const [generatorStudyId, setGeneratorStudyId] = useState<string>();
   const [viewer, setViewer] = useState<{ studyId: string; contentId: string }>();
   const generatorStudy = studies.find((study) => study.id === generatorStudyId);
@@ -51,7 +51,7 @@ export function AcademyPage() {
         </section>
       )}
       {generatorStudy ? <AcademyGenerateDialog study={generatorStudy} open onOpenChange={(open) => !open && setGeneratorStudyId(undefined)} onGenerate={(kind: AcademyContentKind, force) => generate(generatorStudy, kind, force)} isGenerating={generatingStudyId === generatorStudy.id} progress={generationProgress} /> : null}
-      {viewerStudy ? <AcademyContentViewer study={viewerStudy} content={viewerContent} open={Boolean(viewerContent)} onOpenChange={(open) => !open && setViewer(undefined)} onOpenProfessor={() => void openProfessor(viewerStudy.id)} /> : null}
+      {viewerStudy ? <AcademyContentViewer study={viewerStudy} content={viewerContent} open={Boolean(viewerContent)} onOpenChange={(open) => !open && setViewer(undefined)} onOpenProfessor={() => void openProfessor(viewerStudy.id)} onExport={(kind: AcademyExportKind) => viewerContent ? exportContent(viewerStudy, viewerContent, kind) : Promise.resolve()} exportingKind={exportingKind} /> : null}
     </>
   );
 }

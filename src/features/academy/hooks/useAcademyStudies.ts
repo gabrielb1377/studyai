@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { AcademyService } from "../services/AcademyService";
 import { ContentGeneratorService, type AcademyGenerationProgress } from "../services/ContentGeneratorService";
+import { AcademyExportService } from "../services/AcademyExportService";
 import { ACADEMY_UPDATED_EVENT } from "../storage/AcademyStorage";
-import type { AcademyContentKind, AcademyStudy, CreateAcademyStudyInput } from "../types";
+import type { AcademyContentKind, AcademyExportKind, AcademyGeneratedContent, AcademyStudy, CreateAcademyStudyInput } from "../types";
 
 export function useAcademyStudies() {
   const [studies, setStudies] = useState<AcademyStudy[]>([]);
@@ -12,6 +13,7 @@ export function useAcademyStudies() {
   const [isCreating, setIsCreating] = useState(false);
   const [generatingStudyId, setGeneratingStudyId] = useState<string>();
   const [generationProgress, setGenerationProgress] = useState<AcademyGenerationProgress>();
+  const [exportingKind, setExportingKind] = useState<AcademyExportKind>();
   const [error, setError] = useState<string>();
 
   const refresh = useCallback(async () => {
@@ -66,5 +68,20 @@ export function useAcademyStudies() {
     }
   }, [refresh]);
 
-  return { studies, isLoading, isCreating, generatingStudyId, generationProgress, error, create, generate, refresh };
+  const exportContent = useCallback(async (study: AcademyStudy, content: AcademyGeneratedContent, kind: AcademyExportKind) => {
+    setExportingKind(kind);
+    setError(undefined);
+    try {
+      const result = await AcademyExportService.export(study, content, kind);
+      await refresh();
+      return result;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível exportar o conteúdo.");
+      throw cause;
+    } finally {
+      setExportingKind(undefined);
+    }
+  }, [refresh]);
+
+  return { studies, isLoading, isCreating, generatingStudyId, generationProgress, exportingKind, error, create, generate, exportContent, refresh };
 }

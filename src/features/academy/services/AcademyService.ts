@@ -66,6 +66,7 @@ export const AcademyService = {
       modules: [],
       progress: 0,
       contents: [],
+      exports: [],
     };
     const material: Material = {
       id: materialId,

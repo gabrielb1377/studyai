@@ -21,6 +21,9 @@ const academyKindLabels = {
   "practical-project": "Projeto prático",
   summary: "Resumo",
   exercise: "Exercícios",
+  "generated-pdf": "PDF Gerado",
+  "generated-workbook": "Apostila Gerada",
+  "generated-presentation": "Apresentação Gerada",
 } as const;
 
 export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
@@ -28,7 +31,12 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
   const generatedByAcademy = material.sourceType === "ai-generated";
   const typeInfo = materialTypes[material.fileType];
   const Icon = generatedByAcademy ? Sparkles : typeInfo.icon;
-  const label = generatedByAcademy ? "Material Gerado por IA" : typeInfo.label;
+  const generatedExportLabel = material.academyMaterialKind?.startsWith("generated-")
+    ? academyKindLabels[material.academyMaterialKind]
+    : undefined;
+  const label = generatedByAcademy
+    ? generatedExportLabel ?? "Material Gerado por IA"
+    : typeInfo.label;
   const details = [
     ...(generatedByAcademy ? [] : [{ label: "Tamanho", value: formatFileSize(material.size) }]),
     ...(material.academyMaterialKind ? [{ label: "Tipo Academy", value: academyKindLabels[material.academyMaterialKind] }] : []),
