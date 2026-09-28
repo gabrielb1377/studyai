@@ -1,4 +1,4 @@
-export const syncEntities = ["documents", "contents", "chunks", "embeddings", "studies", "notes", "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge", "metadata", "workspace", "mentor", "learning"] as const;
+export const syncEntities = ["documents", "contents", "chunks", "embeddings", "studies", "notes", "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge", "academy", "metadata", "workspace", "mentor", "learning"] as const;
 export type SyncEntity = (typeof syncEntities)[number];
 
 export type SyncMutation = {

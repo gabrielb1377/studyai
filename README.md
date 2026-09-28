@@ -11,6 +11,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Importação de PDF, DOCX, PPTX, TXT, imagens, áudio e vídeo, com extração de texto, OCR ou transcrição conforme o formato suportado.
 - Primeiro acesso com sessão autenticada ou modo offline, onboarding acadêmico e preferência de experiência.
 - Organização automática de estudos e identificação de tópicos a partir do conteúdo extraído.
+- Academy para iniciar um estudo livre por tema, sem arquivo importado, com registro inicial na Biblioteca e no Learning Engine.
 - Biblioteca inteligente com detecção de duplicados por conteúdo, filtros de estudo e pesquisa sobre texto extraído, OCR, transcrições e colaboração.
 - Workspace restaurável com visualização de materiais, notas, resumos, flashcards, quizzes e sessões de estudo.
 - Tutor integrado a recuperação lexical e busca vetorial local sobre o material indexado.
@@ -34,6 +35,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 ```text
 Interface (Next.js)
   ├─ Importação → extração/OCR/transcrição → estudos e índice local
+  ├─ Academy → estudo livre → Biblioteca + Learning Engine
   ├─ Tutor e ferramentas → recuperação de contexto → AIClient
   │                                        ↓
   │                              Route Handlers internos

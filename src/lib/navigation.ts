@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Database, FolderTree, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
+import { BookOpen, Bot, Database, FolderTree, GraduationCap, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavigationItem = {
@@ -28,6 +28,12 @@ export const navigation = [
     label: "Estudo",
     icon: BookOpen,
     description: "Seu espaço para aprender",
+  },
+  {
+    href: "/academy",
+    label: "Academy",
+    icon: GraduationCap,
+    description: "Estude qualquer tema sem importar arquivos",
   },
   {
     href: "/tutor",

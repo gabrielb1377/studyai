@@ -14,6 +14,16 @@ export type RecordLearningActivity = {
   occurredAt?: string;
 };
 
+export type RegisterLearningStudy = {
+  studyId: string;
+  subject: string;
+  topic: string;
+  goal: string;
+  estimatedMinutes: number;
+  progress?: number;
+  createdAt?: string;
+};
+
 let writeQueue: Promise<void> = Promise.resolve();
 
 function dateKey(value: string) {
@@ -68,6 +78,40 @@ function withActivity(profile: LearningProfile, activity: LearningActivity): Lea
 }
 
 export const LearningService = {
+  async registerStudy(input: RegisterLearningStudy) {
+    let result: LearningProfile | undefined;
+    writeQueue = writeQueue.catch(() => undefined).then(async () => {
+      const profile = await LearningStorage.load();
+      const current = profile.topics[input.studyId];
+      const updatedAt = input.createdAt ?? new Date().toISOString();
+      result = {
+        ...profile,
+        topics: {
+          ...profile.topics,
+          [input.studyId]: {
+            studyId: input.studyId,
+            subject: input.subject,
+            topic: input.topic,
+            timeMinutes: current?.timeMinutes ?? 0,
+            flashcardsAnswered: current?.flashcardsAnswered ?? 0,
+            quizzesCompleted: current?.quizzesCompleted ?? 0,
+            correctAnswers: current?.correctAnswers ?? 0,
+            wrongAnswers: current?.wrongAnswers ?? 0,
+            accessDates: current?.accessDates ?? [],
+            lastAccessedAt: current?.lastAccessedAt,
+            goal: input.goal,
+            estimatedMinutes: Math.max(0, Math.round(input.estimatedMinutes)),
+            progress: Math.min(100, Math.max(0, Math.round(input.progress ?? 0))),
+          },
+        },
+        updatedAt,
+      };
+      await LearningStorage.save(result);
+    });
+    await writeQueue;
+    return result ?? LearningStorage.load();
+  },
+
   async recordActivity(input: RecordLearningActivity) {
     let result: LearningProfile | undefined;
     writeQueue = writeQueue.catch(() => undefined).then(async () => {

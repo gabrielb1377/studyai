@@ -1,6 +1,14 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 27 de setembro de 2026.
+Atualizado em 28 de setembro de 2026.
+
+## Academy Base — Sprint 36.1A
+
+O módulo `src/features/academy` permite criar um estudo livre a partir de tema e matéria, sem arquivo físico. A rota `/academy` coleta nível, objetivo, duração, idioma, profundidade e estilo. A criação gera atomicamente um `AcademyStudy`, um material leve identificado como `Material Gerado por IA` e um `StudyRecord`; em seguida registra objetivo, progresso inicial e tempo estimado no Learning Engine.
+
+O conteúdo didático ainda não é gerado nesta fase. `modules` permanece vazio e o contrato `AcademyWorkspaceContract` reserva a futura abertura no Workspace sem acoplar a tela atual. Os registros usam o object store `academy` do IndexedDB e participam do Cloud Sync incremental pelos mesmos contratos das demais entidades.
+
+Validação da Sprint 36.1A: ESLint, TypeScript e build de produção aprovados; 39 páginas geradas; suíte Playwright encerrada com sucesso (108 cenários diretos e 1 recuperado pelo retry, depois aprovado isoladamente sem retry).
 
 ## Propósito
 
@@ -33,7 +41,7 @@ Validação da Sprint 36: ESLint, TypeScript e build de produção aprovados; 10
 | OCR local | Tesseract.js com dados em português e inglês |
 | Transcrição local | Transformers.js com Whisper Tiny |
 | Testes de interface | Playwright |
-| Persistência local | IndexedDB nativo, banco `studyai-db` v2 |
+| Persistência local | IndexedDB nativo, banco `studyai-db` v3 |
 | Binários originais | Origin Private File System (OPFS), com fallback de re-seleção |
 | Backend cloud | Route Handlers Next.js e serviços `server-only` |
 | Banco cloud | PostgreSQL via `pg` |
@@ -53,6 +61,7 @@ Validação da Sprint 36: ESLint, TypeScript e build de produção aprovados; 10
 | `src/components/layout` | Shell, Header, Sidebar, busca global de páginas e tema. |
 | `src/components/ui` | Primitivos visuais reutilizáveis. |
 | `src/features/dashboard` | Painel inicial e indicadores. |
+| `src/features/academy` | Estudos livres sem arquivo, validação, persistência e contratos de integração. |
 | `src/features/study` | Workspace de um tema e Study Engine. |
 | `src/features/study-generator` | Análise estrutural local e criação automática de matérias, temas, subtemas e metadados de estudo. |
 | `src/features/ai` | AIService, contrato de providers, seleção, prompts, contexto, retrieval e erros. |
@@ -88,7 +97,7 @@ Validação da Sprint 36: ESLint, TypeScript e build de produção aprovados; 10
 
 ## Persistência local
 
-O Storage V2 usa bancos IndexedDB isolados por identidade (`studyai-db:user-{id}` e `studyai-db:guest`), versão 2. A sessão troca o escopo antes de expor os dados da conta. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
+O Storage V2 usa bancos IndexedDB isolados por identidade (`studyai-db:user-{id}` e `studyai-db:guest`), versão 3. A sessão troca o escopo antes de expor os dados da conta. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
 
 | Object Store | Conteúdo |
 | --- | --- |
@@ -101,6 +110,7 @@ O Storage V2 usa bancos IndexedDB isolados por identidade (`studyai-db:user-{id}
 | `quizzes` | Questões e resultados identificados pelo campo `kind`. |
 | `transcriptions`, `ocr` | Resultados pesados separados por arquivo e estudo. |
 | `knowledge` | Um grafo versionado por arquivo, com conceitos, relações, blocos e chunks semânticos. |
+| `academy` | Estudos livres, preferências pedagógicas, módulos e progresso. |
 | `metadata` | Estado de migração, índice semântico e conversas do Tutor. |
 
 O perfil local do Learning Engine também utiliza `metadata`, sob a chave versionada `learning-profile:v1`. Ele mantém somente métricas e até mil eventos recentes; materiais e conteúdo extraído continuam em seus stores próprios.

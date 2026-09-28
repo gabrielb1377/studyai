@@ -1,6 +1,26 @@
-# Handoff Atual — Sprint 36: V1 Release Candidate
+# Handoff Atual — Sprint 36.1A: Academy Base
 
-Atualizado em 27 de setembro de 2026.
+Atualizado em 28 de setembro de 2026.
+
+## Resultado da Sprint 36.1A
+
+A rota `/academy` cria estudos livres sem PDF ou outro material importado. O fluxo coleta tema, matéria, nível, objetivo, duração, idioma, profundidade e estilo; valida os dados e persiste um `AcademyStudy` no IndexedDB.
+
+```text
+Formulário Academy
+  → validação tipada
+  → transação IndexedDB
+      ├─ academy: AcademyStudy
+      ├─ documents: Material Gerado por IA
+      └─ studies: StudyRecord
+  → Learning Engine: objetivo + tempo estimado + progresso inicial
+```
+
+O banco local avançou para a versão 3 com o store `academy`, incluído no Cloud Sync incremental. A Biblioteca reconhece a origem `ai-generated` e direciona o material de volta ao Academy, sem tentar abrir um arquivo inexistente. `AcademyWorkspaceContract` prepara a futura abertura no Workspace, mas geração de conteúdo, PDF, PPTX e Laboratório não foram implementados nesta fase.
+
+Validação específica inclui criação, persistência após reload, integração com Biblioteca, Study Engine, Learning Engine e viewport mobile. ESLint, TypeScript e build de produção foram aprovados. A regressão Playwright encerrou com sucesso: 108 cenários passaram diretamente e 1 cenário antigo oscilou, passou no retry e também foi aprovado isoladamente sem retry.
+
+## Base preservada da Sprint 36
 
 ## Resultado da Sprint 36
 

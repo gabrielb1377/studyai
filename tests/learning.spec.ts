@@ -94,7 +94,7 @@ test("Tutor recebe perfil adaptativo antes de responder", async ({ page }) => {
   const studyId = await createRealStudy(page);
   await page.evaluate(async ({ key, id }) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("studyai-db", 2); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result);
+      const request = indexedDB.open("studyai-db", 3); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result);
     });
     const nowValue = new Date().toISOString();
     const profile = {
@@ -140,7 +140,7 @@ test("Flashcard registra o agendamento SM-2 no armazenamento", async ({ page }) 
 test("Quiz mostra evolução, pontos fortes ou fracos e recomendação", async ({ page }) => {
   const studyId = await createRealStudy(page);
   await page.evaluate(async ({ id }) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", 2); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", 3); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
     const transaction = database.transaction("quizzes", "readwrite");
     transaction.objectStore("quizzes").put({ id: "question-learning", studyId: id, question: "Como vetores armazenam elementos?", alternatives: ["Por índices", "Sem ordem", "Sem posição", "Somente texto"], correctAnswer: 0, explanation: "Usam índices.", difficulty: "easy", createdAt: new Date().toISOString(), kind: "question", _storageOrder: 0 });
     await new Promise<void>((resolve, reject) => { transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); }); database.close();

@@ -4,7 +4,7 @@ export async function readIndexedDBStore<T>(page: Page, storeName: string): Prom
   return page.evaluate(async (name) => new Promise<T[]>((resolve, reject) => {
     const scope = localStorage.getItem("studyai:storage-scope") || "guest";
     const databaseName = scope === "guest" ? "studyai-db" : `studyai-db:${scope}`;
-    const request = indexedDB.open(databaseName, 2);
+    const request = indexedDB.open(databaseName, 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;

@@ -43,6 +43,8 @@ export type Material = {
   professor?: string;
   tags?: string[];
   persistentBinary?: boolean;
+  sourceType?: "imported" | "ai-generated";
+  academyStudyId?: string;
 };
 
 export type MaterialFilter = "all" | MaterialCategory | "favorites";

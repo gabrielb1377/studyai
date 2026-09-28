@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, Clock3, Eye, FolderInput, Star, Trash2 } from "lucide-react";
+import { BookOpen, Bot, Clock3, Eye, FolderInput, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -17,9 +17,12 @@ import { cn } from "@/lib/utils";
 
 export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
   const [showDetails, setShowDetails] = useState(false);
-  const { icon: Icon, label } = materialTypes[material.fileType];
+  const generatedByAcademy = material.sourceType === "ai-generated";
+  const typeInfo = materialTypes[material.fileType];
+  const Icon = generatedByAcademy ? Sparkles : typeInfo.icon;
+  const label = generatedByAcademy ? "Material Gerado por IA" : typeInfo.label;
   const details = [
-    { label: "Tamanho", value: formatFileSize(material.size) },
+    ...(generatedByAcademy ? [] : [{ label: "Tamanho", value: formatFileSize(material.size) }]),
     { label: "Curso", value: material.course ?? "Não informado" },
     { label: "Disciplina", value: material.subject ?? content?.metadata.subject ?? "Não informada" },
     { label: "Tema", value: material.topic ?? content?.metadata.topic ?? "Não informado" },
@@ -48,7 +51,9 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
     ] : []),
     {
       label: "Status IA",
-      value: content?.metadata.analysisStatus === "analyzed"
+      value: generatedByAcademy
+        ? "Estrutura criada"
+        : content?.metadata.analysisStatus === "analyzed"
         ? "Analisado"
         : content?.metadata.analysisStatus === "fallback"
           ? "Análise básica"
@@ -104,7 +109,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
         </dl>}
         <div className={cn("space-y-2", view === "grid" ? "mb-4 border-t pt-4" : "my-3 sm:my-0")}>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
+            <span>{generatedByAcademy ? "Pronto" : material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
             <span>{material.progress}%</span>
           </div>
           <Progress value={material.progress} aria-label={`Progresso de ${material.name}`} />
@@ -131,9 +136,13 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
           </div>
         ) : null}
         <div className={cn("grid grid-cols-2 gap-2", view === "grid" ? "mb-4 border-t pt-4 sm:grid-cols-3" : "sm:flex sm:justify-end")}>
-          <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>
-          <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia`}><Bot />Tutor</Link></Button>
+          {generatedByAcademy ? (
+            <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}`}><Sparkles />Abrir estudo</Link></Button>
+          ) : <>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia`}><Bot />Tutor</Link></Button>
+          </>}
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
           <Button type="button" size="sm" variant="ghost" onClick={onMove}><FolderInput />Mover</Button>
           <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Excluir</Button>
@@ -141,7 +150,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
         {view === "grid" && <p className="mt-auto flex items-center gap-1.5 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
           <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
           <span>
-            Importado em{" "}
+            {generatedByAcademy ? "Criado em" : "Importado em"}{" "}
             <time dateTime={material.importedAt}>
               {formatMaterialDate(material.importedAt)}
             </time>

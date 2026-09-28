@@ -31,6 +31,9 @@ export type LearningTopicMetrics = {
   wrongAnswers: number;
   accessDates: string[];
   lastAccessedAt?: string;
+  goal?: string;
+  estimatedMinutes?: number;
+  progress?: number;
 };
 
 export type LearningProfile = {

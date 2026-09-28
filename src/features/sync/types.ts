@@ -1,6 +1,6 @@
 import type { CloudSyncState } from "@/features/account/types";
 
-export const clientSyncEntities = ["documents", "contents", "chunks", "embeddings", "studies", "notes", "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge", "metadata", "workspace", "mentor", "learning"] as const;
+export const clientSyncEntities = ["documents", "contents", "chunks", "embeddings", "studies", "notes", "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge", "academy", "metadata", "workspace", "mentor", "learning"] as const;
 export type ClientSyncEntity = (typeof clientSyncEntities)[number];
 export type ClientMutation = { entity: ClientSyncEntity; recordId: string; operation: "upsert" | "delete"; baseVersion: number; updatedAt: string; hash: string; data?: unknown; deviceId: string };
 export type ClientCloudRecord = ClientMutation & { version: number; userId: string; sequence?: number };

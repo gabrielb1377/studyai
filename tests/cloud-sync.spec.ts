@@ -25,7 +25,7 @@ async function login(page: Page, email: string) {
 async function putRecord(page: Page, store: string, value: Record<string, unknown>) {
   await page.evaluate(async ({ store, value }) => new Promise<void>((resolve, reject) => {
     const scope = localStorage.getItem("studyai:storage-scope") || "guest";
-    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 2);
+    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -220,7 +220,7 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
     expect(deletedFile.ok()).toBe(true);
     await firstPage.evaluate(async ({ id }) => {
       const scope = localStorage.getItem("studyai:storage-scope") || "guest";
-      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 2);
+      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 3);
       const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
       await new Promise<void>((resolve, reject) => { const transaction = database.transaction("documents", "readwrite"); transaction.objectStore("documents").delete(id); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); });
       database.close();

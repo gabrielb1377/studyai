@@ -3,7 +3,7 @@ import { readIndexedDBStore } from "./helpers/indexed-db";
 
 async function writeSimulatedDocuments(page: Page, count: number) {
   await page.evaluate(async (total) => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("studyai-db", 2);
+    const request = indexedDB.open("studyai-db", 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -38,7 +38,7 @@ test("migra dados pesados do localStorage sem perda e remove apenas as chaves an
     const now = new Date().toISOString();
     localStorage.setItem("studyai-theme", "dark");
     localStorage.setItem("studyai:materials", JSON.stringify({
-      version: 2,
+      version: 3,
       materials: [{ id: "legacy-document", fileId: "legacy-document", identity: "legacy.pdf:10:1", name: "legacy.pdf", relativePath: "legacy.pdf", fileType: "pdf", mimeType: "application/pdf", size: 10, lastModified: 1, importedAt: now, updatedAt: now, progress: 100, status: "ready", isFavorite: false }],
     }));
     localStorage.setItem("studyai:notes", JSON.stringify([{ id: "legacy-note", studyId: "legacy-study", title: "Nota preservada", content: "Conteúdo", createdAt: now, updatedAt: now }]));
@@ -69,7 +69,7 @@ test("transação abortada executa rollback sem apagar dados anteriores", async 
   await expect(page.getByText("studyai-db", { exact: true })).toBeVisible();
   await writeSimulatedDocuments(page, 1);
   await page.evaluate(async () => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("studyai-db", 2);
+    const request = indexedDB.open("studyai-db", 3);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
