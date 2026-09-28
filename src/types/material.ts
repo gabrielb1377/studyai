@@ -16,6 +16,7 @@ export const materialFileTypes = [
 export type MaterialFileType = (typeof materialFileTypes)[number];
 export type MaterialCategory = "pdf" | "video" | "audio" | "slides" | "document" | "image";
 export type MaterialStatus = "processing" | "ready" | "error";
+export type AcademyMaterialKind = "free-study" | "learning-path" | "practical-project" | "summary" | "exercise";
 
 export type Material = {
   id: string;
@@ -45,6 +46,8 @@ export type Material = {
   persistentBinary?: boolean;
   sourceType?: "imported" | "ai-generated";
   academyStudyId?: string;
+  academyContentId?: string;
+  academyMaterialKind?: AcademyMaterialKind;
 };
 
 export type MaterialFilter = "all" | MaterialCategory | "favorites";

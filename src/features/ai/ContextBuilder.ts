@@ -1,4 +1,5 @@
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
+import { academyLabels, type AcademyContentKind, type AcademyStudy } from "@/features/academy/types";
 import type { TutorStudyContext } from "@/types/tutor-context";
 
 const DEFAULT_MAX_CHARACTERS = 6_000;
@@ -10,6 +11,20 @@ const statusLabels = {
 };
 
 export const ContextBuilder = {
+  fromAcademy(study: AcademyStudy, kind: AcademyContentKind) {
+    return [
+      `Tipo de conteúdo: ${academyLabels.contentKinds[kind]}`,
+      `Tema: ${study.topic}`,
+      `Matéria: ${study.subject}`,
+      `Nível: ${academyLabels.levels[study.level]}`,
+      `Objetivo: ${academyLabels.goals[study.goal]}`,
+      `Duração disponível: ${study.duration} minutos`,
+      `Idioma: ${academyLabels.languages[study.language]}`,
+      `Profundidade: ${academyLabels.depths[study.depth]}`,
+      `Estilo: ${academyLabels.styles[study.style]}`,
+    ].join("\n");
+  },
+
   fromStudy(context: TutorStudyContext) {
     const blocks = [
       `studyId: ${context.studyId}`,

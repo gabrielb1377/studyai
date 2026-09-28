@@ -34,6 +34,10 @@ export type LearningTopicMetrics = {
   goal?: string;
   estimatedMinutes?: number;
   progress?: number;
+  difficulty?: "basic" | "intermediate" | "advanced" | "technical";
+  knowledgeEstimate?: number;
+  nextReviewAt?: string;
+  recommendedActivities?: string[];
 };
 
 export type LearningProfile = {

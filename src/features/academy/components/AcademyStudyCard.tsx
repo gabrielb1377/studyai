@@ -1,12 +1,19 @@
-import { BookOpen, Clock3, Layers3, Sparkles } from "lucide-react";
+import { BookOpen, Clock3, GraduationCap, Layers3, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { academyLabels, type AcademyStudy } from "../types";
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
-export function AcademyStudyCard({ study }: { study: AcademyStudy }) {
+export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfessor, isGenerating }: {
+  study: AcademyStudy;
+  onGenerate: () => void;
+  onOpenContent: () => void;
+  onOpenProfessor: () => void;
+  isGenerating: boolean;
+}) {
   return (
     <Card className="surface-hover h-full gap-4 py-5">
       <CardHeader className="gap-3">
@@ -32,6 +39,12 @@ export function AcademyStudyCard({ study }: { study: AcademyStudy }) {
           <span className="flex items-center gap-1.5"><Clock3 className="size-3.5" />{study.duration} min</span>
           <span className="flex items-center gap-1.5"><Layers3 className="size-3.5" />{study.modules.length} módulos</span>
           <span className="flex items-center gap-1.5"><BookOpen className="size-3.5" /><time dateTime={study.createdAt}>{dateFormatter.format(new Date(study.createdAt))}</time></span>
+        </div>
+        {study.generationError ? <p role="alert" className="rounded-xl bg-destructive/5 p-3 text-xs text-destructive">{study.generationError}</p> : null}
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" onClick={onGenerate} disabled={isGenerating}><Sparkles />{isGenerating ? "Gerando..." : "Gerar"}</Button>
+          {study.contents.length ? <Button onClick={onOpenContent}><BookOpen />Abrir conteúdo</Button> : <Button disabled><BookOpen />Sem conteúdo</Button>}
+          {study.contents.length ? <Button className="col-span-2" variant="secondary" onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button> : null}
         </div>
       </CardContent>
     </Card>

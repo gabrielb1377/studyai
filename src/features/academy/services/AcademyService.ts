@@ -1,5 +1,5 @@
 import { LearningService } from "@/features/learning/LearningService";
-import { STUDY_UPDATED_EVENT } from "@/features/study/services/StudyEngine";
+import { StudyEngine, STUDY_UPDATED_EVENT } from "@/features/study/services/StudyEngine";
 import { StorageManager } from "@/lib/storage/StorageManager";
 import { MATERIALS_UPDATED_EVENT } from "@/services/material-service";
 import type { Material } from "@/types/material";
@@ -65,6 +65,7 @@ export const AcademyService = {
       sourceType: "ai-generated",
       modules: [],
       progress: 0,
+      contents: [],
     };
     const material: Material = {
       id: materialId,
@@ -87,6 +88,7 @@ export const AcademyService = {
       persistentBinary: false,
       sourceType: "ai-generated",
       academyStudyId: academyId,
+      academyMaterialKind: "free-study",
       tags: ["Academy", "Estudo livre"],
     };
     const study: StudyRecord = {
@@ -122,4 +124,12 @@ export const AcademyService = {
   },
 
   workspaceContract,
+
+  async activate(studyId: string) {
+    const study = await AcademyStorage.get(studyId);
+    if (!study) throw new Error("O estudo livre não foi encontrado.");
+    const records = await StudyEngine.load();
+    await StudyEngine.save(StudyEngine.recordAccess(records, studyId));
+    return { study, workspace: workspaceContract(study) };
+  },
 };

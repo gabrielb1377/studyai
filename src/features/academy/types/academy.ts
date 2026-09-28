@@ -3,13 +3,17 @@ export const academyGoals = ["college", "exam", "public-exam", "work", "curiosit
 export const academyLanguages = ["pt-BR", "en", "es"] as const;
 export const academyDepths = ["essential", "balanced", "deep"] as const;
 export const academyStyles = ["structured", "practical", "visual", "socratic"] as const;
+export const academyContentKinds = ["study-material", "learning-path", "practical-project"] as const;
+export const academyGenerationStages = ["outline", "lessons", "practice"] as const;
 
 export type AcademyLevel = (typeof academyLevels)[number];
 export type AcademyGoal = (typeof academyGoals)[number];
 export type AcademyLanguage = (typeof academyLanguages)[number];
 export type AcademyDepth = (typeof academyDepths)[number];
 export type AcademyStyle = (typeof academyStyles)[number];
-export type AcademyStudyStatus = "draft" | "ready" | "in-progress" | "completed";
+export type AcademyContentKind = (typeof academyContentKinds)[number];
+export type AcademyGenerationStage = (typeof academyGenerationStages)[number];
+export type AcademyStudyStatus = "draft" | "generating" | "ready" | "in-progress" | "completed" | "error";
 
 export type AcademyModule = {
   id: string;
@@ -18,6 +22,98 @@ export type AcademyModule = {
   status: "not-started" | "in-progress" | "completed";
   progress: number;
   estimatedMinutes: number;
+  objective?: string;
+  chapterIds?: string[];
+};
+
+export type AcademyChapter = {
+  id: string;
+  title: string;
+  objective: string;
+  content: string;
+  concepts: string[];
+  examples: string[];
+};
+
+export type AcademyExercise = {
+  id: string;
+  type: "multiple-choice" | "true-false" | "discursive" | "code" | "practical";
+  question: string;
+  guidance: string;
+  answer: string;
+  difficulty: "easy" | "medium" | "hard";
+};
+
+export type AcademyGeneratedFlashcard = {
+  question: string;
+  answer: string;
+  difficulty: "easy" | "medium" | "hard";
+};
+
+export type AcademyGeneratedQuizQuestion = {
+  question: string;
+  alternatives: [string, string, string, string];
+  correctAnswer: number;
+  explanation: string;
+  difficulty: "easy" | "medium" | "hard";
+};
+
+export type AcademyTrailDay = {
+  day: number;
+  goal: string;
+  lesson: string;
+  exercise: string;
+  review: string;
+  checkpoint?: string;
+};
+
+export type AcademyPracticalProject = {
+  objective: string;
+  technologies: string[];
+  requirements: string[];
+  steps: string[];
+  challenges: string[];
+  checklist: string[];
+  completionCriteria: string[];
+};
+
+export type AcademyGeneratedContent = {
+  id: string;
+  kind: AcademyContentKind;
+  title: string;
+  objective: string;
+  prerequisites: string[];
+  modules: AcademyModule[];
+  chapters: AcademyChapter[];
+  concepts: Array<{ name: string; description: string; relatedTo: string[] }>;
+  examples: string[];
+  exercises: AcademyExercise[];
+  summary: string;
+  review: string[];
+  nextSteps: string[];
+  studyPlan: string[];
+  flashcards: AcademyGeneratedFlashcard[];
+  quiz: AcademyGeneratedQuizQuestion[];
+  trail?: AcademyTrailDay[];
+  project?: AcademyPracticalProject;
+  generatedAt: string;
+  provider: string;
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+};
+
+export type AcademyOutlineResult = Pick<AcademyGeneratedContent, "title" | "objective" | "prerequisites" | "modules" | "nextSteps">;
+export type AcademyLessonsResult = Pick<AcademyGeneratedContent, "chapters" | "concepts" | "examples" | "summary" | "review">;
+export type AcademyPracticeResult = Pick<AcademyGeneratedContent, "exercises" | "studyPlan" | "flashcards" | "quiz" | "trail" | "project">;
+
+export type AcademyGenerationResult = {
+  stage: AcademyGenerationStage;
+  data: AcademyOutlineResult | AcademyLessonsResult | AcademyPracticeResult;
+  provider: string;
+  model: string;
+  usage?: { inputTokens?: number; outputTokens?: number };
+  cached?: boolean;
 };
 
 export type AcademyStudy = {
@@ -37,6 +133,8 @@ export type AcademyStudy = {
   sourceType: "ai-generated";
   modules: AcademyModule[];
   progress: number;
+  contents: AcademyGeneratedContent[];
+  generationError?: string;
 };
 
 export type CreateAcademyStudyInput = Pick<
@@ -72,4 +170,5 @@ export const academyLabels = {
   languages: { "pt-BR": "Português", en: "Inglês", es: "Espanhol" },
   depths: { essential: "Essencial", balanced: "Equilibrada", deep: "Profunda" },
   styles: { structured: "Estruturado", practical: "Prático", visual: "Visual", socratic: "Socrático" },
+  contentKinds: { "study-material": "Material de estudo", "learning-path": "Trilha", "practical-project": "Projeto prático" },
 } as const;

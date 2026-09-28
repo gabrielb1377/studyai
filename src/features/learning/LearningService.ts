@@ -22,6 +22,10 @@ export type RegisterLearningStudy = {
   estimatedMinutes: number;
   progress?: number;
   createdAt?: string;
+  difficulty?: LearningTopicMetrics["difficulty"];
+  knowledgeEstimate?: number;
+  nextReviewAt?: string;
+  recommendedActivities?: string[];
 };
 
 let writeQueue: Promise<void> = Promise.resolve();
@@ -102,6 +106,10 @@ export const LearningService = {
             goal: input.goal,
             estimatedMinutes: Math.max(0, Math.round(input.estimatedMinutes)),
             progress: Math.min(100, Math.max(0, Math.round(input.progress ?? 0))),
+            difficulty: input.difficulty ?? current?.difficulty,
+            knowledgeEstimate: input.knowledgeEstimate ?? current?.knowledgeEstimate ?? 0,
+            nextReviewAt: input.nextReviewAt ?? current?.nextReviewAt,
+            recommendedActivities: input.recommendedActivities ?? current?.recommendedActivities ?? [],
           },
         },
         updatedAt,

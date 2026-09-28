@@ -15,6 +15,14 @@ import type { KnowledgeGraph } from "@/features/semantic/types";
 import type { LibraryView } from "./LibraryBrowser";
 import { cn } from "@/lib/utils";
 
+const academyKindLabels = {
+  "free-study": "Estudo livre",
+  "learning-path": "Trilha",
+  "practical-project": "Projeto prático",
+  summary: "Resumo",
+  exercise: "Exercícios",
+} as const;
+
 export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
   const [showDetails, setShowDetails] = useState(false);
   const generatedByAcademy = material.sourceType === "ai-generated";
@@ -23,6 +31,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
   const label = generatedByAcademy ? "Material Gerado por IA" : typeInfo.label;
   const details = [
     ...(generatedByAcademy ? [] : [{ label: "Tamanho", value: formatFileSize(material.size) }]),
+    ...(material.academyMaterialKind ? [{ label: "Tipo Academy", value: academyKindLabels[material.academyMaterialKind] }] : []),
     { label: "Curso", value: material.course ?? "Não informado" },
     { label: "Disciplina", value: material.subject ?? content?.metadata.subject ?? "Não informada" },
     { label: "Tema", value: material.topic ?? content?.metadata.topic ?? "Não informado" },
@@ -137,7 +146,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
         ) : null}
         <div className={cn("grid grid-cols-2 gap-2", view === "grid" ? "mb-4 border-t pt-4 sm:grid-cols-3" : "sm:flex sm:justify-end")}>
           {generatedByAcademy ? (
-            <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}`}><Sparkles />Abrir estudo</Link></Button>
+            <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}${material.academyContentId ? `&conteudo=${material.academyContentId}` : ""}`}><Sparkles />Abrir estudo</Link></Button>
           ) : <>
             <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
             <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>

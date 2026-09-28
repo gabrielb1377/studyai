@@ -9,7 +9,7 @@ function isAcademyStudy(value: unknown): value is AcademyStudy {
   return typeof study.id === "string" && typeof study.topic === "string" &&
     typeof study.subject === "string" && study.sourceType === "ai-generated" &&
     typeof study.duration === "number" && typeof study.progress === "number" &&
-    Array.isArray(study.modules) && typeof study.createdAt === "string" &&
+    Array.isArray(study.modules) && (study.contents === undefined || Array.isArray(study.contents)) && typeof study.createdAt === "string" &&
     typeof study.updatedAt === "string";
 }
 
@@ -20,12 +20,12 @@ function emitUpdate() {
 export const AcademyStorage = {
   async list() {
     const studies = await StorageManager.getAll<unknown>("academy");
-    return studies.filter(isAcademyStudy).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return studies.filter(isAcademyStudy).map((study) => ({ ...study, contents: study.contents ?? [] })).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   },
 
   async get(id: string) {
     const study = await StorageManager.get<unknown>("academy", id);
-    return isAcademyStudy(study) ? study : null;
+    return isAcademyStudy(study) ? { ...study, contents: study.contents ?? [] } : null;
   },
 
   async put(study: AcademyStudy) {

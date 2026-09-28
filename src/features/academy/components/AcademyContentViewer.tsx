@@ -1,0 +1,48 @@
+"use client";
+
+import { BookOpen, Brain, CheckCircle2, GraduationCap, ListChecks } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { academyLabels, type AcademyGeneratedContent, type AcademyStudy } from "../types";
+
+export function AcademyContentViewer({ study, content, open, onOpenChange, onOpenProfessor }: {
+  study: AcademyStudy;
+  content?: AcademyGeneratedContent;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onOpenProfessor: () => void;
+}) {
+  if (!content) return null;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <div className="flex flex-wrap gap-2"><Badge>{academyLabels.contentKinds[content.kind]}</Badge><Badge variant="outline">{content.provider} · {content.model}</Badge></div>
+          <DialogTitle className="text-xl">{content.title}</DialogTitle>
+          <DialogDescription>{study.subject} · {study.topic} — {content.objective}</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_15rem]">
+          <div className="space-y-6">
+            {content.chapters.map((chapter) => (
+              <article key={chapter.id} className="rounded-2xl border bg-card p-5">
+                <h3 className="flex items-center gap-2 font-semibold"><BookOpen className="size-4 text-primary" />{chapter.title}</h3>
+                {chapter.objective ? <p className="mt-2 text-sm font-medium text-muted-foreground">{chapter.objective}</p> : null}
+                <div className="mt-4 whitespace-pre-wrap text-sm leading-7">{chapter.content}</div>
+                {chapter.examples.length ? <div className="mt-4 rounded-xl bg-secondary/55 p-4 text-sm"><strong>Exemplos</strong><ul className="mt-2 list-disc space-y-1 pl-5">{chapter.examples.map((example) => <li key={example}>{example}</li>)}</ul></div> : null}
+              </article>
+            ))}
+            <section className="rounded-2xl border p-5"><h3 className="font-semibold">Resumo</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-7">{content.summary}</p></section>
+          </div>
+          <aside className="space-y-3">
+            <div className="rounded-2xl border p-4"><p className="text-xs text-muted-foreground">Módulos</p><p className="mt-1 flex items-center gap-2 font-semibold"><GraduationCap className="size-4 text-primary" />{content.modules.length}</p></div>
+            <div className="rounded-2xl border p-4"><p className="text-xs text-muted-foreground">Flashcards</p><p className="mt-1 flex items-center gap-2 font-semibold"><Brain className="size-4 text-primary" />{content.flashcards.length}</p></div>
+            <div className="rounded-2xl border p-4"><p className="text-xs text-muted-foreground">Questões</p><p className="mt-1 flex items-center gap-2 font-semibold"><ListChecks className="size-4 text-primary" />{content.quiz.length}</p></div>
+            <div className="rounded-2xl border p-4"><p className="text-xs text-muted-foreground">Exercícios</p><p className="mt-1 flex items-center gap-2 font-semibold"><CheckCircle2 className="size-4 text-primary" />{content.exercises.length}</p></div>
+          </aside>
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button><Button onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertCircle, Bot, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +52,11 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const teacher = useTeacher();
+  const setTeacherMode = teacher.setMode;
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("modo") === "professor") setTeacherMode("teacher");
+  }, [setTeacherMode]);
 
   const startNewConversation = () => {
     createConversation();
