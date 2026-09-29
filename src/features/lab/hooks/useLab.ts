@@ -95,7 +95,8 @@ export function useLab(options: { studyId?: string } = {}) {
     setIsReviewing(true); setError(undefined);
     try {
       const feedback = await LabAIService.review(active);
-      const saved = await LabService.save({ ...active, feedback });
+      const latest = await LabStorage.get(active.id);
+      const saved = await LabService.save({ ...(latest ?? active), feedback });
       setProjects((current) => current.map((project) => project.id === saved.id ? saved : project));
       return feedback;
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível corrigir o exercício."); }

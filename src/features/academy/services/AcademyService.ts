@@ -133,4 +133,47 @@ export const AcademyService = {
     await StudyEngine.save(StudyEngine.recordAccess(records, studyId));
     return { study, workspace: workspaceContract(study) };
   },
+
+  async beginContent(studyId: string) {
+    const academyStudy = await AcademyStorage.get(studyId);
+    if (!academyStudy) throw new Error("O estudo livre não foi encontrado.");
+    const now = new Date().toISOString();
+    const progress = Math.max(academyStudy.progress, 5);
+    const updatedStudy: AcademyStudy = {
+      ...academyStudy,
+      status: academyStudy.status === "completed" ? "completed" : "in-progress",
+      progress,
+      modules: academyStudy.modules.map((module, index) => index === 0 && module.status === "not-started"
+        ? { ...module, status: "in-progress", progress: Math.max(module.progress, 5) }
+        : module),
+      updatedAt: now,
+    };
+    const records = await StudyEngine.load();
+    const updatedRecords = StudyEngine.recordAccess(
+      StudyEngine.setProgress(records, studyId, progress, now),
+      studyId,
+      now,
+    );
+    const materials = await StorageManager.getAll<Material>("documents");
+    const updatedMaterials = materials
+      .filter((material) => material.studyId === studyId)
+      .map((material) => ({ ...material, progress: Math.max(material.progress, progress), updatedAt: now }));
+    const updatedRecord = updatedRecords.find((record) => record.studyId === studyId);
+
+    await StorageManager.transaction(["academy", "studies", "documents"], async (storage) => {
+      await storage.put("academy", updatedStudy);
+      if (updatedRecord) await storage.put("studies", updatedRecord);
+      for (const material of updatedMaterials) await storage.put("documents", material);
+    });
+    await LearningService.registerStudy({
+      studyId,
+      subject: updatedStudy.subject,
+      topic: updatedStudy.topic,
+      goal: updatedStudy.goal,
+      estimatedMinutes: updatedStudy.duration,
+      progress,
+      createdAt: now,
+    });
+    return updatedStudy;
+  },
 };

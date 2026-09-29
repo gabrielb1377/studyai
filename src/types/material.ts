@@ -51,4 +51,14 @@ export type Material = {
   labProjectId?: string;
 };
 
-export type MaterialFilter = "all" | MaterialCategory | "favorites";
+export type MaterialFilter =
+  | "all"
+  | MaterialCategory
+  | "favorites"
+  | "ai-generated"
+  | "academy"
+  | "lab"
+  | "generated-pdf"
+  | "generated-presentation"
+  | "practical-project"
+  | "learning-path";

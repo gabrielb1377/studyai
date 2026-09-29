@@ -32,7 +32,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
   const generatedByLab = material.sourceType === "lab";
   const typeInfo = materialTypes[material.fileType];
   const Icon = generatedByLab ? FlaskConical : generatedByAcademy ? Sparkles : typeInfo.icon;
-  const generatedExportLabel = material.academyMaterialKind?.startsWith("generated-")
+  const generatedExportLabel = material.academyMaterialKind
     ? academyKindLabels[material.academyMaterialKind]
     : undefined;
   const label = generatedByLab ? "Exercício de Laboratório" : generatedByAcademy

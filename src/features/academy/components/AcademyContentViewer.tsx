@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { academyLabels, type AcademyExportKind, type AcademyGeneratedContent, type AcademyStudy } from "../types";
+import { useAcademyLearningTracker } from "../hooks/useAcademyLearningTracker";
 
 export function AcademyContentViewer({ study, content, open, onOpenChange, onOpenProfessor, onExport, exportingKind }: {
   study: AcademyStudy;
@@ -18,6 +19,7 @@ export function AcademyContentViewer({ study, content, open, onOpenChange, onOpe
   exportingKind?: AcademyExportKind;
 }) {
   const [exportError, setExportError] = useState<string>();
+  useAcademyLearningTracker({ studyId: study.id, chapter: content?.title ?? study.topic, active: open && Boolean(content) });
   if (!content) return null;
   const contentExports = study.exports.filter((item) => item.contentId === content.id);
   async function runExport(kind: AcademyExportKind) {

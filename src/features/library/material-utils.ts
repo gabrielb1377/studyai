@@ -40,6 +40,13 @@ export const materialFilters: { value: MaterialFilter; label: string }[] = [
   { value: "document", label: "Documentos" },
   { value: "image", label: "Imagens" },
   { value: "favorites", label: "Favoritos" },
+  { value: "ai-generated", label: "Gerado por IA" },
+  { value: "academy", label: "Academy" },
+  { value: "lab", label: "Laboratório" },
+  { value: "generated-pdf", label: "PDF Gerado" },
+  { value: "generated-presentation", label: "Apresentação" },
+  { value: "practical-project", label: "Projeto Prático" },
+  { value: "learning-path", label: "Trilha" },
 ];
 
 function normalize(value: string) {
@@ -57,9 +64,17 @@ export function filterMaterials(
   const words = normalize(query).trim().split(/\s+/).filter(Boolean);
 
   return materials.filter((material) => {
-    const matchesFilter =
-      filter === "all" ||
-      (filter === "favorites" ? material.isFavorite : categories[material.fileType] === filter);
+    const matchesFilter = (() => {
+      if (filter === "all") return true;
+      if (filter === "favorites") return material.isFavorite;
+      if (filter === "ai-generated") return material.sourceType === "ai-generated";
+      if (filter === "academy") return material.sourceType === "ai-generated";
+      if (filter === "lab") return material.sourceType === "lab";
+      if (filter === "generated-pdf" || filter === "generated-presentation" || filter === "practical-project" || filter === "learning-path") {
+        return material.academyMaterialKind === filter;
+      }
+      return categories[material.fileType] === filter;
+    })();
     const text = normalize(
       [
         material.name,

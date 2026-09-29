@@ -114,7 +114,20 @@ export const LabService = {
   },
 
   async save(project: LabProject) {
-    const next = { ...project, status: project.status === "draft" ? "in-progress" as const : project.status, startedAt: project.startedAt ?? new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const persisted = await LabStorage.get(project.id);
+    const next = {
+      ...project,
+      status: persisted?.status === "completed" ? "completed" as const : project.status === "draft" ? "in-progress" as const : project.status,
+      attempts: Math.max(project.attempts, persisted?.attempts ?? 0),
+      correctAttempts: Math.max(project.correctAttempts, persisted?.correctAttempts ?? 0),
+      wrongAttempts: Math.max(project.wrongAttempts, persisted?.wrongAttempts ?? 0),
+      practicedSeconds: Math.max(project.practicedSeconds, persisted?.practicedSeconds ?? 0),
+      lastResult: project.lastResult ?? persisted?.lastResult,
+      feedback: project.feedback ?? persisted?.feedback,
+      startedAt: project.startedAt ?? persisted?.startedAt ?? new Date().toISOString(),
+      completedAt: project.completedAt ?? persisted?.completedAt,
+      updatedAt: new Date().toISOString(),
+    };
     await LabStorage.put(next);
     await MaterialService.upsert(material(next));
     return next;

@@ -63,8 +63,19 @@ test("cria e persiste um estudo livre integrado à Biblioteca e ao Learning Engi
 
   await page.goto("/biblioteca");
   const materialCard = page.getByRole("article", { name: "Árvores binárias" });
-  await expect(materialCard.getByText("Material Gerado por IA")).toBeVisible();
+  await expect(materialCard.getByText("Estudo livre", { exact: true }).first()).toBeVisible();
   await expect(materialCard.getByRole("link", { name: "Abrir estudo" })).toHaveAttribute("href", `/academy?estudo=${academy[0].id}`);
+  await page.getByRole("button", { name: "Academy", exact: true }).click();
+  await expect(materialCard).toBeVisible();
+
+  await page.keyboard.press("Control+K");
+  await page.getByRole("dialog").getByRole("textbox", { name: "Pesquisar páginas" }).fill("Árvores binárias");
+  await expect(page.getByRole("dialog").getByRole("link", { name: /Árvores binárias/ })).toHaveAttribute("href", `/academy?estudo=${academy[0].id}`);
+  await page.keyboard.press("Escape");
+
+  await page.goto("/");
+  await expect(page.getByText("Continuar estudo livre")).toBeVisible();
+  await expect(page.getByText("Árvores binárias", { exact: true }).first()).toBeVisible();
 });
 
 test("Academy mantém o fluxo de criação utilizável no celular", async ({ page }) => {
@@ -139,6 +150,14 @@ test("gera projeto Academy e integra conteúdo, Biblioteca, estudo, grafo e ativ
   const learning = metadata.find((record) => record.key === "learning-profile:v1")?.value;
   expect(learning?.topics[academy[0].id]).toMatchObject({ difficulty: "basic", knowledgeEstimate: 0 });
   expect(learning?.topics[academy[0].id].recommendedActivities).toHaveLength(3);
+
+  await page.waitForTimeout(1_100);
+  await page.getByRole("button", { name: "Fechar" }).first().click();
+  await expect.poll(async () => {
+    const updatedMetadata = await readIndexedDBStore<{ key: string; value?: LearningProfile }>(page, "metadata");
+    return updatedMetadata.find((record) => record.key === "learning-profile:v1")?.value?.activities.some((activity) => activity.type === "reading");
+  }).toBe(true);
+  await page.getByRole("button", { name: "Abrir conteúdo" }).click();
 
   const pdfDownload = page.waitForEvent("download");
   await page.getByRole("button", { name: "Baixar PDF" }).click();

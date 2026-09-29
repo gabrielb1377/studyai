@@ -1,6 +1,24 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 28 de setembro de 2026.
+Atualizado em 29 de setembro de 2026.
+
+## Integração Academy + Lab — Sprint 36.1E
+
+Academy, exportações e Laboratório formam agora um fluxo único. A navegação principal e mobile expõe `/academy` e `/lab`; a Biblioteca distingue estudo livre, trilha, projeto prático, PDF/apostila/apresentação gerados e exercício de Laboratório, com filtros dedicados. A pesquisa global indexa tanto o conteúdo estruturado da Academy quanto enunciado, código, dicas, solução e resultado esperado do Lab, mantendo links para a origem correta.
+
+O Workspace oferece composições nativas para Academy, prática no Lab, revisão de material gerado e trilha guiada. O Dashboard consulta os stores oficiais para retomar estudo livre e prática, listar conteúdos recentes, exercícios pendentes e próxima revisão. Abrir conteúdo Academy marca o Study como em andamento e registra o tempo real de leitura no Learning Engine.
+
+```text
+Academy → conteúdo estruturado → Biblioteca / Knowledge Graph / Learning Engine
+                              ↓
+                    PDF/PPTX / Lab / Professor
+                              ↓
+                 Workspace / busca / Dashboard
+```
+
+Os geradores de PDF/PPTX, SQL/WASM e demais módulos pesados continuam atrás de `import()` dinâmico. O preview HTML usa `sandbox` sem permissões e a execução do Lab bloqueia rede, workers, imports externos e acesso ao sistema. Consulte `docs/RELEASE_NOTES_SPRINT_36_1.md`.
+
+Auditoria de dependências em 29 de setembro de 2026: `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas em `adm-zip` e `sharp` pela cadeia de `@huggingface/transformers`. A correção automática não foi aplicada para evitar uma alteração de dependências fora do escopo; a atualização controlada deve entrar no backlog da Beta Readiness.
 
 ## Academy Base — Sprint 36.1A
 

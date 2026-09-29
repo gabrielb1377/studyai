@@ -1,6 +1,18 @@
-# Handoff Atual — Sprint 36.1A: Academy Base
+# Handoff Atual — Sprint 36.1E: Integração Final
 
-Atualizado em 28 de setembro de 2026.
+Atualizado em 29 de setembro de 2026.
+
+## Resultado da Sprint 36.1E
+
+Academy e Laboratório estão integrados à navegação desktop/mobile, Biblioteca, Workspace, Dashboard, busca global, Learning Engine e Knowledge Graph já existente. Os novos filtros usam os metadados oficiais de `documents`; a busca resolve a rota correta para Academy ou Lab e incorpora o conteúdo do exercício sem duplicar stores.
+
+O Dashboard carrega Academy/Lab de forma assíncrona e mostra retomada de estudo, prática, conteúdo recente, pendências e revisão. Abrir um conteúdo Academy atualiza progresso em `academy`, `studies`, `documents` e Learning Engine e registra tempo de leitura. Os layouts nativos cobrem Academy + Professor + Notas, Lab + Professor + Material, PDF gerado + Quiz + Flashcards e Trilha + Mentor + Plano do dia.
+
+Os módulos pesados permanecem sob carregamento dinâmico; o Lab mantém sandbox local, SQL/WASM lazy e bloqueio de rede. As notas da entrega estão em `docs/RELEASE_NOTES_SPRINT_36_1.md`.
+
+Validação em 29/09/2026: ESLint, TypeScript e build de produção aprovados; 42 páginas geradas e bundle compartilhado de 104 kB. Academy/Lab, Biblioteca e Workspace passaram na suíte focada. A regressão completa aprovou 106 cenários diretamente e 5 por retry; dois cenários antigos de Cloud Sync falharam sob a carga total e passaram isoladamente (2/2), caracterizando instabilidade de execução a acompanhar na Beta Readiness. `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas já registradas no contexto e nas release notes.
+
+## Base preservada da Sprint 36.1A
 
 ## Resultado da Sprint 36.1A
 

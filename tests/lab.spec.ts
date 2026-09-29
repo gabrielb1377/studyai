@@ -35,7 +35,9 @@ test("Academy abre exercício no Lab, executa em sandbox, corrige e atualiza o L
   await page.route("**/api/lab/review", async (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
     provider: "gemini", model: "test", text: JSON.stringify({ correct: ["Uso correto do console.log"], incorrect: [], explanation: "A saída corresponde ao esperado.", improvement: "Mantenha a solução simples.", alternativeSolution: "console.log(6 * 7);", nextExercises: ["Mostre 84"], score: 100 }),
   }) }));
-  await page.getByRole("link", { name: "Abrir no Lab" }).click();
+  const openLab = page.getByRole("link", { name: "Abrir no Lab" });
+  await expect(openLab).toHaveAttribute("href", /\/lab\?academyStudyId=/);
+  await openLab.click();
   await expect(page).toHaveURL(/\/lab\?academyStudyId=/);
   await expect(page.getByRole("heading", { name: "Laboratório", exact: true })).toBeVisible();
   await expect(page.getByText("Mostre o número 42 no console.", { exact: true }).first()).toBeVisible();
@@ -43,7 +45,7 @@ test("Academy abre exercício no Lab, executa em sandbox, corrige e atualiza o L
   const editor = page.getByRole("textbox", { name: "Código do exercício" });
   await editor.fill('console.log("42");');
   await page.getByRole("button", { name: "Executar", exact: true }).click();
-  await expect(page.getByText("42", { exact: true })).toBeVisible();
+  await expect(page.getByText("42", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Corrigir com IA" }).click();
   await expect(page.getByRole("heading", { name: "Correção do Professor" })).toBeVisible();
   await expect(page.getByText("100%", { exact: true })).toBeVisible();
@@ -66,6 +68,18 @@ test("Academy abre exercício no Lab, executa em sandbox, corrige e atualiza o L
 
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Código do exercício" })).toHaveValue('console.log("42");');
+
+  await page.goto("/biblioteca");
+  await page.getByRole("button", { name: "Laboratório", exact: true }).click();
+  await expect(page.getByRole("article", { name: projects[0].title })).toBeVisible();
+  await page.keyboard.press("Control+K");
+  await page.getByRole("dialog").getByRole("textbox", { name: "Pesquisar páginas" }).fill("Mostre o número 42");
+  await expect(page.getByRole("dialog").getByRole("link", { name: new RegExp(projects[0].title) })).toHaveAttribute("href", `/lab?exercise=${projects[0].id}`);
+  await page.keyboard.press("Escape");
+
+  await page.goto("/");
+  await expect(page.getByText("Continuar prática")).toBeVisible();
+  await expect(page.getByText(projects[0].title, { exact: true }).first()).toBeVisible();
 
   await page.goto(`/estudo?tema=${projects[0].studyId}&aba=lab`);
   await expect(page.getByRole("tab", { name: "Lab", exact: true })).toHaveAttribute("aria-selected", "true");

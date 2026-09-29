@@ -11,6 +11,10 @@ export const BUILT_IN_LAYOUTS: WorkspaceLayout[] = [
   { id: "mentor", name: "Mentor", builtIn: true, panels: [{ type: "mentor", title: "Mentor", size: 58 }, { type: "material", title: "Material", size: 42 }], createdAt: now, updatedAt: now },
   { id: "planning", name: "Planejamento", builtIn: true, panels: [{ type: "dashboard", title: "Dashboard do tema", size: 45 }, { type: "notes", title: "Notas", size: 55 }], createdAt: now, updatedAt: now },
   { id: "laboratory", name: "Laboratório", builtIn: true, panels: [{ type: "material", title: "Material", size: 25 }, { type: "lab", title: "Laboratório", size: 25 }, { type: "tutor", title: "Professor", size: 25 }, { type: "notes", title: "Notas", size: 25 }], createdAt: now, updatedAt: now },
+  { id: "academy", name: "Academy", builtIn: true, panels: [{ type: "material", title: "Material Academy", size: 45 }, { type: "tutor", title: "Professor", size: 32 }, { type: "notes", title: "Notas", size: 23 }], createdAt: now, updatedAt: now },
+  { id: "lab-practice", name: "Prática no Lab", builtIn: true, panels: [{ type: "lab", title: "Laboratório", size: 45 }, { type: "tutor", title: "Professor", size: 30 }, { type: "material", title: "Material", size: 25 }], createdAt: now, updatedAt: now },
+  { id: "generated-review", name: "Revisão gerada", builtIn: true, panels: [{ type: "material", title: "PDF Gerado", size: 46 }, { type: "quiz", title: "Quiz", size: 27 }, { type: "flashcards", title: "Flashcards", size: 27 }], createdAt: now, updatedAt: now },
+  { id: "learning-path", name: "Trilha guiada", builtIn: true, panels: [{ type: "material", title: "Trilha", size: 42 }, { type: "mentor", title: "Mentor", size: 33 }, { type: "dashboard", title: "Plano do dia", size: 25 }], createdAt: now, updatedAt: now },
 ];
 
 function normalizeSizes(panels: WorkspacePanel[]) {

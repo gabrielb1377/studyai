@@ -7,6 +7,7 @@ import type { KnowledgeGraph } from "@/features/semantic/types";
 import { CollaborationClient } from "@/features/collaboration/CollaborationClient";
 import type { CollaborationComment, StudyRoom } from "@/features/collaboration/types";
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
+import type { LabProject } from "@/features/lab/types";
 
 export type GlobalSearchCategory = "material" | "note" | "summary" | "flashcard" | "quiz" | "concept" | "knowledge" | "room" | "comment";
 
@@ -27,6 +28,7 @@ type SearchSnapshot = {
   quizzes: Array<Record<string, unknown>>;
   graphs: KnowledgeGraph[];
   contents: ExtractedContent[];
+  labProjects: LabProject[];
   rooms: StudyRoom[];
   comments: Array<CollaborationComment & { roomName: string }>;
 };
@@ -39,6 +41,8 @@ const synonyms: Record<string, string[]> = {
   resumo: ["sintese", "revisao"],
   quiz: ["questao", "exercicio", "prova"],
   conceito: ["termo", "definicao"],
+  academy: ["estudo livre", "trilha", "projeto pratico", "material gerado"],
+  laboratorio: ["lab", "exercicio", "codigo", "pratica"],
 };
 
 function normalize(value: string) {
@@ -69,7 +73,7 @@ function studyHref(studyId: unknown, tab: string, materialId?: string) {
 
 async function snapshot(): Promise<SearchSnapshot> {
   if (cache && cache.expiresAt > Date.now()) return cache.value;
-  const [materials, notes, summaries, flashcards, quizzes, graphs, contents] = await Promise.all([
+  const [materials, notes, summaries, flashcards, quizzes, graphs, contents, labProjects] = await Promise.all([
     StorageManager.getAll<Material>("documents"),
     StorageManager.getAll<StudyNote>("notes"),
     StorageManager.getAll<StudySummary>("summaries"),
@@ -77,11 +81,12 @@ async function snapshot(): Promise<SearchSnapshot> {
     StorageManager.getAll<Record<string, unknown>>("quizzes"),
     StorageManager.getAll<KnowledgeGraph>("knowledge"),
     StorageManager.getAll<ExtractedContent>("contents"),
+    StorageManager.getAll<LabProject>("lab"),
   ]);
   const rooms = await CollaborationClient.list().then((result) => result.rooms).catch(() => []);
   const roomSnapshots = await Promise.all(rooms.map((room) => CollaborationClient.room(room.id).catch(() => null)));
   const comments = roomSnapshots.flatMap((snapshot) => snapshot ? snapshot.comments.map((comment) => ({ ...comment, roomName: snapshot.room.name })) : []);
-  const value = { materials, notes, summaries, flashcards, quizzes, graphs, contents, rooms, comments };
+  const value = { materials, notes, summaries, flashcards, quizzes, graphs, contents, labProjects, rooms, comments };
   cache = { value, expiresAt: Date.now() + 5_000 };
   return value;
 }
@@ -105,8 +110,15 @@ export const GlobalSearchService = {
 
     data.materials.forEach((material) => {
       const content = data.contents.find((item) => item.fileId === material.fileId);
-      const context = [material.name, material.course, material.semester, material.subject, material.topic, material.institution, material.professor, material.relativePath, ...(material.tags ?? []), ...(content?.metadata.keywords ?? []), ...(content?.metadata.subtopics ?? []), ...(content?.metadata.chapters?.map((chapter) => chapter.title) ?? []), content?.extractedText.slice(0, 250_000)].filter(Boolean).join(" ");
-      add({ id: material.id, category: "material", title: material.name, preview: preview(content?.extractedText || [material.subject, material.topic, material.relativePath].filter(Boolean).join(" · ")), href: studyHref(material.studyId, "material", material.id) }, context);
+      const labProject = material.labProjectId ? data.labProjects.find((item) => item.id === material.labProjectId) : undefined;
+      const labText = labProject ? [labProject.title, labProject.exercise.statement, labProject.exercise.expectedResult, labProject.exercise.solution, ...labProject.exercise.hints, ...Object.values(labProject.files)].join(" ") : "";
+      const context = [material.name, material.course, material.semester, material.subject, material.topic, material.institution, material.professor, material.relativePath, material.sourceType, material.academyMaterialKind, ...(material.tags ?? []), ...(content?.metadata.keywords ?? []), ...(content?.metadata.subtopics ?? []), ...(content?.metadata.chapters?.map((chapter) => chapter.title) ?? []), content?.extractedText.slice(0, 250_000), labText].filter(Boolean).join(" ");
+      const href = material.sourceType === "lab"
+        ? `/lab?exercise=${encodeURIComponent(material.labProjectId ?? "")}`
+        : material.sourceType === "ai-generated"
+          ? `/academy?estudo=${encodeURIComponent(material.academyStudyId ?? material.studyId ?? "")}${material.academyContentId ? `&conteudo=${encodeURIComponent(material.academyContentId)}` : ""}`
+          : studyHref(material.studyId, "material", material.id);
+      add({ id: material.id, category: "material", title: material.name, preview: preview(content?.extractedText || labText || [material.subject, material.topic, material.relativePath].filter(Boolean).join(" · ")), href }, context);
     });
     data.notes.forEach((note) => add({ id: note.id, category: "note", title: note.title, preview: preview(note.content), href: studyHref(note.studyId, "notes") }, `${note.title} ${note.content}`));
     data.summaries.forEach((summary) => add({ id: summary.id, category: "summary", title: summary.title, preview: preview(summary.content), href: studyHref(summary.studyId, "summaries") }, `${summary.title} ${summary.content}`));

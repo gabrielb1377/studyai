@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, BookOpen, Bot, BrainCircuit, CircleHelp, FileText, MessageSquare, Network, NotebookPen, Search, Settings, Sparkles, Upload, UsersRound } from "lucide-react";
+import { ArrowUpRight, BookOpen, Bot, BrainCircuit, CircleHelp, FileText, FlaskConical, GraduationCap, MessageSquare, Network, NotebookPen, Search, Settings, Sparkles, Upload, UsersRound } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,8 @@ const quickCommands = [
   { title: "Abrir Tutor", description: "Continuar uma conversa contextual", href: "/tutor", icon: Bot },
   { title: "Criar Flashcards", description: "Abrir a ferramenta no Workspace", href: "/estudo", icon: BrainCircuit },
   { title: "Fazer Quiz", description: "Praticar o tema atual", href: "/estudo", icon: BookOpen },
+  { title: "Criar estudo livre", description: "Gerar uma trilha ou material na Academy", href: "/academy", icon: GraduationCap },
+  { title: "Abrir Laboratório", description: "Praticar código, SQL, Markdown e Mermaid", href: "/lab", icon: FlaskConical },
   { title: "Configurar o StudyAI", description: "Interface, IA, armazenamento e conta", href: "/configuracoes", icon: Settings },
 ] as const;
 
@@ -97,7 +99,7 @@ export function SearchDialog() {
       <DialogContent>
         <DialogTitle>Pesquisa Global</DialogTitle>
         <DialogDescription>
-          Encontre materiais, notas, resumos, flashcards, quizzes, conceitos, salas e comentários.
+          Encontre materiais, conteúdos gerados, exercícios do Lab, notas, flashcards, quizzes, conceitos, salas e comentários.
         </DialogDescription>
         <Input
           aria-label="Pesquisar páginas"

@@ -11,9 +11,10 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Importação de PDF, DOCX, PPTX, TXT, imagens, áudio e vídeo, com extração de texto, OCR ou transcrição conforme o formato suportado.
 - Primeiro acesso com sessão autenticada ou modo offline, onboarding acadêmico e preferência de experiência.
 - Organização automática de estudos e identificação de tópicos a partir do conteúdo extraído.
-- Academy para iniciar um estudo livre por tema, sem arquivo importado, com registro inicial na Biblioteca e no Learning Engine.
-- Biblioteca inteligente com detecção de duplicados por conteúdo, filtros de estudo e pesquisa sobre texto extraído, OCR, transcrições e colaboração.
-- Workspace restaurável com visualização de materiais, notas, resumos, flashcards, quizzes e sessões de estudo.
+- Academy para criar estudos livres, trilhas e projetos práticos, gerar conteúdo estruturado, flashcards e quizzes e exportar PDF, apostila ou apresentação.
+- Laboratório seguro para JavaScript, TypeScript, HTML/CSS, SQL local, Markdown e Mermaid, com terminal simulado e correção contextual por IA.
+- Biblioteca inteligente com filtros para conteúdo importado, Academy, Lab e exportações geradas, além de pesquisa sobre texto extraído, OCR, transcrições, conteúdo e exercícios.
+- Workspace restaurável com layouts integrados para material, Academy, Lab, Professor, Mentor, notas, flashcards e quizzes.
 - Tutor integrado a recuperação lexical e busca vetorial local sobre o material indexado.
 - Modo Professor adaptativo com níveis, métodos de ensino, aula guiada, planos, exercícios, diagramas Mermaid e explicação contextual de trechos selecionados.
 - Providers de IA selecionáveis: Gemini, Ollama, OpenRouter e Groq, com modo automático, verificação de disponibilidade e fallback.
@@ -35,7 +36,8 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 ```text
 Interface (Next.js)
   ├─ Importação → extração/OCR/transcrição → estudos e índice local
-  ├─ Academy → estudo livre → Biblioteca + Learning Engine
+  ├─ Academy → conteúdo estruturado/exportações → Biblioteca + Learning/Knowledge
+  ├─ Lab sandbox → prática local → Learning Engine
   ├─ Tutor e ferramentas → recuperação de contexto → AIClient
   │                                        ↓
   │                              Route Handlers internos

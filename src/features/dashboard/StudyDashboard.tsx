@@ -19,6 +19,7 @@ import { RecentActivityPanel } from "./RecentActivityPanel";
 
 const DiagnosticsDrawer = dynamic(() => import("./DiagnosticsDrawer").then((module) => module.DiagnosticsDrawer));
 const KnowledgeDashboard = dynamic(() => import("@/features/semantic/KnowledgeDashboard").then((module) => module.KnowledgeDashboard), { loading: () => <div className="h-40 animate-pulse rounded-2xl border bg-muted/30" /> });
+const AcademyLabOverview = dynamic(() => import("./AcademyLabOverview").then((module) => module.AcademyLabOverview), { loading: () => <div className="h-44 animate-pulse rounded-2xl border bg-muted/30" /> });
 
 export function StudyDashboard() {
   const { records } = useStudyEngine();
@@ -36,6 +37,7 @@ export function StudyDashboard() {
         <ImportMaterial />
       </div>
       <WorkspaceLauncher studies={records} />
+      <AcademyLabOverview />
       <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} advanced={experience.mode === "advanced"} />
       <SmartLearningDashboard studies={records} flashcards={cards} quizzes={quizzes} />
       <RecentActivityPanel materials={materials} studies={records} />
