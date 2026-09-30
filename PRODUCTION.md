@@ -27,6 +27,7 @@ Copie `.env.production.example` para o cofre de secrets da plataforma. Não vers
 | `S3_BUCKET` e credenciais | Bucket privado S3 compatível para materiais. |
 | `HEALTH_SECRET` | Libera detalhes do health check para o monitor autorizado. |
 | `SMTP_*` | Verificação de email e recuperação de conta. |
+| `FEEDBACK_EMAIL` | Destinatário interno dos relatos enviados pela Central de Ajuda. |
 
 As chaves Gemini/OpenRouter/Groq são opcionais. Ollama continua apropriado apenas onde o servidor consegue alcançar sua instância local.
 

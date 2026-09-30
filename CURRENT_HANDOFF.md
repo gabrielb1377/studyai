@@ -1,6 +1,18 @@
-# Handoff Atual — Sprint 36.1E: Integração Final
+# Handoff Atual — Sprint 36.5: Beta Readiness
 
-Atualizado em 29 de setembro de 2026.
+Atualizado em 30 de setembro de 2026.
+
+## Resultado da Sprint 36.5
+
+A estabilização adiciona um canal de feedback na Central de Ajuda sem criar um novo módulo de produto. Relatos passam por `/api/feedback`, com validação, corpo limitado, rate limit e entrega SMTP server-only para `FEEDBACK_EMAIL`. O diagnóstico é opcional e não inclui documentos, prompts, notas, chaves ou cookies.
+
+O arquivo de backup local evoluiu para v2 e inclui somente preferências allowlisted, incluindo layout/estado do Workspace. A restauração aceita v1/v2, rejeita schema futuro, stores desconhecidos e volumes excessivos, e usa uma transação IndexedDB única para evitar estado parcial. A tela de Conta deixou de repetir duas ações equivalentes de exportação.
+
+Documentação: `docs/BETA_TESTING.md`, `docs/BETA_BACKLOG.md` e `docs/RELEASE_NOTES_BETA.md`. A cadeia local de ML foi atualizada para `@huggingface/transformers 4.3.0`; `npm audit --omit=dev` agora retorna zero vulnerabilidades, e OCR/transcrição/embeddings passaram na regressão. O acompanhamento de cenários assíncronos sob carga total permanece no backlog.
+
+Validação: lint, TypeScript e build aprovados; a regressão completa então existente concluiu 115 cenários (112 diretos e 3 por retry). Na repetição sem retry, Cloud Sync e exclusão em lote passaram; a falha reproduzível de retomada pelo Dashboard foi corrigida e o cenário passou isoladamente. A cobertura Beta atual — feedback, validação da API e backup/restore v2 — passou em 3/3 sem retry. Auditoria de produção: zero vulnerabilidades em `npm audit --omit=dev`.
+
+## Base preservada da Sprint 36.1E
 
 ## Resultado da Sprint 36.1E
 

@@ -52,10 +52,10 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
         </dl>
         <div className="mt-7 flex flex-wrap items-center gap-4">
           <Button asChild size="lg">
-            <Link href={`/estudo?tema=${record.studyId}`}>
+            <a href={`/estudo?tema=${encodeURIComponent(record.studyId)}`}>
               Continuar estudando
               <ArrowRight className="size-4" />
-            </Link>
+            </a>
           </Button>
           <span className="text-xs text-muted-foreground">
             {record.progress}% concluído

@@ -23,6 +23,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-StudyAI <noreply@localhost>}
+      FEEDBACK_EMAIL: ${FEEDBACK_EMAIL:-}
     depends_on:
       postgres:
         condition: service_healthy

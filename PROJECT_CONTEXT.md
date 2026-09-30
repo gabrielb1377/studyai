@@ -1,6 +1,16 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 29 de setembro de 2026.
+Atualizado em 30 de setembro de 2026.
+
+## Beta Readiness — Sprint 36.5
+
+A fase de estabilização manteve as funcionalidades existentes e fechou dois riscos verificáveis. O backup estruturado avançou para o formato v2: além dos stores IndexedDB, preserva preferências allowlisted e o layout do Workspace; restaurações são validadas integralmente e aplicadas em uma única transação. Backups v1 continuam aceitos. Sessões, identificadores de autenticação e credenciais não entram no arquivo.
+
+A Central de Ajuda oferece feedback da Beta e relato de problema. O Route Handler limita tamanho/frequência, valida campos e envia por SMTP server-only para `FEEDBACK_EMAIL`. Diagnósticos são opt-in e incluem apenas rota, navegador, dispositivo e horário. A telemetria registra somente a contagem do evento, nunca o texto enviado.
+
+O runtime local de ML foi atualizado de forma controlada para `@huggingface/transformers 4.3.0`; a regressão cobriu OCR, transcrição, embeddings e importação. `npm audit --omit=dev` passou a reportar zero vulnerabilidades. A navegação “Continuar estudando” também foi estabilizada com navegação nativa no CTA crítico.
+
+Documentos operacionais: `docs/BETA_TESTING.md`, `docs/BETA_BACKLOG.md` e `docs/RELEASE_NOTES_BETA.md`.
 
 ## Integração Academy + Lab — Sprint 36.1E
 
@@ -59,7 +69,7 @@ Validação da Sprint 36: ESLint, TypeScript e build de produção aprovados; 10
 | OCR local | Tesseract.js com dados em português e inglês |
 | Transcrição local | Transformers.js com Whisper Tiny |
 | Testes de interface | Playwright |
-| Persistência local | IndexedDB nativo, banco `studyai-db` v3 |
+| Persistência local | IndexedDB nativo, banco `studyai-db` v4 |
 | Binários originais | Origin Private File System (OPFS), com fallback de re-seleção |
 | Backend cloud | Route Handlers Next.js e serviços `server-only` |
 | Banco cloud | PostgreSQL via `pg` |
@@ -115,7 +125,7 @@ Validação da Sprint 36: ESLint, TypeScript e build de produção aprovados; 10
 
 ## Persistência local
 
-O Storage V2 usa bancos IndexedDB isolados por identidade (`studyai-db:user-{id}` e `studyai-db:guest`), versão 3. A sessão troca o escopo antes de expor os dados da conta. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
+O Storage V2 usa bancos IndexedDB isolados por identidade (`studyai-db:user-{id}` e `studyai-db:guest`), versão 4. A sessão troca o escopo antes de expor os dados da conta. Nenhuma feature acessa o IndexedDB diretamente; todos os acessos passam por `StorageManager`.
 
 | Object Store | Conteúdo |
 | --- | --- |

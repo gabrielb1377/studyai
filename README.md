@@ -83,7 +83,7 @@ npm run build
 
 ## Status
 
-Projeto pessoal em desenvolvimento contínuo. Algumas integrações exigem configuração externa; a presença de suporte no código não significa que serviços de produção estejam provisionados.
+Projeto pessoal em desenvolvimento contínuo e em preparação para Beta. Algumas integrações exigem configuração externa; a presença de suporte no código não significa que serviços de produção estejam provisionados. Consulte o [guia de testes](docs/BETA_TESTING.md), o [backlog da Beta](docs/BETA_BACKLOG.md) e as [release notes](docs/RELEASE_NOTES_BETA.md).
 
 ## Autor
 

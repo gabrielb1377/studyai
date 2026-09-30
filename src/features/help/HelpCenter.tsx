@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CircleHelp, Search, X } from "lucide-react";
+import { ArrowRight, Bug, CircleHelp, MessageSquare, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { helpTopics } from "./help-content";
+import { BetaFeedbackDialog, type BetaFeedbackKind } from "./BetaFeedbackDialog";
 
 function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -17,6 +18,7 @@ export function HelpCenter() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<(typeof helpTopics)[number] | null>(null);
+  const [feedbackKind, setFeedbackKind] = useState<BetaFeedbackKind | null>(null);
   useEffect(() => {
     const show = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
@@ -93,11 +95,16 @@ export function HelpCenter() {
                 })}
               </div>
               {topics.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Nenhum guia encontrado. Tente “Tutor”, “PDF” ou “sincronização”.</p>}
+              <div className="mt-5 flex flex-wrap justify-center gap-2 border-t pt-5">
+                <Button variant="outline" size="sm" onClick={() => { setOpen(false); setFeedbackKind("feedback"); }}><MessageSquare />Enviar feedback</Button>
+                <Button variant="outline" size="sm" onClick={() => { setOpen(false); setFeedbackKind("issue"); }}><Bug />Reportar problema</Button>
+              </div>
               <p className="mt-5 text-center text-xs text-muted-foreground">Atalho: pressione <kbd className="rounded border bg-muted px-1.5 py-0.5">Ctrl K</kbd> para páginas, comandos e conteúdo.</p>
             </div>
           )}
         </DialogContent>
       </Dialog>
+      <BetaFeedbackDialog kind={feedbackKind} onOpenChange={(next) => { if (!next) setFeedbackKind(null); }} />
     </>
   );
 }
