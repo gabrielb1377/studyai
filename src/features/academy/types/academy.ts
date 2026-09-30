@@ -5,6 +5,7 @@ export const academyDepths = ["essential", "balanced", "deep"] as const;
 export const academyStyles = ["structured", "practical", "visual", "socratic"] as const;
 export const academyContentKinds = ["study-material", "learning-path", "practical-project"] as const;
 export const academyGenerationStages = ["outline", "lessons", "practice"] as const;
+export const academyGenerationModes = ["free", "material"] as const;
 export const academyExportKinds = ["pdf", "workbook", "presentation"] as const;
 
 export type AcademyLevel = (typeof academyLevels)[number];
@@ -14,8 +15,9 @@ export type AcademyDepth = (typeof academyDepths)[number];
 export type AcademyStyle = (typeof academyStyles)[number];
 export type AcademyContentKind = (typeof academyContentKinds)[number];
 export type AcademyGenerationStage = (typeof academyGenerationStages)[number];
+export type AcademyGenerationMode = (typeof academyGenerationModes)[number];
 export type AcademyExportKind = (typeof academyExportKinds)[number];
-export type AcademyStudyStatus = "draft" | "generating" | "ready" | "in-progress" | "completed" | "error";
+export type AcademyStudyStatus = "draft" | "generating" | "ready" | "in-progress" | "completed" | "error" | "cancelled";
 
 export type AcademyModule = {
   id: string;

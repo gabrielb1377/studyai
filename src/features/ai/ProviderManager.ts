@@ -123,6 +123,10 @@ export const ProviderManager = {
       });
     }
 
+    if (request.mode !== "automatic" && lastError instanceof AIError) {
+      throw lastError;
+    }
+
     throw new AIError(
       "Nenhum provider de IA está disponível. Inicie o Ollama ou configure um provider online.",
       "PROVIDER_UNAVAILABLE",

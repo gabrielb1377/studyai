@@ -87,7 +87,11 @@ function nextReview() {
 }
 
 export const AcademyContentPersistence = {
-  async persist(study: AcademyStudy, generated: AcademyGeneratedContent) {
+  async persist(
+    study: AcademyStudy,
+    generated: AcademyGeneratedContent,
+    options: { onPhase?: (phase: "library" | "learning") => void } = {},
+  ) {
     const now = new Date().toISOString();
     const markdown = academyContentToMarkdown(generated);
     const byteSize = new TextEncoder().encode(markdown).byteLength;
@@ -151,11 +155,13 @@ export const AcademyContentPersistence = {
     const exerciseText = content.exercises.map((exercise) => `${exercise.question}\n${exercise.answer}`).join("\n\n");
     const exerciseMaterial = makeMaterial(study, content, { id: exerciseMaterialId, name: `Exercícios — ${content.title}`, kind: "exercise", size: new TextEncoder().encode(exerciseText).byteLength, now });
 
+    options.onPhase?.("library");
     await Promise.all([MaterialService.upsert(mainMaterial), MaterialService.upsert(summaryMaterial), MaterialService.upsert(exerciseMaterial)]);
     await ContentStorage.upsert(extracted);
     const chunks = ChunkService.createChunks(extracted);
     await ChunkStorage.replaceForContent(extracted.id, chunks);
     await EmbeddingStorage.synchronize((await ChunkStorage.load()).chunks);
+    options.onPhase?.("learning");
     const knowledge = await KnowledgeService.process(extracted);
 
     const summaries = await SummaryStorage.load() ?? [];

@@ -17,6 +17,8 @@ export type AIRequest = {
   model?: string;
   signal?: AbortSignal;
   stream?: boolean;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
 };
 
 export type AIResponse = {
@@ -48,6 +50,7 @@ export type AIModel = {
   modifiedAt?: string;
   size?: number;
   contextWindow?: number;
+  outputTokenLimit?: number;
 };
 
 export type AIProviderStatus = {

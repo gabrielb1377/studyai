@@ -15,7 +15,7 @@ import { useAcademyStudies } from "../hooks/useAcademyStudies";
 
 export function AcademyPage() {
   const router = useRouter();
-  const { studies, isLoading, isCreating, generatingStudyId, generationProgress, exportingKind, error, create, generate, exportContent } = useAcademyStudies();
+  const { studies, isLoading, isCreating, generatingStudyId, generationProgress, exportingKind, error, create, generate, cancelGeneration, exportContent } = useAcademyStudies();
   const [generatorStudyId, setGeneratorStudyId] = useState<string>();
   const [viewer, setViewer] = useState<{ studyId: string; contentId: string }>();
   const generatorStudy = studies.find((study) => study.id === generatorStudyId);
@@ -50,7 +50,7 @@ export function AcademyPage() {
           <div className="content-fade grid gap-4 md:grid-cols-2 xl:grid-cols-3">{studies.map((study) => <AcademyStudyCard key={study.id} study={study} isGenerating={generatingStudyId === study.id} onGenerate={() => setGeneratorStudyId(study.id)} onOpenContent={() => { const contentId = study.contents[0]?.id; if (contentId) setViewer({ studyId: study.id, contentId }); }} onOpenProfessor={() => void openProfessor(study.id)} />)}</div>
         </section>
       )}
-      {generatorStudy ? <AcademyGenerateDialog study={generatorStudy} open onOpenChange={(open) => !open && setGeneratorStudyId(undefined)} onGenerate={(kind: AcademyContentKind, force) => generate(generatorStudy, kind, force)} isGenerating={generatingStudyId === generatorStudy.id} progress={generationProgress} /> : null}
+      {generatorStudy ? <AcademyGenerateDialog study={generatorStudy} open onOpenChange={(open) => !open && setGeneratorStudyId(undefined)} onGenerate={(kind: AcademyContentKind, force) => generate(generatorStudy, kind, force)} onCancel={cancelGeneration} isGenerating={generatingStudyId === generatorStudy.id} progress={generationProgress} /> : null}
       {viewerStudy ? <AcademyContentViewer study={viewerStudy} content={viewerContent} open={Boolean(viewerContent)} onOpenChange={(open) => !open && setViewer(undefined)} onOpenProfessor={() => void openProfessor(viewerStudy.id)} onExport={(kind: AcademyExportKind) => viewerContent ? exportContent(viewerStudy, viewerContent, kind) : Promise.resolve()} exportingKind={exportingKind} /> : null}
     </>
   );

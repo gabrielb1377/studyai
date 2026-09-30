@@ -4,10 +4,11 @@ import { AIError } from "../AIErrors";
 import type { AIProvider, AIProviderStatus, AIResponse, AIStreamEvent } from "../AIProvider";
 
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL = "gemini-3.7-flash";
+const FALLBACK_MODEL = "gemini-2.5-flash";
 const REQUEST_TIMEOUT_MS = 20_000;
 const HEALTH_TIMEOUT_MS = 5_000;
 const MAX_ATTEMPTS = 3;
+let lastWorkingModel: string | undefined;
 
 type GeminiContent = { role: "model" | "user"; parts: Array<{ text: string }> };
 type GeminiResponse = {
@@ -18,6 +19,16 @@ type GeminiResponse = {
     candidatesTokenCount?: number;
     totalTokenCount?: number;
   };
+};
+
+type GeminiModelsResponse = {
+  models?: Array<{
+    name?: string;
+    displayName?: string;
+    inputTokenLimit?: number;
+    outputTokenLimit?: number;
+    supportedGenerationMethods?: string[];
+  }>;
 };
 
 function toGeminiContent(history: Parameters<AIProvider["generate"]>[0]["history"]): GeminiContent[] {
@@ -43,22 +54,46 @@ function isHighDemand(status: number, message?: string) {
   return status === 429 || status === 503 || /overload|high demand|resource exhausted/i.test(message ?? "");
 }
 
-async function fetchWithBackoff(url: string, init: RequestInit, signal: AbortSignal) {
+async function fetchWithBackoff(url: string, init: RequestInit, signal: AbortSignal, maxAttempts = MAX_ATTEMPTS) {
   let lastResponse: Response | undefined;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const response = await fetch(url, { ...init, signal });
     lastResponse = response;
     if (response.ok) return response;
     const clone = response.clone();
     const data = await clone.json().catch(() => null) as GeminiResponse | null;
-    if (!isHighDemand(response.status, data?.error?.message) || attempt === MAX_ATTEMPTS - 1) return response;
+    if (!isHighDemand(response.status, data?.error?.message) || attempt === maxAttempts - 1) return response;
     await delay(400 * (2 ** attempt), signal);
   }
   return lastResponse!;
 }
 
-function selectedModel(model?: string) {
-  return model?.trim().replace(/^models\//, "") || MODEL;
+async function listModels(apiKey: string, signal?: AbortSignal) {
+  const response = await fetch(API_URL, {
+    headers: { "x-goog-api-key": apiKey },
+    cache: "no-store",
+    signal,
+  });
+  const data = await response.json().catch(() => null) as GeminiModelsResponse | null;
+  if (!response.ok) throw new AIError("Não foi possível listar os modelos do Gemini.", "PROVIDER_UNAVAILABLE", response.status, "gemini");
+  return (data?.models ?? []).flatMap((model) => {
+    const name = model.name?.trim().replace(/^models\//, "");
+    if (!name || !model.supportedGenerationMethods?.includes("generateContent")) return [];
+    return [{ name, contextWindow: model.inputTokenLimit, outputTokenLimit: model.outputTokenLimit }];
+  });
+}
+
+async function modelCandidates(apiKey: string, model: string | undefined, signal: AbortSignal) {
+  if (model?.trim()) return [{ name: model.trim().replace(/^models\//, ""), outputTokenLimit: undefined }];
+  const models = await listModels(apiKey, signal);
+  const stableFlash = models
+    .filter((candidate) => /^gemini-[\d.]+-flash$/.test(candidate.name))
+    .sort((left, right) => right.name.localeCompare(left.name, undefined, { numeric: true }));
+  const alias = models.find((candidate) => candidate.name === "gemini-flash-latest");
+  const otherFlash = models.filter((candidate) => /flash/i.test(candidate.name) && !stableFlash.includes(candidate) && candidate !== alias);
+  const candidates = [...stableFlash, ...(alias ? [alias] : []), ...otherFlash, ...models.filter((candidate) => !/flash/i.test(candidate.name))];
+  if (!lastWorkingModel) return candidates;
+  return candidates.sort((left, right) => Number(right.name === lastWorkingModel) - Number(left.name === lastWorkingModel));
 }
 
 export const GeminiProvider: AIProvider = {
@@ -73,7 +108,7 @@ export const GeminiProvider: AIProvider = {
         provider: this.id,
         available: false,
         latencyMs: 0,
-        models: [{ name: MODEL }],
+        models: [{ name: FALLBACK_MODEL }],
         endpoint: API_URL,
         error: "GEMINI_API_KEY não configurada.",
       };
@@ -86,25 +121,21 @@ export const GeminiProvider: AIProvider = {
       : timeoutController.signal;
     const startedAt = performance.now();
     try {
-      const response = await fetch(API_URL, {
-        headers: { "x-goog-api-key": apiKey },
-        cache: "no-store",
-        signal: requestSignal,
-      });
+      const models = await listModels(apiKey, requestSignal);
       return {
         provider: this.id,
-        available: response.ok,
+        available: models.length > 0,
         latencyMs: Math.round(performance.now() - startedAt),
-        models: [{ name: MODEL }],
+        models,
         endpoint: API_URL,
-        error: response.ok ? undefined : "Gemini indisponível.",
+        error: models.length > 0 ? undefined : "Nenhum modelo compatível encontrado no Gemini.",
       };
     } catch {
       return {
         provider: this.id,
         available: false,
         latencyMs: Math.round(performance.now() - startedAt),
-        models: [{ name: MODEL }],
+        models: [],
         endpoint: API_URL,
         error: "Gemini indisponível.",
       };
@@ -113,7 +144,7 @@ export const GeminiProvider: AIProvider = {
     }
   },
 
-  async generate({ history, message, model, signal }): Promise<AIResponse> {
+  async generate({ history, message, model, signal, maxOutputTokens, timeoutMs }): Promise<AIResponse> {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       throw new AIError(
@@ -125,25 +156,40 @@ export const GeminiProvider: AIProvider = {
     }
 
     const timeoutController = new AbortController();
-    const timeout = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(() => timeoutController.abort(), timeoutMs ?? REQUEST_TIMEOUT_MS);
     const requestSignal = signal
       ? AbortSignal.any([signal, timeoutController.signal])
       : timeoutController.signal;
 
     try {
-      const activeModel = selectedModel(model);
-      const response = await fetchWithBackoff(`${API_URL}/${activeModel}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          contents: [
-            ...toGeminiContent(history),
-            { role: "user", parts: [{ text: message.trim() }] },
-          ],
-        }),
-        cache: "no-store",
-      }, requestSignal);
-      const data = await response.json().catch(() => null) as GeminiResponse | null;
+      const candidates = await modelCandidates(apiKey, model, requestSignal);
+      if (candidates.length === 0) throw new AIError("Nenhum modelo compatível encontrado no Gemini.", "PROVIDER_UNAVAILABLE", 503, this.id);
+      let activeModel = candidates[0];
+      let response: Response | undefined;
+      let data: GeminiResponse | null = null;
+      for (const candidate of candidates.slice(0, model?.trim() ? 1 : 4)) {
+        activeModel = candidate;
+        const outputLimit = Math.min(maxOutputTokens ?? candidate.outputTokenLimit ?? 8_192, candidate.outputTokenLimit ?? Number.MAX_SAFE_INTEGER);
+        response = await fetchWithBackoff(`${API_URL}/${candidate.name}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            contents: [
+              ...toGeminiContent(history),
+              { role: "user", parts: [{ text: message.trim() }] },
+            ],
+            generationConfig: { maxOutputTokens: outputLimit },
+          }),
+          cache: "no-store",
+        }, requestSignal, model?.trim() ? MAX_ATTEMPTS : 1);
+        data = await response.json().catch(() => null) as GeminiResponse | null;
+        if (response.ok) {
+          lastWorkingModel = candidate.name;
+          break;
+        }
+        if (!isHighDemand(response.status, data?.error?.message)) break;
+      }
+      if (!response) throw new AIError("Nenhum modelo compatível encontrado no Gemini.", "PROVIDER_UNAVAILABLE", 503, this.id);
       if (!response.ok) {
         throw new AIError(
           data?.error?.message ?? "O provedor de IA não conseguiu responder agora.",
@@ -161,7 +207,7 @@ export const GeminiProvider: AIProvider = {
       }
       return {
         provider: this.id,
-        model: activeModel,
+        model: activeModel.name,
         text,
         usage: {
           inputTokens: data?.usageMetadata?.promptTokenCount,
@@ -185,21 +231,26 @@ export const GeminiProvider: AIProvider = {
     }
   },
 
-  async *stream({ history, message, model, signal }): AsyncGenerator<AIStreamEvent> {
+  async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs }): AsyncGenerator<AIStreamEvent> {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) throw new AIError("Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.", "MISSING_API_KEY", 503, this.id);
     const timeoutController = new AbortController();
-    const timeout = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS);
+    const timeout = setTimeout(() => timeoutController.abort(), timeoutMs ?? REQUEST_TIMEOUT_MS);
     const requestSignal = signal ? AbortSignal.any([signal, timeoutController.signal]) : timeoutController.signal;
-    const activeModel = selectedModel(model);
     let text = "";
     let usage: AIResponse["usage"];
 
     try {
-      const response = await fetchWithBackoff(`${API_URL}/${activeModel}:streamGenerateContent?alt=sse`, {
+      const [activeModel] = await modelCandidates(apiKey, model, requestSignal);
+      if (!activeModel) throw new AIError("Nenhum modelo compatível encontrado no Gemini.", "PROVIDER_UNAVAILABLE", 503, this.id);
+      const outputLimit = Math.min(maxOutputTokens ?? activeModel.outputTokenLimit ?? 8_192, activeModel.outputTokenLimit ?? Number.MAX_SAFE_INTEGER);
+      const response = await fetchWithBackoff(`${API_URL}/${activeModel.name}:streamGenerateContent?alt=sse`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({ contents: [...toGeminiContent(history), { role: "user", parts: [{ text: message.trim() }] }] }),
+        body: JSON.stringify({
+          contents: [...toGeminiContent(history), { role: "user", parts: [{ text: message.trim() }] }],
+          generationConfig: { maxOutputTokens: outputLimit },
+        }),
         cache: "no-store",
       }, requestSignal);
       if (!response.ok || !response.body) {
@@ -233,7 +284,7 @@ export const GeminiProvider: AIProvider = {
         }
       }
       if (!text.trim()) throw new AIError("O Gemini retornou uma resposta vazia.", "INVALID_RESPONSE", 502, this.id);
-      yield { type: "done", response: { provider: this.id, model: activeModel, text: text.trim(), usage } };
+      yield { type: "done", response: { provider: this.id, model: activeModel.name, text: text.trim(), usage } };
     } catch (error) {
       if (error instanceof AIError) throw error;
       if (requestSignal.aborted) throw new AIError("A IA demorou demais para responder. Tente novamente.", "TIMEOUT", 504, this.id);

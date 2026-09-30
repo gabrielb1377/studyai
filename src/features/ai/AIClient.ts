@@ -1,24 +1,68 @@
 import { AISettings } from "./AISettings";
 
-type AIErrorResponse = { error?: string };
+type AIErrorResponse = {
+  error?: string;
+  code?: string;
+  provider?: string;
+  suggestion?: string;
+};
+
+export class AIClientError extends Error {
+  constructor(
+    message: string,
+    public readonly code = "UNKNOWN_ERROR",
+    public readonly provider?: string,
+    public readonly suggestion?: string,
+    public readonly status?: number,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "AIClientError";
+  }
+}
 
 export const AIClient = {
-  async request<T>(endpoint: string, payload: Record<string, unknown>, fallbackMessage: string) {
+  async request<T>(
+    endpoint: string,
+    payload: Record<string, unknown>,
+    fallbackMessage: string,
+    options: { signal?: AbortSignal } = {},
+  ) {
     const settings = AISettings.load();
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        mode: settings.mode,
-        provider: settings.provider,
-        model: settings.models[settings.provider],
-        models: settings.models,
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payload,
+          mode: settings.mode,
+          provider: settings.provider,
+          model: settings.models[settings.provider],
+          models: settings.models,
+        }),
+        signal: options.signal,
+      });
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      throw new AIClientError(
+        "Não foi possível conectar ao serviço de IA.",
+        "NETWORK_ERROR",
+        settings.provider,
+        "Verifique a conexão e o status do provider em Configurações > IA.",
+        undefined,
+        { cause: error },
+      );
+    }
     const data = await response.json().catch(() => null) as (T & AIErrorResponse) | null;
     if (!response.ok || !data) {
-      throw new Error(data?.error ?? fallbackMessage);
+      throw new AIClientError(
+        data?.error ?? fallbackMessage,
+        data?.code ?? (response.ok ? "INVALID_RESPONSE" : "HTTP_ERROR"),
+        data?.provider ?? settings.provider,
+        data?.suggestion ?? (response.ok ? "Tente novamente ou selecione outro modelo." : undefined),
+        response.status,
+      );
     }
     return data;
   },

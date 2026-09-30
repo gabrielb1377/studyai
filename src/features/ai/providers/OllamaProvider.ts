@@ -149,8 +149,8 @@ export const OllamaProvider: AIProvider = {
     }
   },
 
-  async generate({ history, message, model, signal, stream = false }): Promise<AIResponse> {
-    const request = withTimeout(signal, REQUEST_TIMEOUT_MS);
+  async generate({ history, message, model, signal, stream = false, maxOutputTokens, timeoutMs }): Promise<AIResponse> {
+    const request = withTimeout(signal, timeoutMs ?? REQUEST_TIMEOUT_MS);
     try {
       const selectedModel = model?.trim() || (await listModels(request.signal))[0]?.name;
       if (!selectedModel) {
@@ -169,6 +169,7 @@ export const OllamaProvider: AIProvider = {
           model: selectedModel,
           messages: toOllamaMessages(history, message),
           stream,
+          ...(maxOutputTokens ? { options: { num_predict: maxOutputTokens } } : {}),
         }),
         cache: "no-store",
         signal: request.signal,
@@ -221,15 +222,20 @@ export const OllamaProvider: AIProvider = {
     }
   },
 
-  async *stream({ history, message, model, signal }): AsyncGenerator<AIStreamEvent> {
-    const request = withTimeout(signal, REQUEST_TIMEOUT_MS);
+  async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs }): AsyncGenerator<AIStreamEvent> {
+    const request = withTimeout(signal, timeoutMs ?? REQUEST_TIMEOUT_MS);
     try {
       const selectedModel = model?.trim() || (await listModels(request.signal))[0]?.name;
       if (!selectedModel) throw new AIError("Nenhum modelo está instalado no Ollama.", "PROVIDER_UNAVAILABLE", 503, this.id);
       const response = await fetch(`${getBaseUrl()}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: selectedModel, messages: toOllamaMessages(history, message), stream: true }),
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: toOllamaMessages(history, message),
+          stream: true,
+          ...(maxOutputTokens ? { options: { num_predict: maxOutputTokens } } : {}),
+        }),
         cache: "no-store",
         signal: request.signal,
       });

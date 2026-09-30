@@ -19,8 +19,11 @@ type ChatStreamResponse = {
   error?: { message?: string };
 };
 
-function boundedMessages(history: readonly AIMessage[], message: string, contextWindow: number) {
-  const outputReserve = Math.min(2_048, Math.max(512, Math.floor(contextWindow * 0.2)));
+function boundedMessages(history: readonly AIMessage[], message: string, contextWindow: number, requestedOutputTokens?: number) {
+  const outputReserve = Math.min(
+    requestedOutputTokens ?? 2_048,
+    Math.max(512, Math.floor(contextWindow * 0.6)),
+  );
   const inputBudget = Math.max(512, contextWindow - outputReserve);
   const boundedMessage = TokenCounter.truncate(message, Math.max(256, inputBudget - 32));
   let used = TokenCounter.estimate(boundedMessage) + 4;
@@ -68,14 +71,14 @@ export function createOpenAICompatibleProvider({
         return { provider: id, available: false, latencyMs: 0, models: [], endpoint, error: error instanceof Error ? error.message : `${name} indisponível.` };
       }
     },
-    async generate({ history, message, model, signal }): Promise<AIResponse> {
+    async generate({ history, message, model, signal, maxOutputTokens }): Promise<AIResponse> {
       const key = apiKey()?.trim();
       if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
       const models = await listModels(key, signal);
       const selectedModel = model?.trim() || models[0]?.name;
       if (!selectedModel) throw new AIError(`Nenhum modelo disponível no ${name}.`, "PROVIDER_UNAVAILABLE", 503, id);
       const modelInfo = models.find((item) => item.name === selectedModel);
-      const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384);
+      const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384, maxOutputTokens);
       try {
         const response = await fetch(`${endpoint}/chat/completions`, {
           method: "POST",
@@ -103,14 +106,14 @@ export function createOpenAICompatibleProvider({
         throw new AIError(`Não foi possível conectar ao ${name}.`, "PROVIDER_ERROR", 502, id);
       }
     },
-    async *stream({ history, message, model, signal }): AsyncGenerator<AIStreamEvent> {
+    async *stream({ history, message, model, signal, maxOutputTokens }): AsyncGenerator<AIStreamEvent> {
       const key = apiKey()?.trim();
       if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
       const models = await listModels(key, signal);
       const selectedModel = model?.trim() || models[0]?.name;
       if (!selectedModel) throw new AIError(`Nenhum modelo disponível no ${name}.`, "PROVIDER_UNAVAILABLE", 503, id);
       const modelInfo = models.find((item) => item.name === selectedModel);
-      const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384);
+      const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384, maxOutputTokens);
       const response = await fetch(`${endpoint}/chat/completions`, {
         method: "POST",
         headers: headers(key),

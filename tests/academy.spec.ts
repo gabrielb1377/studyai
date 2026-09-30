@@ -87,8 +87,10 @@ test("Academy mantém o fluxo de criação utilizável no celular", async ({ pag
 });
 
 test("gera projeto Academy e integra conteúdo, Biblioteca, estudo, grafo e atividades", async ({ page }) => {
+  const generationRequests: Array<Record<string, unknown>> = [];
   await page.route("**/api/academy/generate", async (route) => {
-    const body = route.request().postDataJSON() as { stage: "outline" | "lessons" | "practice" };
+    const body = route.request().postDataJSON() as { stage: "outline" | "lessons" | "practice" } & Record<string, unknown>;
+    generationRequests.push(body);
     const responses = {
       outline: {
         title: "Dashboard React na prática",
@@ -121,11 +123,21 @@ test("gera projeto Academy e integra conteúdo, Biblioteca, estudo, grafo e ativ
   await page.getByRole("textbox", { name: "Matéria", exact: true }).fill("Desenvolvimento Web");
   await page.getByLabel("Objetivo").selectOption("practical-project");
   await page.getByRole("button", { name: "Criar estudo", exact: true }).click();
+  expect(await readIndexedDBStore(page, "contents")).toHaveLength(0);
+  expect(await readIndexedDBStore(page, "chunks")).toHaveLength(0);
+  expect(await readIndexedDBStore(page, "knowledge")).toHaveLength(0);
   await page.getByRole("button", { name: "Gerar", exact: true }).click();
   await page.getByRole("radio", { name: /Projeto prático/ }).click();
   await page.getByRole("button", { name: "Gerar conteúdo", exact: true }).click();
 
   await expect(page.getByRole("button", { name: "Abrir conteúdo" })).toBeVisible();
+  expect(generationRequests).toHaveLength(3);
+  for (const request of generationRequests) {
+    expect(request).toMatchObject({ generationMode: "free" });
+    expect(request).not.toHaveProperty("materialId");
+    expect(request).not.toHaveProperty("documentId");
+    expect(request).not.toHaveProperty("chunks");
+  }
   await page.getByRole("button", { name: "Abrir conteúdo" }).click();
   await expect(page.getByRole("heading", { name: "Dashboard React na prática" })).toBeVisible();
   await expect(page.getByText("Componentes e estado", { exact: true })).toBeVisible();
@@ -195,4 +207,91 @@ test("gera projeto Academy e integra conteúdo, Biblioteca, estudo, grafo e ativ
   await page.getByRole("button", { name: "Abrir no Professor" }).click();
   await expect(page).toHaveURL(/\/tutor\?modo=professor/);
   await expect(page.getByRole("button", { name: "Professor" })).toBeVisible();
+});
+
+test("Academy exibe erro configurável do provider e encerra o loading", async ({ page }) => {
+  await page.route("**/api/academy/generate", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "MISSING_API_KEY",
+        error: "Configure um provedor de IA antes de gerar conteúdo.",
+        provider: "gemini",
+        suggestion: "Abra Configurações > IA e configure o provider.",
+      }),
+    });
+  });
+
+  await page.goto("/academy");
+  await page.getByRole("button", { name: "Criar estudo livre" }).click();
+  await page.getByRole("textbox", { name: "Tema", exact: true }).fill("Docker");
+  await page.getByRole("textbox", { name: "Matéria", exact: true }).fill("DevOps");
+  await page.getByRole("button", { name: "Criar estudo", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar conteúdo", exact: true }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("alert")).toContainText("Configure um provedor de IA antes de gerar conteúdo.");
+  await expect(dialog.getByRole("alert")).toContainText("Provider: gemini");
+  await expect(dialog.getByRole("alert")).toContainText("Tipo: MISSING_API_KEY");
+  await expect(dialog.getByRole("button", { name: "Tentar novamente" })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Gerar conteúdo", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Cancelar geração" })).toHaveCount(0);
+
+  const academy = await readIndexedDBStore<AcademyStudy>(page, "academy");
+  expect(academy[0]).toMatchObject({ status: "error", generationError: "Configure um provedor de IA antes de gerar conteúdo." });
+});
+
+test("Academy trata resposta vazia do provider sem deixar a interface travada", async ({ page }) => {
+  await page.route("**/api/academy/generate", async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        code: "INVALID_RESPONSE",
+        error: "O provider retornou uma resposta vazia.",
+        provider: "ollama",
+        suggestion: "Tente gerar novamente ou selecione outro modelo.",
+      }),
+    });
+  });
+
+  await page.goto("/academy");
+  await page.getByRole("button", { name: "Criar estudo livre" }).click();
+  await page.getByRole("textbox", { name: "Tema", exact: true }).fill("Docker");
+  await page.getByRole("textbox", { name: "Matéria", exact: true }).fill("DevOps");
+  await page.getByRole("button", { name: "Criar estudo", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar conteúdo", exact: true }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("alert")).toContainText("O provider retornou uma resposta vazia.");
+  await expect(dialog.getByRole("alert")).toContainText("Tipo: INVALID_RESPONSE");
+  await expect(dialog.getByRole("button", { name: "Gerar conteúdo", exact: true })).toBeEnabled();
+  expect(await readIndexedDBStore(page, "contents")).toHaveLength(0);
+  expect(await readIndexedDBStore(page, "knowledge")).toHaveLength(0);
+});
+
+test("Academy permite cancelar a geração sem manter o loading ativo", async ({ page }) => {
+  await page.route("**/api/academy/generate", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+    await route.abort("failed").catch(() => undefined);
+  });
+
+  await page.goto("/academy");
+  await page.getByRole("button", { name: "Criar estudo livre" }).click();
+  await page.getByRole("textbox", { name: "Tema", exact: true }).fill("Docker");
+  await page.getByRole("textbox", { name: "Matéria", exact: true }).fill("DevOps");
+  await page.getByRole("button", { name: "Criar estudo", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar", exact: true }).click();
+  await page.getByRole("button", { name: "Gerar conteúdo", exact: true }).click();
+  await page.getByRole("button", { name: "Cancelar geração" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("alert")).toContainText("Geração cancelada.");
+  await expect(dialog.getByRole("button", { name: "Gerar conteúdo", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Cancelar geração" })).toHaveCount(0);
+  const academy = await readIndexedDBStore<AcademyStudy>(page, "academy");
+  expect(academy[0]).toMatchObject({ status: "cancelled", generationError: "Geração cancelada." });
 });

@@ -3,7 +3,7 @@ import "server-only";
 import { ContextBuilder } from "@/features/ai/ContextBuilder";
 import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import { TokenCounter } from "@/features/ai/TokenCounter";
-import type { AcademyContentKind, AcademyGenerationStage, AcademyStudy } from "../types";
+import type { AcademyContentKind, AcademyGenerationMode, AcademyGenerationStage, AcademyStudy } from "../types";
 
 const schemas: Record<AcademyGenerationStage, string> = {
   outline: `{
@@ -41,6 +41,7 @@ export const AcademyPromptBuilder = {
   build({ study, kind, stage, previous }: {
     study: AcademyStudy;
     kind: AcademyContentKind;
+    generationMode?: AcademyGenerationMode;
     stage: AcademyGenerationStage;
     previous?: unknown;
   }) {
@@ -49,6 +50,7 @@ export const AcademyPromptBuilder = {
       : "Nenhuma etapa anterior.";
     const question = [
       "Crie conteúdo educacional original, correto e seguro para o Academy do StudyAI.",
+      "MODO DE GERAÇÃO LIVRE: use somente as preferências fornecidas abaixo. Não exija, procure ou presuma PDF, materialId, documentId, chunks, Biblioteca ou Knowledge Graph existente.",
       "Responda SOMENTE com JSON válido no schema informado, sem markdown ao redor do JSON.",
       "Não mencione arquivos, PDFs ou fontes que não foram fornecidos. Não invente credenciais, links ou referências.",
       "Use conteúdo suficiente para estudo, respeitando o nível, a duração e a profundidade pedidos.",

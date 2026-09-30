@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AcademyService } from "../services/AcademyService";
 import { ContentGeneratorService, type AcademyGenerationProgress } from "../services/ContentGeneratorService";
 import { AcademyExportService } from "../services/AcademyExportService";
@@ -13,6 +13,7 @@ export function useAcademyStudies() {
   const [isCreating, setIsCreating] = useState(false);
   const [generatingStudyId, setGeneratingStudyId] = useState<string>();
   const [generationProgress, setGenerationProgress] = useState<AcademyGenerationProgress>();
+  const generationController = useRef<AbortController | undefined>(undefined);
   const [exportingKind, setExportingKind] = useState<AcademyExportKind>();
   const [error, setError] = useState<string>();
 
@@ -49,13 +50,17 @@ export function useAcademyStudies() {
   }, [refresh]);
 
   const generate = useCallback(async (study: AcademyStudy, kind: AcademyContentKind, force = false) => {
+    generationController.current?.abort();
+    const controller = new AbortController();
+    generationController.current = controller;
     setGeneratingStudyId(study.id);
-    setGenerationProgress(undefined);
+    setGenerationProgress({ stage: "preparing", completedStages: 0, totalStages: 6, state: "generating" });
     setError(undefined);
     try {
       const result = await ContentGeneratorService.generate(study, kind, {
         force,
         onProgress: setGenerationProgress,
+        signal: controller.signal,
       });
       await refresh();
       return result;
@@ -64,9 +69,13 @@ export function useAcademyStudies() {
       throw cause;
     } finally {
       setGeneratingStudyId(undefined);
-      setGenerationProgress(undefined);
+      if (generationController.current === controller) generationController.current = undefined;
     }
   }, [refresh]);
+
+  const cancelGeneration = useCallback(() => {
+    generationController.current?.abort();
+  }, []);
 
   const exportContent = useCallback(async (study: AcademyStudy, content: AcademyGeneratedContent, kind: AcademyExportKind) => {
     setExportingKind(kind);
@@ -83,5 +92,5 @@ export function useAcademyStudies() {
     }
   }, [refresh]);
 
-  return { studies, isLoading, isCreating, generatingStudyId, generationProgress, exportingKind, error, create, generate, exportContent, refresh };
+  return { studies, isLoading, isCreating, generatingStudyId, generationProgress, exportingKind, error, create, generate, cancelGeneration, exportContent, refresh };
 }

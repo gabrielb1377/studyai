@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { normalizeAIError } from "@/features/ai/AIErrors";
+import { AIError, normalizeAIError } from "@/features/ai/AIErrors";
 import {
   isAIModelPreferences,
   isAIProviderId,
@@ -15,12 +15,14 @@ import { AcademyPromptBuilder } from "@/features/academy/services/AcademyPromptB
 import {
   academyContentKinds,
   academyGenerationStages,
+  academyGenerationModes,
   academyDepths,
   academyGoals,
   academyLanguages,
   academyLevels,
   academyStyles,
   type AcademyContentKind,
+  type AcademyGenerationMode,
   type AcademyGenerationStage,
   type AcademyStudy,
 } from "@/features/academy/types";
@@ -31,6 +33,7 @@ export const runtime = "nodejs";
 type AcademyGenerateRequest = {
   study: AcademyStudy;
   kind: AcademyContentKind;
+  generationMode: AcademyGenerationMode;
   stage: AcademyGenerationStage;
   previous?: unknown;
   model?: string;
@@ -58,6 +61,7 @@ function isRequest(value: unknown): value is AcademyGenerateRequest {
   const body = value as Partial<AcademyGenerateRequest>;
   return isStudy(body.study) &&
     academyContentKinds.includes(body.kind as AcademyContentKind) &&
+    academyGenerationModes.includes(body.generationMode as AcademyGenerationMode) &&
     academyGenerationStages.includes(body.stage as AcademyGenerationStage) &&
     (body.provider === undefined || isAIProviderId(body.provider)) &&
     (body.mode === undefined || isAISelectionMode(body.mode)) &&
@@ -84,6 +88,8 @@ export async function POST(request: Request) {
       models: body.models,
       mode: body.mode,
       provider: body.provider,
+      maxOutputTokens: body.stage === "outline" ? 2_048 : body.stage === "lessons" ? 8_192 : 4_096,
+      timeoutMs: 90_000,
     });
     const data = AcademyGenerationParser.parse(body.stage, response.text);
     return NextResponse.json({
@@ -95,7 +101,17 @@ export async function POST(request: Request) {
       cached: response.execution?.cached ?? false,
     });
   } catch (error) {
-    const normalized = normalizeAIError(error, "Não foi possível gerar o conteúdo da Academy.");
+    const normalized = normalizeAIError(
+      error instanceof AIError
+        ? error
+        : new AIError(
+          error instanceof Error ? error.message : "O provider retornou uma resposta inválida.",
+          "INVALID_RESPONSE",
+          502,
+          body.provider,
+        ),
+      "Não foi possível gerar o conteúdo da Academy.",
+    );
     return NextResponse.json(normalized.body, { status: normalized.status });
   }
 }
