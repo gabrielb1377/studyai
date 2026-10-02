@@ -68,6 +68,16 @@ npm run dev
 
 Acesse `http://localhost:3000`. Preencha somente as credenciais dos serviços que pretende usar em `.env.local`; não versione esse arquivo. Gemini, OpenRouter e Groq dependem de credenciais configuradas no servidor. Ollama requer uma instância local acessível. Para o backend de sincronização/armazenamento, consulte [`PRODUCTION.md`](PRODUCTION.md) e o [`docker-compose.yml`](docker-compose.yml). O Compose exige secrets explícitos e não inicia com credenciais padrão.
 
+## Deploy
+
+O caminho recomendado para a Beta é Railway com PostgreSQL gerenciado, Object Storage S3 compatível e um provider remoto de IA. Também estão documentadas as opções Vercel + Supabase e VPS + Docker Compose.
+
+- [Guia de deploy online](docs/DEPLOY_ONLINE.md)
+- [Checklist pós-deploy](docs/DEPLOY_CHECKLIST.md)
+- [Infraestrutura de produção](PRODUCTION.md)
+
+O repositório prepara a implantação, mas não provisiona serviços externos nem representa uma URL pública já ativa.
+
 ## Testes e verificações
 
 Os scripts disponíveis no `package.json`:
@@ -77,6 +87,7 @@ npm run lint
 npm run typecheck
 npm run test:e2e
 npm run build
+npm run db:migrate # requer DATABASE_URL
 ```
 
 `test:e2e` executa a suíte Playwright em Chromium.

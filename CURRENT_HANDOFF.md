@@ -1,6 +1,14 @@
 # Handoff Atual — Sprint 36.5: Beta Readiness
 
-Atualizado em 30 de setembro de 2026.
+Atualizado em 2 de outubro de 2026.
+
+## Deploy online 24h
+
+O repositório agora possui runbook para Railway, Vercel/Supabase e VPS/Docker Compose, com Railway recomendado para a Beta. `railway.toml` aponta para o Dockerfile e `/api/health`; o container aplica o schema PostgreSQL antes de iniciar.
+
+Produção não aceita mais persistência efêmera: PostgreSQL e S3 são obrigatórios, e o health check retorna `503` se banco, schema ou bucket estiverem indisponíveis. `APP_URL` é a origem canônica para emails e links públicos. Ollama sem URL explícita permanece somente no desenvolvimento; providers remotos continuam atrás do AIService/ProviderManager no servidor.
+
+Consulte `docs/DEPLOY_ONLINE.md` e execute `docs/DEPLOY_CHECKLIST.md` após o provisionamento. Nenhum serviço externo, domínio ou credencial foi criado por esta alteração.
 
 ## Resultado da Sprint 36.5
 

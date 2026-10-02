@@ -2,6 +2,8 @@
 
 Este documento descreve a infraestrutura preparada na Sprint 32. Ele não substitui o runbook do provedor de hospedagem nem provisiona domínio, DNS ou credenciais.
 
+Para Railway, Vercel/Supabase e VPS, use o guia operacional [`docs/DEPLOY_ONLINE.md`](docs/DEPLOY_ONLINE.md) e valide a implantação com [`docs/DEPLOY_CHECKLIST.md`](docs/DEPLOY_CHECKLIST.md).
+
 ## Arquitetura de referência
 
 ```text
@@ -21,6 +23,7 @@ Copie `.env.production.example` para o cofre de secrets da plataforma. Não vers
 
 | Variável | Uso |
 | --- | --- |
+| `APP_URL` | Origem HTTPS canônica para emails, convites e compartilhamentos. |
 | `STUDYAI_DOMAIN` | Host público usado pelo proxy HTTPS. |
 | `DATABASE_URL` | PostgreSQL persistente. |
 | `AUTH_SECRET` | Assinatura de sessões; mínimo de 32 caracteres aleatórios. |
@@ -34,9 +37,11 @@ As chaves Gemini/OpenRouter/Groq são opcionais. Ollama continua apropriado apen
 ## Inicialização local da infraestrutura
 
 ```bash
-docker compose up --build -d
-docker compose ps
-curl -H "x-health-secret: $HEALTH_SECRET" https://localhost/api/health
+Copy-Item .env.production.example .env.production
+# Preencha .env.production com um domínio e secrets reais.
+docker compose --env-file .env.production up --build -d
+docker compose --env-file .env.production ps
+curl -H "x-health-secret: $HEALTH_SECRET" https://SEU-DOMINIO/api/health
 ```
 
 O Compose cria volumes duráveis para PostgreSQL, MinIO e Caddy. Ele exige `POSTGRES_PASSWORD`, `AUTH_SECRET`, `S3_ACCESS_KEY_ID` e `S3_SECRET_ACCESS_KEY` explicitamente e falha antes de iniciar quando algum deles está ausente. Para um serviço S3 gerenciado, remova MinIO do ambiente e informe o endpoint/credenciais do provedor.
@@ -53,8 +58,8 @@ Caddy cuida do certificado e da renovação. O middleware da aplicação mantém
 
 ## Observabilidade e privacidade
 
-- `/api/health` retorna somente estado mínimo sem autenticação.
-- Detalhes exigem `Authorization: Bearer <HEALTH_SECRET>`.
+- `/api/health` testa PostgreSQL, schema e Object Storage; produção indisponível retorna `503`.
+- Detalhes exigem o header `x-health-secret: <HEALTH_SECRET>`.
 - Métricas do cliente são desativadas por padrão e dependem de consentimento.
 - O endpoint de telemetria aceita apenas métricas numéricas allowlisted.
 - Prompts, arquivos, mensagens, notas e respostas não devem ser enviados para telemetria.
@@ -71,6 +76,8 @@ Configure retenção e alerta no provedor de logs. Nunca grave cookies, tokens, 
 ## Pipeline de entrega
 
 O workflow de CI executa lint, TypeScript, build e Playwright. O workflow de deploy publica uma imagem no GHCR e pode chamar um webhook de implantação configurado como secret. Produção e homologação devem usar secrets e bancos/buckets separados.
+
+Antes de iniciar uma release fora do container, aplique o schema com `npm run db:migrate`. O container executa a mesma migração automaticamente antes do servidor.
 
 ## Checklist de release
 

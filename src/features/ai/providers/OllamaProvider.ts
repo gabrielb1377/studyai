@@ -41,7 +41,11 @@ type OllamaProcessResponse = {
 };
 
 function getBaseUrl() {
-  return (process.env.OLLAMA_URL?.trim() || DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const configured = process.env.OLLAMA_URL?.trim();
+  if (!configured && process.env.NODE_ENV === "production") {
+    throw new AIError("Ollama não foi configurado neste ambiente.", "PROVIDER_UNAVAILABLE", 503, "ollama");
+  }
+  return (configured || DEFAULT_BASE_URL).replace(/\/+$/, "");
 }
 
 function withTimeout(signal: AbortSignal | undefined, duration: number) {

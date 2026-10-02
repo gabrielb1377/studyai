@@ -86,7 +86,40 @@ test("produção possui Object Storage, HTTPS, containers e entrega contínua", 
   expect(workflow).toContain("docker/build-push-action");
   const health = await request.get("/api/health");
   expect(health.ok()).toBe(true);
-  await expect(health.json()).resolves.toEqual(expect.objectContaining({ status: "ok", objectStorage: expect.objectContaining({ mode: "database" }) }));
+  await expect(health.json()).resolves.toEqual(expect.objectContaining({
+    status: "ok",
+    environment: expect.any(String),
+    objectStorage: expect.objectContaining({ mode: "database" }),
+    checks: expect.objectContaining({
+      application: expect.objectContaining({ publicUrlConfigured: true }),
+      database: expect.objectContaining({ available: false, schemaReady: false }),
+      objectStorage: expect.objectContaining({ available: false }),
+    }),
+  }));
+});
+
+test("deploy online possui runbook, migração e produção sem dependência implícita de localhost", async () => {
+  const [online, checklist, productionEnv, migration, railway, middleware, ollama] = await Promise.all([
+    readFile(path.join(root, "docs", "DEPLOY_ONLINE.md"), "utf8"),
+    readFile(path.join(root, "docs", "DEPLOY_CHECKLIST.md"), "utf8"),
+    readFile(path.join(root, ".env.production.example"), "utf8"),
+    readFile(path.join(root, "scripts", "db-migrate.mjs"), "utf8"),
+    readFile(path.join(root, "railway.toml"), "utf8"),
+    readFile(path.join(root, "src", "middleware.ts"), "utf8"),
+    readFile(path.join(root, "src", "features", "ai", "providers", "OllamaProvider.ts"), "utf8"),
+  ]);
+
+  expect(online).toContain("## Opção A — Railway");
+  expect(online).toContain("## Opção B — Vercel + Supabase");
+  expect(online).toContain("## Opção C — VPS + Docker Compose");
+  expect(checklist).toContain("PC local desligado");
+  expect(productionEnv).not.toContain("localhost");
+  expect(productionEnv).toContain("APP_URL=https://");
+  expect(migration).toContain("BEGIN");
+  expect(migration).toContain("ROLLBACK");
+  expect(railway).toContain('healthcheckPath = "/api/health"');
+  expect(middleware).toContain('process.env.NODE_ENV==="development"');
+  expect(ollama).toContain('process.env.NODE_ENV === "production"');
 });
 
 test("endpoint de telemetria rejeita corpos grandes e JSON inválido", async ({ request }) => {

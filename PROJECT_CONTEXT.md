@@ -1,6 +1,16 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 30 de setembro de 2026.
+Atualizado em 2 de outubro de 2026.
+
+## Deploy online 24h
+
+A configuração de produção foi preparada para hospedagem independente do computador local. Railway é o caminho recomendado para a Beta; Vercel/Supabase e VPS/Docker Compose permanecem documentados como alternativas em `docs/DEPLOY_ONLINE.md`.
+
+Produção exige PostgreSQL persistente e Object Storage S3 compatível. O fallback em memória/BYTEA permanece exclusivo do desenvolvimento; `/api/health` verifica conexão, schema e bucket e responde `503` quando a release não está pronta. O container aplica `npm run db:migrate` antes de iniciar, e `railway.toml` usa o mesmo endpoint como health check.
+
+`APP_URL` define a origem HTTPS de emails, convites e compartilhamentos. Providers continuam server-side; Gemini, OpenRouter e Groq são adequados à cloud, enquanto Ollama só é ativado em produção com `OLLAMA_URL` explícita e alcançável pelo servidor. A PWA usa a URL pública e IndexedDB/OPFS apenas como cache offline por dispositivo.
+
+Documentos operacionais: `docs/DEPLOY_ONLINE.md` e `docs/DEPLOY_CHECKLIST.md`.
 
 ## Beta Readiness — Sprint 36.5
 

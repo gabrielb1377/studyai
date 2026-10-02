@@ -40,7 +40,10 @@ function safeSegment(value: string) {
 }
 
 export const ObjectStorage = {
-  mode(): ObjectStorageMode {
+  mode(options: { allowMissing?: boolean } = {}): ObjectStorageMode {
+    if (!configured() && process.env.NODE_ENV === "production" && !options.allowMissing) {
+      throw new Error("Object Storage não configurado para produção.");
+    }
     return configured() ? "s3" : "database";
   },
 
