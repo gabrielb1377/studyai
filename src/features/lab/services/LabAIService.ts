@@ -1,8 +1,22 @@
-import { AIClient } from "@/features/ai/AIClient";
+import { AIClient, AIClientError } from "@/features/ai/AIClient";
+import { AI_RATE_LIMIT_MESSAGE } from "@/features/ai/AIErrors";
 import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
 import type { AIResponse } from "@/features/ai/AIProvider";
 import { LabFeedbackParser } from "./LabFeedbackParser";
 import type { LabProject, LabReviewRequest } from "../types";
+
+const DEFAULT_RATE_LIMIT_COOLDOWN_MS = 30_000;
+
+export class LabAIRateLimitError extends Error {
+  constructor(public readonly retryAfterMs = DEFAULT_RATE_LIMIT_COOLDOWN_MS) {
+    super(AI_RATE_LIMIT_MESSAGE);
+    this.name = "LabAIRateLimitError";
+  }
+}
+
+export function isLabAIRateLimitError(error: unknown): error is LabAIRateLimitError {
+  return error instanceof LabAIRateLimitError;
+}
 
 export const LabAIService = {
   async review(project: LabProject) {
@@ -21,7 +35,14 @@ export const LabAIService = {
       errors: project.lastResult?.error ? [project.lastResult.error] : [],
       context: (retrieval?.chunks ?? []).slice(0, 3).map((chunk) => ({ sourceName: chunk.metadata.sourceName, text: chunk.text })),
     };
-    const response = await AIClient.request<AIResponse>("/api/lab/review", { request }, "Não foi possível corrigir o exercício.");
-    return LabFeedbackParser.parse(response.text, response);
+    try {
+      const response = await AIClient.request<AIResponse>("/api/lab/review", { request }, "Não foi possível corrigir o exercício.");
+      return LabFeedbackParser.parse(response.text, response);
+    } catch (error) {
+      if (error instanceof AIClientError && (error.status === 429 || error.code === "RATE_LIMIT")) {
+        throw new LabAIRateLimitError(error.retryAfterMs);
+      }
+      throw error;
+    }
   },
 };

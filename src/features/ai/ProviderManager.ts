@@ -1,6 +1,6 @@
 import "server-only";
 
-import { AIError } from "./AIErrors";
+import { AIError, safeAIErrorLogMessage } from "./AIErrors";
 import type {
   AIManagerRequest,
   AIManagerStatus,
@@ -119,13 +119,11 @@ export const ProviderManager = {
         latencyMs: measured.latencyMs,
         success: false,
         fallback,
-        error: measured.error instanceof Error ? measured.error.message : "Falha desconhecida.",
+        error: safeAIErrorLogMessage(measured.error),
       });
     }
 
-    if (request.mode !== "automatic" && lastError instanceof AIError) {
-      throw lastError;
-    }
+    if (lastError instanceof AIError) throw lastError;
 
     throw new AIError(
       "Nenhum provider de IA está disponível. Inicie o Ollama ou configure um provider online.",
@@ -202,7 +200,7 @@ export const ProviderManager = {
       } catch (error) {
         lastError = error;
         const latencyMs = Math.round(performance.now() - startedAt);
-        addLog({ provider: providerId, model: selectedModel, latencyMs, success: false, fallback, error: error instanceof Error ? error.message : "Falha desconhecida." });
+        addLog({ provider: providerId, model: selectedModel, latencyMs, success: false, fallback, error: safeAIErrorLogMessage(error) });
         if (emitted || request.mode !== "automatic") throw error;
       }
     }

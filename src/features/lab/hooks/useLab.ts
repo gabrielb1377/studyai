@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LabStorage } from "../storage/LabStorage";
 import { LabService } from "../services/LabService";
-import { LabAIService } from "../services/LabAIService";
+import { isLabAIRateLimitError, LabAIService } from "../services/LabAIService";
 import { SafeExecutionService } from "../services/SafeExecutionService";
 import { SqlLabSession } from "../services/SqlLabService";
 import type { CreateLabProjectInput, LabLanguage, LabProject } from "../types";
@@ -17,6 +17,8 @@ export function useLab(options: { studyId?: string } = {}) {
   const [isRunning, setIsRunning] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [error, setError] = useState<string>();
+  const [isReviewRateLimited, setIsReviewRateLimited] = useState(false);
+  const [reviewCooldownSeconds, setReviewCooldownSeconds] = useState(0);
   const sqlRef = useRef(new SqlLabSession());
   const startedRef = useRef(Date.now());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -35,6 +37,12 @@ export function useLab(options: { studyId?: string } = {}) {
   }, [refresh]);
 
   useEffect(() => () => { sqlRef.current.dispose(); if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+
+  useEffect(() => {
+    if (reviewCooldownSeconds <= 0) return;
+    const timer = setTimeout(() => setReviewCooldownSeconds((current) => Math.max(0, current - 1)), 1_000);
+    return () => clearTimeout(timer);
+  }, [reviewCooldownSeconds]);
 
   const active = projects.find((project) => project.id === activeId);
 
@@ -91,17 +99,24 @@ export function useLab(options: { studyId?: string } = {}) {
   }, [active, isRunning]);
 
   const review = useCallback(async () => {
-    if (!active || isReviewing) return;
-    setIsReviewing(true); setError(undefined);
+    if (!active || isReviewing || reviewCooldownSeconds > 0) return;
+    setIsReviewing(true); setError(undefined); setIsReviewRateLimited(false);
     try {
       const feedback = await LabAIService.review(active);
       const latest = await LabStorage.get(active.id);
       const saved = await LabService.save({ ...(latest ?? active), feedback });
       setProjects((current) => current.map((project) => project.id === saved.id ? saved : project));
+      setReviewCooldownSeconds(0);
       return feedback;
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível corrigir o exercício."); }
+    } catch (cause) {
+      if (isLabAIRateLimitError(cause)) {
+        setIsReviewRateLimited(true);
+        setReviewCooldownSeconds(Math.max(1, Math.ceil(cause.retryAfterMs / 1_000)));
+      }
+      setError(cause instanceof Error ? cause.message : "Não foi possível corrigir o exercício.");
+    }
     finally { setIsReviewing(false); }
-  }, [active, isReviewing]);
+  }, [active, isReviewing, reviewCooldownSeconds]);
 
   const complete = useCallback(async () => {
     if (!active) return;
@@ -115,5 +130,5 @@ export function useLab(options: { studyId?: string } = {}) {
     if (activeId === project.id) setActiveId(projects.find((item) => item.id !== project.id)?.id);
   }, [activeId, projects]);
 
-  return { projects, studies, active, activeId, isLoading, isRunning, isReviewing, error, setActiveId, create, openAcademy, update, updateCode, changeLanguage, run, review, complete, remove };
+  return { projects, studies, active, activeId, isLoading, isRunning, isReviewing, error, isReviewRateLimited, reviewCooldownSeconds, setActiveId, create, openAcademy, update, updateCode, changeLanguage, run, review, complete, remove };
 }

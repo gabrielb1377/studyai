@@ -5,7 +5,11 @@ export type AIErrorCode =
   | "MISSING_API_KEY"
   | "PROVIDER_ERROR"
   | "PROVIDER_UNAVAILABLE"
+  | "RATE_LIMIT"
   | "TIMEOUT";
+
+export const AI_RATE_LIMIT_MESSAGE =
+  "Limite temporário da IA atingido. Tente novamente em alguns minutos ou troque o provedor de IA.";
 
 export class AIError extends Error {
   constructor(
@@ -38,17 +42,33 @@ function suggestionFor(error: AIError) {
   return "Teste a conexão do provider em Configurações > IA e tente novamente.";
 }
 
+export function isAIRateLimitError(error: unknown) {
+  return error instanceof AIError && (
+    error.code === "RATE_LIMIT" ||
+    error.status === 429 ||
+    /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)
+  );
+}
+
+export function safeAIErrorLogMessage(error: unknown) {
+  if (!(error instanceof AIError)) return "UNKNOWN_ERROR";
+  return [error.code, error.status, error.provider ?? "unknown"].join(":");
+}
+
 export function normalizeAIError(error: unknown, fallbackMessage: string) {
   if (error instanceof AIError) {
+    const rateLimited = isAIRateLimitError(error);
     return {
-      status: error.status,
+      status: rateLimited ? 429 : error.status,
       body: {
-        code: error.code,
-        error: error.code === "MISSING_API_KEY"
+        code: rateLimited ? "RATE_LIMIT" : error.code,
+        error: rateLimited
+          ? AI_RATE_LIMIT_MESSAGE
+          : error.code === "MISSING_API_KEY"
           ? "Configure um provedor de IA antes de gerar conteúdo."
           : error.message,
         provider: error.provider,
-        suggestion: suggestionFor(error),
+        suggestion: rateLimited ? AI_RATE_LIMIT_MESSAGE : suggestionFor(error),
       },
     };
   }

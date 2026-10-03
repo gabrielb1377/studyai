@@ -8,6 +8,8 @@ type AIErrorResponse = {
 };
 
 export class AIClientError extends Error {
+  public readonly retryAfterMs?: number;
+
   constructor(
     message: string,
     public readonly code = "UNKNOWN_ERROR",
@@ -15,10 +17,20 @@ export class AIClientError extends Error {
     public readonly suggestion?: string,
     public readonly status?: number,
     options?: ErrorOptions,
+    retryAfterMs?: number,
   ) {
     super(message, options);
     this.name = "AIClientError";
+    this.retryAfterMs = retryAfterMs;
   }
+}
+
+function retryAfterMs(value: string | null) {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
+  const date = Date.parse(value);
+  return Number.isNaN(date) ? undefined : Math.max(0, date - Date.now());
 }
 
 export const AIClient = {
@@ -62,6 +74,8 @@ export const AIClient = {
         data?.provider ?? settings.provider,
         data?.suggestion ?? (response.ok ? "Tente novamente ou selecione outro modelo." : undefined),
         response.status,
+        undefined,
+        retryAfterMs(response.headers.get("retry-after")),
       );
     }
     return data;

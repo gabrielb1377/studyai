@@ -116,3 +116,62 @@ test("Lab é responsivo e bloqueia APIs externas na execução", async ({ page }
   await expect(page.getByText("Acesso à rede, workers e imports externos não são permitidos no Laboratório.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("Lab preserva o código, aplica cooldown e permite retry após rate limit da IA", async ({ page }) => {
+  let requests = 0;
+  await page.route("**/api/lab/review", async (route) => {
+    requests += 1;
+    if (requests === 1) {
+      await route.fulfill({
+        status: 429,
+        headers: { "Retry-After": "1" },
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "RATE_LIMIT",
+          error: "Limite temporário da IA atingido. Tente novamente em alguns minutos ou troque o provedor de IA.",
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        provider: "openrouter",
+        model: "test-model",
+        text: JSON.stringify({
+          correct: ["A função devolve a soma."],
+          incorrect: [],
+          explanation: "A solução atende ao enunciado.",
+          improvement: "Adicione testes para outros valores.",
+          alternativeSolution: "const soma = (a, b) => a + b;",
+          nextExercises: ["Implemente uma função de subtração."],
+          score: 100,
+        }),
+      }),
+    });
+  });
+
+  await page.goto("/lab");
+  await page.getByRole("button", { name: "Novo exercício" }).click();
+  await page.getByRole("textbox", { name: "Título do exercício" }).fill("Retry seguro");
+  await page.getByRole("button", { name: "Criar laboratório" }).click();
+  const editor = page.getByRole("textbox", { name: "Código do exercício" });
+  const answer = "function soma(a, b) { return a + b; }";
+  await editor.fill(answer);
+  await page.getByRole("button", { name: "Corrigir com IA" }).click();
+
+  await expect(page.getByRole("alert").filter({ hasText: "Limite temporário da IA" })).toContainText(
+    "Limite temporário da IA atingido. Tente novamente em alguns minutos ou troque o provedor de IA.",
+  );
+  const retry = page.getByRole("button", { name: "Tentar novamente" });
+  await expect(retry).toBeDisabled();
+  await expect(editor).toHaveValue(answer);
+  expect(requests).toBe(1);
+
+  await expect(retry).toBeEnabled({ timeout: 3_000 });
+  await retry.click();
+  await expect(page.getByRole("heading", { name: "Correção do Professor" })).toBeVisible();
+  await expect(editor).toHaveValue(answer);
+  expect(requests).toBe(2);
+});

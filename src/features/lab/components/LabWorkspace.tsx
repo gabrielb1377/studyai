@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Check, FlaskConical, Play, Sparkles, Trash2 } from "lucide-react";
+import { Check, FlaskConical, Play, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,8 +31,8 @@ export function LabWorkspace({ studyId, compact = false, academyStudyId, academy
   const project = lab.active;
   const executable = project.language === "javascript" || project.language === "typescript" || project.language === "python" || project.language === "sql";
   const workspace = <div className="space-y-4">
-    {lab.error ? <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{lab.error}</p> : null}
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3"><div className="mr-auto min-w-0"><h2 className="truncate text-sm font-semibold">{project.title}</h2><p className="text-xs text-muted-foreground">Autosave · sandbox local</p></div>{executable ? <Button size="sm" onClick={() => void lab.run()} disabled={lab.isRunning}><Play />{lab.isRunning ? "Executando…" : "Executar"}</Button> : null}<Button size="sm" variant="outline" onClick={() => void lab.review()} disabled={lab.isReviewing}><Sparkles />{lab.isReviewing ? "Corrigindo…" : "Corrigir com IA"}</Button><Button size="sm" variant="outline" onClick={() => void lab.complete()} disabled={project.status === "completed"}><Check />Concluir</Button>{!compact ? <Button size="icon-sm" variant="ghost" aria-label="Excluir exercício" className="text-destructive" onClick={() => { if (window.confirm("Excluir este exercício do Laboratório?")) void lab.remove(project); }}><Trash2 /></Button> : null}</div>
+    {lab.error ? <div role="alert" className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"><p className="min-w-0 flex-1">{lab.error}</p>{lab.isReviewRateLimited ? <div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => void lab.review()} disabled={lab.isReviewing || lab.reviewCooldownSeconds > 0}><RotateCcw />Tentar novamente</Button>{lab.reviewCooldownSeconds > 0 ? <span aria-live="polite" className="text-xs text-muted-foreground">Disponível em {lab.reviewCooldownSeconds}s</span> : null}</div> : null}</div> : null}
+    <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3"><div className="mr-auto min-w-0"><h2 className="truncate text-sm font-semibold">{project.title}</h2><p className="text-xs text-muted-foreground">Autosave · sandbox local</p></div>{executable ? <Button size="sm" onClick={() => void lab.run()} disabled={lab.isRunning}><Play />{lab.isRunning ? "Executando…" : "Executar"}</Button> : null}<Button size="sm" variant="outline" onClick={() => void lab.review()} disabled={lab.isReviewing || lab.reviewCooldownSeconds > 0}><Sparkles />{lab.isReviewing ? "Corrigindo…" : "Corrigir com IA"}</Button><Button size="sm" variant="outline" onClick={() => void lab.complete()} disabled={project.status === "completed"}><Check />Concluir</Button>{!compact ? <Button size="icon-sm" variant="ghost" aria-label="Excluir exercício" className="text-destructive" onClick={() => { if (window.confirm("Excluir este exercício do Laboratório?")) void lab.remove(project); }}><Trash2 /></Button> : null}</div>
     <div className={`grid gap-4 ${compact ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_18rem]"}`}><LabEditor language={project.language} value={project.files[project.language] ?? ""} onChange={lab.updateCode} onLanguageChange={lab.changeLanguage} /><LabPreview project={project} /><LabExercisePanel project={project} /></div>
     <LabTerminal key={project.id} state={project.terminal} onChange={(terminal) => lab.update({ terminal })} />
   </div>;
