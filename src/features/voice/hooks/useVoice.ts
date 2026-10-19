@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { VoiceService, VoicePreferences, VoiceEvent, VoiceError } from "@/features/voice/types";
+import { VoiceService, VoicePreferences, VoiceError } from "@/features/voice/types";
 import { createVoiceService } from "@/features/voice/services";
 
 // Hook customizado para gerenciar estado de voz e controles
@@ -26,9 +26,7 @@ export function useVoice() {
     autoplay: false,
   });
 
-  const [event, setEvent] = useState<VoiceEvent | null>(null);
   const voiceRef = useRef<VoiceService | null>(null);
-  const cleanupRef = useRef<(event: VoiceEvent) => void | undefined>(() => undefined);
 
   // Inicializar service
   useEffect(() => {
@@ -45,9 +43,6 @@ export function useVoice() {
         error: error ?? undefined,
       });
     });
-
-    // Listener para eventos de síntese (via postMessage ou contexto)
-    // Nota: O service emite eventos; o consumidor inscreve-se via setEvent
 
     const cleanup = () => {
       void service.stop();
@@ -67,7 +62,7 @@ export function useVoice() {
         setStatus((prev) => ({ ...prev, isSpeaking: false, error: { code: "SYNTHESIS_FAILED", message: (e as Error).message } }));
       }
     },
-    [voiceRef]
+    []
   );
 
   const pause = useCallback(async () => {
@@ -75,25 +70,21 @@ export function useVoice() {
       await voiceRef.current.pause();
       setStatus((prev) => ({ ...prev, isPaused: true }));
     }
-  }, [voiceRef]);
+  }, []);
 
   const resume = useCallback(async () => {
     if (voiceRef.current) {
       await voiceRef.current.resume();
       setStatus((prev) => ({ ...prev, isPaused: false }));
     }
-  }, [voiceRef]);
+  }, []);
 
   const stop = useCallback(async () => {
     if (voiceRef.current) {
       await voiceRef.current.stop();
-      setStatus({
-        ...status,
-        isSpeaking: false,
-        isPaused: false,
-      });
+      setStatus((prev) => ({ ...prev, isSpeaking: false, isPaused: false }));
     }
-  }, [voiceRef]);
+  }, []);
 
   const setPreferencesHandler = useCallback(
     async (prefs: Partial<VoicePreferences>) => {
@@ -102,14 +93,8 @@ export function useVoice() {
         setPreferences((prev) => ({ ...prev, ...prefs }));
       }
     },
-    [voiceRef]
+    []
   );
-
-  // Efeito para sincronizar eventos do service (se houver mecanismo de postMessage, etc.)
-  useEffect(() => {
-    // Por enquanto, o service é síncrono/inline; eventos são dispatchados pelo componente
-    return () => {};
-  }, [voiceRef]);
 
   return {
     // Status
@@ -126,9 +111,7 @@ export function useVoice() {
     setPreferences: setPreferencesHandler,
 
     // Utilitários
-    getAvailableVoices: voiceRef.current
-      ? voiceRef.current.getAvailableVoices
-      : () => [],
+    getAvailableVoices: () => voiceRef.current?.getAvailableVoices() ?? [],
 
     // Reset
     reset: () => {

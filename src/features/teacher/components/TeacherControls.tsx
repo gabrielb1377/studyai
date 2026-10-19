@@ -10,23 +10,12 @@ import {
   GraduationCap,
   ListChecks,
   Mic,
-  MicOff,
   Network,
   Play,
   Pause,
   Quote,
   Route,
   Sparkles,
-  Volume2,
-  VolumeX,
-  ChevronLeft,
-  ChevronRight,
-  RotateCcw,
-  SkipBack,
-  SkipForward,
-  Send,
-  X,
-  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +33,7 @@ import {
   type RateOption,
 } from "../types";
 import { TeacherAudioPlayer } from "./TeacherAudioPlayer";
+import { NarratedLessonPanel } from "./NarratedLessonPanel";
 import { VoiceInput } from "@/features/voice/components/VoiceInput";
 
 const tools: Array<{ action: TeacherAction; label: string; icon: typeof Route }> = [
@@ -117,22 +107,8 @@ export function TeacherControls({
   const isPlaying = audioLessonMode === "active";
   const isPaused = audioLessonMode === "paused";
   const [showVoiceInput, setShowVoiceInput] = useState(false);
-
-  // Generate a lesson plan for audio lesson
-  const handleStartAudioLesson = () => {
-    if (!context) return;
-    // Create a default plan based on the topic
-    const topic = context.topic || "o tema atual";
-    const plan = [
-      `Introdução e objetivos: ${topic}`,
-      "Explicação conceitual fundamental",
-      "Exemplos práticos do material",
-      "Exercício proposto",
-      "Correção e feedback",
-      "Resumo e próxima etapa",
-    ];
-    onStartAudioLesson(topic, plan);
-  };
+  void onStartAudioLesson;
+  void onPauseLesson;
 
   const handleVoiceQuestion = (question: string) => {
     if (onVoiceQuestion) {
@@ -265,28 +241,31 @@ export function TeacherControls({
         </div>
       </details>
 
-      {/* Audio Lesson Controls - shown when not in active audio lesson */}
+      {/* Narrated lesson (real AI-backed flow) */}
       {!isAudioLessonActive && context && (
-        <div className="mt-3 rounded-lg border bg-primary/5 p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Mic className="size-4 text-primary" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-medium">Aula Narrada</p>
-                <p className="text-xs text-muted-foreground">O Professor explica, exemplifica e propõe exercícios com narração em áudio</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={handleStartAudioLesson}
-              disabled={disabled}
-            >
-              <Play className="size-3.5 me-1" aria-hidden="true" />Iniciar Aula Narrada
-            </Button>
-          </div>
-        </div>
+        <NarratedLessonPanel
+          studyId={context.studyId}
+          topic={context.topic || context.title || "o tema atual"}
+          subject={context.subject || ""}
+          teaching={{
+            mode: "teacher",
+            action: "audio_lesson",
+            level: preferences.level,
+            method: preferences.method,
+            summaryStyle: preferences.summaryStyle,
+            voice: audioPreferences.voice,
+            rate: audioPreferences.rate,
+            autoplay: audioPreferences.autoplay,
+          }}
+          options={{
+            voice: audioPreferences.voice,
+            rate: audioPreferences.rate,
+            autoplay: audioPreferences.autoplay,
+            narrationEnabled: true,
+          }}
+          onClose={onEndLesson}
+          onQuestion={onVoiceQuestion}
+        />
       )}
 
       {selection && (

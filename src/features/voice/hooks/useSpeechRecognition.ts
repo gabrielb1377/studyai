@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import type {
   SpeechRecognitionPreferences,
-  SpeechRecognitionResult,
   SpeechRecognitionError,
   SpeechRecognitionService,
 } from "@/features/voice/types";
@@ -51,7 +50,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   useEffect(() => {
     const service = createSpeechRecognitionService();
     serviceRef.current = service;
-    void service.init().then(({ supported, provider, error }) => {
+    void service.init().then(({ supported, error }) => {
       if (!supported) {
         setStatus("error");
         setError(error ?? { code: "not-allowed", message: "Reconhecimento de fala não suportado" });
@@ -193,7 +192,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
         }
 
         recognition.start();
-      } catch (e) {
+      } catch {
         const err: SpeechRecognitionError = {
           code: "audio-capture",
           message: "Não foi possível iniciar o microfone",

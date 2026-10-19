@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useVoice } from "@/features/voice/hooks/useVoice";
-import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,8 +51,7 @@ export function TeacherAudioPlayer({
   autoplay,
   disabled,
 }: TeacherAudioPlayerProps) {
-  const { speak, pause, resume, stop, status, preferences, setPreferences, getAvailableVoices } =
-    useVoice();
+  const { stop, status, getAvailableVoices } = useVoice();
 
   const [selectedRate, setSelectedRate] = useState<RateOption>(currentRate);
   const [selectedVoice, setSelectedVoice] = useState<string>(currentVoice);

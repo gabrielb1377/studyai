@@ -1,8 +1,7 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useVoice } from "@/features/voice/hooks/useVoice";
-import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,10 +19,8 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProps) {
-  const { speak, pause, resume, stop, status, preferences, setPreferences, getAvailableVoices } =
-    useVoice();
+  const { stop, pause, resume, status, preferences, getAvailableVoices } = useVoice();
 
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedRate, setSelectedRate] = useState<RateOption>(1);
   const [selectedVoice, setSelectedVoice] = useState<string>("");
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -49,18 +46,18 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
     });
   }, [text, selectedRate, selectedVoice, onSpeak]);
 
-  const handlePause = useCallback(() => {
-    pause();
-  }, [pause]);
-
-  const handleResume = useCallback(() => {
-    resume();
-  }, [resume]);
-
   const handleStop = useCallback(() => {
     stop();
     onStop?.();
   }, [stop, onStop]);
+
+  const handlePause = useCallback(async () => {
+    await pause();
+  }, [pause]);
+
+  const handleResume = useCallback(async () => {
+    await resume();
+  }, [resume]);
 
   // Renderizar controles
   return (

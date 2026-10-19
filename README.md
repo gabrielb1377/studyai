@@ -19,6 +19,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Modo Professor adaptativo com níveis, métodos de ensino, aula guiada, planos, exercícios, diagramas Mermaid e explicação contextual de trechos selecionados.
 - Providers de IA selecionáveis: Gemini, Ollama, OpenRouter e Groq, com modo automático, verificação de disponibilidade e fallback.
 - Chaves de API individuais (BYOK): cada usuário cadastra suas próprias chaves por provider, criptografadas no servidor, com fallback para variáveis de ambiente compartilhadas.
+- Aulas narradas: o Professor conduz aulas em etapas, narra a explicação, permite perguntas por voz, exercícios corrigidos e explicação alternativa, com continuidade entre sessões.
 - Persistência local e suporte a sincronização, conta, colaboração e execução em web, PWA, Electron e projetos Capacitor.
 
 ## Tecnologias
@@ -82,6 +83,34 @@ A partir da V1.1, cada usuário autenticado pode cadastrar suas próprias chaves
 - **Rate limiting**: limite de 10 tentativas por minuto para salvar/testar chaves.
 - **CSRF**: todas as mutações exigem token CSRF (`x-csrf-token`).
 - **Fallback**: modo automático continua funcionando com chaves do servidor quando o usuário não cadastrou a sua.
+
+## Aulas narradas (Professor)
+
+Na V1.1 o Professor conduz **aulas narradas** usando o Web Speech API do navegador:
+
+```text
+Aluno inicia aula narrada
+  ↓
+Professor gera o plano de etapas (AI Core, sem provider novo)
+  ↓
+VoiceService narra a etapa atual
+  ↓
+Aluno clica em "Fazer pergunta" → narração cancelada, etapa preservada
+  ↓
+Microfone (Web Speech Recognition) → transcrição editável
+  ↓
+Aluno confirma → Professor responde → VoiceService narra a resposta
+  ↓
+Aluno continua, repete a explicação ou pede outra abordagem
+```
+
+- **Sem API Key e sem dependência externa**: usa apenas as APIs nativas do navegador.
+- **Texto sempre visível**: a narração é uma camada de acessibilidade sobre o conteúdo.
+- **Continuidade**: a sessão fica no IndexedDB (`metadata`) com etapa atual, exercícios e preferências de áudio.
+- **Tempo real de estudo**: pausas não são contabilizadas; a atividade é registrada no Learning Engine.
+- **Privacidade**: o microfone nunca é ativado automaticamente e nenhum áudio bruto é persistido.
+
+Também é possível narrar páginas de PDF, texto selecionado, conteúdos da Academy e respostas do Tutor.
 
 ## Deploy
 

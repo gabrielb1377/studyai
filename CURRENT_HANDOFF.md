@@ -1,6 +1,67 @@
-# Handoff Atual — Sprint 37A: BYOK (Bring Your Own Key)
+# Handoff Atual — Sprint 37B.2: AI Teacher Voice Lessons
 
 Atualizado em 19 de outubro de 2026.
+
+## Resultado da Sprint 37B.2 — Aulas narradas
+
+O Professor passou a conduzir **aulas narradas** com o Voice Core. O aluno inicia uma
+aula, o Professor gera um plano de etapas pelo AI Core, narra cada etapa, permite
+interromper para perguntar pelo microfone, responde, corrige exercícios, oferece
+explicação alternativa e retoma a aula exatamente de onde parou.
+
+### Entregas
+
+1. **Navegação pedagógica** — `TeacherNarrationService` converte Markdown em fala
+   natural: remove marcação, URLs longas, código e fórmulas LaTeX; preserva termos
+   técnicos. O texto original permanece visível.
+2. **Geração no AI Core** — `TeacherAudioLessonService` produz plano, explicação
+   alternativa e correção. Nenhum provider novo foi criado.
+3. **Route Handler** — `POST /api/teacher/audio-lesson` (server-only) exige JWT e
+   CSRF e aplica BYOK antes do fallback do servidor.
+4. **Estado da aula** — `useAudioLesson` coordena iniciar, narrar, pausar, avançar,
+   repetir, perguntar, responder e explicar de outro modo.
+5. **Continuidade** — `TeacherAudioSessionStorage` persiste a sessão no IndexedDB
+   (`metadata`): etapa atual, exercícios, preferências e tempo efetivo.
+6. **Learning Engine** — aula iniciada, exercício respondido e aula encerrada são
+   registrados; pausas não contam como tempo de estudo.
+7. **Interrupção inteligente** — "Fazer pergunta" cancela a narração e preserva
+   etapa e contexto.
+8. **Reconhecimento de fala** — `useSpeechRecognition` com pt-BR/en-US/es-ES e
+   transcrição editável antes do envio.
+9. **Integrações** — "Ouvir resposta" (Tutor/Professor), "Ouvir página" e "Ouvir
+   texto selecionado" (PDF), "Ouvir conteúdo" (Academy).
+
+### Arquivos
+
+Novos: `TeacherNarrationService.ts`, `TeacherAudioLessonService.ts`,
+`TeacherAudioLessonClient.ts`, `TeacherAudioSessionStorage.ts`,
+`useAudioLesson.ts`, `NarratedLessonPanel.tsx`, `api/teacher/audio-lesson/route.ts`,
+`tests/narrated-lesson.spec.ts`.
+
+Modificados: `TeacherPromptBuilder.ts`, `teacher/types.ts`, `TeacherControls.tsx`,
+`TeacherAudioPlayer.tsx`, `TutorMessage.tsx`, `PdfMaterialViewer.tsx`,
+`AcademyContentViewer.tsx`, `AcademyPage.tsx`, módulo `voice/**`.
+
+### Validação
+
+- ESLint: 0 erros (1 warning pré-existente em `OllamaProvider`).
+- TypeScript: sem erros.
+- Playwright: **126/126** (15.0 min) — 121 anteriores + 5 novos.
+- Build: aprovado.
+
+### Observação sobre a 37C.1
+
+O WIP do Academy Studio (37C.1) ficou em `tmp/wip-academy-studio-37C1` com erros de
+sintaxe JSX. Foi preservado fora de `src/` e excluído de TypeScript, ESLint e Git
+para manter o repositório verde. Deve ser retomado a partir desse material.
+
+### Riscos
+
+- `SpeechRecognition` pode usar servidores do navegador (comportamento do navegador).
+- Sem progresso por palavra: a sincronização é por etapa.
+- Vozes variam por SO; em alguns sistemas a narração soa mecânica.
+
+## Base: Sprint 37A — BYOK
 
 ## Deploy online 24h
 

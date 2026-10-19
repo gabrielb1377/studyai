@@ -1,12 +1,7 @@
 import type {
   VoiceProviderId,
   VoicePreferences,
-  VoiceEvent,
-  VoiceError,
   VoiceService,
-  SpeechRecognitionProviderId,
-  SpeechRecognitionPreferences,
-  SpeechRecognitionError,
   SpeechRecognitionService,
 } from "../types";
 
@@ -96,7 +91,7 @@ export function createSpeechRecognitionService(): SpeechRecognitionService {
       provider: "web-speech",
       available: true,
     }),
-    start: async (options?: { language?: string }) => {
+    start: async () => {
       // The actual recognition is started by the hook directly
       return Promise.resolve();
     },
@@ -202,7 +197,7 @@ function createWebSpeechService(window: { speechSynthesis?: SpeechSynthesis }): 
         }
       };
 
-      utterance.onerror = (event) => {
+      utterance.onerror = () => {
         isSpeaking = false;
         isPaused = false;
         pendingText = "";
@@ -235,7 +230,7 @@ function createWebSpeechService(window: { speechSynthesis?: SpeechSynthesis }): 
       autoplay: false,
     }),
 
-    setPreferences: async (prefs: Partial<VoicePreferences>): Promise<void> => {
+    setPreferences: async (): Promise<void> => {
       // Preferências são salvas via zustand/localStorage pelo consumer
       // Esta função é um no-op no service layer; o consumer trata a persistência
     },

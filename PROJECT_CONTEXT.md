@@ -1,6 +1,34 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 2 de outubro de 2026.
+Atualizado em 19 de outubro de 2026.
+
+## Aulas narradas — Sprint 37B.2
+
+O Professor conduz aulas em etapas usando o Voice Core. A geração do plano, a
+explicação alternativa e a correção de exercício passam pelo mesmo AI Core
+(`AIService` → `ProviderManager`), sem provider paralelo. O navegador acessa a
+geração por `POST /api/teacher/audio-lesson`, rota server-only com JWT, CSRF e
+prioridade para a chave individual (BYOK) do usuário.
+
+A narração usa `TeacherNarrationService`, que converte Markdown em fala natural:
+remove marcação, URLs longas, blocos de código e fórmulas LaTeX, preservando termos
+técnicos. O texto original continua visível na tela.
+
+A sessão fica no IndexedDB (store `metadata`) com etapa atual, etapas concluídas,
+exercícios, preferências de áudio e tempo efetivo. `accumulateActiveSeconds()`
+desconta pausas, de modo que somente a narração em execução conta como tempo de
+estudo. A atividade é registrada no Learning Engine como `reading` (aula) e `quiz`
+(exercício).
+
+O reconhecimento de fala usa `SpeechRecognition` nativa, com pt-BR, en-US e es-ES.
+A transcrição é editável antes do envio. O microfone nunca é ativado
+automaticamente e nenhum áudio bruto é persistido.
+
+Integrações: "Ouvir resposta" nas mensagens do Tutor/Professor, "Ouvir página" e
+"Ouvir texto selecionado" no leitor de PDF, "Ouvir conteúdo" no visualizador da
+Academy.
+
+Ver `docs/RELEASE_NOTES_SPRINT_37B_2.md`.
 
 ## Deploy online 24h
 

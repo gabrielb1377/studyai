@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Mic, MicOff, Send, X, Loader2, AlertTriangle, Volume2, VolumeX } from "lucide-react";
+import { Mic, MicOff, Send, X, AlertTriangle, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useSpeechRecognition } from "@/features/voice/hooks/useSpeechRecognition";
 import { useVoice } from "@/features/voice/hooks/useVoice";
 
@@ -33,11 +32,10 @@ export function VoiceInput({
     stopListening,
     abortListening,
     clearTranscript,
-    preferences,
-    setPreferences,
   } = useSpeechRecognition();
 
-  const { speak, stop, status: ttsStatus } = useVoice();
+  const { stop, status: ttsStatus } = useVoice();
+  void context;
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [editableTranscript, setEditableTranscript] = useState("");
@@ -73,7 +71,7 @@ export function VoiceInput({
       setEditableTranscript("");
       setIsEditing(false);
     }
-  }, [editableTranscript]);
+  }, [editableTranscript, onSendMessage, clearTranscript]);
 
   const handleCancelEditing = useCallback(() => {
     setEditableTranscript(transcript);

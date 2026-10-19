@@ -1,8 +1,6 @@
 import type {
   VoiceProviderId,
   VoicePreferences,
-  VoiceEvent,
-  VoiceError,
   VoiceService,
 } from "../types";
 
@@ -26,7 +24,6 @@ export const webSpeechProvider: VoiceService = {
     }
 
     // Carregar vozes assim que disponíveis
-    const voices = window.speechSynthesis.getVoices?.() ?? [];
     return {
       supported: true,
       provider: "web-speech",
@@ -81,7 +78,7 @@ export const webSpeechProvider: VoiceService = {
           globalWindow.removeEventListener("onend", handlers.onend);
           resolve();
         },
-        onerror: (e: Event) => {
+        onerror: () => {
           globalWindow.removeEventListener("onerror", handlers.onerror);
           reject(new Error("Erro na síntese de áudio"));
         },

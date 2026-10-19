@@ -1,10 +1,4 @@
-import type {
-  SpeechRecognitionProviderId,
-  SpeechRecognitionPreferences,
-  SpeechRecognitionResult,
-  SpeechRecognitionError,
-  SpeechRecognitionService,
-} from "../types";
+import type { SpeechRecognitionPreferences, SpeechRecognitionService } from "../types";
 
 export const webSpeechRecognitionProvider: SpeechRecognitionService = {
   init: async () => {
@@ -41,7 +35,7 @@ export const webSpeechRecognitionProvider: SpeechRecognitionService = {
     };
   },
 
-  start: async (options?: { language?: string }): Promise<void> => {
+  start: async (): Promise<void> => {
     // Implementation will be done via the hook using the native API directly
     // This is a placeholder for the service interface
     return Promise.resolve();

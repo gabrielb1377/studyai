@@ -152,3 +152,6 @@ ios/App/DerivedData/
 # Browser verification artifacts
 test-results/
 playwright-report/
+
+# Work in progress (not part of the build)
+tmp/
