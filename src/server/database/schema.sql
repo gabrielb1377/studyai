@@ -203,6 +203,16 @@ CREATE TABLE IF NOT EXISTS collaboration_activity (
 );
 CREATE INDEX IF NOT EXISTS collaboration_activity_room ON collaboration_activity(room_id,created_at DESC);
 
+CREATE TABLE IF NOT EXISTS user_api_keys (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  encrypted_key TEXT NOT NULL,
+  key_hint TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, provider)
+);
+
 CREATE TABLE IF NOT EXISTS collaboration_progress (
   room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
   resource_id TEXT NOT NULL REFERENCES room_resources(id) ON DELETE CASCADE,

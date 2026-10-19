@@ -18,6 +18,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Tutor integrado a recuperação lexical e busca vetorial local sobre o material indexado.
 - Modo Professor adaptativo com níveis, métodos de ensino, aula guiada, planos, exercícios, diagramas Mermaid e explicação contextual de trechos selecionados.
 - Providers de IA selecionáveis: Gemini, Ollama, OpenRouter e Groq, com modo automático, verificação de disponibilidade e fallback.
+- Chaves de API individuais (BYOK): cada usuário cadastra suas próprias chaves por provider, criptografadas no servidor, com fallback para variáveis de ambiente compartilhadas.
 - Persistência local e suporte a sincronização, conta, colaboração e execução em web, PWA, Electron e projetos Capacitor.
 
 ## Tecnologias
@@ -27,6 +28,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 | Frontend | Next.js 15 App Router, React 19, TypeScript, Tailwind CSS 4, Zustand, Radix UI e Lucide React |
 | Backend/API | Route Handlers do Next.js, Node.js e PostgreSQL via `pg` |
 | IA e processamento | Providers via `fetch`; Transformers.js/Whisper para transcrição local; Tesseract.js para OCR; recuperação lexical e vetores locais |
+| Segurança IA | Chaves de API criptografadas (AES-256-GCM), isolamento por usuário, rate limiting e CSRF |
 | Dados e arquivos | IndexedDB, OPFS, PostgreSQL e armazenamento S3 compatível via AWS SDK |
 | Testes | Playwright (testes end-to-end) |
 | Infraestrutura e plataformas | Docker/Compose, Caddy, GitHub Actions, Electron, PWA e Capacitor para Android/iOS |
@@ -67,6 +69,19 @@ npm run dev
 ```
 
 Acesse `http://localhost:3000`. Preencha somente as credenciais dos serviços que pretende usar em `.env.local`; não versione esse arquivo. Gemini, OpenRouter e Groq dependem de credenciais configuradas no servidor. Ollama requer uma instância local acessível. Para o backend de sincronização/armazenamento, consulte [`PRODUCTION.md`](PRODUCTION.md) e o [`docker-compose.yml`](docker-compose.yml). O Compose exige secrets explícitos e não inicia com credenciais padrão.
+
+## Chaves de API individuais (BYOK)
+
+A partir da V1.1, cada usuário autenticado pode cadastrar suas próprias chaves de API na tela **Configurações → IA**:
+
+- **Isolamento**: chaves são vinculadas à conta do usuário; usuário A nunca acessa chaves do usuário B.
+- **Criptografia**: armazenadas com AES-256-GCM (chave mestra derivada de `AUTH_SECRET`, server-side only).
+- **Mascaramento**: a interface exibe apenas dica mascarada (ex.: `AIza••••xxxx`); a chave completa nunca aparece em logs, respostas de API ou interface.
+- **Prioridade**: chave própria do usuário > variável de ambiente do servidor (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`).
+- **Teste de conexão**: botão "Testar" valida a chave contra o provider antes de salvar.
+- **Rate limiting**: limite de 10 tentativas por minuto para salvar/testar chaves.
+- **CSRF**: todas as mutações exigem token CSRF (`x-csrf-token`).
+- **Fallback**: modo automático continua funcionando com chaves do servidor quando o usuário não cadastrou a sua.
 
 ## Deploy
 

@@ -10,6 +10,9 @@ import {
   type AISelectionMode,
 } from "@/features/ai/AIProvider";
 import { AIService } from "@/features/ai/AIService";
+import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { requireUser } from "@/server/auth/http";
+import { aiProviderIds } from "@/features/ai/AIProvider";
 import { TokenCounter } from "@/features/ai/TokenCounter";
 import { AcademyPromptBuilder } from "@/features/academy/services/AcademyPromptBuilder";
 import {
@@ -76,6 +79,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    let userApiKeys: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> | undefined;
+    try {
+      const user = requireUser(request);
+      const entries = await Promise.all(aiProviderIds.map(async (provider) => [provider, await ApiKeyService.getDecrypted(user.sub, provider)] as const));
+      const map: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> = {};
+      for (const [provider, key] of entries) if (key) map[provider] = key;
+      if (Object.keys(map).length > 0) userApiKeys = map;
+    } catch { userApiKeys = undefined; }
     const prompt = AcademyPromptBuilder.build(body);
     if (prompt.metrics.promptTokens > 8_000) {
       return NextResponse.json({ error: "O contexto excedeu o limite seguro. Reduza a profundidade ou a duração." }, { status: 413 });
@@ -88,6 +99,7 @@ export async function POST(request: Request) {
       models: body.models,
       mode: body.mode,
       provider: body.provider,
+      apiKeys: userApiKeys,
       maxOutputTokens: body.stage === "outline" ? 2_048 : body.stage === "lessons" ? 8_192 : 4_096,
       timeoutMs: 90_000,
     });

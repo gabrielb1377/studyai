@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
+import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { requireUser } from "@/server/auth/http";
+import { aiProviderIds } from "@/features/ai/AIProvider";
 import { normalizeAIError } from "@/features/ai/AIErrors";
 import {
   isAIModelPreferences,
@@ -66,6 +69,16 @@ export async function POST(request: Request) {
   }
 
   try {
+    let userApiKeys: Partial<Record<AIProviderId, string>> | undefined;
+    try {
+      const user = requireUser(request);
+      const entries = await Promise.all(aiProviderIds.map(async (provider) => [provider, await ApiKeyService.getDecrypted(user.sub, provider)] as const));
+      const map: Partial<Record<AIProviderId, string>> = {};
+      for (const [provider, key] of entries) if (key) map[provider] = key;
+      if (Object.keys(map).length > 0) userApiKeys = map;
+    } catch {
+      userApiKeys = undefined;
+    }
     const prompt = PromptBuilder.contextual({
       question: body.message,
       history: body.history,
@@ -82,6 +95,7 @@ export async function POST(request: Request) {
       signal: request.signal,
       provider: body.provider,
       stream: body.stream,
+      apiKeys: userApiKeys,
     };
     if (body.stream) {
       const encoder = new TextEncoder();
@@ -142,3 +156,4 @@ export async function POST(request: Request) {
     return NextResponse.json(normalized.body, { status: normalized.status });
   }
 }
+

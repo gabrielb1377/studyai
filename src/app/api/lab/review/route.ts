@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { isAIRateLimitError, normalizeAIError } from "@/features/ai/AIErrors";
 import { AIService } from "@/features/ai/AIService";
+import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { requireUser } from "@/server/auth/http";
+import { aiProviderIds } from "@/features/ai/AIProvider";
 import { LabPromptBuilder } from "@/features/lab/services/LabPromptBuilder";
 import { isLabReviewRequest } from "@/features/lab/validators/lab-validation";
 import { isAIModelPreferences, isAIProviderId, isAISelectionMode, type AIModelPreferences, type AIProviderId, type AISelectionMode } from "@/features/ai/AIProvider";
@@ -11,7 +14,7 @@ export const runtime = "nodejs";
 type Body = { request?: unknown; provider?: AIProviderId; model?: string; models?: AIModelPreferences; mode?: AISelectionMode };
 const RATE_LIMIT_RETRY_AFTER_SECONDS = 30;
 
-async function generateReview(body: Body & { request: Parameters<typeof LabPromptBuilder.review>[0] }, signal: AbortSignal) {
+async function generateReview(body: Body & { request: Parameters<typeof LabPromptBuilder.review>[0] }, signal: AbortSignal, userApiKeys?: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>>) {
   const message = LabPromptBuilder.review(body.request);
   const primaryProvider = body.provider ?? "gemini";
   const primaryRequest = {
@@ -22,6 +25,7 @@ async function generateReview(body: Body & { request: Parameters<typeof LabPromp
     models: body.models,
     mode: body.mode,
     signal,
+    apiKeys: userApiKeys,
   } as const;
 
   try {
@@ -41,6 +45,7 @@ async function generateReview(body: Body & { request: Parameters<typeof LabPromp
         provider: fallback.provider,
         model: body.models?.[fallback.provider],
         mode: "manual",
+        apiKeys: userApiKeys,
       });
       Telemetry.metric({ name: "lab-ai-fallback-success", value: 1, unit: "count", source: "server" });
       return response;
@@ -59,7 +64,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Os dados da correção são inválidos." }, { status: 400 });
   }
   try {
-    const response = await generateReview(body as Body & { request: Parameters<typeof LabPromptBuilder.review>[0] }, request.signal);
+    let userApiKeys: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> | undefined;
+    try {
+      const user = requireUser(request);
+      const entries = await Promise.all(aiProviderIds.map(async (provider) => [provider, await ApiKeyService.getDecrypted(user.sub, provider)] as const));
+      const map: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> = {};
+      for (const [provider, key] of entries) if (key) map[provider] = key;
+      if (Object.keys(map).length > 0) userApiKeys = map;
+    } catch { userApiKeys = undefined; }
+    const response = await generateReview(body as Body & { request: Parameters<typeof LabPromptBuilder.review>[0] }, request.signal, userApiKeys);
     return NextResponse.json(response);
   } catch (error) {
     const normalized = normalizeAIError(error, "Não foi possível corrigir o exercício.");

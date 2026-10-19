@@ -88,6 +88,7 @@ export const ProviderManager = {
       const measured = await LatencyService.measure(() => provider.generate({
         ...request,
         model: selectedModel,
+        apiKey: request.apiKeys?.[providerId] ?? request.apiKey,
       }));
 
       if (!("error" in measured)) {
@@ -166,7 +167,7 @@ export const ProviderManager = {
       let emitted = false;
       try {
         if (provider.stream) {
-          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true })) {
+          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey })) {
             if (event.type === "delta") {
               emitted = true;
               yield event;
@@ -184,7 +185,7 @@ export const ProviderManager = {
             return;
           }
         } else {
-          const response = await provider.generate({ ...request, model: selectedModel, stream: false });
+          const response = await provider.generate({ ...request, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey });
           for (const line of response.text.match(/.{1,80}(?:\s|$)/g) ?? [response.text]) {
             emitted = true;
             yield { type: "delta", text: line };
@@ -208,7 +209,7 @@ export const ProviderManager = {
     throw lastError ?? new AIError("Nenhum provider de IA está disponível.", "PROVIDER_UNAVAILABLE", 503, preferred);
   },
 
-  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
+  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal; apiKey?: string }) {
     return HealthService.check(providerId, options);
   },
 

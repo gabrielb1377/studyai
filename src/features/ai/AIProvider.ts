@@ -19,6 +19,7 @@ export type AIRequest = {
   stream?: boolean;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  apiKey?: string;
 };
 
 export type AIResponse = {
@@ -73,6 +74,7 @@ export type AIManagerRequest = AIRequest & {
   provider?: AIProviderId;
   mode?: AISelectionMode;
   models?: AIModelPreferences;
+  apiKeys?: Partial<Record<AIProviderId, string>>;
 };
 
 export type AIProviderLog = {
@@ -107,7 +109,7 @@ export interface AIProvider {
   readonly available: boolean;
   generate(request: AIRequest): Promise<AIResponse>;
   stream?(request: AIRequest): AsyncGenerator<AIStreamEvent>;
-  inspect?(signal?: AbortSignal): Promise<AIProviderStatus>;
+  inspect?(signal?: AbortSignal, apiKey?: string): Promise<AIProviderStatus>;
 }
 
 export function isAIProviderId(value: unknown): value is AIProviderId {

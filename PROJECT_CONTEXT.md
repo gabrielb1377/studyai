@@ -22,6 +22,76 @@ O runtime local de ML foi atualizado de forma controlada para `@huggingface/tran
 
 Documentos operacionais: `docs/BETA_TESTING.md`, `docs/BETA_BACKLOG.md` e `docs/RELEASE_NOTES_BETA.md`.
 
+## BYOK — Sprint 37A
+
+A Sprint 37A implementa **Bring Your Own Key (BYOK)**: chaves de API individuais por usuário e provider.
+
+### Arquitetura
+- **Tabela `user_api_keys`** no PostgreSQL: `user_id`, `provider`, `encrypted_key`, `key_hint`, timestamps. Chave composta `(user_id, provider)`.
+- **Criptografia AES-256-GCM**: chave mestra derivada de `AUTH_SECRET` via `scrypt` com salt fixo `studyai-api-key-encryption-v1`. IV único (12 bytes aleatórios) por operação. Tag de autenticação GCM verificada na descriptografia.
+- **Isolamento estrito**: todas as operações (`list`, `get`, `set`, `delete`, `test`) exigem `userId` autenticado via JWT (`requireUser`). Usuário A nunca acessa chaves do usuário B.
+- **Rate limiting**: 10 req/min por usuário para `set` e `test` (`apikey:set:{userId}`).
+- **CSRF**: todas as mutações (`POST`, `DELETE`) exigem header `x-csrf-token` validado contra cookie `studyai_csrf`.
+
+### Fluxo de resolução de chave (ProviderManager)
+1. Requisição chega com `apiKeys: Partial<Record<AIProviderId, string>>` (carregado das chaves do usuário no banco).
+2. Para cada provider candidato: `request.apiKeys?.[providerId] ?? request.apiKey` (fallback server env).
+3. Chave do usuário tem prioridade absoluta; chave do servidor só é usada se o usuário não cadastrou a sua.
+4. Modo `automatic` continua funcionando: providers online são ordenados por latência; chaves do servidor servem como fallback compartilhado.
+
+### Providers suportados
+| Provider | Chave obrigatória? | Validação leve | Variável server env |
+| --- | --- | --- | --- |
+| Gemini | Sim | Prefixo `AIza` | `GEMINI_API_KEY` |
+| Groq | Sim | Prefixo `gsk_` | `GROQ_API_KEY` |
+| OpenRouter | Sim | Prefixo `sk-or-` | `OPENROUTER_API_KEY` |
+| Ollama | Não (URL local) | — | `OLLAMA_URL` |
+
+### Interface (Configurações → IA)
+- Painel "Chaves de API individuais" abaixo do gerenciador de IA.
+- Input `type=password`, autocomplete=off, placeholder dinâmico.
+- Botões: **Salvar** (criptografa + persiste), **Testar** (chama provider com a chave), **Remover** (DELETE).
+- Dica mascarada: `AIza••••xxxx` (primeiros 4 + últimos 4).
+- Chave completa nunca exposta em logs, respostas JSON ou DOM.
+
+### Endpoints
+- `GET /api/account/api-keys` → lista chaves do usuário (sem segredos, apenas `keyHint`).
+- `POST /api/account/api-keys` → salva chave (valida, criptografa, rate limit, CSRF).
+- `DELETE /api/account/api-keys?provider=gemini` → remove chave (CSRF).
+- `POST /api/account/api-keys/test` → testa chave (aceita chave no body OU usa salva; CSRF).
+
+### Integração AI Core
+- Rotas `/api/tutor`, `/api/tutor/summary`, `/api/tutor/flashcards`, `/api/tutor/quiz`, `/api/academy/generate`, `/api/lab/review` carregam chaves do usuário autenticado e passam via `apiKeys` para `AIService.generate/stream`.
+- `AIProvider` interface expandida: `inspect(signal, apiKey?)`, `generate(request)`, `stream(request)` — todos aceitam `apiKey` opcional.
+- `GeminiProvider`, `OpenAICompatibleProvider` (Groq, OpenRouter) implementam `apiKeyOverride`.
+- `OllamaProvider` aceita e ignora (compatibilidade de interface).
+
+### Migração PostgreSQL
+```sql
+CREATE TABLE IF NOT EXISTS user_api_keys (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  encrypted_key TEXT NOT NULL,
+  key_hint TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, provider)
+);
+```
+- Não destrutiva; `IF NOT EXISTS`.
+- `ON DELETE CASCADE` remove chaves ao excluir conta.
+- Compatível com modo memória (desenvolvimento sem Postgres).
+
+### Validação
+- ESLint, TypeScript, build: aprovados.
+- 121/121 testes Playwright aprovados (1 flaky pre-existente, passou no retry).
+- `npm audit --omit=dev`: 7 vulnerabilidades (transitivas, pré-existentes; sharp/next/katex/source-map-js).
+
+### Riscos conhecidos
+- Rotação de `AUTH_SECRET` invalida todas as chaves criptografadas existentes (documentado em Segurança).
+- Fallback compartilhado consome cota do servidor; não há quota por usuário implementada.
+- Ollama não suporta API key; usa `OLLAMA_URL` configurada no servidor.
+
 ## Integração Academy + Lab — Sprint 36.1E
 
 Academy, exportações e Laboratório formam agora um fluxo único. A navegação principal e mobile expõe `/academy` e `/lab`; a Biblioteca distingue estudo livre, trilha, projeto prático, PDF/apostila/apresentação gerados e exercício de Laboratório, com filtros dedicados. A pesquisa global indexa tanto o conteúdo estruturado da Academy quanto enunciado, código, dicas, solução e resultado esperado do Lab, mantendo links para a origem correta.

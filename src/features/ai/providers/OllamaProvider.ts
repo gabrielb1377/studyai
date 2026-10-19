@@ -117,7 +117,7 @@ export const OllamaProvider: AIProvider = {
   name: "Ollama",
   available: true,
 
-  async inspect(signal): Promise<AIProviderStatus> {
+  async inspect(signal, _apiKey?: string): Promise<AIProviderStatus> {
     const startedAt = performance.now();
     const request = withTimeout(signal, HEALTH_TIMEOUT_MS);
     try {

@@ -101,8 +101,8 @@ export const GeminiProvider: AIProvider = {
   name: "Gemini",
   available: true,
 
-  async inspect(signal): Promise<AIProviderStatus> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
+  async inspect(signal, apiKeyOverride?: string): Promise<AIProviderStatus> {
+    const apiKey = (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
     if (!apiKey) {
       return {
         provider: this.id,
@@ -144,8 +144,8 @@ export const GeminiProvider: AIProvider = {
     }
   },
 
-  async generate({ history, message, model, signal, maxOutputTokens, timeoutMs }): Promise<AIResponse> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
+  async generate({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): Promise<AIResponse> {
+    const apiKey = (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
     if (!apiKey) {
       throw new AIError(
         "Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.",
@@ -231,8 +231,8 @@ export const GeminiProvider: AIProvider = {
     }
   },
 
-  async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs }): AsyncGenerator<AIStreamEvent> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
+  async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): AsyncGenerator<AIStreamEvent> {
+    const apiKey = (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
     if (!apiKey) throw new AIError("Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.", "MISSING_API_KEY", 503, this.id);
     const timeoutController = new AbortController();
     const timeout = setTimeout(() => timeoutController.abort(), timeoutMs ?? REQUEST_TIMEOUT_MS);

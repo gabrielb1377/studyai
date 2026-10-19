@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
@@ -63,4 +63,32 @@ export function secureHash(value: unknown) {
 export function constantTimeEqual(left: string, right: string) {
   const a = encoder.encode(left); const b = encoder.encode(right);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+const ENCRYPTION_SALT = Buffer.from("studyai-api-key-encryption-v1", "utf8");
+
+async function encryptionKey() {
+  return scrypt(secret(), ENCRYPTION_SALT, 32) as Promise<Buffer>;
+}
+
+export async function encryptSecret(plaintext: string) {
+  const key = await encryptionKey();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return `enc:v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${ciphertext.toString("base64url")}`;
+}
+
+export async function decryptSecret(payload: string) {
+  const parts = payload.split(":");
+  if (parts.length !== 5 || parts[0] !== "enc" || parts[1] !== "v1") throw new Error("Formato de segredo inválido.");
+  const key = await encryptionKey();
+  const iv = Buffer.from(parts[2], "base64url");
+  const tag = Buffer.from(parts[3], "base64url");
+  const ciphertext = Buffer.from(parts[4], "base64url");
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+  return plaintext.toString("utf8");
 }

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { AIService } from "@/features/ai/AIService";
+import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { requireUser } from "@/server/auth/http";
+import { aiProviderIds } from "@/features/ai/AIProvider";
 import { normalizeAIError } from "@/features/ai/AIErrors";
 import {
   isAIModelPreferences,
@@ -53,6 +56,14 @@ export async function POST(request: Request) {
   }
 
   try {
+    let userApiKeys: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> | undefined;
+    try {
+      const user = requireUser(request);
+      const entries = await Promise.all(aiProviderIds.map(async (provider) => [provider, await ApiKeyService.getDecrypted(user.sub, provider)] as const));
+      const map: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> = {};
+      for (const [provider, key] of entries) if (key) map[provider] = key;
+      if (Object.keys(map).length > 0) userApiKeys = map;
+    } catch { userApiKeys = undefined; }
     const response = await AIService.generate({
       history: [],
       signal: request.signal,
@@ -61,6 +72,7 @@ export async function POST(request: Request) {
       models: body.models,
       mode: body.mode,
       provider: body.provider,
+      apiKeys: userApiKeys,
     });
     const questions = parseQuestions(response.text);
     if (!questions) return NextResponse.json({ error: "O provider não retornou questões em um formato válido." }, { status: 502 });

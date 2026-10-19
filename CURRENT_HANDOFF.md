@@ -1,6 +1,6 @@
-# Handoff Atual — Sprint 36.5: Beta Readiness
+# Handoff Atual — Sprint 37A: BYOK (Bring Your Own Key)
 
-Atualizado em 2 de outubro de 2026.
+Atualizado em 19 de outubro de 2026.
 
 ## Deploy online 24h
 
@@ -8,7 +8,67 @@ O repositório agora possui runbook para Railway, Vercel/Supabase e VPS/Docker C
 
 Produção não aceita mais persistência efêmera: PostgreSQL e S3 são obrigatórios, e o health check retorna `503` se banco, schema ou bucket estiverem indisponíveis. `APP_URL` é a origem canônica para emails e links públicos. Ollama sem URL explícita permanece somente no desenvolvimento; providers remotos continuam atrás do AIService/ProviderManager no servidor.
 
+**Novidade V1.1**: Tabela `user_api_keys` adicionada ao schema. Migração não destrutiva (`IF NOT EXISTS`). Requer `npm run db:migrate` após deploy.
+
 Consulte `docs/DEPLOY_ONLINE.md` e execute `docs/DEPLOY_CHECKLIST.md` após o provisionamento. Nenhum serviço externo, domínio ou credencial foi criado por esta alteração.
+
+## Resultado da Sprint 37A — BYOK
+
+Implementação completa de chaves de API individuais (BYOK) com criptografia server-side, isolamento por usuário e integração transparente ao AI Core.
+
+### Entregas
+
+1. **Criptografia AES-256-GCM** (`src/server/security/Crypto.ts`)
+   - `encryptSecret()` / `decryptSecret()` com IV único (12 bytes) e tag GCM por operação.
+   - Chave mestra derivada de `AUTH_SECRET` via `scrypt` + salt fixo `studyai-api-key-encryption-v1`.
+   - Server-only; segredo nunca sai do processo Node.js.
+
+2. **Schema & CloudDatabase** (`src/server/database/schema.sql`, `src/server/cloud/CloudDatabase.ts`)
+   - Tabela `user_api_keys` (PK composta `user_id, provider`).
+   - `saveApiKey`, `apiKey`, `apiKeys`, `deleteApiKey` com ownership `user_id`.
+   - `deleteAccount` cascata remove chaves.
+
+3. **ApiKeyService** (`src/server/ai/ApiKeyService.ts`)
+   - `list`, `has`, `getDecrypted`, `set`, `delete`, `resolveForUser`.
+   - Validação leve por provider (prefixos `AIza`, `gsk_`, `sk-or-`).
+   - Mascaramento `maskKey()` para `keyHint`.
+   - Rate limit 10/min por usuário.
+
+4. **ProviderManager + AIProvider** (`src/features/ai/`)
+   - `AIRequest.apiKey?`, `AIManagerRequest.apiKeys?`.
+   - `generate/stream` passam `apiKey` por provider candidato.
+   - Prioridade: chave do usuário > server env.
+   - `inspect(signal, apiKey?)` para teste de conexão.
+
+5. **Providers atualizados**
+   - `GeminiProvider`: `inspect/generate/stream` aceitam `apiKeyOverride`.
+   - `OpenAICompatibleProvider` (Groq, OpenRouter): idem.
+   - `OllamaProvider`: aceita e ignora (sem API key).
+
+6. **Endpoints de conta** (`src/app/api/account/api-keys/`)
+   - `GET/POST/DELETE /api/account/api-keys` + `POST /test`.
+   - `requireUser`, `requireCsrf`, `rateLimit`, validação `isAIProviderId`.
+
+7. **Integração rotas AI** (`/api/tutor*`, `/api/academy/generate`, `/api/lab/review`)
+   - Carregam chaves do usuário autenticado → `userApiKeys` → `AIService`.
+   - Fallback automático para server env quando usuário não tem chave.
+
+8. **Interface** (`src/features/settings/api-key-settings.tsx`, `SettingsHub.tsx`)
+   - Painel "Chaves de API individuais" em Configurações → IA.
+   - Salvar, Testar, Remover por provider (exceto Ollama).
+   - Dica mascarada; chave completa nunca exposta.
+
+### Validação
+- ESLint: ✅
+- TypeScript: ✅
+- Build: ✅
+- Playwright: 121/121 ✅ (1 flaky pre-existente passou no retry)
+- `npm audit --omit=dev`: 7 vulnerabilidades transitivas pré-existentes (sharp, next, katex, source-map-js)
+
+### Riscos conhecidos
+- Rotação de `AUTH_SECRET` invalida chaves criptografadas existentes.
+- Fallback compartilhado consome cota do servidor; sem quota por usuário.
+- Ollama usa `OLLAMA_URL` server-side; sem BYOK.
 
 ## Resultado da Sprint 36.5
 

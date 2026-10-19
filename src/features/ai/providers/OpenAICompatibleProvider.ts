@@ -61,8 +61,8 @@ export function createOpenAICompatibleProvider({
     id,
     name,
     available: true,
-    async inspect(signal): Promise<AIProviderStatus> {
-      const key = apiKey()?.trim();
+    async inspect(signal, apiKeyOverride?: string): Promise<AIProviderStatus> {
+      const key = (apiKeyOverride?.trim() || apiKey()?.trim());
       if (!key) return { provider: id, available: false, latencyMs: 0, models: [], endpoint, error: `${id.toUpperCase()}_API_KEY não configurada.` };
       try {
         const models = await listModels(key, signal);
@@ -71,8 +71,8 @@ export function createOpenAICompatibleProvider({
         return { provider: id, available: false, latencyMs: 0, models: [], endpoint, error: error instanceof Error ? error.message : `${name} indisponível.` };
       }
     },
-    async generate({ history, message, model, signal, maxOutputTokens }): Promise<AIResponse> {
-      const key = apiKey()?.trim();
+    async generate({ history, message, model, signal, maxOutputTokens, apiKey: apiKeyOverride }): Promise<AIResponse> {
+      const key = (apiKeyOverride?.trim() || apiKey()?.trim());
       if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
       const models = await listModels(key, signal);
       const selectedModel = model?.trim() || models[0]?.name;
@@ -106,8 +106,8 @@ export function createOpenAICompatibleProvider({
         throw new AIError(`Não foi possível conectar ao ${name}.`, "PROVIDER_ERROR", 502, id);
       }
     },
-    async *stream({ history, message, model, signal, maxOutputTokens }): AsyncGenerator<AIStreamEvent> {
-      const key = apiKey()?.trim();
+    async *stream({ history, message, model, signal, maxOutputTokens, apiKey: apiKeyOverride }): AsyncGenerator<AIStreamEvent> {
+      const key = (apiKeyOverride?.trim() || apiKey()?.trim());
       if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
       const models = await listModels(key, signal);
       const selectedModel = model?.trim() || models[0]?.name;
