@@ -6,11 +6,9 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
 
 // Import icons from lucide-react
-import { Play, Pause, Stop } from "lucide-react";
+import { Play, Pause } from "lucide-react";
 
 type RateOption = 0.75 | 1 | 1.25 | 1.5 | 2;
 
@@ -22,16 +20,23 @@ interface AudioPlayerProps {
 }
 
 export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProps) {
-  const { speak, pause, resume, stop, status, preferences, setPreferences } =
+  const { speak, pause, resume, stop, status, preferences, setPreferences, getAvailableVoices } =
     useVoice();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [selectedRate, setSelectedRate] = useState<RateOption>(1);
   const [selectedVoice, setSelectedVoice] = useState<string>("");
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  // Load voices when available
+  useEffect(() => {
+    const availableVoices = getAvailableVoices();
+    setVoices(availableVoices);
+  }, [getAvailableVoices, status.available]);
 
   // Efeitos para sincronizar preferências UI com o hook
   useEffect(() => {
-    setSelectedRate(preferences.rate ?? 1);
+    setSelectedRate((preferences.rate ?? 1) as RateOption);
     setSelectedVoice(preferences.voice ?? "");
   }, [preferences]);
 
@@ -62,7 +67,7 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
     <Card className="shadow-none">
       <CardHeader className="px-0 py-2 border-b">
         <CardTitle className="text-sm font-medium">
-          <Mic className="size-4 me-2 align-middle" aria-hidden="true" />
+          <span className="size-4 me-2 align-middle" aria-hidden="true">🔊</span>
           Áudio
         </CardTitle>
       </CardHeader>
@@ -85,7 +90,7 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
             className="flex-1"
           >
             {status.isSpeaking ? (
-              <Stop className="size-4" aria-hidden="true" />
+              <Pause className="size-4" aria-hidden="true" />
             ) : (
               <Play className="size-4" aria-hidden="true" />
             )}
@@ -116,7 +121,7 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
               aria-label="Continuar narração"
               className="flex-1"
             >
-              <Stop className="size-4" aria-hidden="true" />
+              <Play className="size-4" aria-hidden="true" />
             </Button>
           )}
         </div>
@@ -126,23 +131,18 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
           <span className="text-xs text-muted-foreground">
             Velocidade:
           </span>
-          <Select
+          <select
             value={selectedRate}
-            onValueChange={setSelectedRate}
+            onChange={(e) => setSelectedRate(parseFloat(e.target.value) as RateOption)}
             disabled={disabled}
-            className="h-8 w-24"
+            className="h-8 w-24 rounded-md border bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
           >
-            <SelectTrigger>
-              <SelectValue placeholder="0.75x" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={0.75}>0.75x</SelectItem>
-              <SelectItem value={1}>1x</SelectItem>
-              <SelectItem value={1.25}>1.25x</SelectItem>
-              <SelectItem value={1.5}>1.5x</SelectItem>
-              <SelectItem value={2}>2x</SelectItem>
-            </SelectContent>
-          </Select>
+            <option value={0.75}>0.75x</option>
+            <option value={1}>1x</option>
+            <option value={1.25}>1.25x</option>
+            <option value={1.5}>1.5x</option>
+            <option value={2}>2x</option>
+          </select>
         </div>
 
         {/* Seleção de voz */}
@@ -151,23 +151,19 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
             <span className="text-xs text-muted-foreground">
               Voz:
             </span>
-            <Select
+            <select
               value={selectedVoice || "Padrão"}
-              onValueChange={setSelectedVoice}
+              onChange={(e) => setSelectedVoice(e.target.value)}
               disabled={disabled}
-              className="h-8 w-[180px]"
+              className="h-8 w-[180px] rounded-md border bg-background px-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
             >
-              <SelectTrigger>
-                <SelectValue placeholder={selectedVoice || "Selecione uma voz"} />
-              </SelectTrigger>
-              <SelectContent>
-                {voices.map((voice) => (
-                  <SelectItem key={voice.name} value={voice.name}>
-                    {voice.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="">Selecione uma voz</option>
+              {voices.map((voice) => (
+                <option key={voice.name} value={voice.name}>
+                  {voice.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
@@ -182,7 +178,7 @@ export function AudioPlayer({ text, onSpeak, onStop, disabled }: AudioPlayerProp
             aria-label="Parar narração"
             className="mt-2"
           >
-            <Stop className="size-4" aria-hidden="true" />
+            <span className="size-4" aria-hidden="true">⏹</span>
           </Button>
         )}
       </CardContent>

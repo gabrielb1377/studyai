@@ -1,40 +1,19 @@
-import "server-only";
-
 import type {
   VoiceProviderId,
   VoicePreferences,
   VoiceEvent,
   VoiceError,
-} from "../voice/types";
-
-// Interface for the voice service - desacoplado das implementações
-export interface VoiceService {
-  // Inicialização e status
-  init(): Promise<{ supported: boolean; provider: VoiceProviderId; error?: VoiceError }>;
-  getStatus(): Promise<{ provider: VoiceProviderId; available: boolean; error?: VoiceError }>;
-
-  // Controle de reprodução
-  speak(text: string, options?: { rate?: number; voice?: string }): Promise<void>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  stop(): Promise<void>;
-
-  // Preferências
-  getPreferences(): VoicePreferences;
-  setPreferences(prefs: Partial<VoicePreferences>): Promise<void>;
-
-  // Lista de vozes disponíveis
-  getAvailableVoices(): SpeechSynthesisVoice[];
-}
+  VoiceService,
+} from "../types";
 
 // Factory function - retorna a implementação baseada no ambiente
 export function createVoiceService(): VoiceService {
   // Verificar se Web Speech API está disponível
-  const window = (globalThis as unknown as { speechSynthesis?: any }).speechSynthesis;
-  const hasWebSpeech = typeof window?.speak === "function";
+  const window = (globalThis as unknown as { speechSynthesis?: SpeechSynthesis });
+  const hasWebSpeech = typeof window?.speechSynthesis?.speak === "function";
 
   if (hasWebSpeech) {
-    return createWebSpeechService();
+    return createWebSpeechService(window);
   }
 
   // Fallback -provider não disponível
@@ -65,12 +44,12 @@ export function createVoiceService(): VoiceService {
   };
 }
 
-function createWebSpeechService(): VoiceService {
+function createWebSpeechService(window: { speechSynthesis?: SpeechSynthesis }): VoiceService {
   let voices: SpeechSynthesisVoice[] = [];
   let isSpeaking = false;
   let isPaused = false;
   let pendingText = "";
-  let pendingOptions: { rate?: number; voice?: string } | null = null;
+  let pendingOptions: { rate?: number; voice?: string; volume?: number } | null = null;
 
   // Carregar vozes quando disponíveis
   const loadVoices = () => {
@@ -83,7 +62,7 @@ function createWebSpeechService(): VoiceService {
     window?.speechSynthesis?.addEventListener("voiceschanged", loadVoices);
   }
 
-  return {
+  const service: VoiceService = {
     init: async () => {
       loadVoices();
       const supported = voices.length > 0 || typeof window?.speechSynthesis?.speak === "function";
@@ -102,7 +81,7 @@ function createWebSpeechService(): VoiceService {
       };
     },
 
-    speak: async (text: string, options: { rate?: number; voice?: string } = {}) => {
+    speak: async (text: string, options: { rate?: number; voice?: string; volume?: number } = {}) => {
       // Cancel any ongoing speech
       stopInternal();
 
@@ -142,13 +121,13 @@ function createWebSpeechService(): VoiceService {
         isPaused = false;
       };
 
-      utterance.onend = () => {
+      utterance.onend = async () => {
         isSpeaking = false;
         isPaused = false;
         pendingText = "";
         // Processar próximo na fila se houver
         if (pendingText) {
-          speak(pendingText, pendingOptions);
+          await service.speak(pendingText, pendingOptions!);
           pendingText = "";
           pendingOptions = null;
         }
@@ -180,7 +159,7 @@ function createWebSpeechService(): VoiceService {
     },
 
     getPreferences: (): VoicePreferences => ({
-      provider: "web-speech",
+      provider: "web-speech" as VoiceProviderId,
       voice: "",
       rate: 1,
       volume: 1,
@@ -196,6 +175,8 @@ function createWebSpeechService(): VoiceService {
       return voices;
     },
   };
+
+  return service;
 
   function stopInternal() {
     window?.speechSynthesis?.cancel();

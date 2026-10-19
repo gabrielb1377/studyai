@@ -18,6 +18,7 @@ const actionInstructions: Record<TeacherAction, string> = {
   compare: "Compare os conceitos pedidos em uma tabela clara, destacando definição, finalidade, diferenças, semelhanças e um exemplo sustentado pelo contexto.",
   adaptive_summary: "Produza o resumo no formato solicitado, preservando conceitos, relações e ressalvas importantes do material.",
   explain_selection: "Explique prioritariamente o trecho selecionado e use os demais trechos apenas para esclarecer seu contexto. Informe a página ou capítulo quando disponível.",
+  audio_lesson: "Conduza uma aula narrada completa sobre o tema. Estruture em etapas: 1) Introdução e objetivos, 2) Explicação conceitual clara, 3) Exemplos práticos do material, 4) Exercício proposto, 5) Correção e feedback, 6) Resumo e próxima etapa. Pare em cada etapa e aguarde confirmação do aluno antes de avançar. Use linguagem natural para narração: evite markdown excessivo, não leia URLs, explique fórmulas de forma compreensível.",
 };
 
 const levelInstructions: Record<TeacherRequest["level"], string> = {
@@ -52,6 +53,9 @@ export const TeacherPromptBuilder = {
     if (request.action === "adaptive_summary") {
       blocks.push(`Formato do resumo: ${teacherSummaryStyleLabels[request.summaryStyle]}.`);
     }
+    if (request.action === "audio_lesson") {
+      blocks.push(`Preferências de áudio: voz "${request.voice ?? "padrão"}", velocidade ${request.rate}x, reprodução automática ${request.autoplay ? "ligada" : "desligada"}.`);
+    }
     if (request.selection) {
       const location = [
         request.selection.sourceName,
@@ -76,6 +80,7 @@ export const TeacherPromptBuilder = {
       compare: `Compare os conceitos centrais e mais relacionados de ${topic}.`,
       adaptive_summary: `Gere um ${teacherSummaryStyleLabels[summaryStyle ?? "medium"].toLocaleLowerCase("pt-BR")} de ${topic}.`,
       explain_selection: "Explique o trecho selecionado com base no contexto do material.",
+      audio_lesson: `Inicie uma aula narrada completa sobre ${topic}. Comece pela introdução e pelo objetivo da aula, depois prossiga etapa por etapa aguardando minha confirmação para avançar.`,
     };
     return messages[action];
   },

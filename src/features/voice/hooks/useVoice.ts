@@ -49,11 +49,11 @@ export function useVoice() {
     // Listener para eventos de síntese (via postMessage ou contexto)
     // Nota: O service emite eventos; o consumidor inscreve-se via setEvent
 
-    cleanupRef.current = () => {
+    const cleanup = () => {
       void service.stop();
       voiceRef.current = null;
     };
-    return cleanupRef.current;
+    return cleanup;
   }, []);
 
   // Funções de controle

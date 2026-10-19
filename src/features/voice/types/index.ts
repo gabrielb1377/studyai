@@ -20,3 +20,22 @@ export interface VoiceError {
   code: "NOT_SUPPORTED" | "NOT_ALLOWED" | "SYNTHESIS_FAILED" | "NETWORK_ERROR" | "ABORTED";
   message: string;
 }
+
+export interface VoiceService {
+  // Inicialização e status
+  init(): Promise<{ supported: boolean; provider: VoiceProviderId; error?: VoiceError }>;
+  getStatus(): Promise<{ provider: VoiceProviderId; available: boolean; error?: VoiceError }>;
+
+  // Controle de reprodução
+  speak(text: string, options?: { rate?: number; voice?: string; volume?: number }): Promise<void>;
+  pause(): Promise<void>;
+  resume(): Promise<void>;
+  stop(): Promise<void>;
+
+  // Preferências
+  getPreferences(): VoicePreferences;
+  setPreferences(prefs: Partial<VoicePreferences>): Promise<void>;
+
+  // Lista de vozes disponíveis
+  getAvailableVoices(): SpeechSynthesisVoice[];
+}

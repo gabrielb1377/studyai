@@ -25,6 +25,7 @@ export const teacherActions = [
   "compare",
   "adaptive_summary",
   "explain_selection",
+  "audio_lesson",
 ] as const;
 
 export type TeacherAction = (typeof teacherActions)[number];
@@ -46,10 +47,30 @@ export type TeacherPreferences = {
   summaryStyle: TeacherSummaryStyle;
 };
 
+export type TeacherAudioLessonPreferences = TeacherPreferences & {
+  voice: string;
+  rate: number;
+  autoplay: boolean;
+};
+
+export const defaultTeacherAudioLessonPreferences: TeacherAudioLessonPreferences = {
+  level: "intermediate",
+  method: "step_by_step",
+  summaryStyle: "medium",
+  voice: "",
+  rate: 1,
+  autoplay: false,
+};
+
+export type RateOption = 0.75 | 1 | 1.25 | 1.5 | 2;
+
 export type TeacherRequest = TeacherPreferences & {
   mode: "teacher";
   action: TeacherAction;
   selection?: TeacherMaterialSelection;
+  voice?: string;
+  rate?: number;
+  autoplay?: boolean;
 };
 
 export const teacherLevelLabels: Record<TeacherLevel, string> = {
@@ -58,6 +79,20 @@ export const teacherLevelLabels: Record<TeacherLevel, string> = {
   advanced: "Avançado",
   technical: "Técnico",
   brief: "Resumido",
+};
+
+export const teacherActionLabels: Record<TeacherAction, string> = {
+  dialogue: "Diálogo",
+  guided_lesson: "Aula guiada",
+  lesson_plan: "Plano de aula",
+  flowchart: "Fluxograma",
+  mind_map: "Mapa mental",
+  timeline: "Linha do tempo",
+  exercise: "Exercício",
+  compare: "Comparar conceitos",
+  adaptive_summary: "Resumo adaptativo",
+  explain_selection: "Explicar trecho",
+  audio_lesson: "Aula narrada",
 };
 
 export const teacherMethodLabels: Record<TeacherMethod, string> = {

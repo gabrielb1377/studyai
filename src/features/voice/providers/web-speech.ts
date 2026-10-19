@@ -1,21 +1,18 @@
-import "server-only";
-
 import type {
   VoiceProviderId,
   VoicePreferences,
   VoiceEvent,
   VoiceError,
+  VoiceService,
 } from "../types";
-import { VoiceService } from "../services";
 
 // Provider Web Speech API - sem necessidade de API Key
 // Utiliza o mecanismo nativo do navegador: SpeechSynthesis API
 
 export const webSpeechProvider: VoiceService = {
   init: async () => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
-    const hasWebSpeech = typeof window?.speak === "function";
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
+    const hasWebSpeech = typeof globalWindow.speechSynthesis?.speak === "function";
 
     if (!hasWebSpeech) {
       return {
@@ -38,22 +35,20 @@ export const webSpeechProvider: VoiceService = {
   },
 
   getStatus: async () => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
     return {
       provider: "web-speech",
-      available: typeof window?.speak === "function",
+      available: typeof globalWindow.speechSynthesis?.speak === "function",
     };
   },
 
   speak: async (
     text: string,
-    options?: { rate?: number; voice?: string }
+    options?: { rate?: number; voice?: string; volume?: number }
   ): Promise<void> => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
 
-    if (!window?.speak) {
+    if (!globalWindow.speechSynthesis?.speak) {
       throw new Error("Web Speech API não disponível");
     }
 
@@ -61,11 +56,10 @@ export const webSpeechProvider: VoiceService = {
     const voiceName = options?.voice ?? "";
 
     // Filtrar voz pelo nome ou usar padrão
-    const voices: SpeechSynthesisVoice[] = window.speechSynthesis.getVoices ?? [];
-    const selectedVoice =
-      voiceName &&
-      voices.find((v) => v.name.toLowerCase().includes(voiceName.toLowerCase()));
-    const voice = selectedVoice ?? voices.find((v) => v.default) ?? voices[0];
+    const voices: SpeechSynthesisVoice[] = globalWindow.speechSynthesis.getVoices?.() ?? [];
+    const selectedVoice: SpeechSynthesisVoice | null = voiceName
+      ? voices.find((v) => v.name.toLowerCase().includes(voiceName.toLowerCase())) ?? null
+      : null;
 
     const utterance = new SpeechSynthesisUtterance(text.trim());
     utterance.rate = Math.max(0.1, Math.min(3, rate ?? 1));
@@ -73,53 +67,51 @@ export const webSpeechProvider: VoiceService = {
     utterance.text = text.trim();
 
     if (selectedVoice || !voiceName) {
-      utterance.voice = selectedVoice ?? voices.find((v) => v.default) ?? voices[0];
+      const fallbackVoice: SpeechSynthesisVoice | null = voices.find((v) => v.default) ?? (voices.length > 0 ? voices[0] : null);
+      utterance.voice = selectedVoice ?? fallbackVoice;
     }
 
     // Retornar promise que resolve quando a narração terminar
     return new Promise<void>((resolve, reject) => {
       const handlers = {
         onstart: () => {
-          window?.removeEventListener("onstart", handlers.onstart);
+          globalWindow.removeEventListener("onstart", handlers.onstart);
         },
         onend: () => {
-          window?.removeEventListener("onend", handlers.onend);
+          globalWindow.removeEventListener("onend", handlers.onend);
           resolve();
         },
         onerror: (e: Event) => {
-          window?.removeEventListener("onerror", handlers.onerror);
+          globalWindow.removeEventListener("onerror", handlers.onerror);
           reject(new Error("Erro na síntese de áudio"));
         },
       };
 
-      window?.addEventListener("onstart", handlers.onstart);
-      window?.addEventListener("onend", handlers.onend);
-      window?.addEventListener("onerror", handlers.onerror);
+      globalWindow.addEventListener("onstart", handlers.onstart);
+      globalWindow.addEventListener("onend", handlers.onend);
+      globalWindow.addEventListener("onerror", handlers.onerror);
 
-      window?.speechSynthesis?.speak(utterance);
+      globalWindow.speechSynthesis?.speak(utterance);
     });
   },
 
   pause: async () => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
-    window?.speechSynthesis?.pause();
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
+    globalWindow.speechSynthesis?.pause();
   },
 
   resume: async () => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
-    window?.speechSynthesis?.resume();
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
+    globalWindow.speechSynthesis?.resume();
   },
 
   stop: async () => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
-    window?.speechSynthesis?.cancel();
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
+    globalWindow.speechSynthesis?.cancel();
   },
 
   getPreferences: (): VoicePreferences => ({
-    provider: "web-speech",
+    provider: "web-speech" as VoiceProviderId,
     voice: "",
     rate: 1,
     volume: 1,
@@ -131,8 +123,7 @@ export const webSpeechProvider: VoiceService = {
   },
 
   getAvailableVoices: (): SpeechSynthesisVoice[] => {
-    const window = (globalThis as unknown as { speechSynthesis?: any })
-      .speechSynthesis;
-    return window.speechSynthesis.getVoices?.() ?? [];
+    const globalWindow = globalThis as unknown as Window & typeof globalThis;
+    return globalWindow.speechSynthesis?.getVoices?.() ?? [];
   },
 };

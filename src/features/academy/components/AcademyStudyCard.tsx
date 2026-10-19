@@ -1,4 +1,4 @@
-import { BookOpen, Clock3, GraduationCap, Layers3, Sparkles } from "lucide-react";
+import { BookOpen, Clock3, GraduationCap, Layers3, Mic, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";

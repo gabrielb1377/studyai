@@ -26,6 +26,7 @@ import { TutorSidebar } from "./TutorSidebar";
 import { TeacherControls } from "@/features/teacher/components/TeacherControls";
 import { useTeacher } from "@/features/teacher/hooks/useTeacher";
 import type { TeacherAction } from "@/features/teacher/types";
+import type { TeacherAudioLessonPreferences, RateOption } from "@/features/teacher/types";
 
 export function TutorWorkspace({ compact = false, instanceId }: { compact?: boolean; instanceId?: string } = {}) {
   const {
@@ -254,10 +255,23 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
             context={context}
             disabled={isLoading}
             preferences={teacher.preferences}
+            audioPreferences={teacher.audioPreferences as TeacherAudioLessonPreferences & { rate: RateOption }}
             selection={teacher.selection}
+            audioLessonMode={teacher.audioLessonMode}
+            audioLessonSession={teacher.audioLessonSession}
             onPreferencesChange={teacher.updatePreferences}
+            onAudioPreferencesChange={teacher.updateAudioPreferences}
             onAction={(action) => { void runTeacherAction(action); }}
             onClearSelection={teacher.clearSelection}
+            onStartAudioLesson={teacher.startAudioLesson}
+            onAdvanceStep={teacher.advanceAudioLessonStep}
+            onPreviousStep={teacher.previousAudioLessonStep}
+            onRepeatStep={teacher.repeatCurrentStep}
+            onPlayPause={teacher.audioLessonMode === "active" ? teacher.pauseAudioLesson : teacher.resumeAudioLesson}
+            onStop={teacher.endAudioLesson}
+            onPauseLesson={teacher.pauseAudioLesson}
+            onResumeLesson={teacher.resumeAudioLesson}
+            onEndLesson={teacher.endAudioLesson}
           />
         )}
         {activeConversation ? (
