@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   BookOpenCheck,
   BrainCircuit,
@@ -8,6 +10,7 @@ import {
   GraduationCap,
   ListChecks,
   Mic,
+  MicOff,
   Network,
   Play,
   Pause,
@@ -21,6 +24,9 @@ import {
   RotateCcw,
   SkipBack,
   SkipForward,
+  Send,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +44,7 @@ import {
   type RateOption,
 } from "../types";
 import { TeacherAudioPlayer } from "./TeacherAudioPlayer";
+import { VoiceInput } from "@/features/voice/components/VoiceInput";
 
 const tools: Array<{ action: TeacherAction; label: string; icon: typeof Route }> = [
   { action: "lesson_plan", label: "Plano de aula", icon: ListChecks },
@@ -80,6 +87,7 @@ interface TeacherControlsProps {
   onPauseLesson: () => void;
   onResumeLesson: () => void;
   onEndLesson: () => void;
+  onVoiceQuestion: (question: string) => void;
 }
 
 export function TeacherControls({
@@ -103,10 +111,12 @@ export function TeacherControls({
   onPauseLesson,
   onResumeLesson,
   onEndLesson,
+  onVoiceQuestion,
 }: TeacherControlsProps) {
   const isAudioLessonActive = audioLessonMode === "active" && audioLessonSession;
   const isPlaying = audioLessonMode === "active";
   const isPaused = audioLessonMode === "paused";
+  const [showVoiceInput, setShowVoiceInput] = useState(false);
 
   // Generate a lesson plan for audio lesson
   const handleStartAudioLesson = () => {
@@ -122,6 +132,14 @@ export function TeacherControls({
       "Resumo e próxima etapa",
     ];
     onStartAudioLesson(topic, plan);
+  };
+
+  const handleVoiceQuestion = (question: string) => {
+    if (onVoiceQuestion) {
+      onVoiceQuestion(question);
+    }
+    // After sending a question, hide the voice input
+    setShowVoiceInput(false);
   };
 
   if (isAudioLessonActive && audioLessonSession) {
@@ -146,6 +164,31 @@ export function TeacherControls({
           autoplay={audioPreferences.autoplay}
           disabled={disabled}
         />
+
+        {/* Voice Input for asking questions during the lesson */}
+        <div className="mt-3 space-y-3">
+          {!showVoiceInput && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setShowVoiceInput(true)}
+              disabled={disabled}
+              className="w-full"
+            >
+              <Mic className="size-3.5 me-1" aria-hidden="true" />
+              Fazer pergunta por voz
+            </Button>
+          )}
+          {showVoiceInput && (
+            <VoiceInput
+              onSendMessage={handleVoiceQuestion}
+              disabled={disabled}
+              placeholder="Pergunte algo sobre a explicação atual..."
+              context={audioLessonSession.plan[audioLessonSession.currentStep]}
+            />
+          )}
+        </div>
       </div>
     );
   }

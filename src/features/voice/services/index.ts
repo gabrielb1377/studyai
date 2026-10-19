@@ -4,6 +4,10 @@ import type {
   VoiceEvent,
   VoiceError,
   VoiceService,
+  SpeechRecognitionProviderId,
+  SpeechRecognitionPreferences,
+  SpeechRecognitionError,
+  SpeechRecognitionService,
 } from "../types";
 
 // Factory function - retorna a implementação baseada no ambiente
@@ -41,6 +45,71 @@ export function createVoiceService(): VoiceService {
     }),
     setPreferences: async () => {},
     getAvailableVoices: () => [],
+  };
+}
+
+// Factory function - retorna a implementação de reconhecimento de fala
+export function createSpeechRecognitionService(): SpeechRecognitionService {
+  const globalWindow = globalThis as unknown as Window & typeof globalThis;
+  const SpeechRecognition =
+    globalWindow.SpeechRecognition || globalWindow.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    return {
+      init: async () => ({
+        supported: false,
+        provider: "web-speech",
+        error: {
+          code: "not-allowed",
+          message: "Web Speech Recognition API não disponível neste navegador.",
+        },
+      }),
+      getStatus: async () => ({
+        provider: "web-speech",
+        available: false,
+        error: {
+          code: "not-allowed",
+          message: "Web Speech Recognition API não disponível.",
+        },
+      }),
+      start: async () => {},
+      stop: async () => {},
+      abort: async () => {},
+      getPreferences: () => ({
+        provider: "web-speech",
+        language: "pt-BR",
+        continuous: false,
+        interimResults: true,
+        maxAlternatives: 1,
+      }),
+      setPreferences: async () => {},
+    };
+  }
+
+  return {
+    init: async () => ({
+      supported: true,
+      provider: "web-speech",
+      error: undefined,
+    }),
+    getStatus: async () => ({
+      provider: "web-speech",
+      available: true,
+    }),
+    start: async (options?: { language?: string }) => {
+      // The actual recognition is started by the hook directly
+      return Promise.resolve();
+    },
+    stop: async () => Promise.resolve(),
+    abort: async () => Promise.resolve(),
+    getPreferences: () => ({
+      provider: "web-speech",
+      language: "pt-BR",
+      continuous: false,
+      interimResults: true,
+      maxAlternatives: 1,
+    }),
+    setPreferences: async () => {},
   };
 }
 

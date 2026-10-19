@@ -272,6 +272,10 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
             onPauseLesson={teacher.pauseAudioLesson}
             onResumeLesson={teacher.resumeAudioLesson}
             onEndLesson={teacher.endAudioLesson}
+            onVoiceQuestion={(question) => {
+              const teaching = teacher.createRequest("voice_question", context).teaching;
+              void sendMessage(question, { teaching });
+            }}
           />
         )}
         {activeConversation ? (

@@ -26,6 +26,8 @@ export const teacherActions = [
   "adaptive_summary",
   "explain_selection",
   "audio_lesson",
+  "voice_question",
+  "explain_differently",
 ] as const;
 
 export type TeacherAction = (typeof teacherActions)[number];
@@ -93,6 +95,8 @@ export const teacherActionLabels: Record<TeacherAction, string> = {
   adaptive_summary: "Resumo adaptativo",
   explain_selection: "Explicar trecho",
   audio_lesson: "Aula narrada",
+  voice_question: "Pergunta por voz",
+  explain_differently: "Explicar de outra forma",
 };
 
 export const teacherMethodLabels: Record<TeacherMethod, string> = {
