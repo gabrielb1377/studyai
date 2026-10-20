@@ -1,8 +1,60 @@
-# Handoff Atual — Sprint 37D.3: Intelligence, Quality & Developer Experience Upgrade
+# Handoff Atual — Sprint 37D.4: Diagram Studio Pro — React Flow Integration
 
 Atualizado em 20 de outubro de 2026.
 
-## ✅ Sprint 37D.3 CONCLUÍDA
+## ✅ Sprint 37D.4 CONCLUÍDA
+
+### Commit Final
+- **Commit:** `5b43184` — `feat(diagrams): upgrade visual editor with react flow 37D.4`
+- **Branch:** v1.1-development
+- **Arquivos:** 5 alterados (+488/-1 linhas)
+- **Validação:** lint ✅ typecheck ✅ build ✅ test:e2e 179/180 ✅ audit ✅ diff-check ✅
+
+### Entregas Principais
+
+#### 1. React Flow Integration (`src/features/diagrams/adapters/reactFlowAdapter.ts`, `DiagramCanvasReactFlow.tsx`)
+- **Adapter bidirecional tipado** `DiagramDocument ↔ ReactFlowState` — `DiagramDocument` permanece fonte da verdade
+- **Canvas React Flow** com nodes/edges customizados — formas: box, rounded, pill, ellipse, diamond
+- **Conexões arrastáveis** (drag-to-connect) entre nós
+- **Multisseleção nativa** (Shift+click, marquee)
+- **Toolbar flutuante** — Fit View, Zoom In/Out, Reset Zoom, Snap-to-grid (16px)
+- **Atalhos de teclado** — Delete (excluir), Ctrl+D (duplicar), Ctrl+A (selecionar tudo), Ctrl+C/V (copiar/colar), Esc (desselecionar)
+- **Zoom/Pan fluidos** com MiniMap e controles de toolbar
+- **Fit-to-view** (ajuste automático à tela)
+- **Snap-to-grid** opcional (16px)
+- **Atalhos não interferem** em inputs/textarea
+- **Exportadores inalterados** (SVG, PNG, PDF, PPTX) — consomem `DiagramDocument`
+
+#### 2. Integração com Studio (`StudioDiagramsPanel.tsx`)
+- Substituição do `DiagramCanvas` nativo pelo `DiagramCanvasReactFlow`
+- Props compatíveis: `diagram`, `theme`, `editable`, `onMoveNode`, `onChange`
+- Preserva integração com IA, Mermaid, Knowledge Graph
+- Inspector lateral (`DiagramInspector`) inalterado
+
+#### 3. Tipos Atualizados
+- `DiagramEdge.style` agora inclui `"curve"` além de `"solid" | "dashed"`
+
+### Validação
+```
+npm run lint        # 0 erros (12 warnings pré-existentes)
+npm run typecheck   # limpo
+npm run build       # 45 rotas, 104 kB shared
+npm run test:e2e    # 179/180 passed (1 flaky pré-existente)
+npm audit --omit=dev # 7 vulns transitivas pré-existentes
+```
+
+### Arquivos
+- **Novos (2):** `src/features/diagrams/adapters/reactFlowAdapter.ts`, `src/features/diagrams/components/DiagramCanvasReactFlow.types.ts`
+- **Modificados (3):** `package.json` (+ `@xyflow/react@12.12.0`), `src/features/diagrams/types.ts`, `src/features/academy/studio/components/StudioDiagramsPanel.tsx`
+
+### Próximos Passos (Sprint 37D.5+)
+1. **Persistência de posições manuais** — sincronizar `layout: "manual"` com IndexedDB
+2. **Histórico Undo/Redo** — pilha de operações no nível do documento
+3. **Alinhamento/Distribuição** — botões na toolbar para nós selecionados
+4. **Snap-to-guides** — guias visuais ao arrastar nós
+5. **Zoom/Pan touch** — gestos nativos no mobile (pinch-to-zoom, two-finger pan)
+6. **Testes E2E específicos** — drag-to-connect, multiselect, shortcuts
+7. **Documentação Obsidian** — notas técnicas e decisões
 
 ### Commit Final
 - **Commit:** `e9db82e` — `feat(studyai): improve ai quality diagrams and reliability 37D.3`
