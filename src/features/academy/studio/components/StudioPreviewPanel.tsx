@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { markdownToSafeHtml } from "../sanitize";
+import { DiagramCanvas } from "@/features/diagrams/components/DiagramCanvas";
 import { resolveStudioTheme, studioColorSchemes } from "../export/theme";
 import type { DocumentStructure, Slide, StudioCustomization } from "../types";
 
@@ -36,6 +37,18 @@ export function StudioPreviewPanel({ structure, slides = [], docType, customizat
   const [scale, setScale] = useState(1);
 
   const theme = useMemo(() => resolveStudioTheme(customization), [customization]);
+  const diagramTheme = useMemo(
+    () => ({
+      accent: theme.colors.accent,
+      accentSoft: theme.colors.accentSoft,
+      ink: theme.colors.ink,
+      muted: theme.colors.muted,
+      surface: theme.colors.surface,
+      border: theme.colors.border,
+      onAccent: theme.colors.onAccent,
+    }),
+    [theme.colors],
+  );
   const pages = useMemo(
     () => (docType === "presentation" ? Math.max(1, slides.length) : pageCountFor(structure, customization)),
     [docType, slides.length, structure, customization],
@@ -129,11 +142,17 @@ export function StudioPreviewPanel({ structure, slides = [], docType, customizat
               {section.title}
             </h2>
           ) : null}
-          <div
-            className="studio-content mt-3 max-w-none"
-            style={{ fontSize: theme.type.body * PT_TO_PX, lineHeight: theme.type.bodyLeading * PT_TO_PX, fontFamily: theme.font.web }}
-            dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(section.content) }}
-          />
+          {section.diagram ? (
+            <div className="mt-3">
+              <DiagramCanvas diagram={section.diagram} theme={diagramTheme} ariaLabel={`Prévia do diagrama: ${section.diagram.title}`} />
+            </div>
+          ) : (
+            <div
+              className="studio-content mt-3 max-w-none"
+              style={{ fontSize: theme.type.body * PT_TO_PX, lineHeight: theme.type.bodyLeading * PT_TO_PX, fontFamily: theme.font.web }}
+              dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(section.content) }}
+            />
+          )}
         </div>
         {customization.headerFooter.enabled ? (
           <div className="mt-8 flex items-center justify-between border-t pt-3 text-[11px]" style={{ borderColor: `${theme.colors.accent}22`, color: theme.colors.muted }}>
@@ -160,11 +179,17 @@ export function StudioPreviewPanel({ structure, slides = [], docType, customizat
         <h1 className="text-3xl font-bold" style={{ color: theme.colors.accent, fontFamily: theme.font.web }}>
           {slide.title}
         </h1>
-        <div
-          className="studio-content mt-4 max-w-none"
-          style={{ fontSize: theme.type.body * PT_TO_PX, lineHeight: theme.type.bodyLeading * PT_TO_PX, fontFamily: theme.font.web }}
-          dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(slide.content) }}
-        />
+        {slide.diagram ? (
+          <div className="mt-4">
+            <DiagramCanvas diagram={slide.diagram} theme={diagramTheme} ariaLabel={`Prévia do diagrama do slide: ${slide.diagram.title}`} />
+          </div>
+        ) : (
+          <div
+            className="studio-content mt-4 max-w-none"
+            style={{ fontSize: theme.type.body * PT_TO_PX, lineHeight: theme.type.bodyLeading * PT_TO_PX, fontFamily: theme.font.web }}
+            dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(slide.content) }}
+          />
+        )}
         {customization.headerFooter.enabled ? (
           <div className="mt-auto flex items-center justify-between pt-4 text-[11px]" style={{ color: theme.colors.muted }}>
             <span>StudyAI Academy</span>

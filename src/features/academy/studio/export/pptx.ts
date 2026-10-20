@@ -11,6 +11,8 @@ import type { ExportBlock, ExportDeckModel } from "./model";
 import { resolveStudioTheme, toHexRgb, type StudioTheme } from "./theme";
 import { studioFileStem } from "./pdf";
 import type { StudioCustomization } from "../types";
+import { edgeLabelPoint, layoutDiagram } from "@/features/diagrams/layout";
+import type { DiagramDocument } from "@/features/diagrams/types";
 
 export type StudioPptxResult = {
   blob: Blob;
@@ -47,6 +49,25 @@ type PptxShape = {
   line?: string;
   lineWidth?: number;
   radius?: boolean;
+  geometry?: "rect" | "roundRect" | "ellipse" | "diamond";
+  text?: string;
+  textSize?: number;
+  textColor?: string;
+  font?: string;
+  bold?: boolean;
+};
+
+type PptxConnector = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  flipH: boolean;
+  flipV: boolean;
+  line: string;
+  width: number;
+  dashed?: boolean;
+  arrow?: boolean;
 };
 
 type PptxTable = {
@@ -69,6 +90,7 @@ type SlideFrame = {
   texts: PptxText[];
   shapes: PptxShape[];
   tables: PptxTable[];
+  connectors: PptxConnector[];
   notes?: string;
 };
 
@@ -120,8 +142,24 @@ function shape(item: PptxShape, id: number): string {
   const line = item.line
     ? `<a:ln w="${Math.round((item.lineWidth ?? 1) * 12700)}"><a:solidFill><a:srgbClr val="${item.line}"/></a:solidFill></a:ln>`
     : "<a:ln><a:noFill/></a:ln>";
-  const geometry = item.radius ? "roundRect" : "rect";
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Forma ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${toEmu(item.x)}" y="${toEmu(item.y)}"/><a:ext cx="${toEmu(item.w)}" cy="${toEmu(item.h)}"/></a:xfrm><a:prstGeom prst="${geometry}"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="pt-BR"/></a:p></p:txBody></p:sp>`;
+  const geometry = item.geometry ?? (item.radius ? "roundRect" : "rect");
+  const body = item.text
+    ? item.text
+        .split("\n")
+        .map(
+          (lineText) =>
+            `<a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="pt-BR" sz="${Math.round((item.textSize ?? 11) * 100)}"${item.bold ? ' b="1"' : ""} dirty="0"><a:solidFill><a:srgbClr val="${item.textColor ?? "1F2937"}"/></a:solidFill><a:latin typeface="${xml(item.font ?? "Aptos")}"/><a:cs typeface="${xml(item.font ?? "Aptos")}"/></a:rPr><a:t>${xml(lineText || " ")}</a:t></a:r><a:endParaRPr lang="pt-BR" sz="${Math.round((item.textSize ?? 11) * 100)}"/></a:p>`,
+        )
+        .join("")
+    : '<a:p><a:endParaRPr lang="pt-BR"/></a:p>';
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Forma ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${toEmu(item.x)}" y="${toEmu(item.y)}"/><a:ext cx="${toEmu(item.w)}" cy="${toEmu(item.h)}"/></a:xfrm><a:prstGeom prst="${geometry}"><a:avLst/></a:prstGeom>${fill}${line}</p:spPr><p:txBody><a:bodyPr wrap="square" lIns="27432" rIns="27432" tIns="18288" bIns="18288" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${body}</p:txBody></p:sp>`;
+}
+
+function connector(item: PptxConnector, id: number): string {
+  const flip = `${item.flipH ? ' flipH="1"' : ""}${item.flipV ? ' flipV="1"' : ""}`;
+  const dash = item.dashed ? '<a:prstDash val="dash"/>' : "";
+  const arrow = item.arrow ? '<a:tailEnd type="triangle" w="med" len="med"/>' : "";
+  return `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="${id}" name="Conector ${id}"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr><p:spPr><a:xfrm${flip}><a:off x="${toEmu(item.x)}" y="${toEmu(item.y)}"/><a:ext cx="${toEmu(item.w)}" cy="${toEmu(item.h)}"/></a:xfrm><a:prstGeom prst="line"><a:avLst/></a:prstGeom><a:ln w="${Math.round(item.width * 12700)}"><a:solidFill><a:srgbClr val="${item.line}"/></a:solidFill>${dash}${arrow}</a:ln></p:spPr></p:cxnSp>`;
 }
 
 function tableCell(text: string, width: number, fill: string, color: string, bold: boolean, font: string, size: number): string {
@@ -143,9 +181,10 @@ function tableFrame(item: PptxTable, id: number): string {
 function slideXml(frame: SlideFrame): string {
   let id = 2;
   const shapes = frame.shapes.map((item) => shape(item, id++)).join("");
+  const connectors = frame.connectors.map((item) => connector(item, id++)).join("");
   const texts = frame.texts.map((item) => textBox(item, id++)).join("");
   const tables = frame.tables.map((item) => tableFrame(item, id++)).join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="${frame.background}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${shapes}${texts}${tables}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="${frame.background}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${connectors}${shapes}${texts}${tables}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 }
 
 function notesXml(notes: string): string {
@@ -182,6 +221,99 @@ type SlideContext = {
   title: string;
 };
 
+type DiagramArea = { x: number; y: number; w: number; h: number };
+
+/**
+ * Desenha o diagrama com formas e conectores nativos do OOXML.
+ *
+ * Cada nó vira uma forma com texto editável e cada trecho de conexão vira um
+ * `p:cxnSp`. Nenhum slide (nem o diagrama) é convertido em imagem: o conteúdo
+ * continua editável no PowerPoint.
+ */
+function drawDiagram(frame: SlideFrame, diagram: DiagramDocument, area: DiagramArea, theme: StudioTheme) {
+  const layout = layoutDiagram(diagram);
+  if (!layout.nodes.length) return;
+
+  const scale = Math.min(area.w / layout.width, area.h / layout.height);
+  const width = layout.width * scale;
+  const height = layout.height * scale;
+  const offsetX = area.x + (area.w - width) / 2;
+  const offsetY = area.y + (area.h - height) / 2;
+  const accent = toHexRgb(theme.colors.accent);
+  const soft = toHexRgb(theme.colors.accentSoft);
+  const ink = toHexRgb(theme.colors.ink);
+  const muted = toHexRgb(theme.colors.muted);
+  const font = theme.font.pptx;
+  const lineWidth = Math.max(0.75, 1.4 * scale * 72);
+  const toInches = (value: number) => value * scale;
+
+  layout.edges.forEach((edge) => {
+    const points = edge.points;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const start = points[index];
+      const end = points[index + 1];
+      const x1 = offsetX + toInches(start.x);
+      const y1 = offsetY + toInches(start.y);
+      const x2 = offsetX + toInches(end.x);
+      const y2 = offsetY + toInches(end.y);
+      const isLast = index === points.length - 2;
+      frame.connectors.push({
+        x: Math.min(x1, x2),
+        y: Math.min(y1, y2),
+        w: Math.abs(x2 - x1),
+        h: Math.abs(y2 - y1),
+        flipH: x2 < x1,
+        flipV: y2 < y1,
+        line: muted,
+        width: lineWidth,
+        dashed: edge.dashed,
+        arrow: edge.arrow && isLast,
+      });
+    }
+    if (edge.label) {
+      const point = edgeLabelPoint(edge);
+      frame.texts.push({
+        text: edge.label,
+        x: offsetX + toInches(point.x) - 0.4,
+        y: offsetY + toInches(point.y) - 0.12,
+        w: 0.8,
+        h: 0.24,
+        size: Math.max(7, 11 * scale * 72),
+        color: ink,
+        font,
+        align: "ctr",
+        fill: toHexRgb(theme.colors.surface),
+      });
+    }
+  });
+
+  layout.nodes.forEach((node) => {
+    const geometry = node.shape === "ellipse"
+      ? "ellipse"
+      : node.shape === "diamond"
+        ? "diamond"
+        : node.shape === "rounded" || node.shape === "pill"
+          ? "roundRect"
+          : "rect";
+    const text = [...node.lines, ...node.descriptionLines].join("\n");
+    frame.shapes.push({
+      x: offsetX + toInches(node.x),
+      y: offsetY + toInches(node.y),
+      w: toInches(node.width),
+      h: toInches(node.height),
+      fill: soft,
+      line: accent,
+      lineWidth,
+      geometry,
+      text,
+      textSize: Math.max(6, node.fontSize * scale * 72),
+      textColor: ink,
+      font,
+      bold: true,
+    });
+  });
+}
+
 function blockText(block: ExportBlock, theme: StudioTheme): { text: string; bullets: boolean; size: number; bold?: boolean; color?: string; mono?: boolean } | null {
   if (block.kind === "paragraph") return { text: plain(block.text), bullets: false, size: 16, color: theme.colors.ink };
   if (block.kind === "example") return { text: plain(block.text), bullets: false, size: 15, color: theme.colors.ink };
@@ -193,7 +325,10 @@ function blockText(block: ExportBlock, theme: StudioTheme): { text: string; bull
     return { text: block.items.map((item) => `${prefix}${plain(item)}`).join("\n"), bullets: true, size: 16, color: theme.colors.ink };
   }
   if (block.kind === "code") return { text: block.code, bullets: false, size: 13, color: theme.colors.ink, mono: true };
-  if (block.kind === "diagram") return { text: block.source, bullets: false, size: 13, color: theme.colors.ink, mono: true };
+  if (block.kind === "diagram") {
+    if (block.diagram) return null;
+    return { text: block.source, bullets: false, size: 13, color: theme.colors.ink, mono: true };
+  }
   if (block.kind === "exercise") {
     const parts = [block.question];
     if (block.guidance) parts.push(`Dica: ${block.guidance}`);
@@ -213,9 +348,10 @@ function buildSlide(slide: ExportDeckModel["slides"][number], context: SlideCont
   const surface = toHexRgb(theme.colors.surface);
   const font = theme.font.pptx;
   const mono = theme.font.mono ? font : "Consolas";
-  const frame: SlideFrame = { background: surface, texts: [], shapes: [], tables: [], notes: slide.notes };
+  const frame: SlideFrame = { background: surface, texts: [], shapes: [], tables: [], connectors: [], notes: slide.notes };
   const margin = 0.7;
   const contentWidth = width - margin * 2;
+  const diagram = slide.diagram ?? slide.blocks.find((block): block is Extract<ExportBlock, { kind: "diagram" }> => block.kind === "diagram" && Boolean(block.diagram))?.diagram;
 
   const titleText = (): PptxText => ({
     text: plain(slide.title) || "Slide",
@@ -278,10 +414,17 @@ function buildSlide(slide: ExportDeckModel["slides"][number], context: SlideCont
   }
 
   if (slide.layout === "diagram" || slide.layout === "code") {
+    if (slide.layout === "diagram" && diagram) {
+      drawDiagram(frame, diagram, { x: margin, y: 1.5, w: contentWidth, h: height - 2.2 }, theme);
+      if (diagram.caption) {
+        frame.texts.push({ text: diagram.caption, x: margin, y: height - 0.62, w: contentWidth, h: 0.28, size: 10, color: muted, font, align: "ctr" });
+      }
+      return frame;
+    }
     const code = textBlocks.find((block) => block.mono)?.text ?? "";
     frame.shapes.push({ x: margin, y: 1.6, w: contentWidth, h: height - 2.5, fill: soft, line: accent, lineWidth: 1 });
     frame.texts.push({
-      text: code || (slide.layout === "diagram" ? "Diagrama Mermaid - fonte editavel" : "Codigo"),
+      text: code || (slide.layout === "diagram" ? "Diagrama sem fonte editavel" : "Codigo"),
       x: margin + 0.25,
       y: 1.85,
       w: contentWidth - 0.5,
@@ -321,7 +464,8 @@ function buildSlide(slide: ExportDeckModel["slides"][number], context: SlideCont
   const tableBlocks = tables;
   const bodyBlocks = textBlocks.filter((block) => !block.mono);
   if (bodyBlocks.length) {
-    const bodyHeight = tableBlocks.length ? height - 2.5 - Math.min(2.2, tableBlocks.length * 1.6) : height - 2.5;
+    const available = tableBlocks.length ? height - 2.5 - Math.min(2.2, tableBlocks.length * 1.6) : height - 2.5;
+    const bodyHeight = diagram ? Math.max(1.2, Math.min(1.9, available - 2.9)) : available;
     frame.texts.push({
       text: bodyBlocks.map((block) => block.text).join("\n"),
       x: margin,
@@ -352,7 +496,14 @@ function buildSlide(slide: ExportDeckModel["slides"][number], context: SlideCont
     });
     cursor += Math.min(2.2, (table.rows.length + 1) * 0.5) + 0.2;
   });
-  if (slide.layout === "title-content" && !bodyBlocks.length && !tableBlocks.length) {
+  if (diagram) {
+    const top = Math.min(height - 2.6, cursor + 0.05);
+    drawDiagram(frame, diagram, { x: margin, y: top, w: contentWidth, h: Math.max(1.2, height - top - 0.55) }, theme);
+    if (diagram.caption) {
+      frame.texts.push({ text: diagram.caption, x: margin, y: height - 0.55, w: contentWidth, h: 0.26, size: 10, color: muted, font, align: "ctr" });
+    }
+  }
+  if (slide.layout === "title-content" && !bodyBlocks.length && !tableBlocks.length && !diagram) {
     frame.texts.push({ text: "Sem conteudo", x: margin, y: 1.8, w: contentWidth, h: 0.6, size: 16, color: muted, font });
   }
   return frame;

@@ -61,6 +61,8 @@ export type Slide = {
   order: number;
   background?: string;
   customFields?: Record<string, string>;
+  /** Diagrama editável associado ao slide (layout "diagram"). */
+  diagram?: import("../../diagrams/types").DiagramDocument;
 };
 
 export type DocumentSection = {
@@ -70,6 +72,8 @@ export type DocumentSection = {
   content: string;
   level?: 1 | 2 | 3;
   order: number;
+  /** Diagrama editável associado à seção (tipo "diagram"). */
+  diagram?: import("../../diagrams/types").DiagramDocument;
   metadata?: {
     language?: string;
     columns?: number;
@@ -160,7 +164,7 @@ export type StudioEditorState = {
   activeSlideId?: string;
   viewMode: "edit" | "preview" | "split";
   sidebarOpen: boolean;
-  sidebarTab: "structure" | "templates" | "customization" | "ai-assist" | "export";
+  sidebarTab: "structure" | "templates" | "customization" | "diagrams" | "ai-assist" | "export";
   unsavedChanges: boolean;
   lastSavedAt?: string;
 };

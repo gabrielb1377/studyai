@@ -24,6 +24,7 @@ const academyKindLabels = {
   "generated-pdf": "PDF Gerado",
   "generated-workbook": "Apostila Gerada",
   "generated-presentation": "Apresentação Gerada",
+  "generated-diagram": "Diagrama Gerado",
 } as const;
 
 export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
@@ -166,6 +167,9 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               ) : null}
               {material.academyStudioDocumentId && material.academyStudyId && material.academyContentId ? (
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
+              ) : null}
+              {material.fileType === "png" && material.studyId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=material`}><Eye />Abrir material</Link></Button>
               ) : null}
             </>
           ) : <>

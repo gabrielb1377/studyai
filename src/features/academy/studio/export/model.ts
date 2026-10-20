@@ -8,6 +8,8 @@
  */
 
 import { sanitizeMarkdown } from "../sanitize";
+import { toMermaidSource } from "@/features/diagrams/render/svg";
+import type { DiagramDocument } from "@/features/diagrams/types";
 import type { DocumentSection, Slide, StudioDocument } from "../types";
 
 export type ExportBlock =
@@ -20,7 +22,7 @@ export type ExportBlock =
   | { kind: "exercise"; id: string; question: string; guidance?: string; answer?: string }
   | { kind: "summary"; id: string; text: string }
   | { kind: "quote"; id: string; text: string }
-  | { kind: "diagram"; id: string; language: string; source: string };
+  | { kind: "diagram"; id: string; language: string; source: string; diagram?: DiagramDocument };
 
 export type ExportSection = {
   id: string;
@@ -60,6 +62,7 @@ export type ExportSlideModel = {
   blocks: ExportBlock[];
   notes?: string;
   background?: string;
+  diagram?: DiagramDocument;
 };
 
 export type ExportDeckModel = {
@@ -188,8 +191,9 @@ function sectionBlocks(section: DocumentSection): ExportBlock[] {
     return [{
       kind: "diagram",
       id,
-      language: (match?.[1] || "mermaid").toLowerCase(),
-      source: (match?.[2] ?? content).trim(),
+      language: section.diagram ? "studio" : (match?.[1] || "mermaid").toLowerCase(),
+      source: section.diagram ? toMermaidSource(section.diagram) : (match?.[2] ?? content).trim(),
+      diagram: section.diagram,
     }];
   }
   if (section.type === "code") {
@@ -273,9 +277,21 @@ export function buildDeckModel(document: StudioDocument): ExportDeckModel {
       id: slide.id,
       layout: slide.layout,
       title: slide.title,
-      blocks: parseMarkdownBlocks(slide.content ?? "", `sl-${slide.id}`),
+      blocks: [
+        ...(slide.diagram
+          ? [{
+              kind: "diagram" as const,
+              id: `sl-${slide.id}-diagram`,
+              language: "studio",
+              source: toMermaidSource(slide.diagram),
+              diagram: slide.diagram,
+            }]
+          : []),
+        ...parseMarkdownBlocks(slide.content ?? "", `sl-${slide.id}`),
+      ],
       notes: slide.presenterNotes,
       background: slide.background,
+      diagram: slide.diagram,
     })),
     headerFooter: {
       enabled: customization.headerFooter.enabled,

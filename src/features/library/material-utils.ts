@@ -45,6 +45,7 @@ export const materialFilters: { value: MaterialFilter; label: string }[] = [
   { value: "lab", label: "Laboratório" },
   { value: "generated-pdf", label: "PDF Gerado" },
   { value: "generated-presentation", label: "Apresentação" },
+  { value: "generated-diagram", label: "Diagrama" },
   { value: "practical-project", label: "Projeto Prático" },
   { value: "learning-path", label: "Trilha" },
 ];
@@ -70,7 +71,7 @@ export function filterMaterials(
       if (filter === "ai-generated") return material.sourceType === "ai-generated";
       if (filter === "academy") return material.sourceType === "ai-generated";
       if (filter === "lab") return material.sourceType === "lab";
-      if (filter === "generated-pdf" || filter === "generated-presentation" || filter === "practical-project" || filter === "learning-path") {
+      if (filter === "generated-pdf" || filter === "generated-presentation" || filter === "generated-diagram" || filter === "practical-project" || filter === "learning-path") {
         return material.academyMaterialKind === filter;
       }
       return categories[material.fileType] === filter;

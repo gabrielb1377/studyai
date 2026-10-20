@@ -10,6 +10,8 @@
 import type { ExportBlock, ExportDocumentModel } from "./model";
 import { resolveStudioTheme, toRgbComponents } from "./theme";
 import type { StudioCustomization } from "../types";
+import { edgeLabelPoint, layoutDiagram } from "@/features/diagrams/layout";
+import type { DiagramDocument } from "@/features/diagrams/types";
 
 export type StudioPdfOptions = {
   includeAnswers: boolean;
@@ -259,12 +261,186 @@ export const StudioPdfExporter = {
       y -= theme.spacing.paragraph * 0.6;
     };
 
-    const drawBlock = (block: ExportBlock) => {
+    /**
+     * Métricas do bloco de diagrama. Usadas tanto para desenhar quanto para
+     * decidir a quebra de página antes do título da seção (evita título órfão).
+     */
+    const diagramMetrics = (diagram: DiagramDocument, reservedTop = 0) => {
+      const layout = layoutDiagram(diagram);
+      const captionText = diagram.caption ? safePdfText(diagram.caption) : "";
+      const captionHeight = captionText ? theme.type.caption + 10 : 0;
+      const availableHeight = pageHeight - marginTop - marginBottom - 24 - reservedTop;
+      const scale = Math.min(
+        contentWidth / layout.width,
+        Math.max(0.2, availableHeight - captionHeight) / layout.height,
+        1.6,
+      );
+      const width = layout.width * scale;
+      const height = layout.height * scale;
+      return { layout, captionText, captionHeight, scale, width, height, blockHeight: height + captionHeight + 10 };
+    };
+
+    /**
+     * Desenha o diagrama como vetor nativo (formas, conectores e textos),
+     * preservando a proporção e as margens do documento. A fonte editável
+     * continua apenas no Studio — aqui o objetivo é fidelidade visual.
+     */
+    const drawDiagram = (diagram: DiagramDocument, reservedTop = 0) => {
+      const { layout, captionText, scale, width, height, blockHeight } = diagramMetrics(diagram, reservedTop);
+      if (y - blockHeight < bottomLimit) newPage();
+
+      const offsetX = marginLeft + (contentWidth - width) / 2;
+      const topY = y;
+      const toX = (value: number) => offsetX + value * scale;
+      const toY = (value: number) => topY - value * scale;
+      const strokeWidth = Math.max(0.5, 1.4 * scale);
+      const minimumFont = 5.5;
+
+      // Conexões primeiro, para que os nós cubram as pontas.
+      layout.edges.forEach((edge) => {
+        const points = edge.points;
+        for (let index = 0; index < points.length - 1; index += 1) {
+          const start = points[index];
+          const end = points[index + 1];
+          page.drawLine({
+            start: { x: toX(start.x), y: toY(start.y) },
+            end: { x: toX(end.x), y: toY(end.y) },
+            thickness: strokeWidth,
+            color: muted,
+            opacity: edge.dashed ? 0.9 : 1,
+            ...(edge.dashed ? { dashArray: [3, 3] } : {}),
+          });
+        }
+        const last = points[points.length - 1];
+        const before = points[points.length - 2] ?? last;
+        if (edge.arrow && last) {
+          const angle = Math.atan2(last.y - before.y, last.x - before.x);
+          const size = Math.max(3.5, 7 * scale);
+          for (const offset of [Math.PI / 6, -Math.PI / 6]) {
+            const tip = {
+              x: last.x - size * Math.cos(angle + offset),
+              y: last.y - size * Math.sin(angle + offset),
+            };
+            page.drawLine({
+              start: { x: toX(last.x), y: toY(last.y) },
+              end: { x: toX(tip.x), y: toY(tip.y) },
+              thickness: strokeWidth,
+              color: muted,
+            });
+          }
+        }
+        if (edge.label) {
+          const point = edgeLabelPoint(edge);
+          const size = Math.max(minimumFont, 11 * scale);
+          const label = safePdfText(edge.label);
+          const textWidth = regular.widthOfTextAtSize(label, size);
+          page.drawRectangle({
+            x: toX(point.x) - textWidth / 2 - 3,
+            y: toY(point.y) - size + 2,
+            width: textWidth + 6,
+            height: size + 3,
+            color: surface,
+          });
+          page.drawText(label, {
+            x: toX(point.x) - textWidth / 2,
+            y: toY(point.y) - size + 4,
+            size,
+            font: regular,
+            color: ink,
+          });
+        }
+      });
+
+      layout.nodes.forEach((node) => {
+        const x = toX(node.x);
+        const nodeWidth = node.width * scale;
+        const nodeHeight = node.height * scale;
+        const top = toY(node.y);
+        if (node.shape === "ellipse") {
+          page.drawEllipse({
+            x: x + nodeWidth / 2,
+            y: top - nodeHeight / 2,
+            xScale: nodeWidth / 2,
+            yScale: nodeHeight / 2,
+            color: accentSoft,
+            borderColor: accent,
+            borderWidth: strokeWidth,
+          });
+        } else if (node.shape === "diamond") {
+          page.drawSvgPath(
+            `M ${nodeWidth / 2} 0 L ${nodeWidth} ${nodeHeight / 2} L ${nodeWidth / 2} ${nodeHeight} L 0 ${nodeHeight / 2} Z`,
+            { x, y: top, color: accentSoft, borderColor: accent, borderWidth: strokeWidth },
+          );
+        } else if (node.shape === "pill" || node.shape === "rounded") {
+          const radius = Math.min(nodeHeight / 2, (node.shape === "pill" ? nodeHeight / 2 : 12) * scale);
+          page.drawSvgPath(
+            `M ${radius} 0 L ${nodeWidth - radius} 0 Q ${nodeWidth} 0 ${nodeWidth} ${radius} `
+              + `L ${nodeWidth} ${nodeHeight - radius} Q ${nodeWidth} ${nodeHeight} ${nodeWidth - radius} ${nodeHeight} `
+              + `L ${radius} ${nodeHeight} Q 0 ${nodeHeight} 0 ${nodeHeight - radius} L 0 ${radius} Q 0 0 ${radius} 0 Z`,
+            { x, y: top, color: accentSoft, borderColor: accent, borderWidth: strokeWidth },
+          );
+        } else {
+          page.drawRectangle({
+            x,
+            y: top - nodeHeight,
+            width: nodeWidth,
+            height: nodeHeight,
+            color: accentSoft,
+            borderColor: accent,
+            borderWidth: strokeWidth,
+          });
+        }
+
+        const totalLayout = node.lines.length * 18 + (node.descriptionLines.length ? node.descriptionLines.length * 15 + 4 : 0);
+        let baseline = node.y + node.height / 2 - totalLayout / 2 + 14;
+        const centerX = toX(node.x + node.width / 2);
+        const labelSize = Math.max(minimumFont, node.fontSize * scale);
+        node.lines.forEach((line) => {
+          const text = safePdfText(line);
+          const textWidth = bold.widthOfTextAtSize(text, labelSize);
+          page.drawText(text, {
+            x: centerX - textWidth / 2,
+            y: toY(baseline),
+            size: labelSize,
+            font: bold,
+            color: ink,
+          });
+          baseline += 18;
+        });
+        if (node.descriptionLines.length) {
+          const descriptionSize = Math.max(minimumFont - 0.5, node.descriptionFontSize * scale);
+          let descriptionBaseline = baseline + 2;
+          node.descriptionLines.forEach((line) => {
+            const text = safePdfText(line);
+            const textWidth = regular.widthOfTextAtSize(text, descriptionSize);
+            page.drawText(text, {
+              x: centerX - textWidth / 2,
+              y: toY(descriptionBaseline),
+              size: descriptionSize,
+              font: regular,
+              color: muted,
+            });
+            descriptionBaseline += 15;
+          });
+        }
+      });
+
+      y = topY - height - 8;
+      if (captionText) {
+        drawParagraph(captionText, theme.type.caption, regular, muted, 0, theme.type.caption + 4);
+      }
+      y -= theme.spacing.paragraph * 0.6;
+    };
+
+    const drawBlock = (block: ExportBlock, reservedTop = 0) => {
       if (block.kind === "heading") drawHeading(block.text, block.level);
       else if (block.kind === "paragraph") { drawParagraph(block.text); y -= theme.spacing.paragraph; }
       else if (block.kind === "list") drawList(block.items, block.ordered);
       else if (block.kind === "code") drawCode(block.code, block.language === "mermaid" ? "Diagrama Mermaid - fonte editável" : `Código${block.language && block.language !== "text" ? ` (${block.language})` : ""}`);
-      else if (block.kind === "diagram") drawCode(block.source, `Diagrama ${block.language} - fonte editável`);
+      else if (block.kind === "diagram") {
+        if (block.diagram) drawDiagram(block.diagram, reservedTop);
+        else drawCode(block.source, `Diagrama ${block.language} - fonte editável`);
+      }
       else if (block.kind === "table") drawTable(block.header, block.rows);
       else if (block.kind === "example") drawCallout(block.text, ink);
       else if (block.kind === "summary") drawCallout(block.text, ink, accentSoft);
@@ -305,21 +481,31 @@ export const StudioPdfExporter = {
     let tocPage: typeof page | null = null;
     let tocStartY = 0;
     if (tocEntries.length) {
-      tocPage = newPage();
+      // Só cria página nova se a atual já tem conteúdo (capa, por exemplo).
+      tocPage = y < pageHeight - marginTop ? newPage() : page;
       tocStartY = y;
-      if (tocEntries.length * (theme.type.body + 8) > theme.page.contentHeight) {
-        tocPage = newPage();
-        tocStartY = y;
-      }
     }
 
     // --------------------------------------------------------------- Conteúdo
     const sectionPages: Array<{ title: string; page: number }> = [];
     model.sections.forEach((section) => {
-      if (section.level <= 1) newPage();
+      const headingHeight = section.title
+        ? section.level <= 1
+          ? theme.spacing.section + theme.type.h1 + 17
+          : theme.spacing.section * 0.6 + theme.type.h2 + 9
+        : 0;
+      const leading = section.blocks[0];
+      const reserve = leading?.kind === "diagram" && leading.diagram ? headingHeight : 0;
+      const leadingHeight = reserve && leading?.kind === "diagram" && leading.diagram
+        ? diagramMetrics(leading.diagram, reserve).blockHeight
+        : 0;
+      // Capítulos começam em página nova, mas a primeira seção aproveita a página atual.
+      // Se o diagrama de abertura não couber, a quebra acontece antes do título.
+      if (section.level <= 1 && y < pageHeight - marginTop) newPage();
+      else if (leadingHeight && y - reserve - leadingHeight < bottomLimit) newPage();
       sectionPages.push({ title: section.title, page: document.getPageCount() - firstContentIndex });
       if (section.title) drawHeading(section.title, section.level <= 1 ? 1 : 2);
-      section.blocks.forEach(drawBlock);
+      section.blocks.forEach((block, index) => drawBlock(block, index === 0 ? reserve : 0));
     });
 
     // ---------------------------------------------------------- Sumário final

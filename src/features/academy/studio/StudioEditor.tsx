@@ -6,6 +6,7 @@ import {
   Download,
   FileText,
   LayoutTemplate,
+  Network,
   Palette,
   Presentation,
   Redo2,
@@ -26,6 +27,7 @@ import { useStudioEditor } from "./hooks/useStudioEditor";
 import { StudioService } from "./service";
 import { StudioAIPanel } from "./components/StudioAIPanel";
 import { StudioCustomizationPanel } from "./components/StudioCustomizationPanel";
+import { StudioDiagramsPanel } from "./components/StudioDiagramsPanel";
 import { StudioDocumentEditor } from "./components/StudioDocumentEditor";
 import { StudioDocumentSidebar } from "./components/StudioDocumentSidebar";
 import { StudioExportPanel } from "./components/StudioExportPanel";
@@ -171,6 +173,15 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
     void addSlide({ layout: "title-content", title: "Novo slide", content: "" });
   }, [addSlide]);
 
+  const handleAddDiagramSection = useCallback(() => {
+    void (async () => {
+      const before = new Set(sections.map((section) => section.id));
+      const updated = await addSection({ type: "diagram", title: "Novo diagrama", content: "", level: 2 });
+      const created = updated?.documentStructure?.sections.find((section) => !before.has(section.id));
+      if (created) setActiveSection(created.id);
+    })();
+  }, [addSection, sections, setActiveSection]);
+
   const handleExported = useCallback(
     (outcome: { kind: "pdf" | "pptx"; fileName: string; size: number; pageCount?: number; slideCount?: number; materialId: string }) => {
       void registerExport({
@@ -225,10 +236,11 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
       onValueChange={(value) => setSidebarTab(value as typeof editorState.sidebarTab)}
       className="flex h-full min-h-0 flex-col"
     >
-      <TabsList className="mx-2 mt-2 grid shrink-0 grid-cols-5 gap-1">
+      <TabsList className="mx-2 mt-2 grid shrink-0 grid-cols-6 gap-1">
         <TabsTrigger value="structure" className="text-[11px]"><FileText className="size-3.5" aria-hidden="true" /><span className="sr-only">Estrutura</span></TabsTrigger>
         <TabsTrigger value="templates" className="text-[11px]"><LayoutTemplate className="size-3.5" aria-hidden="true" /><span className="sr-only">Templates</span></TabsTrigger>
         <TabsTrigger value="customization" className="text-[11px]"><Palette className="size-3.5" aria-hidden="true" /><span className="sr-only">Personalização</span></TabsTrigger>
+        <TabsTrigger value="diagrams" className="text-[11px]"><Network className="size-3.5" aria-hidden="true" /><span className="sr-only">Diagramas</span></TabsTrigger>
         <TabsTrigger value="ai-assist" className="text-[11px]"><Sparkles className="size-3.5" aria-hidden="true" /><span className="sr-only">Assistência por IA</span></TabsTrigger>
         <TabsTrigger value="export" className="text-[11px]"><Download className="size-3.5" aria-hidden="true" /><span className="sr-only">Exportar</span></TabsTrigger>
       </TabsList>
@@ -264,6 +276,23 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
           <StudioCustomizationPanel
             customization={document.customization}
             onChange={(updates) => void updateCustomization(updates)}
+          />
+        </TabsContent>
+        <TabsContent value="diagrams" className="mt-0">
+          <StudioDiagramsPanel
+            document={document}
+            docType={docType}
+            sections={sections}
+            slides={slides}
+            activeSectionId={editorState.activeSectionId}
+            activeSlideId={editorState.activeSlideId}
+            onSelectSection={setActiveSection}
+            onSelectSlide={setActiveSlide}
+            onUpdateSection={(id, updates) => void updateSection(id, updates)}
+            onUpdateSlide={(id, updates) => void updateSlide(id, updates)}
+            onAddDiagramSection={handleAddDiagramSection}
+            studySubject={study.subject}
+            studyTopic={study.topic}
           />
         </TabsContent>
         <TabsContent value="ai-assist" className="mt-0">
