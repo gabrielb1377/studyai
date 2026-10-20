@@ -20,6 +20,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Providers de IA selecionáveis: Gemini, Ollama, OpenRouter e Groq, com modo automático, verificação de disponibilidade e fallback.
 - Chaves de API individuais (BYOK): cada usuário cadastra suas próprias chaves por provider, criptografadas no servidor, com fallback para variáveis de ambiente compartilhadas.
 - Aulas narradas: o Professor conduz aulas em etapas, narra a explicação, permite perguntas por voz, exercícios corrigidos e explicação alternativa, com continuidade entre sessões.
+- Academy Studio Pro: editor visual dos conteúdos gerados pela Academy, com edição de seções e slides, 12 templates, personalização de cores e tipografia, prévia, assistência de escrita por IA e salvamento local com autosave.
 - Persistência local e suporte a sincronização, conta, colaboração e execução em web, PWA, Electron e projetos Capacitor.
 
 ## Tecnologias
@@ -111,6 +112,30 @@ Aluno continua, repete a explicação ou pede outra abordagem
 - **Privacidade**: o microfone nunca é ativado automaticamente e nenhum áudio bruto é persistido.
 
 Também é possível narrar páginas de PDF, texto selecionado, conteúdos da Academy e respostas do Tutor.
+
+## Academy Studio Pro
+
+A rota `/academy/studio` abre qualquer conteúdo gerado pela Academy no editor visual:
+
+```text
+Conteúdo da Academy
+  ↓
+StudioPage → escolhe Documento ou Apresentação
+  ↓
+StudioEditor
+  ├─ Estrutura (seções ou slides: adicionar, duplicar, mover, excluir)
+  ├─ Templates (6 de documento + 6 de apresentação)
+  ├─ Personalização (cores, tipografia, espaçamento, orientação, cabeçalho, numeração)
+  ├─ Assistência por IA (proposta exibida antes de ser aplicada)
+  └─ Prévia (documento paginado ou apresentação 16:9)
+  ↓
+Autosave com debounce no IndexedDB `studio-documents`
+```
+
+- **Sem módulo paralelo**: reutiliza Academy, AI Core e Design System.
+- **IA pelo mesmo caminho**: `POST /api/academy/studio/assist` → `AIService` → `ProviderManager`, com BYOK do usuário.
+- **Nada se perde**: o conteúdo original é preservado; a proposta da IA só é aplicada quando o aluno confirma.
+- **Exportação profissional** em PDF/PPTX a partir do documento editado chega na Sprint 37C.2; a exportação atual da Academy segue disponível.
 
 ## Deploy
 

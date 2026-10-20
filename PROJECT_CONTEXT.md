@@ -2,6 +2,39 @@
 
 Atualizado em 19 de outubro de 2026.
 
+## Academy Studio Pro — Sprint 37C.1
+
+A Academy agora possui um **editor visual** para os conteúdos que ela mesma
+gera. A rota `/academy/studio` abre o conteúdo como documento ou apresentação,
+edita seções e slides, personaliza o template, exibe a prévia e salva o
+trabalho localmente.
+
+O Studio vive em `src/features/academy/studio/` e reutiliza a Academy, o AI
+Core e o Design System existentes: nenhum módulo paralelo e nenhum provider
+novo. A assistência por IA (melhorar redação, resumir, expandir, simplificar,
+criar exemplo, gerar exercício, reorganizar) passa por
+`POST /api/academy/studio/assist` (server-only) → `StudioAssistService` →
+`AIService` → `ProviderManager` → provider, com BYOK do usuário quando há
+sessão. A proposta da IA é sempre exibida antes de ser aplicada.
+
+O conteúdo original da Academy é preservado integralmente na conversão para
+estrutura editável. Documentos têm 10 tipos de seção e 6 templates; apresentações
+têm 10 layouts e 6 templates. A personalização cobre cores, tipografia,
+espaçamento, orientação, cabeçalho, rodapé, numeração, capa e sumário.
+
+A persistência usa o novo object store `studio-documents` (IndexedDB v5), com
+autosave debounced de 1,5 s, versionamento por documento e recuperação após
+reload. Nada é gravado no `localStorage` além de preferências leves do editor.
+A entidade `studio-documents` entrou no Cloud Sync incremental.
+
+O conteúdo renderizado é sanitizado antes da exibição: allowlist de tags,
+remoção de handlers, `script`, `iframe` e URLs `javascript:`/`data:` perigosas.
+
+A exportação profissional em PDF/PPTX a partir do documento editado fica para a
+Sprint 37C.2. A exportação existente da Academy não foi alterada.
+
+Ver `docs/RELEASE_NOTES_SPRINT_37C_1.md`.
+
 ## Aulas narradas — Sprint 37B.2
 
 O Professor conduz aulas em etapas usando o Voice Core. A geração do plano, a

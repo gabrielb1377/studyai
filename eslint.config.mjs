@@ -14,7 +14,6 @@ const config = [
       "dist-desktop/**",
       "android/**",
       "ios/**",
-      "tmp/**",
     ],
   },
   {

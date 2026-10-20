@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { STORAGE_DATABASE_VERSION } from "../src/lib/storage/StorageVersion";
 import { readIndexedDBStore } from "./helpers/indexed-db";
 
 const password = "StudyAI2026secure";
@@ -23,9 +24,9 @@ async function login(page: Page, email: string) {
 }
 
 async function putRecord(page: Page, store: string, value: Record<string, unknown>) {
-  await page.evaluate(async ({ store, value }) => new Promise<void>((resolve, reject) => {
+  await page.evaluate(async ({ store, value, version }) => new Promise<void>((resolve, reject) => {
     const scope = localStorage.getItem("studyai:storage-scope") || "guest";
-    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 4);
+    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, version);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -34,7 +35,7 @@ async function putRecord(page: Page, store: string, value: Record<string, unknow
       transaction.oncomplete = () => { database.close(); resolve(); };
       transaction.onerror = () => reject(transaction.error);
     };
-  }), { store, value });
+  }), { store, value, version: STORAGE_DATABASE_VERSION });
 }
 
 async function note(page: Page, id: string, content: string) {
@@ -218,13 +219,13 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
     const csrf = await firstPage.evaluate(() => document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? "");
     const deletedFile = await firstPage.request.delete(`/api/files/${materialId}`, { headers: { "x-csrf-token": csrf } });
     expect(deletedFile.ok()).toBe(true);
-    await firstPage.evaluate(async ({ id }) => {
+    await firstPage.evaluate(async ({ id, version }) => {
       const scope = localStorage.getItem("studyai:storage-scope") || "guest";
-      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 4);
+      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, version);
       const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
       await new Promise<void>((resolve, reject) => { const transaction = database.transaction("documents", "readwrite"); transaction.objectStore("documents").delete(id); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); });
       database.close();
-    }, { id: materialId });
+    }, { id: materialId, version: STORAGE_DATABASE_VERSION });
     await sync(firstPage);
     await sync(secondPage);
     const cachedAfterDelete = await secondPage.evaluate(async (id) => {

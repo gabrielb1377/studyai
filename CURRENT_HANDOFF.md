@@ -1,6 +1,87 @@
-# Handoff Atual — Sprint 37B.2: AI Teacher Voice Lessons
+# Handoff Atual — Sprint 37C.1: Academy Studio Pro
 
 Atualizado em 19 de outubro de 2026.
+
+## Resultado da Sprint 37C.1 — Academy Studio Pro
+
+A Academy ganhou um **editor visual** para os materiais e apresentações que
+ela gera. O aluno abre um conteúdo, edita seções e slides, escolhe um
+template, personaliza cores e tipografia, acompanha a prévia, recebe uma
+proposta de escrita da IA e salva o trabalho localmente.
+
+### Recuperação do WIP
+
+O WIP da 37C.1 estava em `tmp/wip-academy-studio-37C1`, fora do build, por
+erro de sintaxe JSX. O material foi auditado antes de qualquer alteração:
+`types.ts`, `templates.ts` e a lógica de persistência eram válidos e foram
+recuperados integralmente; `service.ts` e o hook foram reparados sobre a mesma
+lógica; os componentes quebrados (tags não fechadas, `)}` extras, estrutura de
+função partida) foram reescritos com JSX válido.
+
+As exclusões de `tmp/` em `tsconfig.json` e `eslint.config.mjs` foram
+revertidas e o backup foi removido: o build não esconde mais nenhum código.
+
+### Entregas
+
+1. **Editor de documentos** — título, subtítulo, descrição e 10 tipos de
+   seção; adicionar, remover, duplicar, reordenar, desfazer, refazer, salvar e
+   pré-visualizar. O conteúdo original da Academy é preservado.
+2. **Editor de apresentações** — 10 layouts (capa, título e conteúdo, duas
+   colunas, comparação, imagem e texto, diagrama, código, exercício, resumo,
+   em branco), notas do apresentador, duplicar, excluir e reordenar.
+3. **Templates** — 6 de documento e 6 de apresentação.
+4. **Personalização** — cores, tipografia, tamanho, espaçamento, orientação,
+   cabeçalho, rodapé, numeração, capa e sumário.
+5. **Prévia** — documento paginado (capa, sumário, seções) e apresentação em
+   16:9, com zoom, navegação e viewport simulado.
+6. **Assistência por IA contextual** — 7 ações; a proposta é exibida antes de
+   ser aplicada e o conteúdo nunca é sobrescrito silenciosamente.
+7. **Persistência** — store IndexedDB `studio-documents` (schema v5), autosave
+   com debounce, versionamento e recuperação após reload.
+8. **Integrações** — "Abrir no Studio" na Academy e na Biblioteca, "Reabrir no
+   Studio", "Abrir no Workspace" e deep link por URL.
+9. **Segurança** — sanitização de HTML/Markdown, allowlist de tags, remoção de
+   handlers e URLs perigosas, limite de entrada e validação de ações.
+10. **Responsividade** — desktop com painel, editor e prévia; mobile com abas
+    Editar/Prévia/Organizar e sem overflow horizontal.
+
+### Arquivos
+
+Novos: `src/features/academy/studio/**` (tipos, templates, storage, serviço,
+sanitização, hook do editor, hook de assistência, cliente HTTP, `StudioEditor`,
+`StudioPage` e 7 componentes), `src/app/academy/studio/page.tsx`,
+`src/app/api/academy/studio/assist/route.ts`, `src/components/ui/textarea.tsx`,
+`src/components/ui/select.tsx`, `src/components/ui/scroll-area.tsx`,
+`tests/academy-studio.spec.ts`.
+
+Modificados: `StorageVersion.ts`, `Database.ts`, `features/sync/types.ts`,
+`CloudSyncManager.ts`, `server/cloud/types.ts`, `AcademyPage.tsx`,
+`AcademyContentViewer.tsx`, `MaterialCard.tsx`, `tests/helpers/indexed-db.ts`,
+`tsconfig.json`, `eslint.config.mjs`.
+
+### Validação
+
+- ESLint: 0 erros (1 warning pré-existente em `OllamaProvider`).
+- TypeScript: sem erros.
+- Playwright: **138/138** (16,6 min) — 126 anteriores + 12 novos, sem flaky.
+- Build: aprovado, 46 rotas (eram 44).
+- `npm audit --omit=dev`: 7 vulnerabilidades transitivas pré-existentes
+  (sharp, next, katex, source-map-js). Nenhuma dependência nova.
+
+### Correção associada
+
+O schema do IndexedDB foi de v4 para v5. Os testes que abriam o banco com a
+versão fixada passaram a usar `STORAGE_DATABASE_VERSION`, a mesma fonte de
+verdade do runtime.
+
+### Limitações conhecidas
+
+- A exportação PDF/PPTX do documento editado do Studio é da Sprint 37C.2.
+- A paginação da prévia é lógica, não tipográfica.
+- Não há criação de template personalizado nem arrastar e soltar para
+  reordenar.
+
+## Base: Sprint 37B.2 — AI Teacher Voice Lessons
 
 ## Resultado da Sprint 37B.2 — Aulas narradas
 
@@ -51,9 +132,10 @@ Modificados: `TeacherPromptBuilder.ts`, `teacher/types.ts`, `TeacherControls.tsx
 
 ### Observação sobre a 37C.1
 
-O WIP do Academy Studio (37C.1) ficou em `tmp/wip-academy-studio-37C1` com erros de
-sintaxe JSX. Foi preservado fora de `src/` e excluído de TypeScript, ESLint e Git
-para manter o repositório verde. Deve ser retomado a partir desse material.
+O WIP do Academy Studio (37C.1) foi recuperado na Sprint 37C.1: os tipos, os
+templates e a persistência foram preservados, os componentes com JSX quebrado
+foram reescritos e as exclusões temporárias de `tmp/` foram revertidas. A
+exportação profissional em PDF/PPTX permanece na Sprint 37C.2.
 
 ### Riscos
 

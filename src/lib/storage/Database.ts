@@ -21,6 +21,7 @@ const storeDefinitions: Record<StorageStoreName, { keyPath: string; indexes?: Ar
   academy: { keyPath: "id", indexes: [["status", "status"], ["subject", "subject"], ["updatedAt", "updatedAt"]] },
   lab: { keyPath: "id", indexes: [["studyId", "studyId"], ["language", "language"], ["updatedAt", "updatedAt"]] },
   metadata: { keyPath: "key" },
+  "studio-documents": { keyPath: "id", indexes: [["studyId", "studyId"], ["type", "type"], ["updatedAt", "updatedAt"]] },
 };
 
 let databasePromise: Promise<IDBDatabase> | undefined;
