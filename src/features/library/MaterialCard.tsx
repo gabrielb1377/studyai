@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, LayoutTemplate, Sparkles, Star, Trash2 } from "lucide-react";
+import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, LayoutTemplate, Pencil, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -163,6 +163,9 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}${material.academyContentId ? `&conteudo=${material.academyContentId}` : ""}`}><Sparkles />Abrir estudo</Link></Button>
               {material.academyStudyId && material.academyContentId ? (
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=document`}><LayoutTemplate />Abrir no Studio</Link></Button>
+              ) : null}
+              {material.academyStudioDocumentId && material.academyStudyId && material.academyContentId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
               ) : null}
             </>
           ) : <>

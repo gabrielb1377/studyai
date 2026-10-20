@@ -9,7 +9,19 @@ export async function readIndexedDBStore<T>(page: Page, storeName: string): Prom
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
-      const transaction = database.transaction(name as string, "readonly");
+      if (!database.objectStoreNames.contains(name as string)) {
+        database.close();
+        resolve([]);
+        return;
+      }
+      let transaction: IDBTransaction;
+      try {
+        transaction = database.transaction(name as string, "readonly");
+      } catch (error) {
+        database.close();
+        reject(error);
+        return;
+      }
       const values = transaction.objectStore(name as string).getAll();
       values.onsuccess = () => resolve(values.result as T[]);
       values.onerror = () => reject(values.error);

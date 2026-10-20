@@ -9,6 +9,7 @@ import type {
   StudioFontFamily,
   StudioFontSize,
   StudioOrientation,
+  StudioPageMargins,
   StudioPageNumbering,
   StudioSpacing,
 } from "../types";
@@ -48,6 +49,12 @@ const SPACINGS: { id: StudioSpacing; label: string }[] = [
 const ORIENTATIONS: { id: StudioOrientation; label: string }[] = [
   { id: "portrait", label: "Retrato" },
   { id: "landscape", label: "Paisagem" },
+];
+
+const MARGINS: { id: StudioPageMargins; label: string }[] = [
+  { id: "compact", label: "Compacto" },
+  { id: "normal", label: "Normal" },
+  { id: "wide", label: "Amplo" },
 ];
 
 const PAGE_NUMBERINGS: { id: StudioPageNumbering; label: string }[] = [
@@ -130,6 +137,16 @@ export function StudioCustomizationPanel({ customization, onChange }: StudioCust
             onValueChange={(value) => onChange({ orientation: value as StudioOrientation })}
             options={ORIENTATIONS.map((orientation) => ({ value: orientation.id, label: orientation.label }))}
             aria-label="Orientação da página"
+            className="h-8 text-xs"
+          />
+        </label>
+        <label className="block space-y-1 text-[11px] font-medium text-muted-foreground">
+          Margens
+          <Select
+            value={customization.pageMargins}
+            onValueChange={(value) => onChange({ pageMargins: value as StudioPageMargins })}
+            options={MARGINS.map((margin) => ({ value: margin.id, label: margin.label }))}
+            aria-label="Margens da página"
             className="h-8 text-xs"
           />
         </label>

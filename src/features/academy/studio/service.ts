@@ -4,6 +4,7 @@ import type {
   StudioContentKind,
   StudioCustomization,
   StudioDocumentTemplate,
+  StudioExportRecord,
   DocumentStructure,
   DocumentSection,
   Slide,
@@ -28,6 +29,7 @@ function createDefaultCustomization(templateId: StudioDocumentTemplate): StudioC
     spacing: "normal",
     orientation: "portrait",
     pageNumbering: "bottom-center",
+    pageMargins: "normal",
     headerFooter: { enabled: true, headerText: "", footerText: "StudyAI Academy", showPageNumbers: true },
     coverPage: { enabled: true, title: "", subtitle: "", author: "StudyAI Academy", date: new Date().toLocaleDateString("pt-BR") },
     tableOfContents: { enabled: true, depth: 2 },
@@ -428,6 +430,17 @@ export const StudioService = {
     document.template = templateId;
     document.customization = template.defaultCustomization ?? createDefaultCustomization(templateId);
     document.updatedAt = new Date().toISOString();
+
+    return this.updateDocument(document);
+  },
+
+  /** Registra uma exportação no documento, sem duplicar registros. */
+  async registerExport(documentId: string, record: StudioExportRecord) {
+    const document = await this.getDocument(documentId);
+    if (!document) throw new Error("Documento não encontrado.");
+
+    document.exports = [record, ...(document.exports ?? []).filter((item) => item.id !== record.id)];
+    document.status = "exported";
 
     return this.updateDocument(document);
   },

@@ -8,6 +8,7 @@ export const defaultCustomization: StudioCustomization = {
   spacing: "normal",
   orientation: "portrait",
   pageNumbering: "bottom-center",
+  pageMargins: "normal",
   headerFooter: {
     enabled: true,
     headerText: "",

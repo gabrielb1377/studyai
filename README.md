@@ -21,6 +21,7 @@ O StudyAI busca reduzir a fragmentação entre materiais de estudo, consulta con
 - Chaves de API individuais (BYOK): cada usuário cadastra suas próprias chaves por provider, criptografadas no servidor, com fallback para variáveis de ambiente compartilhadas.
 - Aulas narradas: o Professor conduz aulas em etapas, narra a explicação, permite perguntas por voz, exercícios corrigidos e explicação alternativa, com continuidade entre sessões.
 - Academy Studio Pro: editor visual dos conteúdos gerados pela Academy, com edição de seções e slides, 12 templates, personalização de cores e tipografia, prévia, assistência de escrita por IA e salvamento local com autosave.
+- Academy Studio Pro — exportação profissional: PDF paginado e PPTX editável (textos, tabelas e notas nativos) a partir do documento editado, com o template aplicado e o arquivo salvo na Biblioteca.
 - Persistência local e suporte a sincronização, conta, colaboração e execução em web, PWA, Electron e projetos Capacitor.
 
 ## Tecnologias
@@ -135,7 +136,27 @@ Autosave com debounce no IndexedDB `studio-documents`
 - **Sem módulo paralelo**: reutiliza Academy, AI Core e Design System.
 - **IA pelo mesmo caminho**: `POST /api/academy/studio/assist` → `AIService` → `ProviderManager`, com BYOK do usuário.
 - **Nada se perde**: o conteúdo original é preservado; a proposta da IA só é aplicada quando o aluno confirma.
-- **Exportação profissional** em PDF/PPTX a partir do documento editado chega na Sprint 37C.2; a exportação atual da Academy segue disponível.
+- **Exportação profissional** — o documento editado vira PDF paginado ou PPTX editável, gerado no navegador e salvo na Biblioteca.
+
+## Exportação profissional (Academy Studio)
+
+```text
+Documento editado no Studio
+  ↓
+Modelo canônico (ExportDocumentModel / ExportDeckModel)
+  ↓
+Tokens de tema (cores, tipografia, margens, orientação, capa)
+  ↓
+PDF (pdf-lib)  |  PPTX (Open XML com caixas de texto, tabelas e notas)
+  ↓
+Biblioteca (Material + texto extraído + chunks) e download
+```
+
+- **PDF real**: capa, sumário com páginas, capítulos, listas, tabelas, código, diagramas, exercícios, cabeçalho/rodapé e numeração.
+- **PPTX editável**: títulos, parágrafos, listas e tabelas são elementos nativos; as notas do apresentador são preservadas.
+- **Template aplicado de verdade**: a personalização escolhida no Studio altera os arquivos gerados.
+- **Sem dependência nova**: `pdf-lib` e `jszip`, já presentes no projeto.
+- **Reexportar substitui**: o material mantém o mesmo identificador, sem duplicar a Biblioteca.
 
 ## Deploy
 

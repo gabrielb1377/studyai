@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { AudioLines, ChevronLeft, ChevronRight, FileText, Headphones, ImageIcon, RefreshCw, Video } from "lucide-react";
+import { AudioLines, ChevronLeft, ChevronRight, Download, FileText, Headphones, ImageIcon, RefreshCw, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,6 +81,34 @@ export function MaterialViewer({
     setPdfView("pdf");
   };
 
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const downloadFile = async () => {
+    setIsDownloading(true);
+    setDownloadError(null);
+    try {
+      const runtime = MaterialRuntimeStore.get(material.id)?.file;
+      const local = runtime ?? await MaterialBinaryStorage.load(material);
+      const file = local ?? await CloudFileService.download(material).catch(() => null);
+      if (!file) {
+        setDownloadError("O arquivo original não está disponível neste dispositivo.");
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = material.name;
+      anchor.rel = "noopener";
+      anchor.click();
+      globalThis.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    } catch {
+      setDownloadError("Não foi possível baixar o arquivo.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <Card className="gap-0 overflow-hidden py-0 shadow-none">
       <CardHeader className="gap-4 border-b px-5 py-5 sm:px-6">
@@ -98,6 +126,12 @@ export function MaterialViewer({
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
+            {material.type === "document" ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => void downloadFile()} disabled={isDownloading}>
+                {isDownloading ? <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}
+                Baixar original
+              </Button>
+            ) : null}
             <Button type="button" variant="outline" size="sm" onClick={onPrevious} disabled={!hasPrevious}>
               <ChevronLeft aria-hidden="true" />
               Anterior
@@ -148,9 +182,20 @@ export function MaterialViewer({
           </div>
         )}
         {(material.type === "text" || material.type === "document") && (
-          <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-xl border bg-secondary/30 p-5 text-sm leading-7 text-foreground sm:p-7">
-            {material.textContent || "Nenhum texto foi extraído deste material."}
-          </pre>
+          <div className="space-y-3">
+            {downloadError ? (
+              <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">{downloadError}</p>
+            ) : null}
+            {material.fileType === "pptx" ? (
+              <p className="rounded-xl border border-dashed bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
+                A pré-visualização nativa de arquivos do PowerPoint ainda não está disponível. O texto extraído do arquivo
+                aparece abaixo e o original pode ser baixado ou aberto no PowerPoint.
+              </p>
+            ) : null}
+            <pre className="max-h-[520px] overflow-auto whitespace-pre-wrap rounded-xl border bg-secondary/30 p-5 text-sm leading-7 text-foreground sm:p-7">
+              {material.textContent || "Nenhum texto foi extraído deste material."}
+            </pre>
+          </div>
         )}
         {material.type === "image" && source && (
           // eslint-disable-next-line @next/next/no-img-element

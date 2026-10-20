@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  Download,
   FileText,
   LayoutTemplate,
   Palette,
@@ -27,6 +28,7 @@ import { StudioAIPanel } from "./components/StudioAIPanel";
 import { StudioCustomizationPanel } from "./components/StudioCustomizationPanel";
 import { StudioDocumentEditor } from "./components/StudioDocumentEditor";
 import { StudioDocumentSidebar } from "./components/StudioDocumentSidebar";
+import { StudioExportPanel } from "./components/StudioExportPanel";
 import { StudioPreviewPanel } from "./components/StudioPreviewPanel";
 import { StudioPresentationEditor } from "./components/StudioPresentationEditor";
 import { StudioTemplatesPanel } from "./components/StudioTemplatesPanel";
@@ -75,6 +77,7 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
     reorderSlides,
     changeTemplate,
     updateCustomization,
+    registerExport,
     undo,
     redo,
     setViewMode,
@@ -168,6 +171,24 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
     void addSlide({ layout: "title-content", title: "Novo slide", content: "" });
   }, [addSlide]);
 
+  const handleExported = useCallback(
+    (outcome: { kind: "pdf" | "pptx"; fileName: string; size: number; pageCount?: number; slideCount?: number; materialId: string }) => {
+      void registerExport({
+        id: outcome.materialId,
+        kind: outcome.kind,
+        format: outcome.kind,
+        fileName: outcome.fileName,
+        size: outcome.size,
+        pageCount: outcome.pageCount,
+        slideCount: outcome.slideCount,
+        materialId: outcome.materialId,
+        persistentBinary: true,
+        createdAt: new Date().toISOString(),
+      });
+    },
+    [registerExport],
+  );
+
   if (!document && (isLoading || !ready)) {
     return (
       <div className="flex h-[70dvh] items-center justify-center" aria-label="Carregando documento do Studio">
@@ -204,11 +225,12 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
       onValueChange={(value) => setSidebarTab(value as typeof editorState.sidebarTab)}
       className="flex h-full min-h-0 flex-col"
     >
-      <TabsList className="mx-2 mt-2 grid shrink-0 grid-cols-4 gap-1">
+      <TabsList className="mx-2 mt-2 grid shrink-0 grid-cols-5 gap-1">
         <TabsTrigger value="structure" className="text-[11px]"><FileText className="size-3.5" aria-hidden="true" /><span className="sr-only">Estrutura</span></TabsTrigger>
         <TabsTrigger value="templates" className="text-[11px]"><LayoutTemplate className="size-3.5" aria-hidden="true" /><span className="sr-only">Templates</span></TabsTrigger>
         <TabsTrigger value="customization" className="text-[11px]"><Palette className="size-3.5" aria-hidden="true" /><span className="sr-only">Personalização</span></TabsTrigger>
         <TabsTrigger value="ai-assist" className="text-[11px]"><Sparkles className="size-3.5" aria-hidden="true" /><span className="sr-only">Assistência por IA</span></TabsTrigger>
+        <TabsTrigger value="export" className="text-[11px]"><Download className="size-3.5" aria-hidden="true" /><span className="sr-only">Exportar</span></TabsTrigger>
       </TabsList>
       <ScrollArea className="min-h-0 flex-1">
         <TabsContent value="structure" className="mt-0">
@@ -250,6 +272,14 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
             targetLabel={aiTarget.label}
             context={`${document.title}. ${study.subject}. ${study.topic}`}
             onApply={applyAiSuggestion}
+          />
+        </TabsContent>
+        <TabsContent value="export" className="mt-0">
+          <StudioExportPanel
+            document={document}
+            studySubject={study.subject}
+            studyTopic={study.topic}
+            onExported={handleExported}
           />
         </TabsContent>
       </ScrollArea>

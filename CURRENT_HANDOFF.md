@@ -1,6 +1,105 @@
-# Handoff Atual — Sprint 37C.1: Academy Studio Pro
+# Handoff Atual — Sprint 37C.2: Academy Studio Pro — Exportação Profissional
 
 Atualizado em 19 de outubro de 2026.
+
+## Resultado da Sprint 37C.2 — Exportação profissional
+
+O Academy Studio passou a **exportar** o material que ele edita. O documento
+estruturado é normalizado em um modelo canônico, recebe os tokens de tema
+resolvidos a partir da personalização escolhida e vira **PDF profissional** ou
+**PPTX editável**. O arquivo é gerado no navegador, salvo na Biblioteca
+vinculado ao documento-fonte e pode ser reaberto, editado e exportado de novo.
+
+### Entregas
+
+1. **Modelo canônico** — `ExportDocumentModel` e `ExportDeckModel` são a única
+   entrada dos renderizadores; normalização determinística, sem IA.
+2. **Theme tokens compartilhados** — `export/theme.ts` resolve cores,
+   tipografia, escala, espaçamento, margens, orientação, capa e paginação. A
+   prévia, o PDF e o PPTX consomem os mesmos tokens.
+3. **PDF profissional** — pdf-lib: capa, sumário com páginas reais, capítulos,
+   seções, listas, tabelas, código, diagramas, exercícios com respostas
+   opcionais, conclusão, cabeçalho/rodapé e numeração. A4 retrato ou paisagem,
+   margens configuráveis e acentuação brasileira preservada.
+4. **PPTX editável** — JSZip/Open XML: caixas de texto, listas, tabelas
+   (`<a:tbl>`), formas nativas e notas do apresentador. Slides nunca são
+   imagens. Os 10 layouts do Studio são suportados.
+5. **Prévia fiel** — botão "Pré-visualizar exportação" simula a página
+   (A4, margens, cabeçalho/rodapé, numeração), usando os mesmos tokens.
+6. **Estados de exportação** — preparando, gerando, concluído e erro, com
+   bloqueio de exportações simultâneas.
+7. **Biblioteca e Workspace** — material com identificador estável por
+   (documento, formato): reexportar substitui, não duplica. "Reabrir no
+   Studio" no card da Biblioteca; "Baixar original" no leitor do Workspace.
+8. **Segurança e limites** — sanitização reaproveitada, nome de arquivo
+   normalizado e limites de 400 seções, 200 slides e 1 000 000 caracteres.
+9. **Sem dependência nova** — `pdf-lib` e `jszip` já existentes.
+   `pptxgenjs` foi avaliado e descartado.
+
+### Arquivos
+
+Novos: `export/theme.ts`, `export/model.ts`, `export/pdf.ts`, `export/pptx.ts`,
+`export/service.ts`, `components/StudioExportPanel.tsx`,
+`tests/academy-studio-export.spec.ts`, `tests/helpers/pdf-text.ts`,
+`scripts/qa-studio-export.mjs`.
+
+Modificados: `studio/types.ts`, `studio/templates.ts`, `studio/service.ts`,
+`studio/hooks/useStudioEditor.ts`, `studio/StudioEditor.tsx`,
+`components/StudioPreviewPanel.tsx`, `components/StudioCustomizationPanel.tsx`,
+`library/MaterialCard.tsx`, `study/MaterialViewer.tsx`,
+`study/StudyWorkspace.tsx`, `types/study.ts`, `types/material.ts`,
+`tests/helpers/indexed-db.ts`.
+
+### Validação
+
+- ESLint: 0 erros (1 warning pré-existente em `OllamaProvider`).
+- TypeScript: sem erros.
+- Playwright: **153/153** (19,2 min) — 138 anteriores + 15 novos; 152 passaram
+  diretamente e 1 flaky (`lab.spec.ts`) passou no retry.
+- Build: aprovado, 46 rotas. `/academy/studio` com 34 kB (189 kB de First Load),
+  pois `pdf-lib` e `jszip` são carregados sob demanda.
+- `npm audit --omit=dev`: 7 vulnerabilidades transitivas pré-existentes
+  (sharp, next, katex, source-map-js). Nenhuma dependência nova.
+
+### Bugs corrigidos durante a sprint
+
+1. **Loop infinito de recarga do documento** (herdado da 37C.1) — a garantia de
+   um documento por conteúdo passou a usar a chave `studyId::contentId::tipo`.
+2. **Conteúdo de seção do tipo "título" descartado na exportação** — o corpo
+   da seção era substituído pelo título, criando duplicação no PDF.
+3. **Quebras de linha perdidas no Markdown** — parágrafos com quebras suaves
+   viravam um bloco só, o que quebrava listas em PPTX.
+4. **Regex de sanitização consumindo quebras de linha** — `\\s*` apagava
+   parágrafos inteiros na conversão para texto puro.
+5. **Extração de texto do PDF** — o helper lia hex em pares de 4 dígitos
+   quando o pdf-lib grava WinAnsi (2 dígitos por byte).
+6. **Capa sangrada na prévia de exportação** — as margens eram aplicadas
+   também à capa, que é sangrada no PDF.
+7. **Bundle da rota Studio inflado** — `pdf-lib` e `jszip` passaram a ser
+   carregados sob demanda (77 kB → 34 kB).
+
+### Limitações
+
+- O ambiente não possui LibreOffice, PowerPoint ou Poppler: o PPTX foi validado
+  estruturalmente, não visualmente. O PDF foi conferido pelo leitor de PDF do
+  próprio StudyAI.
+- Fontes do PDF cobrem Latin-1; caracteres fora do conjunto viram `?`.
+- Diagramas entram como fonte editável.
+- A Biblioteca não tem pré-visualização nativa de PPTX.
+- Sem imagens embutidas a partir do Studio (campo reservado no schema).
+
+### QA visual
+
+`scripts/qa-studio-export.mjs` gera os arquivos de exemplo (apostila técnica
+extensa, apresentação de 14 slides e documento com tabelas, código e
+acentuação) e captura a prévia e o leitor de PDF do próprio StudyAI.
+
+**Limitação registrada**: o ambiente não possui LibreOffice, PowerPoint ou
+Poppler, portanto o PPTX não pode ser renderizado para inspeção visual — ele
+foi validado estruturalmente (OOXML, shapes, tabelas, notas e coordenadas
+dentro da área do slide).
+
+## Base: Sprint 37C.1 — Academy Studio Pro
 
 ## Resultado da Sprint 37C.1 — Academy Studio Pro
 

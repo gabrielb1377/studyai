@@ -48,6 +48,7 @@ export type Material = {
   academyStudyId?: string;
   academyContentId?: string;
   academyMaterialKind?: AcademyMaterialKind;
+  academyStudioDocumentId?: string;
   labProjectId?: string;
 };
 

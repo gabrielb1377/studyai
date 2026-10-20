@@ -2,6 +2,35 @@
 
 Atualizado em 19 de outubro de 2026.
 
+## Academy Studio Pro — Exportação profissional — Sprint 37C.2
+
+O [[Academy Studio]] agora **exporta** o que edita. O documento estruturado do
+Studio é normalizado em um modelo canônico (`ExportDocumentModel` /
+`ExportDeckModel`), recebe os tokens de tema resolvidos a partir da
+`StudioCustomization` e é renderizado em **PDF profissional** (pdf-lib) ou
+**PPTX editável** (JSZip/Open XML).
+
+A pré-visualização, o PDF e o PPTX consomem **os mesmos** tokens
+(`src/features/academy/studio/export/theme.ts`): não há três configurações de
+tema paralelas. A escolha de template, cores, tipografia, espaçamento,
+orientação, margens, capa, cabeçalho/rodapé e numeração afeta realmente os
+arquivos gerados.
+
+A geração é local (navegador), não usa IA e não altera o documento-fonte. O
+artefato é salvo na Biblioteca com identificador estável por (documento,
+formato) — reexportar substitui, não duplica — e carrega o vínculo com o
+documento-fonte, permitindo reabrir, editar e exportar outra versão.
+
+O PPTX usa caixas de texto, tabelas, formas e notas do apresentador nativos:
+slides nunca são exportados como imagens. Diagramas entram como fonte
+editável, com aviso explícito.
+
+Limites: as fontes padrão do PDF cobrem Latin-1 (acentos brasileiros são
+preservados); o ambiente não possui LibreOffice para renderizar o PPTX, que
+foi validado estruturalmente.
+
+Ver `docs/RELEASE_NOTES_SPRINT_37C_2.md`.
+
 ## Academy Studio Pro — Sprint 37C.1
 
 A Academy agora possui um **editor visual** para os conteúdos que ela mesma

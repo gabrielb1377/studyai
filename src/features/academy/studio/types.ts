@@ -28,6 +28,8 @@ export type StudioOrientation = "portrait" | "landscape";
 
 export type StudioPageNumbering = "none" | "bottom-center" | "bottom-right" | "top-right";
 
+export type StudioPageMargins = "compact" | "normal" | "wide";
+
 export type SlideLayoutType = 
   | "cover" 
   | "title-content" 
@@ -99,6 +101,7 @@ export type StudioCustomization = {
   spacing: StudioSpacing;
   orientation: StudioOrientation;
   pageNumbering: StudioPageNumbering;
+  pageMargins: StudioPageMargins;
   headerFooter: {
     enabled: boolean;
     headerText?: string;
@@ -119,6 +122,19 @@ export type StudioCustomization = {
   };
 };
 
+export type StudioExportRecord = {
+  id: string;
+  kind: "pdf" | "pptx";
+  format: "pdf" | "pptx";
+  fileName: string;
+  size: number;
+  pageCount?: number;
+  slideCount?: number;
+  materialId: string;
+  persistentBinary: boolean;
+  createdAt: string;
+};
+
 export type StudioDocument = {
   id: string;
   studyId: string;
@@ -135,6 +151,7 @@ export type StudioDocument = {
   createdAt: string;
   updatedAt: string;
   lastEditedBy?: string;
+  exports?: StudioExportRecord[];
 };
 
 export type StudioEditorState = {
@@ -143,7 +160,7 @@ export type StudioEditorState = {
   activeSlideId?: string;
   viewMode: "edit" | "preview" | "split";
   sidebarOpen: boolean;
-  sidebarTab: "structure" | "templates" | "customization" | "ai-assist";
+  sidebarTab: "structure" | "templates" | "customization" | "ai-assist" | "export";
   unsavedChanges: boolean;
   lastSavedAt?: string;
 };

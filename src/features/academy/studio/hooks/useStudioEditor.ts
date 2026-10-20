@@ -8,6 +8,7 @@ import type {
   StudioDocumentTemplate,
   StudioCustomization,
   StudioTemplate,
+  StudioExportRecord,
   DocumentSection,
   DocumentStructure,
   Slide,
@@ -395,6 +396,18 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível alterar o template.");
+        return null;
+      }
+    },
+
+    registerExport: async (record: StudioExportRecord) => {
+      if (!document) return null;
+      try {
+        const updated = await StudioService.registerExport(document.id, record);
+        setDocument(updated);
+        return updated;
+      } catch (error) {
+        setLastError(error instanceof Error ? error.message : "Não foi possível registrar a exportação.");
         return null;
       }
     },
