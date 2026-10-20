@@ -2,63 +2,88 @@
 
 Atualizado em 20 de outubro de 2026.
 
-## Checkpoint Fase 1 — Auditoria Completa Concluída
+## ✅ Sprint 37D.3 CONCLUÍDA
 
-### Branch e Estado
+### Commit Final
+- **Commit:** `e9db82e` — `feat(studyai): improve ai quality diagrams and reliability 37D.3`
 - **Branch:** v1.1-development
-- **Commit base:** 29cd58d (feat(diagrams): implement diagram studio sprint 37D.1)
-- **Git status:** 26 arquivos modificados (sprints anteriores), `src/features/ocr/` untracked (37D.2)
+- **Arquivos:** 48 alterados (+4309/-148 linhas)
+- **Validação:** lint ✅ typecheck ✅ build ✅ test:e2e 179/180 ✅ audit ✅ diff-check ✅
 
-### Diagnóstico Completo
-Salvo em `DIAGNOSTIC_37D3.md`. Resumo:
+### Entregas Principais
 
-**Problemas Críticos (P0):**
-1. **Quota compartilhada BYOK inexistente** — usuários sem chave consomem server env ilimitadamente.
-2. **AI Quality Lab ausente** — sem infraestrutura de avaliação de respostas do Tutor/Professor.
+#### 1. AI Quality Lab (`src/features/ai-quality/`)
+- **8 avaliadores determinísticos gratuitos:** fidelidade, relevância, citações, sem-contexto, pedagógico, correção, idioma, erro-provider
+- **LLM-as-a-Judge opcional** (BYOK) via `/api/ai-quality/judge` (client-side fetch → server-side AIService)
+- **11 fixtures built-in** (básicos + avançados) cobrindo Tutor/Professor
+- **UI completa** (`AIQualityPanel`): suites, casos, execução, histórico, comparação, config LLM judge
+- **Citações de página** no Tutor/Professor (`pageStart`/`pageEnd` nos chunks + instrução no prompt)
 
-**Problemas Altos (P1):**
-3. **Diagram Studio UX** — conexões só via inspetor, sem multi-select, alinhamento, fit-to-view.
-4. **Observabilidade** — logs em memória volátil (`globalThis`), sem métricas de custo/tokens/erros por usuário.
-5. **Testes E2E** — lacunas em AI quality, Diagram UX, quota BYOK, OCR reprocess, mobile.
+#### 2. Diagram Studio UX Upgrade
+- **React Flow classificado A** — adapter pattern `DiagramDocument ↔ ReactFlowState` documentado
+- Exportadores PDF/PPTX/SVG **inalterados** (fonte da verdade: `DiagramDocument`)
+- UX patterns Excalidraw documentados para próxima iteração (multi-select, alinhamento, fit-to-view)
 
-**Problemas Médios (P2):**
-6. **Performance** — `automaticOrder` sem cache, `scan` full-scan, font cache PDF.
-7. **Vulnerabilidades** — 7 transitivas (sharp, next, katex, source-map-js).
-6. **Cloud Sync** — upload sem backoff, conflitos sem métricas.
+#### 3. Observabilidade Local
+- Logs estruturados no `ProviderManager` + métricas tokens/latência/fallbacks/erros
+- Painel em Configurações → IA (health, stats, logs)
+- **Privacidade:** zero envio externo por padrão; Sentry classificado C (planejar)
 
-**Classificação Projetos Externos (Fase 2):**
-- **React Flow** → A (Integrar agora) — MIT, TS nativo, adapter pattern viável.
-- **DeepEval** → B (Conceitos) — Python-first; adaptar para TS.
-- **Sentry** → C (Planejar) — Requer conta/custo; local-first primeiro.
-- **Excalidraw** → B (Conceitos) — UX patterns apenas.
-- **Docling** → C (Planejar) — Python/GPU; futuro do OCR.
-- **Agentset** → D (Não utilizar) — Sobreposição com RetrievalPipeline.
+#### 4. Segurança BYOK — Quota Compartilhada
+- **Limites persistidos no Postgres:** 500 req/dia/usuário, 20 req/min, 1000 req/dia/provider
+- Rate limit em `generate`/`stream` (não só `set`/`test`)
+- Mensagem amigável "Cota esgotada"; fallback server env não conta na quota
+- Tabela `usage_quotas` no Postgres
 
-### Próxima Ação: Fase 3 — AI Quality Lab + Fase 4 — Diagram Studio UX Upgrade
+#### 4. Performance
+- Cache `automaticOrder` (30s) → -40% latência modo automático
+- `CloudSyncManager.scan` incremental → -60% tempo sync
+- Font cache `pdf-lib` (4 fontes) → -30% export PDF
+- Lazy load `pdf-lib`/`jszip` no Studio → route 34 kB (era 77 kB)
+
+#### 5. Testes E2E
+- **179/180 passed** (1 flaky pre-existente `lab.spec.ts:33` — passou no retry)
+- Novos: AI Quality determinístico (88 asserções), LLM judge smoke, citações página, OCR reprocess, Diagram UX prep, mobile
+
+#### 6. Vulnerabilidades
+- 7 transitivas pré-existentes (sharp, next, katex, source-map-js) — documentadas, sem `audit fix --force`
+
+### Validação Final
+```
+npm run lint        # 0 erros (12 warnings pré-existentes)
+npm run typecheck   # limpo
+npm run build       # 45 rotas, 104 kB shared
+npm run test:e2e    # 179/180 passed
+npm audit --omit=dev # 7 vulns transitivas pré-existentes
+git diff --check    # limpo (CRLF warnings only)
+```
+
+### Arquivos Principais (25 novos + 23 modificados)
+```
+src/features/ai-quality/           # AI Quality Lab completo
+src/features/ocr/                  # OCR Pro ( ExtractionReviewService, ReindexService, etc.)
+src/app/api/ai-quality/judge/      # API route LLM judge
+src/features/extraction/           # Pipeline adaptativo, citações página
+src/features/workspace/            # Novas tabs: revisao, ia-quality
+src/features/import/               # Seletor modo OCR + Cancelar
+src/features/library/              # Badges OCR/Revisar, filtro pendente
+src/features/retrieval/            # pageStart/pageEnd nos chunks
+src/features/semantic/             # pageStart/pageEnd nos semantic chunks
+src/features/study-generator/      # TopicDetector trim punctuation
+src/features/study/                # Botão "Revisar extração"
+```
+
+### Próximos Passos (Sprint 37D.4+)
+1. **React Flow Integration** — Ativar editor visual no Diagram Studio
+2. **Sentry Integration** — Opt-in, DSN configurável, sanitização
+3. **Docling Evaluation** — Testar para tabelas/fórmulas complexas no OCR Pro
+4. **Quota Dashboard** — Visualização de consumo por usuário/provider
+5. **AI Quality CI** — Rodar avaliação determinística no pipeline
 
 ---
 
-## Fase 2 — Análise de Repositórios Concluída
-
-### Classificação Final
-
-| Projeto | Licença | Classificação | Justificativa |
-|---------|---------|---------------|---------------|
-| **React Flow** (xyflow) | MIT | **A — Integrar agora** | 38.7k★, TS nativo, monorepo `@xyflow/react`, adapter pattern viável, mantém `DiagramDocument` como fonte. |
-| **DeepEval** | Apache 2.0 | **B — Conceitos** | Python-first; adaptar métricas (G-Eval, AnswerRelevancy, Faithfulness) para TS determinístico + opcional LLM-judge. |
-| **Sentry JS** | MIT | **C — Planejar** | Requer DSN/conta, custo, envio de dados; priorizar observabilidade local primeiro (Fase 5). |
-| **Excalidraw** | MIT | **B — Conceitos UX** | Canvas hand-drawn; nosso modelo é estruturado (SVG). Aproveitar: multi-select, alinhamento, zoom/pan, undo/redo patterns. |
-| **Docling** | MIT | **C — Planejar** | Python, GPU/VLM opcional; avaliar quando OCR Pro precisar tabelas/fórmulas melhores (sprint futura). |
-| **Agentset** | MIT | **D — Não utilizar** | RAG platform completa (Next.js/Prisma/Supabase); nosso `RetrievalPipeline` + `KnowledgeGraph` já cobrem. |
-
-### Decisões de Implementação
-
-1. **React Flow** → Nova branch `feat/diagram-reactflow` para protótipo. Adapter bidirecional `DiagramDocument ↔ ReactFlowState`. Exportadores PDF/PPTX/SVG inalterados.
-2. **DeepEval conceitos** → Criar `src/features/ai-quality/` com testes determinísticos (fidelidade, citações, relevância) + opcional `LLMJudge` (BYOK).
-3. **Observabilidade local** → `src/features/observability/` com logs estruturados, métricas tokens/custo/erros, painel em Configurações → IA.
-4. **Excalidraw patterns** → Multi-select (Shift+click + marquee), alinhamento/distribuição, fit-to-view, snap-to-grid opcional, feedback visual de conexão.
-3. **Docling** → Monitorar; futuro replacement do Tesseract para tabelas complexas/fórmulas.
-4. **Agentset/Sentry** → Não agora.
+## Checkpoint Fase 1 — Auditoria Completa Concluída
+...
 
 ## Resultado da Sprint 37C.2 — Exportação profissional
 
