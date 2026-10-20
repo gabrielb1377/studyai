@@ -60,7 +60,7 @@ export type DiagramEdge = {
   from: string;
   to: string;
   label?: string;
-  style?: "solid" | "dashed";
+  style?: "solid" | "dashed" | "curve";
   arrow?: boolean;
 };
 
