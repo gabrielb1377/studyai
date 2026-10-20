@@ -9,6 +9,8 @@ export const workspacePanelTypes = [
   "lab",
   "knowledge",
   "dashboard",
+  "review",
+  "ai-quality",
 ] as const;
 
 export type WorkspacePanelType = (typeof workspacePanelTypes)[number];

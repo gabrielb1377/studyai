@@ -26,6 +26,8 @@ const tabToPanel: Record<WorkspaceTab, WorkspacePanelType> = {
   quiz: "quiz",
   notes: "notes",
   lab: "lab",
+  revisao: "review",
+  "ia-quality": "ai-quality",
 };
 
 const panelToTab: Partial<Record<WorkspacePanelType, WorkspaceTab>> = {
@@ -37,6 +39,8 @@ const panelToTab: Partial<Record<WorkspacePanelType, WorkspaceTab>> = {
   quiz: "quiz",
   notes: "notes",
   lab: "lab",
+  review: "revisao",
+  "ai-quality": "ia-quality",
 };
 
 const mobileWorkspaceQuery = "(max-width: 1023px)";

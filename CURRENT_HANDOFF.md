@@ -1,6 +1,64 @@
-# Handoff Atual — Sprint 37C.2: Academy Studio Pro — Exportação Profissional
+# Handoff Atual — Sprint 37D.3: Intelligence, Quality & Developer Experience Upgrade
 
-Atualizado em 19 de outubro de 2026.
+Atualizado em 20 de outubro de 2026.
+
+## Checkpoint Fase 1 — Auditoria Completa Concluída
+
+### Branch e Estado
+- **Branch:** v1.1-development
+- **Commit base:** 29cd58d (feat(diagrams): implement diagram studio sprint 37D.1)
+- **Git status:** 26 arquivos modificados (sprints anteriores), `src/features/ocr/` untracked (37D.2)
+
+### Diagnóstico Completo
+Salvo em `DIAGNOSTIC_37D3.md`. Resumo:
+
+**Problemas Críticos (P0):**
+1. **Quota compartilhada BYOK inexistente** — usuários sem chave consomem server env ilimitadamente.
+2. **AI Quality Lab ausente** — sem infraestrutura de avaliação de respostas do Tutor/Professor.
+
+**Problemas Altos (P1):**
+3. **Diagram Studio UX** — conexões só via inspetor, sem multi-select, alinhamento, fit-to-view.
+4. **Observabilidade** — logs em memória volátil (`globalThis`), sem métricas de custo/tokens/erros por usuário.
+5. **Testes E2E** — lacunas em AI quality, Diagram UX, quota BYOK, OCR reprocess, mobile.
+
+**Problemas Médios (P2):**
+6. **Performance** — `automaticOrder` sem cache, `scan` full-scan, font cache PDF.
+7. **Vulnerabilidades** — 7 transitivas (sharp, next, katex, source-map-js).
+6. **Cloud Sync** — upload sem backoff, conflitos sem métricas.
+
+**Classificação Projetos Externos (Fase 2):**
+- **React Flow** → A (Integrar agora) — MIT, TS nativo, adapter pattern viável.
+- **DeepEval** → B (Conceitos) — Python-first; adaptar para TS.
+- **Sentry** → C (Planejar) — Requer conta/custo; local-first primeiro.
+- **Excalidraw** → B (Conceitos) — UX patterns apenas.
+- **Docling** → C (Planejar) — Python/GPU; futuro do OCR.
+- **Agentset** → D (Não utilizar) — Sobreposição com RetrievalPipeline.
+
+### Próxima Ação: Fase 3 — AI Quality Lab + Fase 4 — Diagram Studio UX Upgrade
+
+---
+
+## Fase 2 — Análise de Repositórios Concluída
+
+### Classificação Final
+
+| Projeto | Licença | Classificação | Justificativa |
+|---------|---------|---------------|---------------|
+| **React Flow** (xyflow) | MIT | **A — Integrar agora** | 38.7k★, TS nativo, monorepo `@xyflow/react`, adapter pattern viável, mantém `DiagramDocument` como fonte. |
+| **DeepEval** | Apache 2.0 | **B — Conceitos** | Python-first; adaptar métricas (G-Eval, AnswerRelevancy, Faithfulness) para TS determinístico + opcional LLM-judge. |
+| **Sentry JS** | MIT | **C — Planejar** | Requer DSN/conta, custo, envio de dados; priorizar observabilidade local primeiro (Fase 5). |
+| **Excalidraw** | MIT | **B — Conceitos UX** | Canvas hand-drawn; nosso modelo é estruturado (SVG). Aproveitar: multi-select, alinhamento, zoom/pan, undo/redo patterns. |
+| **Docling** | MIT | **C — Planejar** | Python, GPU/VLM opcional; avaliar quando OCR Pro precisar tabelas/fórmulas melhores (sprint futura). |
+| **Agentset** | MIT | **D — Não utilizar** | RAG platform completa (Next.js/Prisma/Supabase); nosso `RetrievalPipeline` + `KnowledgeGraph` já cobrem. |
+
+### Decisões de Implementação
+
+1. **React Flow** → Nova branch `feat/diagram-reactflow` para protótipo. Adapter bidirecional `DiagramDocument ↔ ReactFlowState`. Exportadores PDF/PPTX/SVG inalterados.
+2. **DeepEval conceitos** → Criar `src/features/ai-quality/` com testes determinísticos (fidelidade, citações, relevância) + opcional `LLMJudge` (BYOK).
+3. **Observabilidade local** → `src/features/observability/` com logs estruturados, métricas tokens/custo/erros, painel em Configurações → IA.
+4. **Excalidraw patterns** → Multi-select (Shift+click + marquee), alinhamento/distribuição, fit-to-view, snap-to-grid opcional, feedback visual de conexão.
+3. **Docling** → Monitorar; futuro replacement do Tesseract para tabelas complexas/fórmulas.
+4. **Agentset/Sentry** → Não agora.
 
 ## Resultado da Sprint 37C.2 — Exportação profissional
 

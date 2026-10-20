@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, LayoutTemplate, Pencil, Sparkles, Star, Trash2 } from "lucide-react";
+import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, LayoutTemplate, Pencil, ScanText, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import type { Material } from "@/types/material";
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
 import { formatMaterialDate, materialTypes } from "./material-utils";
 import type { KnowledgeGraph } from "@/features/semantic/types";
+import { qualityLabel } from "@/features/ocr/quality";
 import type { LibraryView } from "./LibraryBrowser";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
   const label = generatedByLab ? "Exercício de Laboratório" : generatedByAcademy
     ? generatedExportLabel ?? "Material Gerado por IA"
     : typeInfo.label;
+  const reviewNeeded = Boolean(content?.pages?.some((page) => page.status === "review" || page.status === "error"));
   const details = [
     ...(generatedByAcademy ? [] : [{ label: "Tamanho", value: formatFileSize(material.size) }]),
     ...(material.academyMaterialKind ? [{ label: "Tipo Academy", value: academyKindLabels[material.academyMaterialKind] }] : []),
@@ -63,6 +65,12 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
     ...(content?.metadata.readingTimeMinutes !== undefined
       ? [{ label: "Leitura", value: `${content.metadata.readingTimeMinutes} min` }]
       : []),
+    ...(content?.pipeline ? [
+      { label: "Extração", value: content.pipeline.mode === "native" ? "Texto nativo" : content.pipeline.mode === "force" ? "OCR forçado" : "Automática" },
+      { label: "Páginas OCR", value: `${content.pipeline.ocrPages} de ${content.pipeline.pages}` },
+      { label: "Revisadas", value: String(content.pipeline.reviewedPages) },
+      { label: "Qualidade", value: qualityLabel(content.metadata.quality ?? "unknown") },
+    ] : []),
     ...(knowledge ? [
       { label: "Conceitos", value: String(knowledge.statistics.conceptCount) },
       { label: "Relações", value: String(knowledge.statistics.relationCount) },
@@ -111,6 +119,16 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
             </span>
           )}
         </div>
+        {content?.metadata.ocrPerformed || reviewNeeded ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {content?.metadata.ocrPerformed ? <Badge variant="outline">OCR aplicado</Badge> : null}
+            {reviewNeeded ? (
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200">
+                Revisar extração
+              </Badge>
+            ) : null}
+          </div>
+        ) : null}
         <h3
           id={`material-${material.id}`}
           className={cn("break-words text-sm font-semibold leading-6", view === "grid" && "mb-5")}
@@ -177,6 +195,11 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
             <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>
             <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia`}><Bot />Tutor</Link></Button>
           </>}
+          {content ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=revisao`}><ScanText />Revisar</Link>
+            </Button>
+          ) : null}
           <Button type="button" size="sm" variant="ghost" onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
           <Button type="button" size="sm" variant="ghost" onClick={onMove}><FolderInput />Mover</Button>
           <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Excluir</Button>

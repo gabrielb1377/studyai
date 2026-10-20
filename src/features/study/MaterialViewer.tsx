@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { AudioLines, ChevronLeft, ChevronRight, Download, FileText, Headphones, ImageIcon, RefreshCw, Video } from "lucide-react";
+import { AudioLines, ChevronLeft, ChevronRight, Download, FileText, Headphones, ImageIcon, RefreshCw, ScanText, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,6 +50,7 @@ export function MaterialViewer({
   compact?: boolean;
 }) {
   const Icon = materialIcons[material.type];
+  const router = useRouter();
   const [source, setSource] = useState(material.source);
   const [isRestoring, setIsRestoring] = useState(false);
   const [pdfView, setPdfView] = useState<"text" | "pdf">("pdf");
@@ -126,6 +128,10 @@ export function MaterialViewer({
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => router.push(`/estudo?tema=${encodeURIComponent(studyId)}&arquivo=${encodeURIComponent(material.id)}&aba=revisao`)}>
+              <ScanText aria-hidden="true" />
+              Revisar extração
+            </Button>
             {material.type === "document" ? (
               <Button type="button" variant="outline" size="sm" onClick={() => void downloadFile()} disabled={isDownloading}>
                 {isDownloading ? <RefreshCw className="size-3.5 animate-spin" aria-hidden="true" /> : <Download className="size-3.5" aria-hidden="true" />}

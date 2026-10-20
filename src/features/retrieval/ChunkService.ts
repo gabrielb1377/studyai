@@ -1,4 +1,5 @@
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
+import { pageRangeForText } from "@/features/ocr/structure";
 import type { ContentChunk } from "./RetrievalTypes";
 
 const TARGET_WORDS = 160;
@@ -32,26 +33,31 @@ export const ChunkService = {
   createChunks(content: ExtractedContent): ContentChunk[] {
     if (content.status !== "extracted" || !content.extractedText.trim()) return [];
 
-    return splitIntoWindows(content.extractedText).map((text, chunkIndex) => ({
-      id: `${content.id}:chunk:${chunkIndex}`,
-      studyId: content.studyId,
-      fileId: content.fileId,
-      chunkIndex,
-      text,
-      metadata: {
-        extractedContentId: content.id,
-        sourceName: content.metadata.name,
-        fileType: content.fileType,
-        mimeType: content.metadata.type,
-        size: content.metadata.size,
-        pageCount: content.metadata.pageCount,
-        duration: content.metadata.duration,
-        language: content.metadata.language,
-        title: content.metadata.title,
-        subject: content.metadata.subject,
-        topic: content.metadata.topic,
-        keywords: content.metadata.keywords,
-      },
-    }));
+    return splitIntoWindows(content.extractedText).map((text, chunkIndex) => {
+      const range = content.pages?.length ? pageRangeForText(content.pages, text) : {};
+      return {
+        id: `${content.id}:chunk:${chunkIndex}`,
+        studyId: content.studyId,
+        fileId: content.fileId,
+        chunkIndex,
+        text,
+        metadata: {
+          extractedContentId: content.id,
+          sourceName: content.metadata.name,
+          fileType: content.fileType,
+          mimeType: content.metadata.type,
+          size: content.metadata.size,
+          pageCount: content.metadata.pageCount,
+          duration: content.metadata.duration,
+          language: content.metadata.language,
+          title: content.metadata.title,
+          subject: content.metadata.subject,
+          topic: content.metadata.topic,
+          keywords: content.metadata.keywords,
+          ...(range.pageStart ? { pageStart: range.pageStart } : {}),
+          ...(range.pageEnd ? { pageEnd: range.pageEnd } : {}),
+        },
+      };
+    });
   },
 };

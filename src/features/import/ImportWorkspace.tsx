@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CheckCircle2, Copy, RefreshCw, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, RefreshCw, ScanText, Square, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { OcrMode } from "@/features/extraction/ExtractionTypes";
 import { DropZone } from "./DropZone";
 import { ImportFileCard } from "./ImportFileCard";
 import { ImportProgress } from "./ImportProgress";
@@ -22,6 +24,9 @@ export function ImportWorkspace() {
     removeFile,
     importFiles,
     resolveDuplicates,
+    ocrMode,
+    setOcrMode,
+    cancelImport,
   } = useImport();
   const processing = phase === "processing";
   const addFilesRef = useRef(addFiles);
@@ -53,6 +58,32 @@ export function ImportWorkspace() {
   return (
     <div className="space-y-6">
       <DropZone disabled={processing} onFiles={addFiles} />
+
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <ScanText className="size-4 text-primary" aria-hidden="true" />
+            Extração de texto
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O OCR roda localmente, página por página, e só é acionado quando o texto nativo não é suficiente.
+          </p>
+        </div>
+        <div className="w-full sm:w-64">
+          <label htmlFor="import-ocr-mode" className="sr-only">Modo de extração de texto</label>
+          <Select
+            id="import-ocr-mode"
+            value={ocrMode}
+            onValueChange={(value) => setOcrMode(value as OcrMode)}
+            options={[
+              { value: "auto", label: "Automático (recomendado)" },
+              { value: "native", label: "Somente texto nativo" },
+              { value: "force", label: "Forçar OCR" },
+            ]}
+            disabled={processing}
+          />
+        </div>
+      </div>
 
       {feedback && (
         <p
@@ -95,6 +126,12 @@ export function ImportWorkspace() {
                   ? "Extração concluída"
                   : "Importar"}
             </Button>
+            {processing ? (
+              <Button type="button" variant="destructive" className="h-11" onClick={cancelImport}>
+                <Square className="size-4" aria-hidden="true" />
+                Cancelar
+              </Button>
+            ) : null}
           </div>
 
           <div

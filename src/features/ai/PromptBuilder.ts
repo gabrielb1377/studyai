@@ -43,6 +43,9 @@ export const PromptBuilder = {
       sections.push("", "Contexto do estudo:", ContextBuilder.fromStudy(studyContext));
     }
     if (compressed.chunks.length > 0) {
+      if (compressed.chunks.some((chunk) => chunk.metadata.pageStart)) {
+        sections.push("", "Ao citar um trecho recuperado, informe a página no formato (p. X) ou (p. X–Y).");
+      }
       sections.push("", "Trechos recuperados dos materiais:", ContextBuilder.fromChunks(compressed.chunks));
     }
     sections.push("", `Pergunta do usuário: ${question}`);
