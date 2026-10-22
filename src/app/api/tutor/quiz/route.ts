@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 import { AIService } from "@/features/ai/AIService";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
 import { requireUser } from "@/server/auth/http";
@@ -16,6 +15,7 @@ import {
 import { PromptBuilder } from "@/features/ai/PromptBuilder";
 import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
+import { withAIQuota, createQuotaAwareAIRequest } from "@/server/ai/QuotaMiddleware";
 
 export const runtime = "nodejs";
 
@@ -50,35 +50,24 @@ function parseQuestions(value: string): GeneratedQuestion[] | null {
 }
 
 export async function POST(request: Request) {
-  const body: unknown = await request.json().catch(() => null);
-  if (!isRequest(body)) {
-    return NextResponse.json({ error: "É necessário conteúdo real extraído para criar o quiz." }, { status: 400 });
-  }
-
-  try {
-    let userApiKeys: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> | undefined;
+  return withAIQuota(request, async (request, aiRequest) => {
     try {
-      const user = requireUser(request);
-      const entries = await Promise.all(aiProviderIds.map(async (provider) => [provider, await ApiKeyService.getDecrypted(user.sub, provider)] as const));
-      const map: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> = {};
-      for (const [provider, key] of entries) if (key) map[provider] = key;
-      if (Object.keys(map).length > 0) userApiKeys = map;
-    } catch { userApiKeys = undefined; }
-    const response = await AIService.generate({
-      history: [],
-      signal: request.signal,
-      message: PromptBuilder.quiz(body.title, body.subject, body.chunks),
-      model: body.model,
-      models: body.models,
-      mode: body.mode,
-      provider: body.provider,
-      apiKeys: userApiKeys,
-    });
-    const questions = parseQuestions(response.text);
-    if (!questions) return NextResponse.json({ error: "O provider não retornou questões em um formato válido." }, { status: 502 });
-    return NextResponse.json({ questions });
-  } catch (error) {
-    const normalized = normalizeAIError(error, "Erro inesperado ao criar o quiz.");
-    return NextResponse.json(normalized.body, { status: normalized.status });
-  }
+      const response = await AIService.generate({
+        history: aiRequest.history,
+        message: aiRequest.message,
+        model: aiRequest.model,
+        models: aiRequest.models,
+        mode: aiRequest.mode,
+        signal: request.signal,
+        provider: aiRequest.provider,
+        apiKeys: aiRequest.apiKeys,
+      });
+      const questions = parseQuestions(response.text);
+      if (!questions) return NextResponse.json({ error: "O provider não retornou questões em um formato válido." }, { status: 502 });
+      return NextResponse.json({ questions });
+    } catch (error) {
+      const normalized = normalizeAIError(error, "Erro inesperado ao criar o quiz.");
+      return NextResponse.json(normalized.body, { status: normalized.status });
+    }
+  });
 }

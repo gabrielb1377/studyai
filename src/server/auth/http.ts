@@ -57,7 +57,14 @@ export function publicOrigin(request: Request) {
 }
 
 export function apiError(error: unknown) {
-  if (error instanceof Response) return error;
+  if (error instanceof Response) {
+    // Convert plain Response to NextResponse by cloning
+    return new NextResponse(error.body, {
+      status: error.status,
+      statusText: error.statusText,
+      headers: error.headers,
+    });
+  }
   const message = error instanceof Error ? error.message : "Não foi possível concluir a solicitação.";
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
   const unavailable = new Set(["ECONNREFUSED", "ECONNRESET", "ENOTFOUND", "ETIMEDOUT", "57P01", "53300"]);

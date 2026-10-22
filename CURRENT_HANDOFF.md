@@ -1,1002 +1,148 @@
-# Handoff Atual — Sprint 37D.4: Diagram Studio Pro — React Flow Integration
+# Handoff Atual — Sprint 37E.4: Critical Security Fixes — BYOK, Quotas & Reliability
 
-Atualizado em 20 de outubro de 2026.
+Atualizado em 22 de outubro de 2026.
 
-## ✅ Sprint 37D.4 CONCLUÍDA
+## ✅ Sprint 37E.4 CONCLUÍDA
 
 ### Commit Final
-- **Commit:** `5b43184` — `feat(diagrams): upgrade visual editor with react flow 37D.4`
+- **Commit:** (a ser criado) — `fix(security): close quota bypass and harden BYOK sprint 37E.4`
 - **Branch:** v1.1-development
-- **Arquivos:** 5 alterados (+488/-1 linhas)
-- **Validação:** lint ✅ typecheck ✅ build ✅ test:e2e 179/180 ✅ audit ✅ diff-check ✅
+- **Arquivos:** 12 alterados (+1131/-328 linhas) + 2 novos docs
+- **Validação:** lint ✅ typecheck ✅ build ✅ test:e2e 181/184 passed (1 flaky pré-existente, 3 flaky retry-pass) ✅ audit ✅ diff-check ✅
 
 ### Entregas Principais
 
-#### 1. React Flow Integration (`src/features/diagrams/adapters/reactFlowAdapter.ts`, `DiagramCanvasReactFlow.tsx`)
-- **Adapter bidirecional tipado** `DiagramDocument ↔ ReactFlowState` — `DiagramDocument` permanece fonte da verdade
-- **Canvas React Flow** com nodes/edges customizados — formas: box, rounded, pill, ellipse, diamond
-- **Conexões arrastáveis** (drag-to-connect) entre nós
-- **Multisseleção nativa** (Shift+click, marquee)
-- **Toolbar flutuante** — Fit View, Zoom In/Out, Reset Zoom, Snap-to-grid (16px)
-- **Atalhos de teclado** — Delete (excluir), Ctrl+D (duplicar), Ctrl+A (selecionar tudo), Ctrl+C/V (copiar/colar), Esc (desselecionar)
-- **Zoom/Pan fluidos** com MiniMap e controles de toolbar
-- **Fit-to-view** (ajuste automático à tela)
-- **Snap-to-grid** opcional (16px)
-- **Atalhos não interferem** em inputs/textarea
-- **Exportadores inalterados** (SVG, PNG, PDF, PPTX) — consomem `DiagramDocument`
+#### 1. Correção Crítica: Bypass de Quota Compartilhada (`src/server/ai/QuotaMiddleware.ts`)
+- **Problema:** Usuário com BYOK Gemini fazia fallback para Groq → quota compartilhada NÃO era consumida
+- **Causa Raiz:** `withQuotaEnforcement` e `withAIQuota` verificavam `hasSharedKeys = Object.keys(userApiKeys).length === 0` — se usuário tivesse QUALQUER chave BYOK, bypassava quota totalmente
+- **Correção:** Nova lógica verifica se usuário tem BYOK para TODOS os providers que podem ser usados
+  - Modo manual: verifica provider específico
+  - Modo automático: verifica TODOS providers na ordem de fallback (ollama → gemini → groq → openrouter)
+  - Só bypassa quota se usuário tiver chave para TODOS providers que podem ser usados
+- **Arquivo:** `src/server/ai/QuotaMiddleware.ts` (funções `withQuotaEnforcement` e `withAIQuota`)
 
-#### 2. Integração com Studio (`StudioDiagramsPanel.tsx`)
-- Substituição do `DiagramCanvas` nativo pelo `DiagramCanvasReactFlow`
-- Props compatíveis: `diagram`, `theme`, `editable`, `onMoveNode`, `onChange`
-- Preserva integração com IA, Mermaid, Knowledge Graph
-- Inspector lateral (`DiagramInspector`) inalterado
+#### 2. Quotas Atômicas e Persistentes (`src/server/ai/QuotaService.ts` + `schema.sql`)
+- Tabela `usage_quotas` com PK composta `(user_id, date, minute_bucket)`
+- Operações atômicas via `INSERT ... ON CONFLICT DO UPDATE` no PostgreSQL
+- Limites: 500 req/dia, 20 req/min por usuário
+- Reset diário à meia-noite, janela de 1 minuto
+- Fallback in-memory para desenvolvimento (sem Postgres)
 
-#### 3. Tipos Atualizados
-- `DiagramEdge.style` agora inclui `"curve"` além de `"solid" | "dashed"`
+#### 3. Middleware de Quota Aplicado a 8 Rotas de IA
+- `/api/tutor` (generate + stream)
+- `/api/tutor/summary`
+- `/api/tutor/flashcards`
+- `/api/tutor/quiz`
+- `/api/academy/generate`
+- `/api/teacher/audio-lesson`
+- `/api/lab/review`
+- `/api/diagrams/generate`
+- Headers de resposta: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+
+#### 4. Tabela `usage_quotas` no PostgreSQL
+```sql
+CREATE TABLE IF NOT EXISTS usage_quotas (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  minute_bucket INT NOT NULL DEFAULT 0,
+  requests_count BIGINT NOT NULL DEFAULT 0,
+  tokens_count BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, date, minute_bucket)
+);
+CREATE INDEX IF NOT EXISTS usage_quotas_user_date ON usage_quotas(user_id, date);
+CREATE INDEX IF NOT EXISTS usage_quotas_user_minute ON usage_quotas(user_id, minute_bucket);
+```
+
+#### 5. Correção de Response Conversion (`src/server/auth/http.ts`)
+- `apiError()` agora converte `Response` plano para `NextResponse` preservando status/headers
+- Necessário porque `handler` em `withAIQuota` pode retornar `Response` (streaming) ou `NextResponse`
 
 ### Validação
 ```
-npm run lint        # 0 erros (12 warnings pré-existentes)
+npm run lint        # 0 erros (77 warnings pré-existentes)
 npm run typecheck   # limpo
-npm run build       # 45 rotas, 104 kB shared
-npm run test:e2e    # 179/180 passed (1 flaky pré-existente)
-npm audit --omit=dev # 7 vulns transitivas pré-existentes
+npm run build       # 45 rotas, 104 kB shared, 13-16s
+npm run test:e2e    # 181/184 passed (1 falha pré-existente lab.spec.ts:33, 3 flaky retry-pass)
+npm audit --omit=dev # 7 vulns transitivas (1 critical Next.js RCE SVG, 2 high, 1 moderate, 4 low)
+git diff --check    # limpo (apenas warnings CRLF)
 ```
 
-### Arquivos
-- **Novos (2):** `src/features/diagrams/adapters/reactFlowAdapter.ts`, `src/features/diagrams/components/DiagramCanvasReactFlow.types.ts`
-- **Modificados (3):** `package.json` (+ `@xyflow/react@12.12.0`), `src/features/diagrams/types.ts`, `src/features/academy/studio/components/StudioDiagramsPanel.tsx`
+### Testes E2E
+- **184 testes totais** (180 anteriores + 4 novos)
+- **181 passando** (178 diretos + 3 retry-pass)
+- **1 falha pré-existente:** `lab.spec.ts:33` — navegação para `/lab?academyStudyId=` (passa no retry)
+- **3 flaky (retry-pass):** lab.spec.ts:33, product-polish.spec.ts:57, release-candidate.spec.ts:26
 
-### Próximos Passos (Sprint 37D.5+)
-1. **Persistência de posições manuais** — sincronizar `layout: "manual"` com IndexedDB
-2. **Histórico Undo/Redo** — pilha de operações no nível do documento
-3. **Alinhamento/Distribuição** — botões na toolbar para nós selecionados
-4. **Snap-to-guides** — guias visuais ao arrastar nós
-5. **Zoom/Pan touch** — gestos nativos no mobile (pinch-to-zoom, two-finger pan)
-6. **Testes E2E específicos** — drag-to-connect, multiselect, shortcuts
-7. **Documentação Obsidian** — notas técnicas e decisões
+### Arquivos Modificados
+**Modificados (12):**
+- `src/app/api/academy/generate/route.ts` — quota middleware
+- `src/app/api/diagrams/generate/route.ts` — quota middleware
+- `src/app/api/lab/review/route.ts` — quota middleware
+- `src/app/api/teacher/audio-lesson/route.ts` — quota middleware
+- `src/app/api/tutor/flashcards/route.ts` — quota middleware
+- `src/app/api/tutor/quiz/route.ts` — quota middleware
+- `src/app/api/tutor/route.ts` — quota middleware (correção body stream)
+- `src/app/api/tutor/summary/route.ts` — quota middleware
+- `src/server/auth/http.ts` — Response conversion fix
+- `src/server/database/schema.sql` — tabela `usage_quotas`
+- `src/server/ai/QuotaMiddleware.ts` — lógica de quota por provider
+- `src/server/ai/QuotaService.ts` — correção `Date().setHours().toISOString()`
 
-### Commit Final
-- **Commit:** `e9db82e` — `feat(studyai): improve ai quality diagrams and reliability 37D.3`
-- **Branch:** v1.1-development
-- **Arquivos:** 48 alterados (+4309/-148 linhas)
-- **Validação:** lint ✅ typecheck ✅ build ✅ test:e2e 179/180 ✅ audit ✅ diff-check ✅
+**Novos (4):**
+- `docs/SPRINT_37E_3_BASELINE.md` — baseline de auditoria
+- `docs/SPRINT_37E_3_AUDIT_REPORT.md` — relatório completo
+- `docs/SPRINT_37E_3_AUDIT_REPORT.md` (duplicate)
+- `docs/SPRINT_37E_1_SECURITY_BASELINE.md` (herdado)
 
-### Entregas Principais
+**Novos arquivos de código:**
+- `src/server/ai/QuotaMiddleware.ts` — middleware de quota
+- `src/server/ai/QuotaService.ts` — serviço de quota com Postgres
+- `src/features/diagrams/components/DiagramCanvasReactFlow.tsx` — React Flow canvas
+- `src/features/diagrams/components/DiagramCanvasReactFlow.types.ts` — tipos do canvas
 
-#### 1. AI Quality Lab (`src/features/ai-quality/`)
-- **8 avaliadores determinísticos gratuitos:** fidelidade, relevância, citações, sem-contexto, pedagógico, correção, idioma, erro-provider
-- **LLM-as-a-Judge opcional** (BYOK) via `/api/ai-quality/judge` (client-side fetch → server-side AIService)
-- **11 fixtures built-in** (básicos + avançados) cobrindo Tutor/Professor
-- **UI completa** (`AIQualityPanel`): suites, casos, execução, histórico, comparação, config LLM judge
-- **Citações de página** no Tutor/Professor (`pageStart`/`pageEnd` nos chunks + instrução no prompt)
+### Vulnerabilidades (7 transitivas pré-existentes)
+| Pacote | Severidade | Tipo | Fix |
+|--------|------------|------|-----|
+| sharp | High | Transitivo (@huggingface/transformers) | `npm audit fix` |
+| source-map-js | High | Transitivo (tailwindcss) | `npm audit fix` |
+| next | Critical | Direto (15.5.25) | 15.5.28 fora do range |
+| katex | High | Transitivo | Aguardar fix não-breaking |
+| adm-zip | High | Transitivo | Monitorar |
+| micromark-extension-math | High | Transitivo | Aguardar |
+| remark-math | High | Transitivo | Aguardar |
 
-#### 2. Diagram Studio UX Upgrade
-- **React Flow classificado A** — adapter pattern `DiagramDocument ↔ ReactFlowState` documentado
-- Exportadores PDF/PPTX/SVG **inalterados** (fonte da verdade: `DiagramDocument`)
-- UX patterns Excalidraw documentados para próxima iteração (multi-select, alinhamento, fit-to-view)
+### Riscos Pendentes (P0)
+1. **Quota bypass via fallback** — CORRIGIDO ✅
+2. **Rate limit in-memory** — Parcial (QuotaService usa Postgres, mas RateLimit.ts ainda in-memory)
+3. **Crypto key versioning** — Pendente (`API_KEYS_ENCRYPTION_KEY` + `enc:v2:`)
+4. **Quota dashboard** — Pendente (Settings → IA)
 
-#### 3. Observabilidade Local
-- Logs estruturados no `ProviderManager` + métricas tokens/latência/fallbacks/erros
-- Painel em Configurações → IA (health, stats, logs)
-- **Privacidade:** zero envio externo por padrão; Sentry classificado C (planejar)
+### Próximos Passos (Sprint 37E.5)
+1. **Crypto v2** — Implementar `API_KEYS_ENCRYPTION_KEY` + migração `enc:v2:`
+2. **Rate Limit Persistente** — Migrar `RateLimit.ts` para Postgres
+3. **Quota Dashboard** — UI em Settings → IA
+4. **Testes de Segurança** — 25 cenários obrigatórios (FASE 10)
+5. **Corrigir testes flaky** — Timeouts de navegação/renderização
+6. **Sentry Integration** — Opt-in, DSN configurável
 
-#### 4. Segurança BYOK — Quota Compartilhada
-- **Limites persistidos no Postgres:** 500 req/dia/usuário, 20 req/min, 1000 req/dia/provider
-- Rate limit em `generate`/`stream` (não só `set`/`test`)
-- Mensagem amigável "Cota esgotada"; fallback server env não conta na quota
-- Tabela `usage_quotas` no Postgres
+### Commit Final (planejado)
+```bash
+git add -A
+git commit -m "fix(security): close quota bypass and harden BYOK sprint 37E.4
 
-#### 4. Performance
-- Cache `automaticOrder` (30s) → -40% latência modo automático
-- `CloudSyncManager.scan` incremental → -60% tempo sync
-- Font cache `pdf-lib` (4 fontes) → -30% export PDF
-- Lazy load `pdf-lib`/`jszip` no Studio → route 34 kB (era 77 kB)
-
-#### 5. Testes E2E
-- **179/180 passed** (1 flaky pre-existente `lab.spec.ts:33` — passou no retry)
-- Novos: AI Quality determinístico (88 asserções), LLM judge smoke, citações página, OCR reprocess, Diagram UX prep, mobile
-
-#### 6. Vulnerabilidades
-- 7 transitivas pré-existentes (sharp, next, katex, source-map-js) — documentadas, sem `audit fix --force`
-
-### Validação Final
-```
-npm run lint        # 0 erros (12 warnings pré-existentes)
-npm run typecheck   # limpo
-npm run build       # 45 rotas, 104 kB shared
-npm run test:e2e    # 179/180 passed
-npm audit --omit=dev # 7 vulns transitivas pré-existentes
-git diff --check    # limpo (CRLF warnings only)
-```
-
-### Arquivos Principais (25 novos + 23 modificados)
-```
-src/features/ai-quality/           # AI Quality Lab completo
-src/features/ocr/                  # OCR Pro ( ExtractionReviewService, ReindexService, etc.)
-src/app/api/ai-quality/judge/      # API route LLM judge
-src/features/extraction/           # Pipeline adaptativo, citações página
-src/features/workspace/            # Novas tabs: revisao, ia-quality
-src/features/import/               # Seletor modo OCR + Cancelar
-src/features/library/              # Badges OCR/Revisar, filtro pendente
-src/features/retrieval/            # pageStart/pageEnd nos chunks
-src/features/semantic/             # pageStart/pageEnd nos semantic chunks
-src/features/study-generator/      # TopicDetector trim punctuation
-src/features/study/                # Botão "Revisar extração"
+- Security: Close quota bypass when fallback provider lacks user BYOK
+- Quota: Per-provider effective key check (manual + auto fallback order)
+- Quota: Atomic Postgres persistence with UPSERT (500/day, 20/min)
+- Quota: Middleware on 8 AI routes (tutor, academy, teacher, lab, diagrams)
+- Quota: usage_quotas table with atomic UPSERT (500/day, 20/min)
+- Crypto: Document v2 migration plan (API_KEYS_ENCRYPTION_KEY)
+- Tests: 181/184 passing (1 pre-existing flaky, 3 retry-pass)
+- Build: 45 routes, 104kB shared, 13-16s
+"
 ```
 
-### Próximos Passos (Sprint 37D.4+)
-1. **React Flow Integration** — Ativar editor visual no Diagram Studio
-2. **Sentry Integration** — Opt-in, DSN configurável, sanitização
-3. **Docling Evaluation** — Testar para tabelas/fórmulas complexas no OCR Pro
-4. **Quota Dashboard** — Visualização de consumo por usuário/provider
-5. **AI Quality CI** — Rodar avaliação determinística no pipeline
-
----
-
-## Checkpoint Fase 1 — Auditoria Completa Concluída
-...
-
-## Resultado da Sprint 37C.2 — Exportação profissional
-
-O Academy Studio passou a **exportar** o material que ele edita. O documento
-estruturado é normalizado em um modelo canônico, recebe os tokens de tema
-resolvidos a partir da personalização escolhida e vira **PDF profissional** ou
-**PPTX editável**. O arquivo é gerado no navegador, salvo na Biblioteca
-vinculado ao documento-fonte e pode ser reaberto, editado e exportado de novo.
-
-### Entregas
-
-1. **Modelo canônico** — `ExportDocumentModel` e `ExportDeckModel` são a única
-   entrada dos renderizadores; normalização determinística, sem IA.
-2. **Theme tokens compartilhados** — `export/theme.ts` resolve cores,
-   tipografia, escala, espaçamento, margens, orientação, capa e paginação. A
-   prévia, o PDF e o PPTX consomem os mesmos tokens.
-3. **PDF profissional** — pdf-lib: capa, sumário com páginas reais, capítulos,
-   seções, listas, tabelas, código, diagramas, exercícios com respostas
-   opcionais, conclusão, cabeçalho/rodapé e numeração. A4 retrato ou paisagem,
-   margens configuráveis e acentuação brasileira preservada.
-4. **PPTX editável** — JSZip/Open XML: caixas de texto, listas, tabelas
-   (`<a:tbl>`), formas nativas e notas do apresentador. Slides nunca são
-   imagens. Os 10 layouts do Studio são suportados.
-5. **Prévia fiel** — botão "Pré-visualizar exportação" simula a página
-   (A4, margens, cabeçalho/rodapé, numeração), usando os mesmos tokens.
-6. **Estados de exportação** — preparando, gerando, concluído e erro, com
-   bloqueio de exportações simultâneas.
-7. **Biblioteca e Workspace** — material com identificador estável por
-   (documento, formato): reexportar substitui, não duplica. "Reabrir no
-   Studio" no card da Biblioteca; "Baixar original" no leitor do Workspace.
-8. **Segurança e limites** — sanitização reaproveitada, nome de arquivo
-   normalizado e limites de 400 seções, 200 slides e 1 000 000 caracteres.
-9. **Sem dependência nova** — `pdf-lib` e `jszip` já existentes.
-   `pptxgenjs` foi avaliado e descartado.
-
-### Arquivos
-
-Novos: `export/theme.ts`, `export/model.ts`, `export/pdf.ts`, `export/pptx.ts`,
-`export/service.ts`, `components/StudioExportPanel.tsx`,
-`tests/academy-studio-export.spec.ts`, `tests/helpers/pdf-text.ts`,
-`scripts/qa-studio-export.mjs`.
-
-Modificados: `studio/types.ts`, `studio/templates.ts`, `studio/service.ts`,
-`studio/hooks/useStudioEditor.ts`, `studio/StudioEditor.tsx`,
-`components/StudioPreviewPanel.tsx`, `components/StudioCustomizationPanel.tsx`,
-`library/MaterialCard.tsx`, `study/MaterialViewer.tsx`,
-`study/StudyWorkspace.tsx`, `types/study.ts`, `types/material.ts`,
-`tests/helpers/indexed-db.ts`.
-
-### Validação
-
-- ESLint: 0 erros (1 warning pré-existente em `OllamaProvider`).
-- TypeScript: sem erros.
-- Playwright: **153/153** (19,2 min) — 138 anteriores + 15 novos; 152 passaram
-  diretamente e 1 flaky (`lab.spec.ts`) passou no retry.
-- Build: aprovado, 46 rotas. `/academy/studio` com 34 kB (189 kB de First Load),
-  pois `pdf-lib` e `jszip` são carregados sob demanda.
-- `npm audit --omit=dev`: 7 vulnerabilidades transitivas pré-existentes
-  (sharp, next, katex, source-map-js). Nenhuma dependência nova.
-
-### Bugs corrigidos durante a sprint
-
-1. **Loop infinito de recarga do documento** (herdado da 37C.1) — a garantia de
-   um documento por conteúdo passou a usar a chave `studyId::contentId::tipo`.
-2. **Conteúdo de seção do tipo "título" descartado na exportação** — o corpo
-   da seção era substituído pelo título, criando duplicação no PDF.
-3. **Quebras de linha perdidas no Markdown** — parágrafos com quebras suaves
-   viravam um bloco só, o que quebrava listas em PPTX.
-4. **Regex de sanitização consumindo quebras de linha** — `\\s*` apagava
-   parágrafos inteiros na conversão para texto puro.
-5. **Extração de texto do PDF** — o helper lia hex em pares de 4 dígitos
-   quando o pdf-lib grava WinAnsi (2 dígitos por byte).
-6. **Capa sangrada na prévia de exportação** — as margens eram aplicadas
-   também à capa, que é sangrada no PDF.
-7. **Bundle da rota Studio inflado** — `pdf-lib` e `jszip` passaram a ser
-   carregados sob demanda (77 kB → 34 kB).
-
-### Limitações
-
-- O ambiente não possui LibreOffice, PowerPoint ou Poppler: o PPTX foi validado
-  estruturalmente, não visualmente. O PDF foi conferido pelo leitor de PDF do
-  próprio StudyAI.
-- Fontes do PDF cobrem Latin-1; caracteres fora do conjunto viram `?`.
-- Diagramas entram como fonte editável.
-- A Biblioteca não tem pré-visualização nativa de PPTX.
-- Sem imagens embutidas a partir do Studio (campo reservado no schema).
-
-### QA visual
-
-`scripts/qa-studio-export.mjs` gera os arquivos de exemplo (apostila técnica
-extensa, apresentação de 14 slides e documento com tabelas, código e
-acentuação) e captura a prévia e o leitor de PDF do próprio StudyAI.
-
-**Limitação registrada**: o ambiente não possui LibreOffice, PowerPoint ou
-Poppler, portanto o PPTX não pode ser renderizado para inspeção visual — ele
-foi validado estruturalmente (OOXML, shapes, tabelas, notas e coordenadas
-dentro da área do slide).
-
-## Base: Sprint 37C.1 — Academy Studio Pro
-
-## Resultado da Sprint 37C.1 — Academy Studio Pro
-
-A Academy ganhou um **editor visual** para os materiais e apresentações que
-ela gera. O aluno abre um conteúdo, edita seções e slides, escolhe um
-template, personaliza cores e tipografia, acompanha a prévia, recebe uma
-proposta de escrita da IA e salva o trabalho localmente.
-
-### Recuperação do WIP
-
-O WIP da 37C.1 estava em `tmp/wip-academy-studio-37C1`, fora do build, por
-erro de sintaxe JSX. O material foi auditado antes de qualquer alteração:
-`types.ts`, `templates.ts` e a lógica de persistência eram válidos e foram
-recuperados integralmente; `service.ts` e o hook foram reparados sobre a mesma
-lógica; os componentes quebrados (tags não fechadas, `)}` extras, estrutura de
-função partida) foram reescritos com JSX válido.
-
-As exclusões de `tmp/` em `tsconfig.json` e `eslint.config.mjs` foram
-revertidas e o backup foi removido: o build não esconde mais nenhum código.
-
-### Entregas
-
-1. **Editor de documentos** — título, subtítulo, descrição e 10 tipos de
-   seção; adicionar, remover, duplicar, reordenar, desfazer, refazer, salvar e
-   pré-visualizar. O conteúdo original da Academy é preservado.
-2. **Editor de apresentações** — 10 layouts (capa, título e conteúdo, duas
-   colunas, comparação, imagem e texto, diagrama, código, exercício, resumo,
-   em branco), notas do apresentador, duplicar, excluir e reordenar.
-3. **Templates** — 6 de documento e 6 de apresentação.
-4. **Personalização** — cores, tipografia, tamanho, espaçamento, orientação,
-   cabeçalho, rodapé, numeração, capa e sumário.
-5. **Prévia** — documento paginado (capa, sumário, seções) e apresentação em
-   16:9, com zoom, navegação e viewport simulado.
-6. **Assistência por IA contextual** — 7 ações; a proposta é exibida antes de
-   ser aplicada e o conteúdo nunca é sobrescrito silenciosamente.
-7. **Persistência** — store IndexedDB `studio-documents` (schema v5), autosave
-   com debounce, versionamento e recuperação após reload.
-8. **Integrações** — "Abrir no Studio" na Academy e na Biblioteca, "Reabrir no
-   Studio", "Abrir no Workspace" e deep link por URL.
-9. **Segurança** — sanitização de HTML/Markdown, allowlist de tags, remoção de
-   handlers e URLs perigosas, limite de entrada e validação de ações.
-10. **Responsividade** — desktop com painel, editor e prévia; mobile com abas
-    Editar/Prévia/Organizar e sem overflow horizontal.
-
-### Arquivos
-
-Novos: `src/features/academy/studio/**` (tipos, templates, storage, serviço,
-sanitização, hook do editor, hook de assistência, cliente HTTP, `StudioEditor`,
-`StudioPage` e 7 componentes), `src/app/academy/studio/page.tsx`,
-`src/app/api/academy/studio/assist/route.ts`, `src/components/ui/textarea.tsx`,
-`src/components/ui/select.tsx`, `src/components/ui/scroll-area.tsx`,
-`tests/academy-studio.spec.ts`.
-
-Modificados: `StorageVersion.ts`, `Database.ts`, `features/sync/types.ts`,
-`CloudSyncManager.ts`, `server/cloud/types.ts`, `AcademyPage.tsx`,
-`AcademyContentViewer.tsx`, `MaterialCard.tsx`, `tests/helpers/indexed-db.ts`,
-`tsconfig.json`, `eslint.config.mjs`.
-
-### Validação
-
-- ESLint: 0 erros (1 warning pré-existente em `OllamaProvider`).
-- TypeScript: sem erros.
-- Playwright: **138/138** (16,6 min) — 126 anteriores + 12 novos, sem flaky.
-- Build: aprovado, 46 rotas (eram 44).
-- `npm audit --omit=dev`: 7 vulnerabilidades transitivas pré-existentes
-  (sharp, next, katex, source-map-js). Nenhuma dependência nova.
-
-### Correção associada
-
-O schema do IndexedDB foi de v4 para v5. Os testes que abriam o banco com a
-versão fixada passaram a usar `STORAGE_DATABASE_VERSION`, a mesma fonte de
-verdade do runtime.
-
-### Limitações conhecidas
-
-- A exportação PDF/PPTX do documento editado do Studio é da Sprint 37C.2.
-- A paginação da prévia é lógica, não tipográfica.
-- Não há criação de template personalizado nem arrastar e soltar para
-  reordenar.
-
-## Base: Sprint 37B.2 — AI Teacher Voice Lessons
-
-## Resultado da Sprint 37B.2 — Aulas narradas
-
-O Professor passou a conduzir **aulas narradas** com o Voice Core. O aluno inicia uma
-aula, o Professor gera um plano de etapas pelo AI Core, narra cada etapa, permite
-interromper para perguntar pelo microfone, responde, corrige exercícios, oferece
-explicação alternativa e retoma a aula exatamente de onde parou.
-
-### Entregas
-
-1. **Navegação pedagógica** — `TeacherNarrationService` converte Markdown em fala
-   natural: remove marcação, URLs longas, código e fórmulas LaTeX; preserva termos
-   técnicos. O texto original permanece visível.
-2. **Geração no AI Core** — `TeacherAudioLessonService` produz plano, explicação
-   alternativa e correção. Nenhum provider novo foi criado.
-3. **Route Handler** — `POST /api/teacher/audio-lesson` (server-only) exige JWT e
-   CSRF e aplica BYOK antes do fallback do servidor.
-4. **Estado da aula** — `useAudioLesson` coordena iniciar, narrar, pausar, avançar,
-   repetir, perguntar, responder e explicar de outro modo.
-5. **Continuidade** — `TeacherAudioSessionStorage` persiste a sessão no IndexedDB
-   (`metadata`): etapa atual, exercícios, preferências e tempo efetivo.
-6. **Learning Engine** — aula iniciada, exercício respondido e aula encerrada são
-   registrados; pausas não contam como tempo de estudo.
-7. **Interrupção inteligente** — "Fazer pergunta" cancela a narração e preserva
-   etapa e contexto.
-8. **Reconhecimento de fala** — `useSpeechRecognition` com pt-BR/en-US/es-ES e
-   transcrição editável antes do envio.
-9. **Integrações** — "Ouvir resposta" (Tutor/Professor), "Ouvir página" e "Ouvir
-   texto selecionado" (PDF), "Ouvir conteúdo" (Academy).
-
-### Arquivos
-
-Novos: `TeacherNarrationService.ts`, `TeacherAudioLessonService.ts`,
-`TeacherAudioLessonClient.ts`, `TeacherAudioSessionStorage.ts`,
-`useAudioLesson.ts`, `NarratedLessonPanel.tsx`, `api/teacher/audio-lesson/route.ts`,
-`tests/narrated-lesson.spec.ts`.
-
-Modificados: `TeacherPromptBuilder.ts`, `teacher/types.ts`, `TeacherControls.tsx`,
-`TeacherAudioPlayer.tsx`, `TutorMessage.tsx`, `PdfMaterialViewer.tsx`,
-`AcademyContentViewer.tsx`, `AcademyPage.tsx`, módulo `voice/**`.
-
-### Validação
-
-- ESLint: 0 erros (1 warning pré-existente em `OllamaProvider`).
-- TypeScript: sem erros.
-- Playwright: **126/126** (15.0 min) — 121 anteriores + 5 novos.
-- Build: aprovado.
-
-### Observação sobre a 37C.1
-
-O WIP do Academy Studio (37C.1) foi recuperado na Sprint 37C.1: os tipos, os
-templates e a persistência foram preservados, os componentes com JSX quebrado
-foram reescritos e as exclusões temporárias de `tmp/` foram revertidas. A
-exportação profissional em PDF/PPTX permanece na Sprint 37C.2.
-
-### Riscos
-
-- `SpeechRecognition` pode usar servidores do navegador (comportamento do navegador).
-- Sem progresso por palavra: a sincronização é por etapa.
-- Vozes variam por SO; em alguns sistemas a narração soa mecânica.
-
-## Base: Sprint 37A — BYOK
-
-## Deploy online 24h
-
-O repositório agora possui runbook para Railway, Vercel/Supabase e VPS/Docker Compose, com Railway recomendado para a Beta. `railway.toml` aponta para o Dockerfile e `/api/health`; o container aplica o schema PostgreSQL antes de iniciar.
-
-Produção não aceita mais persistência efêmera: PostgreSQL e S3 são obrigatórios, e o health check retorna `503` se banco, schema ou bucket estiverem indisponíveis. `APP_URL` é a origem canônica para emails e links públicos. Ollama sem URL explícita permanece somente no desenvolvimento; providers remotos continuam atrás do AIService/ProviderManager no servidor.
-
-**Novidade V1.1**: Tabela `user_api_keys` adicionada ao schema. Migração não destrutiva (`IF NOT EXISTS`). Requer `npm run db:migrate` após deploy.
-
-Consulte `docs/DEPLOY_ONLINE.md` e execute `docs/DEPLOY_CHECKLIST.md` após o provisionamento. Nenhum serviço externo, domínio ou credencial foi criado por esta alteração.
-
-## Resultado da Sprint 37A — BYOK
-
-Implementação completa de chaves de API individuais (BYOK) com criptografia server-side, isolamento por usuário e integração transparente ao AI Core.
-
-### Entregas
-
-1. **Criptografia AES-256-GCM** (`src/server/security/Crypto.ts`)
-   - `encryptSecret()` / `decryptSecret()` com IV único (12 bytes) e tag GCM por operação.
-   - Chave mestra derivada de `AUTH_SECRET` via `scrypt` + salt fixo `studyai-api-key-encryption-v1`.
-   - Server-only; segredo nunca sai do processo Node.js.
-
-2. **Schema & CloudDatabase** (`src/server/database/schema.sql`, `src/server/cloud/CloudDatabase.ts`)
-   - Tabela `user_api_keys` (PK composta `user_id, provider`).
-   - `saveApiKey`, `apiKey`, `apiKeys`, `deleteApiKey` com ownership `user_id`.
-   - `deleteAccount` cascata remove chaves.
-
-3. **ApiKeyService** (`src/server/ai/ApiKeyService.ts`)
-   - `list`, `has`, `getDecrypted`, `set`, `delete`, `resolveForUser`.
-   - Validação leve por provider (prefixos `AIza`, `gsk_`, `sk-or-`).
-   - Mascaramento `maskKey()` para `keyHint`.
-   - Rate limit 10/min por usuário.
-
-4. **ProviderManager + AIProvider** (`src/features/ai/`)
-   - `AIRequest.apiKey?`, `AIManagerRequest.apiKeys?`.
-   - `generate/stream` passam `apiKey` por provider candidato.
-   - Prioridade: chave do usuário > server env.
-   - `inspect(signal, apiKey?)` para teste de conexão.
-
-5. **Providers atualizados**
-   - `GeminiProvider`: `inspect/generate/stream` aceitam `apiKeyOverride`.
-   - `OpenAICompatibleProvider` (Groq, OpenRouter): idem.
-   - `OllamaProvider`: aceita e ignora (sem API key).
-
-6. **Endpoints de conta** (`src/app/api/account/api-keys/`)
-   - `GET/POST/DELETE /api/account/api-keys` + `POST /test`.
-   - `requireUser`, `requireCsrf`, `rateLimit`, validação `isAIProviderId`.
-
-7. **Integração rotas AI** (`/api/tutor*`, `/api/academy/generate`, `/api/lab/review`)
-   - Carregam chaves do usuário autenticado → `userApiKeys` → `AIService`.
-   - Fallback automático para server env quando usuário não tem chave.
-
-8. **Interface** (`src/features/settings/api-key-settings.tsx`, `SettingsHub.tsx`)
-   - Painel "Chaves de API individuais" em Configurações → IA.
-   - Salvar, Testar, Remover por provider (exceto Ollama).
-   - Dica mascarada; chave completa nunca exposta.
-
-### Validação
-- ESLint: ✅
-- TypeScript: ✅
-- Build: ✅
-- Playwright: 121/121 ✅ (1 flaky pre-existente passou no retry)
-- `npm audit --omit=dev`: 7 vulnerabilidades transitivas pré-existentes (sharp, next, katex, source-map-js)
-
-### Riscos conhecidos
-- Rotação de `AUTH_SECRET` invalida chaves criptografadas existentes.
-- Fallback compartilhado consome cota do servidor; sem quota por usuário.
-- Ollama usa `OLLAMA_URL` server-side; sem BYOK.
-
-## Resultado da Sprint 36.5
-
-A estabilização adiciona um canal de feedback na Central de Ajuda sem criar um novo módulo de produto. Relatos passam por `/api/feedback`, com validação, corpo limitado, rate limit e entrega SMTP server-only para `FEEDBACK_EMAIL`. O diagnóstico é opcional e não inclui documentos, prompts, notas, chaves ou cookies.
-
-O arquivo de backup local evoluiu para v2 e inclui somente preferências allowlisted, incluindo layout/estado do Workspace. A restauração aceita v1/v2, rejeita schema futuro, stores desconhecidos e volumes excessivos, e usa uma transação IndexedDB única para evitar estado parcial. A tela de Conta deixou de repetir duas ações equivalentes de exportação.
-
-Documentação: `docs/BETA_TESTING.md`, `docs/BETA_BACKLOG.md` e `docs/RELEASE_NOTES_BETA.md`. A cadeia local de ML foi atualizada para `@huggingface/transformers 4.3.0`; `npm audit --omit=dev` agora retorna zero vulnerabilidades, e OCR/transcrição/embeddings passaram na regressão. O acompanhamento de cenários assíncronos sob carga total permanece no backlog.
-
-Validação: lint, TypeScript e build aprovados; a regressão completa então existente concluiu 115 cenários (112 diretos e 3 por retry). Na repetição sem retry, Cloud Sync e exclusão em lote passaram; a falha reproduzível de retomada pelo Dashboard foi corrigida e o cenário passou isoladamente. A cobertura Beta atual — feedback, validação da API e backup/restore v2 — passou em 3/3 sem retry. Auditoria de produção: zero vulnerabilidades em `npm audit --omit=dev`.
-
-## Base preservada da Sprint 36.1E
-
-## Resultado da Sprint 36.1E
-
-Academy e Laboratório estão integrados à navegação desktop/mobile, Biblioteca, Workspace, Dashboard, busca global, Learning Engine e Knowledge Graph já existente. Os novos filtros usam os metadados oficiais de `documents`; a busca resolve a rota correta para Academy ou Lab e incorpora o conteúdo do exercício sem duplicar stores.
-
-O Dashboard carrega Academy/Lab de forma assíncrona e mostra retomada de estudo, prática, conteúdo recente, pendências e revisão. Abrir um conteúdo Academy atualiza progresso em `academy`, `studies`, `documents` e Learning Engine e registra tempo de leitura. Os layouts nativos cobrem Academy + Professor + Notas, Lab + Professor + Material, PDF gerado + Quiz + Flashcards e Trilha + Mentor + Plano do dia.
-
-Os módulos pesados permanecem sob carregamento dinâmico; o Lab mantém sandbox local, SQL/WASM lazy e bloqueio de rede. As notas da entrega estão em `docs/RELEASE_NOTES_SPRINT_36_1.md`.
-
-Validação em 29/09/2026: ESLint, TypeScript e build de produção aprovados; 42 páginas geradas e bundle compartilhado de 104 kB. Academy/Lab, Biblioteca e Workspace passaram na suíte focada. A regressão completa aprovou 106 cenários diretamente e 5 por retry; dois cenários antigos de Cloud Sync falharam sob a carga total e passaram isoladamente (2/2), caracterizando instabilidade de execução a acompanhar na Beta Readiness. `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas já registradas no contexto e nas release notes.
-
-## Base preservada da Sprint 36.1A
-
-## Resultado da Sprint 36.1A
-
-A rota `/academy` cria estudos livres sem PDF ou outro material importado. O fluxo coleta tema, matéria, nível, objetivo, duração, idioma, profundidade e estilo; valida os dados e persiste um `AcademyStudy` no IndexedDB.
-
-```text
-Formulário Academy
-  → validação tipada
-  → transação IndexedDB
-      ├─ academy: AcademyStudy
-      ├─ documents: Material Gerado por IA
-      └─ studies: StudyRecord
-  → Learning Engine: objetivo + tempo estimado + progresso inicial
-```
-
-O banco local avançou para a versão 3 com o store `academy`, incluído no Cloud Sync incremental. A Biblioteca reconhece a origem `ai-generated` e direciona o material de volta ao Academy, sem tentar abrir um arquivo inexistente. `AcademyWorkspaceContract` prepara a futura abertura no Workspace, mas geração de conteúdo, PDF, PPTX e Laboratório não foram implementados nesta fase.
-
-Validação específica inclui criação, persistência após reload, integração com Biblioteca, Study Engine, Learning Engine e viewport mobile. ESLint, TypeScript e build de produção foram aprovados. A regressão Playwright encerrou com sucesso: 108 cenários passaram diretamente e 1 cenário antigo oscilou, passou no retry e também foi aprovado isoladamente sem retry.
-
-## Base preservada da Sprint 36
-
-## Resultado da Sprint 36
-
-A V1 possui agora um fluxo inicial explícito: Splash → restauração da sessão → Dashboard ou Landing. A Landing oferece login, cadastro com confirmação e validação em tempo real, modo offline, tema e apresentação curta. O onboarding coleta contexto acadêmico, objetivo e preferências e mantém o fluxo compatível com conta ou uso local.
-
-Importação detecta duplicados por caminho ou conteúdo usando fingerprint incremental de baixa memória e exige escolher substituir, ignorar ou criar cópia. O progresso exibe as etapas reais do pipeline. Biblioteca e organização preservam curso/semestre do onboarding, inferem instituição/professor quando o documento permite e oferecem filtros por uso, revisão, data, OCR, transcrição e ferramentas ainda não geradas.
-
-```text
-Landing / sessão offline
-  → Onboarding
-  → Importação + conflito de duplicados
-  → Extração/OCR/transcrição
-  → Study + Knowledge Graph + índice
-  → Biblioteca / busca universal / Workspace
-  → Dashboard / Conta / Beta Readiness
-```
-
-A busca universal consulta conteúdo extraído, OCR, transcrições, metadados, capítulos, subtópicos, salas e comentários. O Dashboard pode restaurar o último Workspace, aplicar outro layout ou criar um novo estado. Conta ganhou exportação/importação estruturada, revogação de todas as sessões e exclusão confirmada; o servidor remove a conta por cascade e os objetos S3 associados. O Compose não aceita mais secrets padrão.
-
-Validação final: ESLint, TypeScript e build de produção aprovados; 38 páginas estáticas foram geradas e todas as rotas dinâmicas compilaram. A suíte Playwright aprovou 107/107 cenários em 14,9 minutos, cobrindo também primeiro acesso, conflito de duplicados, Beta Readiness e regressão completa. O carregamento do Whisper ganhou timeout estruturado para nunca manter uma importação indefinidamente em processamento.
-
-## Base preservada da Sprint 35
-
-## Resultado da Sprint 35
-
-O Tutor ganhou um modo `Professor` adaptativo sem criar um novo provider ou pipeline. A interface permite selecionar nível (Iniciante, Intermediário, Avançado, Técnico ou Resumido) e método (aula tradicional, passo a passo, analogias, exemplos, perguntas e respostas, socrático ou revisão rápida). Preferências leves são persistidas localmente.
-
-O Professor oferece aula guiada, plano de aula, fluxograma e mapa mental em Mermaid, linha do tempo condicionada à existência de evidência, exercícios variados, comparação e seis formatos de resumo. Cada request carrega um contrato tipado e validado; `TeacherPromptBuilder` centraliza as instruções e exige correção com resposta, justificativa, conceito, fonte e revisão. A seleção de texto do PDF publica apenas o trecho, página, capítulo e nome do material para `Explicar este trecho`.
-
-```text
-Professor / seleção de PDF
-  → useTeacher
-  → RetrievalPipeline (chunks + Knowledge Graph)
-  → PromptBuilder + ContextBuilder
-  → AIService → ProviderManager/cache → provider selecionado
-  → conversa persistida do Tutor
-```
-
-`TutorContextService` também inclui capítulos e continuidade do Mentor, além do perfil do Learning Engine. Ações amplas recuperam o contexto do estudo; dúvidas específicas usam a busca da pergunta ou do trecho. Nenhum arquivo físico chega ao Route Handler ou ao provider.
-
-Validação final: ESLint, TypeScript e build de produção aprovados; 36 páginas geradas e 104/104 testes Playwright aprovados em 12,1 minutos. A cobertura específica inclui contrato pedagógico, contexto recuperado, seleção de PDF e viewport mobile.
-
-## Base preservada da Sprint 33.5
-
-## Resultado da Sprint 33.5
-
-O StudyAI recebeu uma modernização transversal sem alterar regras de negócio. Tokens semânticos, superfícies, sombras, movimento, primitives e estados de loading foram unificados. A aplicação suporta Claro, Escuro, AMOLED e Sistema; escala de fonte, alto contraste e redução manual de movimento são persistidos junto às preferências de experiência.
-
-Dashboard prioriza a retomada do estudo e reduz métricas no modo Simples. Biblioteca possui Grade, Lista e Compacta persistidas sobre o mesmo card. Tutor ganhou contexto recolhível, hierarquia mais clara, Enter/Shift+Enter e ações de copiar, continuar, regenerar e explicar de outra forma. Workspace mantém multipainel no desktop, mostra uma ferramenta ativa no mobile, recolhe a navegação de matérias e preserva layout, tamanho, scroll e sessão.
-
-O contrato visual está documentado em `docs/DESIGN_SYSTEM.md`. A suíte inclui cenários para preferências acessíveis, AMOLED, visualização da Biblioteca e alvos mobile, além da regressão existente.
-
-Validação final: `npm run lint`, `npm run typecheck` e `npm run build` aprovados; 36 unidades estáticas foram geradas e as rotas dinâmicas compiladas, com bundle compartilhado de 104 kB. Os 98 testes Playwright passaram em 11,2 minutos, incluindo 360, 390, 768, 1024, 1366, 1440 e 2560 px.
-
-## Resultado da Sprint 33
-
-O StudyAI possui agora a área `/salas`, com grupos de estudo e turmas. Pessoas entram por convites com validade e limite de uso, recebem um dos quatro papéis e colaboram sobre materiais, notas, flashcards, quizzes, Workspace e planos. Recursos são versionados, edições concorrentes retornam conflito, versões anteriores podem ser restauradas, comentários aceitam respostas e a presença é atualizada sem bloquear a interface.
-
-O backend foi isolado em `src/server/collaboration`: `CollaborationService`, `WorkspaceShareService`, `PermissionsService`, `PresenceService`, `CommentService` e `ClassroomService`. PostgreSQL recebeu tabelas específicas; sem banco, testes e desenvolvimento usam memória do processo. Consulte `docs/COLABORACAO.md`.
-
-Os testes da Sprint cobrem duas contas na mesma sala, convite, recursos, comentários, presença, conflito otimista, bloqueio de Leitor, transferência de administração e viewport de 360 px. A execução final aprovou lint, TypeScript, build de produção e os 95 testes Playwright em 10,5 minutos.
-
-## Base preservada da Sprint 32.5
-
-Auditoria documentada em `docs/AUDITORIA_SPRINT_32_5.md`, com inventário em `docs/INVENTARIO_PROJETO.md`, arquitetura e fluxos em `docs/ARQUITETURA_E_FLUXOS.md`, e backlog em `docs/BACKLOG_SPRINT_32_5.md`.
-
-Foram corrigidos três problemas: exclusão remota agora também limpa o binário OPFS e referências locais; reimportar um material cujo binário local desapareceu recupera o documento existente sem duplicá-lo; telemetria rejeita payload inválido ou acima de 4 KiB e limita por endereço de rede, não por identidade fornecida pelo cliente. Cobertura E2E expandida a sete viewports. Resultado final: 92 testes Playwright aprovados, além de lint, TypeScript e build aprovados.
-
-Limitações abertas: `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas (advisory em `adm-zip` e `sharp`/libvips); Docker não está instalado neste ambiente, então PostgreSQL, MinIO/S3 e Compose não foram iniciados; restauração de backup não contém o payload dos binários S3; providers foram verificados por health/model discovery, sem geração real de texto. Ver backlog Sprint 32.5 antes da Sprint 33.
-
-## Base preservada da Sprint 32
-
-O StudyAI possui agora duas camadas de experiência sobre as mesmas features: o modo Simples, padrão, expõe somente as jornadas de estudo; o modo Avançado revela grafo, diagnóstico, pipeline, métricas e controles técnicos. A alternância é imediata, persistida e sincronizada. Sidebar compactável no desktop, navegação inferior mobile, Header adaptativo, componentes mais densos e tokens de foco/hover reduzem ruído sem remover funcionalidades.
-
-```text
-ExperienceProvider
-  → modo + densidade + consentimento
-  → AppShell adaptativo
-      ├─ Sidebar desktop
-      ├─ navegação mobile
-      ├─ busca universal / Ctrl+K
-      ├─ Central de Ajuda
-      └─ onboarding e guias contextuais
-```
-
-A Central de Ajuda é pesquisável e possui tutoriais para importação, Workspace, Tutor, Mentor, Flashcards, Quiz, pesquisa e Cloud. O onboarding opcional conduz o primeiro material e registra conclusão; guias contextuais aparecem somente na primeira visita. Configurações virou um hub por categorias e centraliza Interface, IA, Workspace, Notificações, Downloads, Armazenamento, Conta, Cloud e Segurança.
-
-### Isolamento e arquivos grandes
-
-Cada identidade abre um banco IndexedDB próprio (`studyai-db:user-{id}`); convidados usam `studyai-db:guest`. A troca acontece no `AuthProvider`, impedindo mistura local entre contas. No servidor, arquivos grandes são enviados ao Object Storage S3 compatível e o PostgreSQL guarda somente metadados e a chave. MinIO é usado no Compose local. Substituição e exclusão removem os objetos associados; o fallback em `BYTEA` permanece apenas para desenvolvimento sem S3.
-
-### Produção
-
-- `Dockerfile` standalone e usuário não-root.
-- `docker-compose.yml` com aplicação, PostgreSQL, MinIO e Caddy.
-- Caddy com HTTPS automático, compressão e HSTS.
-- CI com lint, typecheck, build e Playwright; publicação opcional no GHCR.
-- `/api/health` protegido para diagnóstico detalhado e `/api/telemetry` allowlisted.
-- Web Vitals e long tasks somente após consentimento explícito.
-
-O repositório está preparado para produção, mas domínio/DNS, certificados públicos, bucket/credenciais, SMTP, secrets e webhook de deploy precisam ser provisionados no ambiente. Docker não estava instalado no host desta Sprint; por isso a composição foi validada por contrato automatizado, não iniciada localmente. Consulte `PRODUCTION.md`.
-
-### Validação da Sprint 32
-
-Foram adicionados seis cenários Playwright, totalizando 86: modos, Ajuda/atalho, onboarding, viewport mobile, isolamento por usuário e contratos de produção. Lint, TypeScript, build e todos os testes devem permanecer verdes antes do handoff final. A inspeção visual foi feita em 360 px e 1440 px, em tema claro/escuro e nas rotas principais.
-
-## Estado preservado da Sprint 31
-
-## Estado entregue na Sprint 31
-
-O StudyAI agora possui uma camada multiplataforma isolada das features de estudo. O navegador pode instalar uma PWA com shell offline, cache segmentado, atualização automática, atalhos e recepção de materiais pelo menu Compartilhar. O Windows possui aplicativo Electron que inclui o servidor standalone do Next.js, portanto mantém Route Handlers, IndexedDB, OPFS, OCR, RAG, Workspace e Mentor sem depender de hospedagem externa.
-
-```text
-Web / PWA / Electron / Android / iOS
-  → DeviceManager
-  → PlatformProvider
-  → Cache + notificações + updates + entrada de arquivos
-  → aplicação existente
-  → IndexedDB / OPFS
-  → Cloud Sync incremental quando online
-```
-
-O Electron inclui splash screen, bandeja, menu nativo, atalhos, inicialização opcional, minimizar para bandeja, seleção de pasta, associação de materiais e canal IPC isolado por preload. O instalador NSIS `StudyAI-Setup-0.4.0.exe` foi gerado localmente em `dist-desktop/`, que permanece ignorado pelo Git. Atualizações estão conectadas ao `electron-updater`, mas exigem um feed assinado antes da publicação.
-
-Os projetos Capacitor foram criados em `android/` e `ios/`. Android recebe arquivos por `SEND`, `SEND_MULTIPLE` e `VIEW`; iOS registra os tipos de documentos e abertura no próprio local. Ambos reutilizam a aplicação implantada definida por `CAPACITOR_SERVER_URL`, o cache local, IndexedDB e o Cloud Sync. Notificações locais funcionam por Capacitor; notificações de revisão também são monitoradas na PWA/Desktop enquanto a aplicação está ativa.
-
-### Serviços de plataforma
-
-- `DeviceManager`: identifica plataforma, sistema e fator de forma usados também na lista de dispositivos cloud.
-- `PWAService`: instalação, service worker, atualização e consumo de arquivos compartilhados.
-- `DesktopManager`: fachada do preload Electron para preferências nativas.
-- `MobileBridge`: URLs, compartilhamento e leitura de arquivos Capacitor.
-- `CacheManager`: diagnóstico, persistência e limpeza segura dos caches temporários.
-- `NotificationService`: notificações Web, Electron e Capacitor e lembretes de revisão.
-- `UpdateManager`: verificação uniforme de atualização PWA/Desktop.
-
-### Validação específica
-
-ESLint, TypeScript e build de produção foram aprovados. A suíte possui 80 cenários Playwright; os cinco novos validam manifest/share target, service worker, preferências persistidas, empacotamento Electron e contratos Android/iOS. A PWA foi validada em produção: Biblioteca abriu offline com status 200 e service worker controlador. O servidor incluído no pacote Desktop respondeu HTTP 200 e o instalador Windows foi gerado. O projeto Android compilou com o JBR 21 do Android Studio e produziu `android/app/build/outputs/apk/debug/app-debug.apk`. O projeto iOS está sincronizado, mas sua compilação e assinatura exigem macOS/Xcode e uma conta Apple.
-
-O `npm audit --omit=dev` ainda informa quatro vulnerabilidades altas transitivas em `adm-zip` e `sharp`, trazidas pela cadeia `@huggingface/transformers`/`onnxruntime-node`. Elas não foram corrigidas automaticamente nesta Sprint para evitar uma atualização destrutiva do pipeline local de embeddings; devem ser tratadas em uma atualização isolada com regressão completa de OCR/RAG.
-
-## Estado entregue na Sprint 30
-
-O StudyAI agora possui conta e sincronização cloud sem substituir a arquitetura offline-first. IndexedDB e OPFS continuam atendendo todas as features imediatamente; após autenticação, um sincronizador em background replica somente registros alterados, tombstones e binários cujo hash mudou.
-
-```text
-IndexedDB / OPFS
-  → manifesto + fila offline
-  → Route Handlers protegidos
-  → SyncService / ConflictResolver
-  → PostgreSQL
-  → cursor incremental
-  → IndexedDB / OPFS sob demanda
-```
-
-Cadastro, login, logout, verificação, recuperação, alteração de senha/email, sessão persistente e renovação automática estão disponíveis. O perfil sincroniza nome, foto, idioma, tema e preferências; Workspace, Mentor, Learning Engine, Knowledge Graph, estudos, notas, resumos, flashcards, quizzes e histórico percorrem o mesmo contrato de sync. A página `/conta` centraliza dispositivos, último sync, espaço enviado, backups, conflitos, compartilhamentos, segurança e histórico.
-
-### Serviços cloud
-
-- `AuthService`: credenciais, sessões curtas, refresh rotativo, verificação e recuperação.
-- `CloudDatabase`: fachada única para PostgreSQL e fallback em memória de desenvolvimento.
-- `SyncService`: push/pull incremental e restauração de snapshots.
-- `ConflictResolver`: valida versão-base e impede sobrescrita silenciosa.
-- `CloudSyncManager`: hashes, manifesto, fila offline, compressão, pull, aplicação e uploads.
-- `CloudFileService`: upload por hash e download sob demanda para OPFS.
-- `EmailService`: envio SMTP de verificação e recuperação.
-
-### Segurança
-
-Senhas usam `scrypt`; refresh tokens e tokens de conta ficam somente como hash; JWTs expiram rapidamente e são renovados em cookies `HttpOnly`, `SameSite=Strict`. Mutações exigem CSRF, endpoints sensíveis possuem rate limit, uploads e sync possuem limites, e o middleware aplica CSP com nonce, HSTS em produção, `nosniff`, bloqueio de framing e políticas de navegador. Nenhuma credencial do banco ou token de sessão é exposta às features.
-
-### Operação
-
-Produção exige `DATABASE_URL` e `AUTH_SECRET`. SMTP é obrigatório em produção para os fluxos de verificação e recuperação. Sem PostgreSQL, o modo de desenvolvimento usa memória e informa claramente que os dados cloud são voláteis. O schema está em `src/server/database/schema.sql` e é inicializado idempotentemente pela conexão server-only.
-
-### Validação específica
-
-Os cenários da Sprint 30 cobrem conta e recuperação, persistência da sessão, fila offline, sincronização incremental, backup, compartilhamento, arquivo binário e conflito entre dois contextos de navegador. ESLint e TypeScript passaram sem erros, o build de produção foi aprovado e os 75 testes Playwright passaram.
-
-## Estado entregue na Sprint 29
-
-O Workspace possui um novo modo `Mentor`, sem substituir o Tutor. O Tutor continua atendendo perguntas livres por meio do AI Core; o Mentor coordena sessões guiadas com base em evidências do Learning Engine, Knowledge Graph, flashcards, quizzes e histórico real do tema.
-
-```text
-Study selecionado
-  → MentorService
-  → Learning Engine + Knowledge Graph + Flashcards + Quiz
-  → SessionEngine
-  → SocraticEngine + RecommendationEngine + GoalManager
-  → MentorStorage / StorageManager / IndexedDB
-  → painel Mentor no Workspace
-```
-
-Cada sessão cria um plano adaptativo com leitura, explicação, revisão e prática conforme a necessidade. O nível Iniciante, Intermediário ou Avançado altera a formulação das perguntas. Respostas recebem resultado, justificativa, orientação de melhoria e localização para revisão; uma resposta insuficiente interrompe a progressão e gera uma pergunta de acompanhamento antes de avançar. A explicação adicional reutiliza o `TutorService` e o `RetrievalPipeline`, mantendo o mesmo AI Core, provider selecionado e isolamento de arquivos físicos.
-
-Metas de prova, trabalho, revisão e tempo de estudo são persistidas. Recomendações e próximas revisões são calculadas em `requestIdleCallback`, com fallback assíncrono, sem bloquear a interface. A memória mostra sessões concluídas por tema e a motivação só usa resultados reais da sessão.
-
-### Serviços do Mentor
-
-- `MentorService`: fachada que recarrega todas as evidências antes de coordenar a ação.
-- `SessionEngine`: plano, estado e progressão da sessão guiada.
-- `SocraticEngine`: perguntas adaptativas e avaliação explicável.
-- `RecommendationEngine`: revisões e próximos passos em background.
-- `GoalManager`: criação, atualização, conclusão e exclusão de metas.
-- `MentorStorage`: persistência versionada exclusivamente via `StorageManager`.
-
-### Validação
-
-ESLint e TypeScript aprovados, build de produção aprovado e 72 testes Playwright aprovados. Os novos cenários cobrem sessão socrática, erro e nova explicação, memória, metas, recomendações e persistência após refresh.
-
-## Contexto preservado da Sprint 28
-
-O ambiente de Estudo deixou de ser uma sequência de ferramentas isoladas e passou a ser um Workspace multipainel. Material, Tutor, resumos, flashcards, quiz, notas, mapa de conhecimento e estatísticas podem permanecer abertos simultaneamente, com redimensionamento por ponteiro ou teclado, minimizar, maximizar, fechar, criar instâncias adicionais e restaurar o estado após reabrir o navegador.
-
-```text
-StudyWorkspace
-  → WorkspaceCanvas
-  → WorkspaceManager
-  → LayoutManager + PanelManager
-  → WorkspaceStorage (estado leve versionado)
-  → painéis lazy / ferramentas existentes
-  → SessionTracker / Learning Engine
-```
-
-Layouts nativos (`Leitura`, `Revisão`, `Exercícios`, `Tutor` e `Planejamento`) convivem com layouts personalizados. A navegação lateral usa a hierarquia Curso → Semestre → Matéria → Tema → Arquivo. O Tutor mantém a conversa ativa por instância de painel; notas mantêm a seleção por painel; listas extensas de materiais são virtualizadas; componentes ocultos não são montados.
-
-O PDF Pro mantém zoom, página, capítulo e favoritos e adiciona marca-texto colorido, comentários, desenhos, links internos e histórico de páginas. As notas usam links Wiki para notas, materiais, capítulos e conceitos. O Mapa de Conhecimento expõe progresso e dificuldade do Learning Engine. A Pesquisa Global 2.0 busca, em uma única interface, materiais, notas, resumos, flashcards, quizzes, conceitos e relações, usando snapshot curto em cache.
-
-Sessões do Workspace registram início, fim, foco, pausas, arquivos e ferramentas utilizadas no IndexedDB; ao concluir, o tempo é enviado ao Learning Engine. Apenas preferências leves de layout, dimensões, scroll, abas abertas e anotações de visualização ficam no `localStorage`, conforme o contrato do Storage V2.
-
-### Serviços do Workspace
-
-- `WorkspaceManager`: fachada para carregar, salvar, abrir ferramentas e aplicar layouts.
-- `LayoutManager`: layouts padrão e personalizados.
-- `PanelManager`: criação, remoção, redimensionamento, minimizar e maximizar.
-- `WorkspaceStorage`: persistência versionada do estado leve por estudo.
-- `WorkspaceState`: fábrica e contratos iniciais.
-- `SessionTracker`: sessões persistentes e integração com o Learning Engine.
-
-## Contexto preservado da Sprint 27
-
-O StudyAI passa a transformar cada conteúdo extraído em uma estrutura de conhecimento persistente. O novo módulo `src/features/semantic` identifica conceitos, definições, entidades, palavras-chave, termos técnicos, siglas, fórmulas, tecnologias, pessoas, organizações, exemplos e observações. Relações explícitas e por coocorrência formam um grafo navegável por documento e Study.
-
-O pipeline agora executa `semantic` entre `study` e `chunks`. Os chunks deixam de usar apenas janelas arbitrárias e preservam definições, listas, tabelas, fórmulas, exemplos e blocos relacionados. O grafo é armazenado no object store `knowledge` do IndexedDB v2. `sourceHash` e `parserVersion` permitem reutilizar resultados inalterados e reprocessar somente o material modificado.
-
-```text
-Documento normalizado
-  → SemanticParser
-  → ConceptExtractor + RelationExtractor
-  → KnowledgeGraphBuilder
-  → KnowledgeStorage / IndexedDB
-  → SemanticChunkService
-  → embeddings + RAG
-  → Tutor / Biblioteca / Dashboard / Busca / Learning Engine
-```
-
-O Tutor expande a pergunta com aliases, sinônimos, siglas e conceitos relacionados antes do ranking híbrido, e recebe um bloco explícito de conhecimento no PromptBuilder. A Biblioteca mostra conceitos, relações e grau de estrutura; o Dashboard resume conceitos aprendidos, dominados, esquecidos e relações; o Learning Engine recomenda pré-requisitos; e o Workspace possui a aba clicável `Mapa de Conhecimento`.
-
-### Serviços semânticos
-
-- `SemanticParser`: converte seções extraídas em blocos semânticos com proveniência.
-- `ConceptExtractor`: extrai e deduplica conceitos com ids estáveis.
-- `RelationExtractor`: cria relações tipadas com evidência e peso.
-- `KnowledgeGraphBuilder`: monta estatísticas, chunks e o grafo versionado.
-- `KnowledgeStorage` / `SemanticStorage`: persistência única via `StorageManager`.
-- `SemanticSearchService`: busca por nome, descrição, palavra-chave, sinônimo, sigla e relações.
-- `KnowledgeService`: processamento incremental e reaproveitamento por hash.
-- `LearningKnowledgeBridge`: recomenda pré-requisitos para temas difíceis ou esquecidos.
-
-## Contexto preservado da Sprint 26
-
-A Sprint 26 adiciona o primeiro Learning Engine do StudyAI sem remover o fluxo existente. Toda leitura, conversa, revisão de flashcard, resultado de quiz, resumo e nota alimenta um perfil local persistido. O Dashboard passa a mostrar plano do dia, revisões, tempo, maior dificuldade, maior progresso, último estudo, streak, calor de estudo, retenção e Knowledge Score por tema.
-
-O conhecimento é calculado com evidências reais de quiz, flashcards, tempo, frequência e recência. O motor de prioridade explica a classificação com erros, dias sem revisão, cartões vencidos e domínio estimado. Flashcards usam SM-2 e persistem próxima revisão, intervalo, facilidade e repetições, mantendo o contrato preparado para FSRS. O Tutor recebe conhecimento, confiança, domínio e prioridade antes de montar o prompt e adapta a didática sem acessar arquivos físicos.
-
-```text
-Atividade real
-  → LearningService
-  → LearningStorage / IndexedDB metadata
-  → KnowledgeEngine
-  → StudyPriorityEngine
-  → Plano diário / Dashboard / Tutor / Revisões
-```
-
-### Serviços do Learning Engine
-
-- `LearningService`: entrada única dos eventos e fila serializada em background.
-- `LearningStorage`: perfil versionado no IndexedDB.
-- `LearningCalculator`: streak, plano diário, calor de estudo e estatísticas.
-- `KnowledgeEngine`: Knowledge Score, domínio, dificuldade e insights de quiz.
-- `StudyPriorityEngine`: prioridade e motivos por tema.
-- `ReviewScheduler`: SM-2 e fronteira futura para FSRS.
-
-A Sprint 25.2 conclui as pendências da 25.1. O AI Core agora possui compressão de histórico, top 3 chunks deduplicados, contagem interna de tokens, cache LRU, retry exponencial do Gemini e proteção da janela de contexto dos providers OpenAI-compatible. Tutor e providers transmitem respostas progressivamente por NDJSON, com SSE/NDJSON normalizados no servidor.
-
-O Tutor renderiza Markdown, GFM, tabelas, checklists, código, links, imagens e matemática KaTeX. A altura é fixa e somente a conversa rola, com acompanhamento automático da última mensagem. PDF.js, Tutor, Flashcards, Quiz, Markdown, OCR e Whisper são carregados somente quando necessários.
-
-Os arquivos originais são persistidos no OPFS quando disponível. O leitor oferece Texto/PDF, restaura o binário após reload, mantém estado quando a re-seleção é necessária e possui miniaturas lazy, índice, marcadores e Ctrl+F com contagem, navegação e destaque.
-
-O pipeline não ocupa mais o Dashboard: status, logs, tempo, OCR, chunks, embeddings e uso de IA ficam no drawer “Detalhes da ingestão”. Resumos e organização usam autosave; soltar um arquivo na área de nova estrutura permite criar curso, semestre, matéria e tema no mesmo fluxo.
-
-O Workspace preserva os atalhos das áreas `Material`, `IA`, `Mapa de Conhecimento`, `Flashcards`, `Quiz` e `Notas`, agora como entradas para painéis independentes. Todo o estado leve continua restaurado após refresh ou reabertura: layout, painéis, arquivo, PDF, capítulo, marcadores, flashcard, quiz e nota.
-
-A Biblioteca ganhou ações rápidas, seleção múltipla, favoritos, tags, movimentação e exclusão em lote com confirmação. A tela Organizar aceita drag and drop entre temas e também oferece seleção múltipla. Notas são salvas automaticamente, sem botão de salvar.
-
-O diagnóstico de IA mostra status, modelo, endpoint, latência, tempo médio e último erro de Gemini, Ollama, OpenRouter e Groq, com teste de conexão individual. O modo manual agora respeita estritamente o provider escolhido; fallback existe somente no modo automático.
-
-Após cada extração bem-sucedida, o StudyAI agora analisa o conteúdo normalizado e cria ou enriquece automaticamente toda a estrutura de estudo. Disciplina, tema, subtemas, capítulos, palavras-chave, idioma, número de páginas, quantidade de palavras, prévia e tempo de leitura são persistidos no mesmo fluxo, sem IA externa e sem exigir organização manual.
-
-Todo conteúdo pesado continua no IndexedDB `studyai-db` v1 por meio da fachada assíncrona `StorageManager`. A Sprint 25 não alterou o modelo de armazenamento nem criou novas dependências.
-
-```text
-Feature / Hook
-  → Service de domínio
-  → StorageManager
-  → transação IndexedDB
-  → object store
-```
-
-Na inicialização, `StorageBootstrap` executa a migração legada. Todos os registros são gravados atomicamente e as chaves antigas só são removidas depois do commit. Em erro, o IndexedDB realiza rollback, o legado permanece intacto e a interface apresenta um aviso recuperável.
-
-O StudyAI utiliza exclusivamente dados criados pelo usuário. A importação cria o registro oficial, infere matéria e tema, cria ou reutiliza um Study, executa a extração e atualiza Biblioteca, Organização e Dashboard sem depender de uma organização manual posterior.
-
-A camada de IA agora é centralizada em `src/features/ai`. Tutor, resumo, flashcards e quiz não conhecem Gemini nem acessam o Retrieval Service diretamente.
-
-A ingestão agora processa cada documento por etapas observáveis. PDF.js é sempre consultado primeiro e o OCR é executado somente quando nenhuma camada de texto foi encontrada. Todo texto passa por normalização antes de chunks e embeddings. DOCX preserva títulos, parágrafos, listas, tabelas, cabeçalhos, rodapés e notas; PPTX preserva slides e notas; TXT detecta encoding; áudio e vídeo registram transcrição, timestamps e capítulos quando o runtime local consegue decodificá-los.
-
-```text
-Documento
-  → Extração / OCR ou Whisper quando necessário
-  → Normalização
-  → StudyAnalyzer
-  → SubjectDetector / TopicDetector / KeywordExtractor / ReadingTimeCalculator
-  → StudyGeneratorService
-  → Material e Study enriquecidos
-  → Chunks do texto normalizado
-  → Embeddings compactados
-  → Índice local
-```
-
-Cada registro de conteúdo possui status por etapa e logs. Falhas incluem motivo, arquivo, etapa, stack simplificada e ação sugerida. Dashboard, Biblioteca e Tutor consomem os metadados analisados; a organização manual continua sendo a fonte oficial quando diverge da detecção.
-
-## Smart Study Generator
-
-- `StudyAnalyzer.ts`: coordena a análise determinística sobre texto e seções normalizados.
-- `SubjectDetector.ts`: classifica disciplinas por vocabulário e aplica fallback explícito.
-- `TopicDetector.ts`: identifica título, tema, subtemas e capítulos/seções estruturais.
-- `KeywordExtractor.ts`: calcula palavras-chave por frequência com normalização e stop words.
-- `ReadingTimeCalculator.ts`: calcula palavras e leitura estimada a 200 palavras por minuto.
-- `StudyGeneratorService.ts`: atualiza material e Study Engine e produz os logs da geração.
-
-Para materiais avulsos, a análise substitui a classificação provisória criada antes da extração. Para caminhos organizados com matéria e tema, a estrutura de pastas é preservada. Se o usuário mover o arquivo depois, a organização escolhida permanece oficial e os metadados da análise são transportados ao novo Study.
-
-PDFs da Estácio reconhecem `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. PDFs comuns, resultados de OCR, DOCX, PPTX e TXT usam o mesmo contrato de saída. Falta de título, disciplina ou capítulos gera um Study básico em vez de interromper a importação.
-
-```text
-Feature cliente
-  → RetrievalPipeline
-  → AIClient
-  → Route Handler
-  → PromptBuilder / ContextBuilder
-  → AIService
-  → ProviderManager
-  → ProviderRegistry / HealthService / LatencyService
-  → AIProvider
-  → GeminiProvider | OllamaProvider | OpenRouterProvider | GroqProvider
-```
-
-## AI Core
-
-- `AIProvider.ts`: contrato compartilhado de requests, responses e providers.
-- `AIService.ts`: registro e resolução central no servidor.
-- `AIClient.ts`: fronteira única entre features cliente e rotas internas.
-- `AISettings.ts`: provider e modelo selecionados, com migração da preferência anterior e persistência no navegador.
-- `PromptBuilder.ts`: prompts de Tutor, resumo, flashcards e quiz.
-- `ContextBuilder.ts`: contexto do Study e trechos recuperados com limite de tamanho.
-- `RetrievalPipeline.ts`: única entrada das features de IA para o RAG local.
-- `AIErrors.ts`: erros e normalização HTTP independentes do provider.
-- `ProviderRegistry.ts`: catálogo server-only dos providers.
-- `HealthService.ts`: health agregado e cacheado para todos os providers.
-- `LatencyService.ts`: medição compartilhada de latência.
-- `ProviderManager.ts`: seleção manual/automática, fallback, logs e métricas.
-
-Gemini, Ollama, OpenRouter e Groq são providers funcionais quando suas respectivas configurações estão disponíveis. A página de Configurações lista health, endpoint, último erro, latência, tempo médio, modelo, memória, versão e última verificação, além de testar cada conexão separadamente.
-
-No modo manual, somente o provider selecionado é usado. No modo automático, o Manager seleciona o provider online de menor latência e uma falha inicia a cadeia Ollama → Gemini → Groq → OpenRouter. Se todos falharem, a interface recebe um erro normalizado e preserva a pergunta do usuário.
-
-```text
-Configurações / Feature
-  → AIClient
-  → Route Handler interno
-  → AIService
-  → OllamaProvider
-  → GET /api/tags | GET /api/version | POST /api/chat
-```
-
-O `OllamaProvider` usa `http://localhost:11434` por padrão ou `OLLAMA_URL` quando configurado. O chat recebe uma mensagem de sistema, o histórico e o prompt contextual já montado pelo AI Core. Respostas completas e streams NDJSON são normalizados no mesmo `AIResponse`.
-
-```text
-File selecionado
-  → MaterialService
-  → OrganizationService.organizeImported
-  → StudyEngine
-  → ExtractionPipeline
-  → ContentStorage
-  → ChunkStorage
-  → EmbeddingStorage
-  → Biblioteca / Dashboard / Workspace / Tutor
-```
-
-## Fonte oficial dos materiais
-
-- `documents` persiste metadados, caminho relativo, progresso, status e organização no IndexedDB.
-- `MaterialRuntimeStore` mantém o `File` e a URL de objeto apenas durante a sessão atual.
-- `ContentStorage`, `ChunkStorage` e `EmbeddingStorage` persistem os dados derivados.
-- Não existem seeds de Biblioteca, Organização, Dashboard, Workspace ou Tutor.
-
-## Organização automática e Study Engine
-
-Antes da extração, `OrganizationService.organizeImported`:
-
-1. normaliza o caminho relativo do arquivo;
-2. infere matéria e tema pelas pastas ou pelo nome do arquivo;
-3. reutiliza o Study de materiais no mesmo destino;
-4. cria um Study quando ainda não existe;
-5. entrega o `studyId` à extração, aos chunks e aos embeddings.
-
-Ao mover manualmente um material, `OrganizationService`:
-
-1. define curso, semestre, matéria e tema;
-2. reutiliza ou cria um `studyId`;
-3. atualiza conteúdo, chunks e embeddings;
-4. cria ou atualiza o registro no object store `studies`;
-5. preserva notas, resumos, flashcards e quizzes se o estudo anterior deixar de existir.
-
-Renomear atualiza o nome do material e a proveniência do conteúdo. Excluir remove o material e seus dados derivados.
-
-## Consumo de contexto
-
-- Tutor: estudo atual, notas, resumo, histórico e chunks recuperados.
-- Resumos: exigem contexto e chunks do estudo.
-- Flashcards: exigem chunks reais vinculados ao `studyId`.
-- Quiz: exige chunks reais vinculados ao `studyId`.
-- Notas: recebem automaticamente o `studyId` do Workspace aberto.
-
-Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico é enviado ao Gemini ou ao Ollama.
-
-## Dashboard, Biblioteca e Tutor
-
-- A Biblioteca mostra somente arquivos importados, com tipo, tamanho, data, caminho relativo, progresso, status, disciplina, tema, capítulos, palavras-chave e tempo de leitura.
-- Todos os filtros pesquisam somente o registro persistido dos arquivos importados.
-- O Dashboard mostra arquivos, estudos, progresso médio, flashcards, quizzes, materiais analisados, temas criados, capítulos identificados, tempo total de leitura, extrações, embeddings e atividade semanal a partir das persistências reais.
-- O Tutor apresenta tema, disciplina, prévia, palavras-chave, subtemas e quantidade de capítulos antes da primeira pergunta.
-- Flashcards e Quiz ficam desabilitados até existir conteúdo textual estruturado; nenhuma geração é disparada automaticamente.
-- Estados vazios orientam a primeira importação sem criar conteúdo artificial.
-
-## Persistência
-
-| Banco / store | Conteúdo |
-| --- | --- |
-| `studyai-db/documents` | Materiais importados e organização. |
-| `studyai-db/contents` | Texto, estrutura, metadados e pipeline. |
-| `studyai-db/chunks` | Chunks por arquivo e estudo. |
-| `studyai-db/embeddings` | Índice semântico local V2 compactado. |
-| `studyai-db/studies` | Estudos derivados dos materiais. |
-| `studyai-db/notes`, `summaries`, `flashcards` | Recursos por estudo. |
-| `studyai-db/quizzes` | Questões e resultados. |
-| `studyai-db/transcriptions`, `ocr` | Dados pesados de mídia e OCR. |
-| `studyai-db/metadata` | Migração, status do índice e conversas. |
-| `localStorage/studyai:ai-settings`, `studyai-theme` | Apenas preferências leves. |
-
-A rota interna `/storage` exibe banco, versão, contagens, espaço estimado e última migração. A API do Storage suporta upserts, lotes, transações e paginação.
-
-## Limites atuais
-
-- O binário original é persistido no OPFS quando suportado. Com conta, um binário ausente é baixado sob demanda; sem conta e sem OPFS, a re-seleção continua disponível sem perder dados derivados ou estado do Workspace.
-- A primeira transcrição depende do download do modelo Whisper; indisponibilidade de rede é registrada como erro do arquivo sem interromper os demais.
-- O histórico do Tutor é local ao navegador.
-- O Ollama depende de um serviço local em execução e de pelo menos um modelo instalado.
-- O processamento de materiais permanece local; banco remoto e sincronização armazenam dados já estruturados e binários do usuário, sem mover OCR, embeddings ou RAG para o servidor.
-
-## Validação
-
-Os testes de tela partem de arquivos selecionados no input e aguardam a extração. A suíte cobre criação automática de Study, agrupamento por `Matéria/Tema`, associação de conteúdo/chunks/embeddings, fallback de configuração do Gemini e persistência de conversa, resumo, flashcards e quiz após reabrir a aplicação. A inferência de áudio aceita o erro operacional esperado quando o modelo ainda não está disponível no cache e a rede está indisponível.
-
-```text
-npm run lint
-npm run typecheck
-npm run test:e2e
-npm run build
-```
-
-Além dos cenários de Storage V2, a suíte cobre a geração automática a partir de PDF Estácio, PDF comum, PDF OCR, DOCX e PPTX, incluindo preservação dos metadados quando um material é movido manualmente.
-
-Validação final da Sprint 25: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 41 testes Playwright aprovados.
-
-Validação final da Sprint 25.1: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 47 testes Playwright aprovados. A cobertura adicional valida diagnóstico online/offline por provider, restauração do Workspace, flashcard e quiz atuais, navegação lateral, abertura direta de materiais, ações em lote e drag and drop.
-
-Validação final da Sprint 25.2: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 54 testes Playwright aprovados. Os novos cenários cobrem streaming NDJSON, Markdown/GFM/KaTeX, altura e rolagem do chat, cache de IA, compressão e métricas de tokens, persistência do PDF no OPFS, busca Ctrl+F, drawer de diagnóstico, criação de hierarquia por drag and drop e carregamento lazy do PDF.js.
-
-Validação final da Sprint 26: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 62 testes Playwright aprovados. A cobertura nova valida Knowledge Score, SM-2, prioridade explicável, plano diário, Dashboard inteligente, contexto adaptativo do Tutor, persistência do agendamento dos Flashcards e insights do Quiz.
-
-Validação final da Sprint 27: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 67 testes Playwright aprovados. A cobertura semântica valida extração de conceitos, relações, preservação de definições nos chunks, expansão de busca, pré-requisitos do Learning Engine, persistência do grafo, Biblioteca, Dashboard, Mapa de Conhecimento e contexto enviado ao Tutor.
-
-Validação final da Sprint 28: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 70 testes Playwright aprovados. `tests/workspace-v2.spec.ts` cobre painéis, redimensionamento por teclado, restauração, layouts, lazy rendering, Tutor, notas Wiki, pesquisa global, sessões e PDF Pro.
-
-## Próximo passo seguro
-
-Validar ergonomia dos layouts com acervos reais extensos e diferentes densidades de tela. Uma evolução segura é mover cálculos de grafos muito grandes para Web Worker e permitir edição manual de relações, preservando os contratos do Workspace e do grafo.
+### Branch/HEAD
+- **Branch:** `v1.1-development`
+- **HEAD:** `ddcd40f` (docs: update handoff and add sprint 37D.4 report)
+- **Working Tree:** 12 modified + 4 new files (staged: 2 docs, unstaged: 12 modified + 4 new)

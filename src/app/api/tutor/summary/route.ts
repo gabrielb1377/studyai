@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 import { AIService } from "@/features/ai/AIService";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
 import { requireUser } from "@/server/auth/http";
@@ -18,6 +17,7 @@ import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import type { TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
+import { withAIQuota, createQuotaAwareAIRequest } from "@/server/ai/QuotaMiddleware";
 
 export const runtime = "nodejs";
 
@@ -46,37 +46,22 @@ function isSummaryRequest(value: unknown): value is SummaryRequest {
 }
 
 export async function POST(request: Request) {
-  const body: unknown = await request.json().catch(() => null);
-  if (!isSummaryRequest(body)) {
-    return NextResponse.json(
-      { code: "INVALID_REQUEST", error: "É necessário um estudo com conteúdo real extraído para gerar o resumo." },
-      { status: 400 },
-    );
-  }
-
-  try {
-    let userApiKeys: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> | undefined;
+  return withAIQuota(request, async (request, aiRequest) => {
     try {
-      const user = requireUser(request);
-      const entries = await Promise.all(aiProviderIds.map(async (provider) => [provider, await ApiKeyService.getDecrypted(user.sub, provider)] as const));
-      const map: Partial<Record<import("@/features/ai/AIProvider").AIProviderId, string>> = {};
-      for (const [provider, key] of entries) if (key) map[provider] = key;
-      if (Object.keys(map).length > 0) userApiKeys = map;
-    } catch { userApiKeys = undefined; }
-    const prompt = PromptBuilder.summary(body.history, body.context, body.chunks);
-    const response = await AIService.generate({
-      history: prompt.history,
-      message: prompt.message,
-      model: body.model,
-      models: body.models,
-      mode: body.mode,
-      signal: request.signal,
-      provider: body.provider,
-      apiKeys: userApiKeys,
-    });
-    return NextResponse.json(response);
-  } catch (error) {
-    const normalized = normalizeAIError(error, "Erro inesperado ao gerar o resumo.");
-    return NextResponse.json(normalized.body, { status: normalized.status });
-  }
+      const response = await AIService.generate({
+        history: aiRequest.history,
+        message: aiRequest.message,
+        model: aiRequest.model,
+        models: aiRequest.models,
+        mode: aiRequest.mode,
+        signal: request.signal,
+        provider: aiRequest.provider,
+        apiKeys: aiRequest.apiKeys,
+      });
+      return NextResponse.json(response);
+    } catch (error) {
+      const normalized = normalizeAIError(error, "Erro inesperado ao gerar o resumo.");
+      return NextResponse.json(normalized.body, { status: normalized.status });
+    }
+  });
 }
