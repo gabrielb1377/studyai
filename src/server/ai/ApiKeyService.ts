@@ -77,7 +77,7 @@ export const ApiKeyService = {
     return process.env[`${provider.toUpperCase()}_API_KEY`]?.trim() || undefined;
   },
 
-  rateLimitSet(userId: string) {
+  async rateLimitSet(userId: string) {
     return rateLimit(`apikey:set:${userId}`, 10, 60_000);
   },
 };

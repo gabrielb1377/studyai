@@ -225,6 +225,15 @@ CREATE TABLE IF NOT EXISTS usage_quotas (
 CREATE INDEX IF NOT EXISTS usage_quotas_user_date ON usage_quotas(user_id, date);
 CREATE INDEX IF NOT EXISTS usage_quotas_user_minute ON usage_quotas(user_id, minute_bucket);
 
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT NOT NULL,
+  window_bucket BIGINT NOT NULL,
+  count BIGINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (key, window_bucket)
+);
+CREATE INDEX IF NOT EXISTS rate_limits_bucket ON rate_limits(window_bucket);
+
 CREATE TABLE IF NOT EXISTS collaboration_progress (
   room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
   resource_id TEXT NOT NULL REFERENCES room_resources(id) ON DELETE CASCADE,

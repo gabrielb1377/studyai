@@ -6,7 +6,8 @@ import { EmailService } from "@/server/auth/EmailService";
 
 export async function POST(request: Request) {
   try {
-    if (!rateLimit(`register:${requestAddress(request)}`, 5, 15 * 60_000).allowed) return NextResponse.json({ error: "Muitas tentativas. Aguarde antes de tentar novamente." }, { status: 429 });
+    const limit = await rateLimit(`register:${requestAddress(request)}`, 5, 15 * 60_000);
+    if (!limit.allowed) return NextResponse.json({ error: "Muitas tentativas. Aguarde antes de tentar novamente." }, { status: 429 });
     EmailService.requireConfiguration();
     const input = await jsonBody<{ name: string; email: string; password: string; deviceId: string; deviceName: string }>(request);
     const result = await AuthService.register(input);

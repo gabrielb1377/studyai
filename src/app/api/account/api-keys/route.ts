@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const body = await jsonBody<{ provider?: string; key?: string }>(request);
     if (!isAIProviderId(body.provider)) throw new Error("Provider de IA inválido.");
     if (typeof body.key !== "string" || body.key.trim().length === 0) throw new Error("Informe a chave de API.");
-    const limit = ApiKeyService.rateLimitSet(user.sub);
+    const limit = await ApiKeyService.rateLimitSet(user.sub);
     if (!limit.allowed) {
       return NextResponse.json({ error: "Muitas tentativas. Tente novamente em instantes." }, { status: 429 });
     }
