@@ -1,5 +1,12 @@
 # Railway Pre-Deploy — StudyAI V1.1
 
+> **Esclarecimento 37E.8B:** os dois arquivos são mecanismos distintos, não duas
+> configs automaticamente ativas. Railway IaC em `.railway/railway.ts` requer
+> Railway CLI `config plan/apply` e não é lida durante deploy. `railway.toml` é
+> Config-as-Code legado para serviço existente que o selecione; serviço não pode
+> ser gerido pelos dois modelos. Configuração ativa ainda não verificada; ver
+> `docs/RAILWAY_CONFIGURATION_DECISION.md`.
+
 **Sprint:** 37E.8A · **Branch:** `v1.1-development`  
 **Checkpoint:** `d0c2d634b84a874ccd262fc41307cec1f87a7138`  
 **Escopo:** inspeção local e remota somente leitura. Nenhuma publicação ou alteração remota.

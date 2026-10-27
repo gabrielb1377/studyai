@@ -1,14 +1,43 @@
-# Handoff Atual — Sprint 37E.8A: Railway Pre-Deployment
+# Handoff Atual — Sprint 37E.8B: Railway Configuration & Authorization Gate
 
 Atualizado em 27 de outubro de 2026.
 
 ## Estado
 
 - **Branch:** `v1.1-development` (nada enviado/pushed)
-- **HEAD de partida 37E.8A:** `d0c2d634b84a874ccd262fc41307cec1f87a7138` (Sprint 37E.7C)
-- **Commit desta sprint:** `4e94f1b` (`chore(release): prepare railway predeployment 37E.8A`); local, sem push
+- **HEAD base 37E.8B:** `03a61ee4e83d575f71a30485b45eff0e0c6e065b`
+- **Commits 37E.8A:** `4e94f1b` pre-deploy; `03a61ee` handoff, ambos locais sem push
+- **Commit 37E.8B:** em preparação; sem push
 - **Deploy:** **NÃO executado**. Railway intocado.
 - **Decisão:** **CONDITIONAL** — ver `docs/FINAL_RELEASE_DECISION_V1_1.md`
+
+## Resultado Sprint 37E.8B (investigação Railway)
+
+- Railway docs oficiais: `.railway/railway.ts` é interpretado por `railway
+  config plan/apply`, não automaticamente no deploy; `railway.toml` é CaC legacy
+  para service existente configurado para o ler. Um service não pode ser
+  gerenciado pelos dois; sunset CaC anunciado para 2026-12-01.
+- CI: `.github/workflows/deploy.yml` em `main` constrói/pusha imagem GHCR e chama
+  webhook opcional `DEPLOY_WEBHOOK_URL`; presença/destino não verificados. Não há
+  workflow para executar Railway IaC. Trigger e deployment remoto ativo não são
+  conhecidos.
+- CLI `5.63.1`, `railway whoami` Unauthorized. Sem login/token, sem comando remoto
+  adicional. Railway service/config path/deploy/domain/DB/S3/env names/resources/
+  restart/logs/alerts ficam **NÃO VERIFICADOS**.
+- Nenhum arquivo de configuração de infra foi alterado. Owner deve escolher
+  legacy CaC temporário ou migração planejada para IaC após inspeção read-only e
+  `config plan` revisado; não executar `apply` sem aprovação explícita.
+- Railway healthcheck é apenas gate do startup/deploy, não monitor contínuo. Live
+  `/api/health/live` é liveness; `/api/health` é readiness dependente de DB/S3.
+- Artefato do container: Dockerfile Node 22 multi-stage; `npm ci`, `npm run
+  build`; runtime `db-migrate.mjs && node server.js`, port padrão 3000/0.0.0.0;
+  config/PORT/restart remotos desconhecidos.
+- Validação 37E.8B: lint 0 erros/75 warnings; typecheck/build PASS; audit 4 low
+  transitivos (exit 1); Playwright dirigido 38/38; `db:migrate` repetida 2x na
+  cópia sintética isolada; standalone live 200/readiness 503 sem DB/S3.
+- Gate **CONDITIONAL**. Ver `docs/SPRINT_37E_8B_REPORT.md`,
+  `docs/RAILWAY_CONFIGURATION_DECISION.md` e
+  `docs/LAUNCH_AUTHORIZATION_CHECKLIST.md`.
 
 ## Entregas Sprint 37E.8A (pré-deploy local)
 

@@ -116,7 +116,8 @@ git log --oneline -10
 npm run build
 
 # 4. Deploy no Railway (re-deploy do build anterior)
-railway up --detach
+# Promover somente após autorização e confirmação do artifact/alvo pelo owner.
+# Não executar CLI, workflow ou webhook como parte deste plano documental.
 ```
 
 **Tempo:** não medido em produção. Confirmar disponibilidade do artifact e

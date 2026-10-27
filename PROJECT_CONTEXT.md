@@ -96,7 +96,7 @@ Ver `docs/RELEASE_NOTES_SPRINT_37B_2.md`.
 
 A configuração de produção foi preparada para hospedagem independente do computador local. Railway é o caminho recomendado para a Beta; Vercel/Supabase e VPS/Docker Compose permanecem documentados como alternativas em `docs/DEPLOY_ONLINE.md`.
 
-Produção exige PostgreSQL persistente e Object Storage S3 compatível. O fallback em memória/BYTEA permanece exclusivo do desenvolvimento; `/api/health` verifica conexão, schema e bucket e responde `503` quando a release não está pronta. O container aplica `npm run db:migrate` antes de iniciar, e `railway.toml` usa o mesmo endpoint como health check.
+Produção exige PostgreSQL persistente e Object Storage S3 compatível. O fallback em memória/BYTEA permanece exclusivo do desenvolvimento; `/api/health/live` é liveness HTTP independente e `/api/health` verifica conexão, schema, bucket e URL, respondendo `503` quando readiness não é atendida. O container aplica `db-migrate.mjs` antes de iniciar. A configuração local `railway.toml` usa liveness, mas seu uso remoto não foi confirmado; `.railway/railway.ts` é Railway IaC avaliada pelo CLI, não automaticamente no deploy. Ver `docs/RAILWAY_CONFIGURATION_DECISION.md`.
 
 `APP_URL` define a origem HTTPS de emails, convites e compartilhamentos. Providers continuam server-side; Gemini, OpenRouter e Groq são adequados à cloud, enquanto Ollama só é ativado em produção com `OLLAMA_URL` explícita e alcançável pelo servidor. A PWA usa a URL pública e IndexedDB/OPFS apenas como cache offline por dispositivo.
 

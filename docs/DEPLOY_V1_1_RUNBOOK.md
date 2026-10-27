@@ -1,17 +1,22 @@
 # Deploy Runbook V1.1 — StudyAI
 
-> **Autoridade operacional (Sprint 37E.8A, 2026-10-27):** este runbook contém
+> **Autoridade operacional (Sprint 37E.8B, 2026-10-27):** este runbook contém
 > instruções históricas, não é autorização nem certificação de Railway. Acesso
 > remoto e secrets não foram verificados. Até validação/aceite do owner, use
 > `docs/RAILWAY_PRE_DEPLOY_V1_1.md` e `docs/PRODUCTION_MIGRATION_PLAN_V1_1.md`;
 > não execute exemplos históricos de login/link/deploy/push. A divergência
 > `.railway/railway.ts` vs `railway.toml` deve ser reconciliada antes de planejar
-> publicação. Nenhuma ação remota foi tomada nesta sprint.
+> publicação. Os comandos abaixo são templates para janela futura aprovada; não
+> foram executados e não devem ser tratados como acesso verificado. Nenhuma ação
+> remota foi tomada nesta sprint. Ver a decisão 37E.8B em
+> `docs/RAILWAY_CONFIGURATION_DECISION.md`; este runbook não escolhe entre
+> `.railway/railway.ts` (IaC avaliada/aplicada pelo CLI) e `railway.toml` (CaC
+> legado aplicado no deploy de service existente quando configurado).
 
 **Versão:** V1.1  
-**Data:** 2026-10-24  
+**Data:** 2026-10-27 (revisão operacional 37E.8B)
 **Branch:** `v1.1-development`  
-**Base verificada:** `d0c2d634b84a874ccd262fc41307cec1f87a7138` (37E.7C)
+**Base desta revisão:** `03a61ee4e83d575f71a30485b45eff0e0c6e065b` (37E.8A)
 
 ---
 
@@ -62,26 +67,26 @@ Acessar: Railway Dashboard → Project → Variables
 | Variável | Valor | Notas |
 |----------|-------|-------|
 | `NODE_ENV` | `production` | |
-| `APP_URL` | `https://studyai.example.com` | URL pública |
-| `NEXT_PUBLIC_APP_URL` | `https://studyai.example.com` | |
-| `STUDYAI_DOMAIN` | `studyai.example.com` | |
-| `AUTH_SECRET` | `openssl rand -base64 48` | **≥ 32 chars** |
-| `HEALTH_SECRET` | `openssl rand -base64 32` | Para health check detalhado |
-| `API_KEYS_ENCRYPTION_KEY` | `openssl rand -base64 32` | **NOVA - BYOK v2** |
-| `DATABASE_URL` | `postgresql://...` | Gerenciado pelo Railway |
+| `APP_URL` | URL HTTPS aprovada do ambiente | URL pública; readiness valida |
+| `NEXT_PUBLIC_APP_URL` | URL pública aprovada, se usada | Não é secret |
+| `STUDYAI_DOMAIN` | Domínio, apenas se algum componente o exigir | Não presumir que Railway precisa |
+| `AUTH_SECRET` | Secret gerado no cofre aprovado | **≥ 32 chars; estável; não rotacionar** |
+| `HEALTH_SECRET` | Secret separado no cofre aprovado | Para health detalhado, opcional operacional |
+| `API_KEYS_ENCRYPTION_KEY` | Secret persistente gerado no cofre aprovado | Preservar para ciphertext v2; não inventar/rotacionar |
+| `DATABASE_URL` | Referência privada ao PostgreSQL aprovado | Nunca documentar ou imprimir valor |
 | `DATABASE_SSL` | `true` | |
 | `DATABASE_SSL_REJECT_UNAUTHORIZED` | `true` | |
 | `DATABASE_POOL_SIZE` | `10` | |
-| `S3_ENDPOINT` | `https://s3.example.com` | Object Storage S3-compatível |
-| `S3_REGION` | `us-east-1` | |
-| `S3_BUCKET` | `studyai-prod` | |
-| `S3_ACCESS_KEY_ID` | `AKIA...` | |
-| `S3_SECRET_ACCESS_KEY` | `...` | |
+| `S3_ENDPOINT` | Endpoint aprovado | Object Storage S3-compatível |
+| `S3_REGION` | Região real do bucket | |
+| `S3_BUCKET` | Bucket aprovado e privado | |
+| `S3_ACCESS_KEY_ID` | Referência a credencial mínima | Valor não deve ir para documento |
+| `S3_SECRET_ACCESS_KEY` | Secret no cofre aprovado | Valor não deve ir para documento |
 | `S3_FORCE_PATH_STYLE` | `true` | |
 | `S3_SERVER_SIDE_ENCRYPTION` | `AES256` | |
-| `GEMINI_API_KEY` | `AIza...` | Pelo menos 1 provider |
-| `GROQ_API_KEY` | `gsk_...` | Pelo menos 1 provider |
-| `OPENROUTER_API_KEY` | `sk-or-...` | Pelo menos 1 provider |
+| `GEMINI_API_KEY` | Secret do provider aprovado | Pelo menos 1 provider se esse for o modelo operacional |
+| `GROQ_API_KEY` | Secret do provider aprovado | Opcional |
+| `OPENROUTER_API_KEY` | Secret do provider aprovado | Opcional |
 | `OLLAMA_URL` | *(opcional)* | Se houver Ollama remoto |
 | `SMTP_HOST` | `smtp.example.com` | Opcional |
 | `SMTP_PORT` | `587` | |
@@ -102,14 +107,14 @@ protege ciphertext v2.
 
 ## 3. Deploy
 
-### Opção A: Railway CLI (aguarda autorização e sessão válida)
+### Opção A: Railway CLI (aguarda autorização, sessão e decisão de configuração)
 
 ```bash
 # Somente em janela aprovada, depois de confirmar o projeto/serviço/ambiente.
 # Não executar como parte desta sprint. A sessão local atual não está autorizada.
 ```
 
-### Opção B: Deploy automático por Git (não aprovado)
+### Opção B: GHCR + webhook ou Git integration (não aprovado)
 
 > Requer autorização explícita. Este runbook **não** autoriza merge/push em
 > `main`; use a branch de release configurada no Railway.
@@ -124,7 +129,7 @@ scrubbing de logs; não foi possível confirmar a identidade/acesso nesta sprint
 
 ---
 
-## 4. Migração do Schema (Automática)
+## 4. Migração do Schema (no startup da imagem; ação mutável)
 
 O `Dockerfile` executa `node scripts/db-migrate.mjs && node server.js`. A
 migração roda **a cada boot**, em transação única, e é idempotente; a primeira
@@ -132,15 +137,14 @@ query também inicializa o schema por processo. Isto é DDL mutável no runtime,
 não na etapa de build. Tratar o primeiro start como migração e só iniciar depois
 de backup/restauração de ensaio e aprovação da janela. Ver
 `docs/PRODUCTION_MIGRATION_PLAN_V1_1.md`; estado do schema Railway não verificado.
+O Railway HTTP healthcheck é gate do novo deploy (2xx antes do tráfego) e não é
+monitorado continuamente após ativação. Configurar monitoramento/alertas de
+readiness separado; falha posterior do readiness não implica restart automático.
 
 ```bash
-# Confirmar no log do deploy
-railway logs --tail 100
-# Esperado: "Schema PostgreSQL atualizado com sucesso."
-
-# Verificação somente leitura
-railway connect postgresql
-SELECT to_regclass('public.rate_limits'), to_regclass('public.usage_quotas');
+# Em janela autorizada, observar logs redigidos no painel da plataforma e
+# verificar schema com consulta read-only aprovada pelo DBA. Não executar sem
+# confirmar service/environment e credenciais protegidas.
 ```
 
 **Falha esperada (fail-closed):** sem `DATABASE_URL`, o script sai com código 1
@@ -148,7 +152,7 @@ e o container não inicia.
 
 ---
 
-## 5. Smoke Tests Pós-Deploy
+## 5. Smoke Tests Pós-Deploy (somente release e janela aprovadas)
 
 Executar dentro de 15 minutos após o deploy:
 
@@ -209,7 +213,7 @@ curl -sf "$BASE_URL/auth/session" | jq -e '.user'
 
 ---
 
-## 7. Rollback (Se Necessário)
+## 7. Rollback (plano conceitual; requer autorização separada)
 
 ### Gatilhos de Rollback
 - Health check `degraded` por > 2 min
