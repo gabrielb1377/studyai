@@ -6,7 +6,7 @@ Atualizado em 27 de outubro de 2026.
 
 - **Branch:** `v1.1-development` (nada enviado/pushed)
 - **HEAD de partida 37E.8A:** `d0c2d634b84a874ccd262fc41307cec1f87a7138` (Sprint 37E.7C)
-- **Commit desta sprint:** em preparação; sem push
+- **Commit desta sprint:** `4e94f1b` (`chore(release): prepare railway predeployment 37E.8A`); local, sem push
 - **Deploy:** **NÃO executado**. Railway intocado.
 - **Decisão:** **CONDITIONAL** — ver `docs/FINAL_RELEASE_DECISION_V1_1.md`
 
