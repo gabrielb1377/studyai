@@ -173,7 +173,9 @@ test("pdf.js permanece lazy até um PDF ser realmente processado", async ({ page
   await page.goto("/importar");
   await page.getByLabel("Selecionar arquivos do dispositivo").setInputFiles({ name: "lazy.pdf", mimeType: "application/pdf", buffer: createTextPdf(["Lazy PDF"]) });
   await page.getByRole("button", { name: "Importar", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible();
+  // The first lazy PDF.js worker startup can outlast the default 5-second
+  // assertion window on a cold dev server.
+  await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible({ timeout: 15_000 });
   const after = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
   expect(after.some((name) => name.includes("pdf.worker"))).toBe(true);
 });

@@ -10,7 +10,8 @@
 
 | Métrica | Threshold Crítico | Threshold Warning | Fonte | Ação |
 |---------|-------------------|-------------------|-------|------|
-| **Health Check** | `degraded` ou 503 por > 2 min | `degraded` por > 30s | `/api/health` | Alerta imediato, investigar DB/Storage |
+| **Liveness** | 503/timeout por > 1 min | > 30s | `/api/health/live` | Reiniciar processo; não depende de DB/S3 |
+| **Readiness** | `degraded` ou 503 por > 2 min | `degraded` por > 30s | `/api/health` | Alerta imediato; investigar DB/Storage sem reiniciar em loop |
 | **Erro 5xx Rate** | > 1% das requisições | > 0.1% | Logs/nginx | Investigar logs, rollback se > 5% |
 | **Auth Failure Rate** | > 5% falhas login | > 1% | Logs auth | Verificar auth service, DB |
 | **Quota Blocked Rate** | > 10% usuários bloqueados | > 5% | QuotaService logs | Verificar quotas, DB, fallback |
@@ -27,7 +28,8 @@
 ## Dashboards Recomendados
 
 ### 1. Health Overview (Grafana/Datadog/Railway)
-- Health check status (ok/degraded/down)
+- Liveness (`/api/health/live`, sem dependências)
+- Readiness (`/api/health`, ok/degraded/down)
 - DB latency (p50, p95, p99)
 - Storage latency
 - Public URL readiness
@@ -69,11 +71,12 @@
 
 ## Alertas Propostos (ainda NÃO configurados)
 
-> **Estado real (Sprint 37E.7B):** o StudyAI não expõe `/metrics` nem envia
+> **Estado real (Sprint 37E.7C):** o StudyAI não expõe `/metrics` nem envia
 > métricas para Prometheus/Grafana. As regras abaixo são um modelo para
 > configuração manual futura; até lá, a observabilidade depende de
-> `/api/health`, logs do Railway e consultas SQL pontuais. Não trate estes
-> alertas como ativos.
+> `/api/health/live` (processo), `/api/health` (dependências), logs do Railway
+> e consultas SQL pontuais. O healthcheck de reinício do Railway usa o
+> liveness; o readiness é para alertas. Não trate estes alertas como ativos.
 
 ```yaml
 groups:

@@ -17,8 +17,8 @@ Roteiro de verificação rápida pós-deploy para confirmar que o StudyAI V1.1 e
 
 | Item | Descrição | Comando/Verificação | Critério de Sucesso | Status |
 |------|-----------|---------------------|---------------------|--------|
-| **1. Health Check** | Endpoint `/api/health` responde | `curl -f https://studyai.example.com/api/health` | HTTP 200, JSON com `status: "ok"` | ☐ |
-| **2. Health Detalhado** | Verificar DB, Storage, URL pública | `curl -f -H "x-health-secret: $HEALTH_SECRET" https://studyai.example.com/api/health` | `status: "ok"`, `database.available: true`, `objectStorage.available: true` | ☐ |
+| **1. Liveness** | Processo HTTP responde sem depender de DB/S3 | `curl -f https://studyai.example.com/api/health/live` | HTTP 200, `status: "ok"`, `check: "liveness"` | ☐ |
+| **2. Readiness + Health Detalhado** | Verificar DB, Storage, URL pública | `curl -f https://studyai.example.com/api/health` e, com `HEALTH_SECRET`, o mesmo endpoint | `status: "ok"`, `database.available: true`, `objectStorage.available: true` | ☐ |
 | **3. Página Inicial** | Carrega sem erros | Abrir `https://studyai.example.com/` no navegador | Renderiza sem erros 5xx, JS carrega | ☐ |
 | **4. Cadastro** | Novo usuário consegue se registrar | UI → `/auth/register` → preencher formulário | Redireciona para dashboard, cria usuário no DB | ☐ |
 | **5. Login/Logout** | Sessão funciona | Login → `/auth/login` → dashboard → Logout | Redireciona corretamente, cookie de sessão válido | ☐ |
@@ -54,9 +54,13 @@ echo "=== Smoke Test V1.1 ==="
 echo "Target: $BASE_URL"
 echo ""
 
-# 1. Health Check
-echo "1. Health Check..."
-curl -sf "$BASE_URL/api/health" | jq -e '.status == "ok"' && echo "✅ Health OK" || { echo "❌ Health FAILED"; exit 1; }
+# 1a. Liveness (não consulta DB/S3)
+echo "1a. Liveness..."
+curl -sf "$BASE_URL/api/health/live" | jq -e '.status == "ok" and .check == "liveness"' && echo "✅ Liveness OK" || { echo "❌ Liveness FAILED"; exit 1; }
+
+# 1b. Readiness (DB, schema, S3, URL pública)
+echo "1b. Readiness..."
+curl -sf "$BASE_URL/api/health" | jq -e '.status == "ok"' && echo "✅ Readiness OK" || { echo "❌ Readiness FAILED"; exit 1; }
 
 # 2. Health Detalhado (com secret)
 if [ -n "$HEALTH_SECRET" ]; then

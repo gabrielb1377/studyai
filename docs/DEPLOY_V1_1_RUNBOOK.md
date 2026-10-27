@@ -153,10 +153,11 @@ Executar dentro de 15 minutos após o deploy:
 BASE_URL="https://studyai.example.com"
 HEALTH_SECRET="${HEALTH_SECRET}"
 
-# 1. Health Check
-curl -sf "$BASE_URL/api/health" | jq -e '.status == "ok"'
+# 1. Liveness (processo HTTP; não consulta DB/S3)
+curl -sf "$BASE_URL/api/health/live" | jq -e '.status == "ok" and .check == "liveness"'
 
-# 2. Health Detalhado
+# 2. Readiness + Health Detalhado
+curl -sf "$BASE_URL/api/health" | jq -e '.status == "ok"'
 curl -sf -H "x-health-secret: $HEALTH_SECRET" "$BASE_URL/api/health" | \
   jq -e '.checks.database.available == true and .checks.objectStorage.available == true'
 

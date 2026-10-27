@@ -56,7 +56,8 @@ remoto). O tempo total **não foi medido em produção**; trate "< 5 min" como
 meta, não como garantia.
 
 **Validação pós-rollback:**
-- Health check `/api/health` → 200 OK
+- Liveness `/api/health/live` → 200 OK (sem DB/S3)
+- Readiness `/api/health` → 200 OK, `status: "ok"`
 - Login/cadastro funcional
 - Feature regressiva restaurada
 

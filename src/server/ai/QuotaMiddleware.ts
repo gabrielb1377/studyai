@@ -175,7 +175,10 @@ export async function withAIQuota(
   handler: (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>
 ): Promise<NextResponse | Response> {
   try {
-    const body = await request.json().catch(() => null);
+    // Lê um clone: o corpo original continua disponível para handlers que
+    // validam o payload novamente (ex.: diagrams, lab, audio-lesson). Um
+    // Request só pode ser consumido uma vez.
+    const body = await request.clone().json().catch(() => null);
     if (!body || typeof body !== "object") {
       return NextResponse.json({ code: "INVALID_REQUEST", error: "Corpo da requisição inválido." }, { status: 400 });
     }

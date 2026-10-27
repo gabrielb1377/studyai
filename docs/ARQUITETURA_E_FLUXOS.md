@@ -108,6 +108,7 @@ O inventário completo dos 27 handlers está em [INVENTARIO_PROJETO.md](./INVENT
 | `/sync` | cliente ↔ server | Push de deltas e pull por cursor; sessão/CSRF e versionamento. |
 | `/api/files/[id]` | cliente ↔ server | PUT/GET/DELETE binário autenticado por userId e hash. |
 | `/backup` | cliente ↔ server | Snapshots/restauração dos registros syncáveis. |
+| `/api/health/live` | monitor | server | Liveness sem DB/S3. |
 | `/api/health` | monitor → server | Health público mínimo e detalhes protegidos. |
 | `/api/telemetry` | cliente → server | Métricas anônimas e allowlisted com consentimento. |
 

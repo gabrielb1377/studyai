@@ -72,7 +72,8 @@ function isRequest(value: unknown): value is AcademyGenerateRequest {
 }
 
 export async function POST(request: Request) {
-  const body: unknown = await request.json().catch(() => null);
+  // Clone para validar sem consumir o corpo que `withAIQuota` lerá em seguida.
+  const body: unknown = await request.clone().json().catch(() => null);
   if (!isRequest(body)) {
     return NextResponse.json({ error: "Os dados para gerar o conteúdo são inválidos." }, { status: 400 });
   }

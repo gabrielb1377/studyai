@@ -1,4 +1,7 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { expect, test, type Page } from "@playwright/test";
+import { needsSharedQuota, providersToCheckFor } from "../src/server/ai/quota-policy";
 
 const checkedAt = "2026-10-22T10:00:00.000Z";
 
@@ -179,48 +182,79 @@ test.describe("Concurrency Tests - Quotas & Rate Limits", () => {
   });
 });
 
-test.describe("Rate Limit Persistence - Cross-Instance Sharing", () => {
-  test.skip("Cenário 5: Rate limit persistente - múltiplas instâncias compartilham contador", async ({ browser }) => {
-    // TODO: Implementar com API direta que passe pelos interceptors
-    // page.request.post não passa pelos route interceptors do Playwright
-    // Necessário usar page.goto com POST ou fetch API no contexto da página
+const execFileAsync = promisify(execFile);
+const concurrencyDatabaseUrl = process.env.CONCURRENCY_DATABASE_URL?.trim();
+const standaloneDir = process.env.STUDYAI_STANDALONE_DIR?.trim();
+const appConcurrencyEnabled = Boolean(concurrencyDatabaseUrl && standaloneDir);
+// Sem banco descartável + build standalone, os cenários permanecem skipped e
+// NÃO contam como aprovados. Com as duas variáveis, o harness real executa
+// duas instâncias de produção contra PostgreSQL multi-conexão.
+const appConcurrencyDescribe = appConcurrencyEnabled ? test.describe : test.describe.skip;
+
+appConcurrencyDescribe("Cenários 5–7: concorrência real da aplicação (PostgreSQL + standalone)", () => {
+  test.describe.configure({ mode: "serial" });
+  let harnessOutput = "";
+
+  test.beforeAll(async () => {
+    const { stdout } = await execFileAsync(process.execPath, ["scripts/verify-app-concurrency.mjs"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        CONFIRM_TEST_DATABASE: "1",
+        DATABASE_URL: concurrencyDatabaseUrl!,
+        DATABASE_SSL: "false",
+        STUDYAI_STANDALONE_DIR: standaloneDir!,
+      },
+      timeout: 300_000,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    harnessOutput = stdout;
   });
 
-  test.skip("Cenário 6: BYOK Gemini falha → fallback Groq shared consome quota antes da chamada", async ({ page }) => {
-    // TODO: Requer mock mais complexo do ProviderManager para simular fallback
+  test("Cenário 5: rate limit de login compartilhado entre duas instâncias", () => {
+    expect(harnessOutput).toContain("PASS  5. rate limit de login compartilhado entre 2 instâncias reais");
+    expect(harnessOutput).toContain("10 permitidas");
   });
 
-  test.skip("Cenário 7: Groq shared sem quota → Groq não é chamado", async ({ page }) => {
-    // TODO: Requer interceptação do ProviderManager
+  test("Cenário 6: BYOK Gemini falha e Groq shared é tentado após consumir quota", () => {
+    expect(harnessOutput).toContain("PASS  6. BYOK Gemini falha → Groq shared tenta após quota compartilhada");
+    expect(harnessOutput).toContain("providers=");
+    expect(harnessOutput).toMatch(/providers=.*gemini/);
+    expect(harnessOutput).toMatch(/providers=.*groq/);
+  });
+
+  test("Cenário 7: quota esgotada bloqueia Groq shared antes do provider", () => {
+    expect(harnessOutput).toContain("PASS  7. quota esgotada → Groq shared não é executado");
+    expect(harnessOutput).toMatch(/logs=\d+→\d+/);
+  });
+
+  test("Cenários E/F: fail-closed com banco indisponível e retries limitados", () => {
+    expect(harnessOutput).toContain("PASS  E1. liveness 200 com banco indisponível; readiness 503");
+    expect(harnessOutput).toContain("PASS  E2. login, cadastro e recuperação fail-closed com banco indisponível");
+    expect(harnessOutput).toContain("PASS  E3. quota fail-closed: banco indisponível nega antes de qualquer provider");
+    expect(harnessOutput).toContain("PASS  F. tentativas de provider limitadas (sem loop de retry)");
   });
 });
 
-test.describe("Quota Per Effective Credential - Documentação de Comportamento", () => {
-  test("Verificação: quota consumida apenas quando credencial shared efetivamente usada (documentação)", async ({ page }) => {
-    // Este teste documenta o comportamento esperado:
-    // 1. Usuário tem BYOK Gemini
-    // 2. Modo manual com Gemini → usa BYOK, NÃO consome quota shared
-    // 3. Modo automático com Gemini OK → usa BYOK, NÃO consome quota shared
-    // 4. Modo automático com Gemini falha → fallback para Groq sem BYOK → consome quota shared
-    // 5. Quota esgotada → Groq não é chamado, erro 429
-    
-    // O teste real de quota requer mock do ProviderManager que simule falha do Gemini
-    // e sucesso do Groq, o que é complexo em E2E. A lógica está verificada em:
-    // - QuotaMiddleware.ts (withAIQuota / withQuotaEnforcement)
-    // - QuotaService.ts (checkAndConsume atômico)
-    // - ProviderManager.ts (fallback sequencial)
-    expect(true).toBe(true); // Documentação do comportamento
+test.describe("Quota por credencial efetiva - política real", () => {
+  test("modo automático com BYOK parcial exige quota; manual com BYOK não exige", () => {
+    const geminiByok = { gemini: "AIza-test" };
+    // Automático percorre ollama/gemini/groq/openrouter; groq/openrouter sem
+    // BYOK exigem a quota compartilhada antes da cadeia de fallback.
+    expect(needsSharedQuota(providersToCheckFor("automatic", undefined), geminiByok)).toBe(true);
+    // Manual Gemini com BYOK não usa credencial compartilhada.
+    expect(needsSharedQuota(providersToCheckFor("manual", "gemini"), geminiByok)).toBe(false);
+    // Manual Groq sem BYOK usa credencial compartilhada e exige quota.
+    expect(needsSharedQuota(providersToCheckFor("manual", "groq"), {})).toBe(true);
   });
 
-  test("Verificação: modo manual com BYOK → sem consumo shared (documentação)", async ({ page }) => {
+  test("modo manual com provider Groq persiste a seleção na configuração", async ({ page }) => {
     await mockManager(page);
     await loginAndSetup(page, "groq");
-    
+
     const settings = await page.evaluate(() => JSON.parse(localStorage.getItem("studyai:ai-settings") ?? "null"));
     expect(settings?.mode).toBe("manual");
     expect(settings?.provider).toBe("groq");
-    
-    // No modo manual com BYOK válido, quota shared NÃO deve ser consumida
-    expect(true).toBe(true); // Documentação do comportamento
   });
 });

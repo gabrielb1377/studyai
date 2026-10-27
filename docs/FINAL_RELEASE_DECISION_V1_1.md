@@ -1,9 +1,9 @@
 # Decisão Final de Release — StudyAI V1.1 Beta
 
 **Data:** 2026-10-26
-**Sprint:** 37E.7B — Final Release Verification
+**Sprint:** 37E.7C — Real Concurrency, E2E Stability & Technical Gate
 **Branch:** `v1.1-development`
-**Commit verificado:** `1e56d76` (37E.7A) + alterações da 37E.7B
+**Checkpoint verificado:** `58d3fab` (37E.7B) + alterações 37E.7C (commit pendente)
 **Responsável pela verificação:** agente de engenharia (sem autoridade de deploy)
 
 ---
@@ -22,15 +22,19 @@
 
 | Área | Evidência |
 |------|-----------|
-| Código | `typecheck` limpo; `lint` 0 erros; `build` OK; `git diff --check` limpo |
-| Testes E2E | 205 descobertos: 193 diretos + 8 retry, 1 falha ambiental (passou 3/3 isolada e na reexecução final), 3 skipped. Reexecução direcionada no código final: 21 passed, 3 skipped (215 descobertos com `quota-policy`) |
+| Código | `typecheck` limpo; `lint` 0 erros (75 warnings); `build` OK; `git diff --check` limpo |
+| Testes E2E | Baseline 37E.7B: 205 descobertos, 193 diretos + 8 retry, 1 falha ambiental, 3 skipped. 37E.7C: **218/218 casos únicos aprovados** (212 diretos + 6 retry), 0 falhas residuais, 0 skipped; uma asserção obsoleta foi corrigida e aprovada direcionadamente |
 | Migrações | `schema.sql` limpo e idempotente em PostgreSQL 18 isolado |
 | Constraints | PKs, índices e FKs `ON DELETE CASCADE` confirmados |
 | Quota | contagem duplicada corrigida (3 vs 6); UPSERT diário/minuto validado |
 | Rate limit | UPSERT atômico validado; login/cadastro/recuperação/API keys **fail-closed** (503 + `Retry-After: 30`) em produção, confirmado no standalone com `DATABASE_URL` inválida e ausente; PK/falhas de FK rejeitadas |
 | Criptografia | 16 testes na implementação real v1/v2, incluindo adulteração e rollback |
 | Segurança de quota | falha de banco em produção propaga erro (fail-closed) |
-| Dependências | 4 advisories **low** (`katex`); sem high/critical |
+| Dependências | `npm audit --omit=dev`: 4 advisories **low** transitivos (`katex`); sem high/critical. Fix automático requer breaking change e não foi aplicado |
+| Concorrência SQL | PostgreSQL 18.4 isolado, múltiplas conexões; **7/7 PASS**, incluindo disputa restante=1 e rate limit compartilhado entre pools |
+| Concorrência da aplicação | Standalone, duas instâncias, PostgreSQL real; **8/8 PASS** (cenários 5–7, E/F e F2) |
+| Health | `/api/health/live` independente de DB/S3; `/api/health` continua readiness detalhada; Docker/Railway apontam liveness |
+| Bug de request body | Corrigido consumo duplo do body em Tutor/Academy/middleware; evidenciado por rota real no standalone |
 | Documentação | hashes, endpoint de sessão, migração automática e rollback corrigidos |
 
 ---
@@ -64,13 +68,11 @@ Estas condições **não** foram executadas nesta sprint (sem acesso/autorizaç�
 
 | # | Gap | Impacto | Pode ir para produção? |
 |---|-----|---------|------------------------|
-| 1 | Cenários 5, 6 e 7 de concorrência `skipped` | Fallback de quota e rate limit entre instâncias não comprovados por teste | Sim, com risco aceito e monitoramento |
-| 2 | Concorrência multi-conexão não executada | UPSERT é atômico por SQL, mas corrida real não foi medida | Sim, com risco aceito |
-| 3 | Rate limit fail-open **apenas** em endpoints não críticos | Limite pode ser contornado entre réplicas em sync/colaboração/telemetria/feedback; auth e API keys são fail-closed | Sim, risco baixo |
-| 4 | Quota superestima consumo com BYOK parcial | Usuário pode ser bloqueado mesmo tendo chave própria | Sim (UX), corrigir depois |
-| 5 | Monitoramento não implantado | Sem alertas automáticos; dependência de logs/SQL | Sim, com operação manual |
-| 6 | Deploy/Railway/backup não testados | Falhas operacionais só aparecem no deploy | **Requer as condições da §2** |
-| 7 | Execução completa com 1 falha ambiental + 8 flakies | Evidência final não é 100% limpa; falha passou isolada e na reexecução | Sim, mas repetir em ambiente limpo (critério §5.4) |
+| 1 | Rate limit fail-open **apenas** em endpoints não críticos | Limite pode ser contornado entre réplicas em sync/colaboração/telemetria/feedback; auth e API keys são fail-closed | Sim, risco baixo |
+| 2 | Quota conservadora com BYOK parcial | Em modo automático pode consumir quota compartilhada antes de saber se fallback será usado | Sim (UX), corrigir depois |
+| 3 | Monitoramento não implantado | Sem alertas automáticos; dependência de logs/SQL | Sim, com operação manual |
+| 4 | Deploy/Railway/backup não testados | Falhas operacionais só aparecem no deploy | **Requer as condições da §2** |
+| 5 | Execução E2E final | 218/218 casos únicos aprovados; 6 retries, 0 falhas residuais, 0 skipped | Gate local atendido; gates operacionais ainda pendentes |
 
 ---
 
@@ -87,22 +89,18 @@ Estas condições **não** foram executadas nesta sprint (sem acesso/autorizaç�
   necessariamente o bypass da quota.
 - **Fuso:** a chave de data é UTC e o reset exibido é local.
 - **`katex` 4 low:** sem correção não-disruptiva.
-- **Health dependente de S3:** storage é pré-requisito de deploy.
+- **Readiness dependente de S3:** storage é pré-requisito para tráfego; Railway/Docker usam liveness sem dependências para evitar reinício por falha transitória.
 
 ---
 
 ## 5. Critérios para Promover a "READY FOR AUTHORIZATION"
 
-1. Implementar e executar os Cenários 5–7 com PostgreSQL real e duas instâncias.
-2. Executar `scripts/verify-concurrency.mjs` em ambiente com múltiplas conexões
-   (CI/container) e anexar a saída.
-3. Configurar ao menos um alerta externo (health/5xx) antes do tráfego real.
-4. Repetir a suíte final e anexar o JSON com 0 falhas e 0 flaky (ou justificar).
+1. Concorrência real SQL e cenários 5–7: **concluído nesta sprint**, evidência em `docs/CONCURRENCY_VALIDATION_V1_1.md`.
+2. Configurar ao menos um alerta externo (readiness/5xx) antes do tráfego real.
+3. Suíte E2E reconciliada nesta sprint; 218 casos únicos aprovados, com retries reportados separadamente em `docs/E2E_STABILITY_V1_1.md`.
+4. Manter autorização humana, backup/restore e smoke test pós-deploy como gates operacionais.
 
-**Estado atual:** o critério 4 **não** está atendido — a execução completa
-teve 1 falha ambiental e 8 flakies. Os fluxos alterados pelo hardening foram
-reexecutados e passaram (21 passed, 3 skipped), mas isso não substitui uma
-execução completa limpa. A decisão permanece **CONDITIONAL**.
+**Estado atual:** concorrência real, healthchecks e suíte E2E reconciliada foram verificados nesta sprint. A decisão permanece **CONDITIONAL** até backup/restore e verificações pós-deploy operacionais; nenhum deploy foi executado ou autorizado.
 
 ---
 

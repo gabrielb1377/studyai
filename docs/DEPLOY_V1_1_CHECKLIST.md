@@ -117,7 +117,8 @@ Executar `docs/SMOKE_TEST_V1_1.md` — Target: ≤ 15 min
 
 | Teste | Critério |
 |-------|----------|
-| Health Check | `GET /api/health` → 200, `status: "ok"` |
+| Liveness | `GET /api/health/live` → 200, `check: "liveness"` |
+| Readiness | `GET /api/health` → 200, `status: "ok"` |
 | Health Detalhado | Com `HEALTH_SECRET` → DB + Storage OK |
 | Página Inicial | Carrega sem 5xx |
 | Cadastro/Login | Funcionando end-to-end |

@@ -117,7 +117,7 @@ test("deploy online possui runbook, migração e produção sem dependência imp
   expect(productionEnv).toContain("APP_URL=https://");
   expect(migration).toContain("BEGIN");
   expect(migration).toContain("ROLLBACK");
-  expect(railway).toContain('healthcheckPath = "/api/health"');
+  expect(railway).toContain('healthcheckPath = "/api/health/live"');
   expect(middleware).toContain('process.env.NODE_ENV==="development"');
   expect(ollama).toContain('process.env.NODE_ENV === "production"');
 });

@@ -3,12 +3,18 @@
 **Data:** 2026-10-24  
 **Branch:** `v1.1-development`  
 **Commit:** `5dc68d0` (37E.6) → verificação final em `1e56d76` + 37E.7B
-**Avaliação:** **SUPERSEDED** — este gate operacional foi reavaliado na Sprint
-37E.7B. A decisão vigente está em `docs/FINAL_RELEASE_DECISION_V1_1.md`.
+**Avaliação:** **SUPERSEDED** — reavaliado na Sprint 37E.7C. A decisão vigente
+está em `docs/FINAL_RELEASE_DECISION_V1_1.md` (CONDITIONAL até a reconciliação
+final do E2E e cumprimento dos gates operacionais).
 
 > **Correção (Sprint 37E.7B):** o hash `c1a2b3d` não existe; o commit da 37E.6
 > é `5dc68d0`. A contagem de testes desta página (189/184) foi substituída pela
 > reconciliação da 37E.7B.
+
+> **Atualização 37E.7C:** PostgreSQL multi-conexão real validado (7/7); cenários
+> de aplicação 5–7 e fail-closed validados via standalone (7/7); healthcheck
+> separado em liveness/readiness. O E2E completo está sendo reconciliado em
+> `docs/E2E_STABILITY_V1_1.md`; nada aqui autoriza deploy.
 
 ---
 
@@ -148,7 +154,7 @@ O StudyAI V1.1 atende aos critérios operacionais para deploy no Railway. O Rele
 ### 10. Observabilidade — **WARNING** ⚠️
 | Componente | Status | Observação |
 |------------|--------|------------|
-| Health endpoint | ✅ | `/api/health` — DB, Storage, URL pública |
+| Health endpoint | ✅ | `/api/health/live` (liveness, sem dependências) + `/api/health` (readiness: DB, schema, Storage, URL pública) |
 | Logs estruturados | ✅ | JSON, trace_id, span_id, sem secrets |
 | Métricas Railway | ✅ | CPU, Memory, Network, Disk built-in |
 | pg_stat_statements | ⚠️ MANUAL | `CREATE EXTENSION pg_stat_statements;` |
@@ -162,10 +168,10 @@ O StudyAI V1.1 atende aos critérios operacionais para deploy no Railway. O Rele
 | Item | Status | Detalhes |
 |------|--------|----------|
 | Dockerfile | ✅ | Multi-stage, standalone, healthcheck |
-| railway.toml | ✅ | builder=DOCKERFILE, healthcheckPath=/api/health |
+| railway.toml | ✅ | builder=DOCKERFILE, healthcheckPath=/api/health/live |
 | Next.js 15.5.28 | ✅ | `output: "standalone"` |
 | Node.js 22 | ✅ | Alpine base |
-| Health check endpoint | ✅ | `/api/health` — DB, Storage, URL pública |
+| Health check endpoint | ✅ | Liveness `/api/health/live`; readiness `/api/health` (DB, Storage, URL pública) |
 | Build standalone | ✅ | `output: "standalone"` em next.config.mjs |
 | Variáveis obrigatórias | ✅ | Documentadas em `DEPLOY_V1_1_CHECKLIST.md` |
 | Object Storage | ✅ | S3 compatível, fallback memória |

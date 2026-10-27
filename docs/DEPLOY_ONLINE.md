@@ -73,7 +73,7 @@ npm run db:migrate
 
 O comando exige `DATABASE_URL`, aplica o schema dentro de uma transação e não imprime a URL. Não existe seed de produção no projeto.
 
-O container também executa a migração antes de iniciar o servidor. `/api/health` confirma conexão e presença do schema. Uma falha de banco retorna `503` e as APIs apresentam uma mensagem genérica, sem expor detalhes da conexão.
+O container também executa a migração antes de iniciar o servidor. `GET /api/health/live` é o liveness (processo HTTP vivo, sem consultar banco/S3) e `GET /api/health` é o readiness (conexão, schema, Object Storage e URL pública). Uma falha de banco ou storage retorna `503` apenas no readiness; as APIs apresentam uma mensagem genérica, sem expor detalhes da conexão.
 
 ## Opção A — Railway (recomendada para a Beta)
 
@@ -81,7 +81,7 @@ O container também executa a migração antes de iniciar o servidor. `/api/heal
 
 1. Envie o repositório para o GitHub sem arquivos `.env`.
 2. No Railway, crie um projeto a partir do repositório.
-3. Adicione o serviço Next.js usando o `Dockerfile` existente. O arquivo `railway.toml` configura `/api/health` e reinício em falha.
+3. Adicione o serviço Next.js usando o `Dockerfile` existente. O arquivo `railway.toml` configura `/api/health/live` (liveness) e reinício em falha. O readiness fica em `/api/health` e deve ser monitorado separadamente.
 4. Adicione um PostgreSQL ao mesmo projeto.
 5. Crie ou conecte um bucket S3 compatível. Se o Object Storage escolhido estiver fora do Railway, mantenha o bucket privado.
 
@@ -98,11 +98,12 @@ No serviço da aplicação:
 
 ### 3. Implantar
 
-O Railway construirá a imagem, executará `npm run db:migrate` pelo comando do container, iniciará o Next.js e aguardará `/api/health` responder `200`. Se banco, schema ou S3 estiverem indisponíveis, o health check responderá `503` e a versão não ficará saudável.
+O Railway construirá a imagem, executará `npm run db:migrate` pelo comando do container, iniciará o Next.js e aguardará `/api/health/live` responder `200`. O liveness não consulta banco nem S3: uma falha temporária de storage não provoca reinício em loop. O readiness em `/api/health` retorna `503` quando banco, schema, S3 ou URL pública estiverem indisponíveis; ele alimenta alertas/monitoramento e não o healthcheck de reinício do Railway.
 
 Depois do primeiro deploy:
 
 ```bash
+curl --fail https://SEU-DOMINIO/api/health/live
 curl --fail https://SEU-DOMINIO/api/health
 ```
 
@@ -224,6 +225,15 @@ O Lab oferece uma experiência reduzida em telas pequenas. Funcionalidades que d
 
 ## Health check
 
+Há dois contratos distintos:
+
+| Endpoint | Tipo | Consulta dependências? | Uso |
+| --- | --- | --- | --- |
+| `GET /api/health/live` | Liveness | Não | Healthcheck do Railway/Docker e detecção de processo travado |
+| `GET /api/health` | Readiness | Sim (PostgreSQL, schema, S3, URL pública) | Monitoramento e alertas de indisponibilidade |
+
+`GET /api/health/live` retorna `200` com `status: "ok"` e `check: "liveness"` enquanto o processo HTTP estiver vivo.
+
 `GET /api/health` retorna:
 
 - status geral (`ok` ou `degraded`);
@@ -233,7 +243,7 @@ O Lab oferece uma experiência reduzida em telas pequenas. Funcionalidades que d
 - disponibilidade do Object Storage;
 - latência dos serviços.
 
-Detalhes de erro e runtime só aparecem em desenvolvimento ou quando o header `x-health-secret` corresponde a `HEALTH_SECRET`. Nenhum segredo é retornado.
+Detalhes de erro e runtime só aparecem em desenvolvimento ou quando o header `x-health-secret` corresponde a `HEALTH_SECRET`. Nenhum segredo é retornado. Uma falha de S3 retorna `503` no readiness, mas não reinicia a aplicação.
 
 ## Segurança antes da publicação
 
@@ -245,7 +255,7 @@ Detalhes de erro e runtime só aparecem em desenvolvimento ou quando o header `x
 - Revise limite de upload de 100 MB no proxy/plataforma.
 - Mantenha CSP, CSRF, cookies seguros e rate limit ativos.
 - Não registre tokens, cookies, prompts ou conteúdo de materiais.
-- Em múltiplas réplicas, mova o rate limit em memória para um armazenamento compartilhado antes de escalar horizontalmente.
+- Em múltiplas réplicas, mantenha `DATABASE_URL` configurada: o rate limit crítico (login/cadastro/recuperação) e as quotas usam PostgreSQL compartilhado e são fail-closed. O fallback em memória existe apenas para endpoints não críticos.
 
 ## Performance
 
@@ -256,7 +266,7 @@ Monaco, Mermaid, SQL/WASM, geradores PDF/PPTX e visualizadores continuam carrega
 - monitore memória durante OCR/transcrição;
 - prefira Railway/VPS para tarefas longas;
 - ajuste pool PostgreSQL ao número de réplicas;
-- acompanhe `/api/health` e logs sem dados pessoais.
+- acompanhe `/api/health/live` (processo) e `/api/health` (dependências) e logs sem dados pessoais.
 
 ## Checklist pós-deploy
 
@@ -266,7 +276,8 @@ Execute integralmente [`DEPLOY_CHECKLIST.md`](DEPLOY_CHECKLIST.md). A implantaç
 
 | Sintoma | Verificação |
 | --- | --- |
-| `/api/health` retorna `503` | Confira `DATABASE_URL`, migração, credenciais/bucket S3 e conectividade. |
+| `/api/health/live` retorna `503`/timeout | Processo HTTP travado ou porta errada; verifique logs e reinicie o container. |
+| `/api/health` retorna `503` | Confira `DATABASE_URL`, migração, credenciais/bucket S3 e conectividade. Não reinicie em loop por falha temporária de S3. |
 | `schemaReady` é falso | Execute `npm run db:migrate`. |
 | Cadastro falha em produção | Verifique PostgreSQL, `AUTH_SECRET`, SMTP e `APP_URL`. |
 | Email aponta para domínio errado | Corrija `APP_URL` e faça novo deploy. |

@@ -61,7 +61,8 @@ function isTutorRequest(value: unknown): value is TutorRequest {
 }
 
 export async function POST(request: Request) {
-  const body: unknown = await request.json().catch(() => null);
+  // Clone para validar sem consumir o corpo que `withAIQuota` lerá em seguida.
+  const body: unknown = await request.clone().json().catch(() => null);
   if (!isTutorRequest(body)) {
     return NextResponse.json(
       { code: "INVALID_REQUEST", error: "Mensagem ou histórico inválido." },
