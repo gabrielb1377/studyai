@@ -1,9 +1,17 @@
 # Smoke Test V1.1 — StudyAI
 
+> **Atualização 37E.8A:** este roteiro tem 21 checks e é exclusivamente
+> pós-publicação autorizada. Não foi executado em produção. Usar conta dedicada
+> de smoke, sem dados pessoais, materiais reais ou prompts privados; registrar
+> somente status, horário, hash do commit, latência/status HTTP e evidência
+> sanitizada. Nunca armazenar secret, JWT, prompt, resposta ou payload de health
+> detalhado. Um health de produção indisponível não deve ser “corrigido” alterando
+> config remotamente durante a execução.
+
 **Versão:** V1.1  
-**Data:** 2026-10-24  
+**Data:** 2026-10-27 (revisão operacional 37E.8A)
 **Branch:** `v1.1-development`  
-**Commit:** `b6610da`
+**Base de revisão:** `d0c2d634b84a874ccd262fc41307cec1f87a7138`
 
 ---
 
@@ -25,13 +33,13 @@ Roteiro de verificação rápida pós-deploy para confirmar que o StudyAI V1.1 e
 | **6. BYOK - Configuração** | Salvar chave API | Settings → IA → Gerenciador → Inserir chave Gemini/Groq | Chave salva, aparece "BYOK Ativo" no dashboard de quotas | ☐ |
 | **7. BYOK - Teste de Conexão** | Testar provider configurado | Settings → IA → Testar conexão | Retorna "Online" com latência | ☐ |
 | **8. Tutor - Chat Básico** | Enviar mensagem | `/tutor` → Nova conversa → "Explique X" | Resposta streaming renderizada | ☐ |
-| **9. Tutor - Streaming** | Verificar NDJSON | Abrir DevTools → Network → filtrar `/api/tutor` | Resposta `text/event-stream`, chunks chegando | ☐ |
-| **10. Professor - Áudio** | Iniciar aula narrada | `/professor` → "Iniciar aula" | Áudio reproduz, controles funcionam | ☐ |
+| **9. Tutor - Streaming** | Verificar NDJSON | Abrir DevTools → Network → filtrar `/api/tutor` | `application/x-ndjson`, eventos chegando | ☐ |
+| **10. Professor - Áudio** | Iniciar aula narrada | `/tutor` → modo Professor → aula guiada; testar narração no browser | Texto/controles funcionam; áudio depende de suporte/permissão do browser | ☐ |
 | **11. Academy - Criação** | Criar estudo | `/academy` → "Novo estudo" → Preencher | Estudo criado, aparece na lista | ☐ |
 | **12. Academy Studio - Edição** | Editar documento | Abrir estudo no Studio → Editar seção | Autosave funciona, preview atualiza | ☐ |
 | **13. Exportação PDF** | Exportar estudo | Studio → Exportar → PDF | Download inicia, PDF válido abre | ☐ |
 | **14. Exportação PPTX** | Exportar apresentação | Studio → Exportar → PPTX | Download inicia, PPTX válido abre | ☐ |
-| **15. Diagram Studio** | Criar diagrama | `/diagramas` → Novo → Adicionar nó/conexão | Canvas renderiza, drag-and-drop funciona | ☐ |
+| **15. Diagram Studio** | Criar diagrama | `/academy/studio` → aba Diagramas → adicionar nó/conexão | Canvas renderiza, drag-and-drop funciona | ☐ |
 | **16. OCR Pro** | Processar imagem | `/importar` → Upload imagem → OCR | Texto extraído aparece no preview | ☐ |
 | **17. Biblioteca** | Listar materiais | `/biblioteca` | Lista carrega, filtros funcionam | ☐ |
 | **18. Workspace** | Abrir estudo | `/estudo` → Selecionar estudo | Carrega chunks, grafo, flashcards | ☐ |
@@ -65,7 +73,7 @@ curl -sf "$BASE_URL/api/health" | jq -e '.status == "ok"' && echo "✅ Readiness
 # 2. Health Detalhado (com secret)
 if [ -n "$HEALTH_SECRET" ]; then
     echo "2. Health Detalhado..."
-    curl -sf -H "x-health-secret: $HEALTH_SECRET" "$BASE_URL/api/health" | \
+curl -sf -H "x-health-secret: $HEALTH_SECRET" "$BASE_URL/api/health" | \
       jq -e '.checks.database.available == true and .checks.objectStorage.available == true' \
       && echo "✅ DB + Storage OK" || { echo "❌ DB/Storage FAILED"; exit 1; }
 fi
@@ -98,6 +106,24 @@ echo "=== Smoke Test Concluído ==="
 
 **Sequência curta (primeiros 5 min após publicar):** 1 → 2 → 4 → 5 → 6 → 8.
 Se qualquer um falhar, interromper e avaliar rollback antes de continuar.
+
+### Prioridade por risco (37E.8A)
+
+| Prioridade | Checks | Orientação |
+|---|---|---|
+| **P0** | 1–2 health, 5 login, 6–7 BYOK, 8–9 Tutor, 19 Cloud Sync, 20 quotas | Executar primeiro; conta de smoke dedicada. BYOK/provider pode fazer chamada externa faturável: usar credencial de teste autorizada e orçamento aprovado. |
+| **P1** | 10 Professor, 11–14 Academy/Studio/PDF/PPTX, 15 Diagram Studio, 16 OCR | Executar após P0; arquivo de fixture sintético, exportações temporárias e sem material real. |
+| **P2** | 3 home, 4 cadastro, 17 Biblioteca, 18 Workspace, 21 AI Quality Lab e responsividade/estados visuais | Criar conta de smoke aprovada; cadastro cria dado persistente. Não executar ação de delete/restore em contas reais. |
+
+### Registro de evidência (uma linha por check)
+
+| ID | Data/hora UTC | Commit publicado | Ambiente/URL (sem tokens) | HTTP/resultado | Latência | Evidência sanitizada | Operador |
+|---|---|---|---|---|---|---|---|
+| Exemplo | preencher | SHA do release | nome do ambiente | PASS/FAIL/WARN | ms | ID do artefato sem dados | nome |
+
+Anexar logs/screenshots apenas depois de remover cookies, headers de auth,
+segredos, emails e conteúdo do usuário. Não enviar o body autenticado do health
+detalhado para canais públicos.
 
 ---
 

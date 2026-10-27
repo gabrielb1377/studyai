@@ -1,9 +1,17 @@
 # Deploy Runbook V1.1 — StudyAI
 
+> **Autoridade operacional (Sprint 37E.8A, 2026-10-27):** este runbook contém
+> instruções históricas, não é autorização nem certificação de Railway. Acesso
+> remoto e secrets não foram verificados. Até validação/aceite do owner, use
+> `docs/RAILWAY_PRE_DEPLOY_V1_1.md` e `docs/PRODUCTION_MIGRATION_PLAN_V1_1.md`;
+> não execute exemplos históricos de login/link/deploy/push. A divergência
+> `.railway/railway.ts` vs `railway.toml` deve ser reconciliada antes de planejar
+> publicação. Nenhuma ação remota foi tomada nesta sprint.
+
 **Versão:** V1.1  
 **Data:** 2026-10-24  
 **Branch:** `v1.1-development`  
-**Commit:** `5dc68d0`
+**Base verificada:** `d0c2d634b84a874ccd262fc41307cec1f87a7138` (37E.7C)
 
 ---
 
@@ -16,8 +24,8 @@ Destinado à equipe de engenharia responsável pelo deploy.
 
 ## Pré-Requisitos
 
-- [ ] Acesso ao Railway CLI (`railway login`)
-- [ ] Acesso ao PostgreSQL do Railway (`railway connect postgresql`)
+- [ ] Acesso Railway autorizado pelo responsável (não executar `railway login` sem autorização)
+- [ ] Acesso PostgreSQL provisionado para a janela aprovada; não usar `railway connect` sem confirmar alvo e autorização
 - [ ] Variáveis de ambiente configuradas no Railway Dashboard
 - [ ] Backup do banco de dados atual (se houver dados em produção)
 - [ ] Smoke test script disponível (`docs/SMOKE_TEST_V1_1.md`)
@@ -38,7 +46,10 @@ npm audit --omit=dev  # 4 low (katex), Critical/High FIXED
 git diff --check      # Clean
 ```
 
-**Confirmação:** ✅ Todos checks passando
+**Estado atualizado:** o baseline 37E.7C passou no lint/typecheck/build, com 75
+warnings de lint e 4 advisories low no audit. Testes locais dirigidos adicionais
+da 37E.8A estão em `docs/SPRINT_37E_8A_REPORT.md`; o gate operacional continua
+**CONDITIONAL** e Railway não foi verificado.
 
 ---
 
@@ -81,53 +92,46 @@ Acessar: Railway Dashboard → Project → Variables
 | `FEEDBACK_EMAIL` | `feedback@studyai.example.com` | |
 | `CAPACITOR_SERVER_URL` | `https://studyai.example.com` | |
 
-**⚠️ IMPORTANTE:** `API_KEYS_ENCRYPTION_KEY` é **NOVA** e obrigatória para BYOK v2.  
-Gerar com: `openssl rand -base64 32`
+**⚠️ IMPORTANTE:** `API_KEYS_ENCRYPTION_KEY` é necessária para gravar BYOK v2;
+sem ela, novas chaves são v1. O formato de Base64 de 32 bytes é recomendação de
+entropia, não parser validado. Criar/registrar somente em processo seguro
+autorizado; nunca copiar o valor ao Git/ticket/log. Não alterar uma chave que já
+protege ciphertext v2.
 
 ---
 
 ## 3. Deploy
 
-### Opção A: Railway CLI (Recomendado)
+### Opção A: Railway CLI (aguarda autorização e sessão válida)
 
 ```bash
-# Login
-railway login
-
-# Link ao projeto
-railway link
-
-# Deploy
-railway up --detach
+# Somente em janela aprovada, depois de confirmar o projeto/serviço/ambiente.
+# Não executar como parte desta sprint. A sessão local atual não está autorizada.
 ```
 
-### Opção B: Git Push (Deploy Automático)
+### Opção B: Deploy automático por Git (não aprovado)
 
 > Requer autorização explícita. Este runbook **não** autoriza merge/push em
 > `main`; use a branch de release configurada no Railway.
 
-```bash
-git push railway v1.1-development:main
-```
+Não há push aprovado. Nunca enviar a branch de desenvolvimento a `main` sem
+fluxo e autorização humana específicos.
 
 ### Verificar Deploy
 
-```bash
-# Ver logs
-railway logs --tail 100
-
-# Ver status
-railway status
-```
+Use comandos de observação somente após autenticação já autorizada e com
+scrubbing de logs; não foi possível confirmar a identidade/acesso nesta sprint.
 
 ---
 
 ## 4. Migração do Schema (Automática)
 
 O `Dockerfile` executa `node scripts/db-migrate.mjs && node server.js`. A
-migração roda **a cada boot**, em transação única, e é idempotente. Não execute
-o SQL de `rate_limits` manualmente: ele já faz parte de
-`src/server/database/schema.sql`.
+migração roda **a cada boot**, em transação única, e é idempotente; a primeira
+query também inicializa o schema por processo. Isto é DDL mutável no runtime,
+não na etapa de build. Tratar o primeiro start como migração e só iniciar depois
+de backup/restauração de ensaio e aprovação da janela. Ver
+`docs/PRODUCTION_MIGRATION_PLAN_V1_1.md`; estado do schema Railway não verificado.
 
 ```bash
 # Confirmar no log do deploy
@@ -168,7 +172,7 @@ curl -sf "$BASE_URL" | grep -q "StudyAI"
 curl -sf "$BASE_URL/auth/login" | grep -q "Entrar"
 
 # 5. Auth API
-curl -sf "$BASE_URL/api/auth/session" | jq -e '.user'
+curl -sf "$BASE_URL/auth/session" | jq -e '.user'
 ```
 
 **Critérios de Sucesso:**
@@ -217,11 +221,11 @@ curl -sf "$BASE_URL/api/auth/session" | jq -e '.user'
 
 | Cenário | Comando | Tempo |
 |---------|---------|-------|
-| **Código** | `git checkout 2ca9a94 && npm run build && railway up` | < 5 min |
-| **Schema `rate_limits`** | `DROP TABLE rate_limits` | < 1 min |
-| **Crypto v2** | Remover `API_KEYS_ENCRYPTION_KEY` no Railway | < 1 min |
-| **Rate Limit** | Reverter `RateLimit.ts` p/ in-memory | < 5 min |
-| **Next.js** | `npm install next@15.5.25` | < 5 min |
+| **Código** | Selecionar artifact/commit aprovado depois de validar suporte schema + BYOK | Não medido |
+| **Schema/dados** | Sem rollback `down` automático; não dropar tabelas; decidir forward fix ou restore isolado aprovado | Não medido |
+| **Crypto v2** | Nunca remover a chave por si só; v1-only exige dry-run + rekey `v2→v1` com backup aprovado | Depende do volume; não medido |
+| **Rate Limit** | Mitigação requer revisão de segurança e rollout específico | Não medido |
+| **Next.js** | Reverter dependências exige build/testes e artifact validado | Não medido |
 
 **Procedimento Padrão:**
 1. Identificar severidade

@@ -1,14 +1,35 @@
-# Handoff Atual — Sprint 37E.7C: Real Concurrency & E2E Stability
+# Handoff Atual — Sprint 37E.8A: Railway Pre-Deployment
 
-Atualizado em 26 de outubro de 2026.
+Atualizado em 27 de outubro de 2026.
 
 ## Estado
 
 - **Branch:** `v1.1-development` (nada enviado/pushed)
-- **HEAD de partida:** `58d3fab` (Sprint 37E.7B)
-- **Commit desta sprint:** criado localmente com a mensagem definida; sem push
+- **HEAD de partida 37E.8A:** `d0c2d634b84a874ccd262fc41307cec1f87a7138` (Sprint 37E.7C)
+- **Commit desta sprint:** em preparação; sem push
 - **Deploy:** **NÃO executado**. Railway intocado.
 - **Decisão:** **CONDITIONAL** — ver `docs/FINAL_RELEASE_DECISION_V1_1.md`
+
+## Entregas Sprint 37E.8A (pré-deploy local)
+
+- `railway whoami` respondeu **Unauthorized**; nenhuma autenticação automática
+  foi feita. Railway, deployments, secrets, domínio, DB, S3, volumes, recursos e
+  logs remotos estão **NÃO VERIFICADOS**.
+- Divergência local pendente: `.railway/railway.ts` aponta branch `main` e
+  `/api/health`; `railway.toml` usa Dockerfile e `/api/health/live`. Não alterei
+  IaC/configuração remota; owner deve decidir o alvo antes de autorização.
+- `pg_dump`/`pg_restore` PostgreSQL 18.4: restore local com registros sintéticos
+  de user, placeholder BYOK, quota e rate limit passou; arquivos em pasta Temp
+  aprovada fora do Git. Isso **não valida backup de produção**.
+- `db:migrate` duas aplicações consecutivas passaram em DB isolado restaurado;
+  harness app **8/8**; Playwright direcionado crypto/health/quota **30/30**.
+- Health standalone production simulado: live 200; readiness 503 com DB e S3
+  indisponíveis; body público sem configuração/segredos/erro detalhado.
+- S3 implementa objetos e metadados localmente, mas bucket/versioning/retention/
+  restore/custo remotos são desconhecidos. Monitoramento remoto/alertas também.
+- **Release Gate CONDITIONAL**: revisar `docs/SPRINT_37E_8A_REPORT.md`,
+  `docs/RAILWAY_PRE_DEPLOY_V1_1.md` e
+  `docs/PRODUCTION_MIGRATION_PLAN_V1_1.md` antes de qualquer janela.
 
 > Correção: os hashes `f3a2b1c` (37E.7A) e `c1a2b3d` (37E.6) citados em
 > documentos anteriores **não existem**. Os reais são `1e56d76` e `5dc68d0`.

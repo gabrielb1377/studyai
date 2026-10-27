@@ -1,5 +1,14 @@
 # Monitoramento Pós-Deploy V1.1 — StudyAI
 
+> **Estado revisto 37E.8A:** os thresholds e retenções abaixo são propostas,
+> salvo onde indicado como mecanismo local. Nesta sprint não havia sessão Railway
+> autorizada; logs/metrics, retenção, CPU/memória e alerts do serviço são
+> **NÃO VERIFICADOS REMOTAMENTE**. Não há agente externo, `/metrics`,
+> Prometheus/Grafana ou alertas comprovadamente ativos. `Telemetry` local mantém
+> dados em memória; health endpoints estão no código. Antes do tráfego, designar
+> operador, canal de alerta, rota monitorada e validar um alerta sintético sem
+> dados de usuários.
+
 **Versão:** V1.1  
 **Data:** 2026-10-24  
 **Período Crítico:** Primeiras 24h → 7 dias → 30 dias

@@ -1,9 +1,9 @@
 # Decisão Final de Release — StudyAI V1.1 Beta
 
-**Data:** 2026-10-26
-**Sprint:** 37E.7C — Real Concurrency, E2E Stability & Technical Gate
+**Data:** 2026-10-27
+**Sprint:** 37E.8A — Railway Pre-Deployment & Operational Verification
 **Branch:** `v1.1-development`
-**Checkpoint verificado:** `58d3fab` (37E.7B) + alterações 37E.7C (commit pendente)
+**Checkpoint verificado:** `d0c2d634b84a874ccd262fc41307cec1f87a7138` (37E.7C)
 **Responsável pela verificação:** agente de engenharia (sem autoridade de deploy)
 
 ---
@@ -12,9 +12,10 @@
 
 > ## ⚠️ CONDITIONAL — NÃO É UM "GO" AUTOMÁTICO
 >
-> A V1.1 está tecnicamente consistente e pode ser **submetida para
-> autorização** de deploy. O deploy **não está autorizado por este documento**.
-> A execução depende das condições obrigatórias abaixo.
+> Validações locais foram executadas; infraestrutura e secrets Railway,
+> backup/restore de produção, proteção de objetos S3 e monitoramento permanecem
+> não verificados. **Não solicitar autorização de deploy ainda.** Esta decisão
+> não autoriza deploy, migração nem alteração remota.
 
 ---
 
@@ -36,6 +37,9 @@
 | Health | `/api/health/live` independente de DB/S3; `/api/health` continua readiness detalhada; Docker/Railway apontam liveness |
 | Bug de request body | Corrigido consumo duplo do body em Tutor/Academy/middleware; evidenciado por rota real no standalone |
 | Documentação | hashes, endpoint de sessão, migração automática e rollback corrigidos |
+| Operações pré-deploy 37E.8A | Backup/restore com dados sintéticos em PostgreSQL isolado passou; **não é evidência de backup/restore real** |
+| Railway | CLI instalado, mas `whoami` não autorizado. Serviço, deployment, secrets, DB, S3, domínio, recursos e logs **não verificados** |
+| Configuração local de deploy | Divergência entre `.railway/railway.ts` (branch `main`, `/api/health`) e `railway.toml` (`/api/health/live`); decisão e reconciliação pendentes |
 
 ---
 
@@ -43,24 +47,30 @@
 
 Estas condições **não** foram executadas nesta sprint (sem acesso/autorização).
 
-1. **Autorização humana explícita** para deploy no Railway.
-   Este documento não substitui a aprovação do responsável pelo produto.
-2. **Backup verificado** do PostgreSQL de produção, com teste de restore.
+1. Resolver a divergência local da IaC e confirmar serviço/ambiente/branch e
+   deployment remoto por acesso somente leitura autorizado.
+2. **Autorização humana explícita** para deploy no Railway; este documento não
+   substitui a aprovação do responsável pelo produto.
+3. **Backup verificado** do PostgreSQL de produção, com restore isolado.
    Sem backup, não executar migração.
-3. **Variáveis de ambiente completas** no Railway, incluindo:
+4. Confirmar presença/persistência de variáveis no ambiente Railway correto,
+   sem expor valores. Incluindo:
    - `AUTH_SECRET` (≥ 32 chars) e `HEALTH_SECRET`;
    - `API_KEYS_ENCRYPTION_KEY` (se BYOK v2 for habilitado);
    - `DATABASE_URL` e SSL;
    - **S3 completo** (`S3_ENDPOINT`, `S3_BUCKET`, credenciais) — sem storage,
      `/api/health` responde 503 e o container é considerado não saudável;
    - pelo menos um provider de IA.
-4. **Smoke test pós-deploy** em até 15 min (`docs/SMOKE_TEST_V1_1.md`),
+5. Definir e testar o plano de backup/restore/versionamento S3 (estado remoto
+   não verificado).
+6. **Smoke test pós-deploy** em até 15 min (`docs/SMOKE_TEST_V1_1.md`),
    começando por health, cadastro, login, BYOK e quota.
-5. **Plano de rollback criptográfico:** se houver `enc:v2:` e a versão de
+7. **Plano de rollback criptográfico:** se houver `enc:v2:` e a versão de
    destino não ler v2, executar `scripts/rekey-byok-v2-to-v1.mjs --apply`
    **antes** de remover a chave. Nunca remover `API_KEYS_ENCRYPTION_KEY`
    diretamente.
-6. **Aceite formal dos riscos residuais** da §4 por quem autorizar o deploy.
+8. Configurar monitoramento/alertas e responsável antes de tráfego real.
+9. **Aceite formal dos riscos residuais** da §4 por quem autorizar o deploy.
 
 ---
 
@@ -70,9 +80,11 @@ Estas condições **não** foram executadas nesta sprint (sem acesso/autorizaç�
 |---|-----|---------|------------------------|
 | 1 | Rate limit fail-open **apenas** em endpoints não críticos | Limite pode ser contornado entre réplicas em sync/colaboração/telemetria/feedback; auth e API keys são fail-closed | Sim, risco baixo |
 | 2 | Quota conservadora com BYOK parcial | Em modo automático pode consumir quota compartilhada antes de saber se fallback será usado | Sim (UX), corrigir depois |
-| 3 | Monitoramento não implantado | Sem alertas automáticos; dependência de logs/SQL | Sim, com operação manual |
-| 4 | Deploy/Railway/backup não testados | Falhas operacionais só aparecem no deploy | **Requer as condições da §2** |
-| 5 | Execução E2E final | 218/218 casos únicos aprovados; 6 retries, 0 falhas residuais, 0 skipped | Gate local atendido; gates operacionais ainda pendentes |
+| 3 | Monitoramento/alertas remotos não verificados | Sem alerta externo comprovado para incidentes | Configurar/testar antes do tráfego |
+| 4 | Railway e branch/healthcheck IaC divergentes | Alvo, origem e health probe não estão alinhados localmente | **Resolver antes de pedir autorização** |
+| 5 | Backup/restore PostgreSQL de produção não verificados | Ensaio local sintético não protege dados reais | **Backup + restore isolado em janela aprovada** |
+| 6 | Backup/versionamento/restore S3 não verificados | Binários de usuário podem não ser recuperáveis | **Definir/verificar no provedor** |
+| 7 | Execução E2E final | 218/218 casos únicos aprovados; 6 retries, 0 falhas residuais, 0 skipped | Gate local atendido |
 
 ---
 
@@ -95,12 +107,14 @@ Estas condições **não** foram executadas nesta sprint (sem acesso/autorizaç�
 
 ## 5. Critérios para Promover a "READY FOR AUTHORIZATION"
 
-1. Concorrência real SQL e cenários 5–7: **concluído nesta sprint**, evidência em `docs/CONCURRENCY_VALIDATION_V1_1.md`.
-2. Configurar ao menos um alerta externo (readiness/5xx) antes do tráfego real.
-3. Suíte E2E reconciliada nesta sprint; 218 casos únicos aprovados, com retries reportados separadamente em `docs/E2E_STABILITY_V1_1.md`.
-4. Manter autorização humana, backup/restore e smoke test pós-deploy como gates operacionais.
+1. Acesso Railway read-only autorizado e IaC reconciliada.
+2. Secrets verificados por presença/health/functionality, sem cópia de valores.
+3. Restore PostgreSQL e plano/restore de objetos S3 aceitos.
+4. Alertas/monitoramento configurados e testados.
+5. Suíte E2E reconciliada: 218 casos únicos; retries reportados em `docs/E2E_STABILITY_V1_1.md`.
+6. Autorização humana; deploy e 21 smoke checks somente em janela aprovada.
 
-**Estado atual:** concorrência real, healthchecks e suíte E2E reconciliada foram verificados nesta sprint. A decisão permanece **CONDITIONAL** até backup/restore e verificações pós-deploy operacionais; nenhum deploy foi executado ou autorizado.
+**Estado atual:** **CONDITIONAL**. Ensaio sintético local de backup/restore passou; isso não comprova recuperação real. Railway, secrets remotos, backup/restore de produção, S3/versionamento e alertas permanecem não verificados. Nenhum deploy, push ou migração remota foi executado/autorizado.
 
 ---
 
