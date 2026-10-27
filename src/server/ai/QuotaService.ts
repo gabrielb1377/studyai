@@ -67,10 +67,7 @@ export const QuotaService = {
       return { allowed: true, remaining: Infinity, limit: Infinity, resetAt: getDayEnd() };
     }
 
-    const minuteBucket = getMinuteBucket();
     const dateStr = getDateString();
-    const minuteBucketEnd = getMinuteBucketEnd();
-    const dayEnd = getDayEnd();
 
     const hasPg = await hasPostgresAsync();
     if (!hasPg) {
@@ -123,7 +120,8 @@ export const QuotaService = {
         resetAt: getMinuteBucketEnd(),
       };
     } catch (error) {
-      await query("ROLLBACK").catch(() => {});
+      // Fail-closed: a quota indisponível nunca deve liberar uso ilimitado
+      // da credencial compartilhada. O erro é propagado ao middleware.
       throw error;
     }
   },
@@ -139,12 +137,13 @@ export const QuotaService = {
     }
 
     const dateStr = getDateString();
-    const minuteBucket = getMinuteBucket();
 
     const [dailyResult, minuteResult] = await Promise.all([
+      // minute_bucket = 0 guarda o contador diário consolidado. Somar todas as
+      // linhas do dia contaria cada requisição duas vezes (dia + minuto).
       query(
-        "SELECT COALESCE(SUM(requests_count), 0) as used FROM usage_quotas WHERE user_id = $1 AND date = $2",
-        [userId, getDateString()]
+        "SELECT COALESCE(requests_count, 0) as used FROM usage_quotas WHERE user_id = $1 AND date = $2 AND minute_bucket = 0",
+        [userId, dateStr]
       ),
       query(
         "SELECT COALESCE(SUM(requests_count), 0) as used FROM usage_quotas WHERE user_id = $1 AND date = $2 AND minute_bucket = $3",
@@ -180,10 +179,11 @@ export const QuotaService = {
     if (!hasPg) return [];
 
     const result = await query(
-      `SELECT date, SUM(requests_count) as requests, SUM(tokens_count) as tokens
+      // Apenas a linha consolidada do dia (minute_bucket = 0) para não
+      // duplicar o total diário com as linhas de minuto.
+      `SELECT date, requests_count as requests, tokens_count as tokens
        FROM usage_quotas
-       WHERE user_id = $1 AND date >= CURRENT_DATE - INTERVAL '${days} days'
-       GROUP BY date
+       WHERE user_id = $1 AND minute_bucket = 0 AND date >= CURRENT_DATE - INTERVAL '${days} days'
        ORDER BY date DESC`,
       [userId]
     );

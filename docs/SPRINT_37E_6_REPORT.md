@@ -3,7 +3,13 @@
 **Data:** 2026-10-24  
 **Branch:** `v1.1-development`  
 **Commit Base:** `b6610da` (Sprint 37E.5)  
-**Commit Final:** `c1a2b3d` (Sprint 37E.6)
+**Commit Final:** `5dc68d0` (Sprint 37E.6)
+
+> **Correção (Sprint 37E.7B):** o hash `c1a2b3d` citado originalmente neste
+> relatório não existe no repositório. O commit real da 37E.6 é `5dc68d0`.
+> A contagem de testes também foi corrigida: a suíte de 189 testes teve
+> **186 aprovações** (184 diretas + 2 após retry) e 3 skipped — ver
+> `docs/SPRINT_37E_7B_REPORT.md`.
 
 ---
 

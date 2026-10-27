@@ -1,166 +1,112 @@
-# Handoff Atual — Sprint 37E.7A: Final Pre-Launch Verification & Deployment Preparation
+# Handoff Atual — Sprint 37E.7B: Final Release Verification
 
-Atualizado em 24 de outubro de 2026.
+Atualizado em 26 de outubro de 2026.
 
-## ✅ Sprint 37E.7A CONCLUÍDA
+## Estado
 
-### Commit Final
-- **Branch:** `v1.1-development`
-- **HEAD:** `5dc68d0` (Sprint 37E.6) + `f3a2b1c` (Sprint 37E.7A)
-- **Working Tree:** Clean
-- **Validação Final:** ✅ Todos os checks passando
+- **Branch:** `v1.1-development` (nada enviado/pushed)
+- **HEAD de partida:** `1e56d76` (Sprint 37E.7A)
+- **Commit desta sprint:** `chore(release): finalize v1.1 verification 37E.7B`
+- **Deploy:** **NÃO executado**. Railway intocado.
+- **Decisão:** **CONDITIONAL** — ver `docs/FINAL_RELEASE_DECISION_V1_1.md`
 
----
-
-## 📊 Resumo das Fases (Todas CONCLUÍDAS)
-
-| Fase | Descrição | Status | Entrega Principal |
-|------|-----------|--------|-------------------|
-| **1** | Auditoria Git & Baseline | ✅ | Baseline confirmado |
-| **2** | PostgreSQL & Migrações | ✅ | `rate_limits` table + índices |
-| **3** | Estratégia de Backup | ✅ | `pg_dump`, S3 versioning, restore procedures |
-| **4** | Variáveis de Ambiente | ✅ | `API_KEYS_ENCRYPTION_KEY` auditada |
-| **5** | Migração BYOK v1/v2 | ✅ | 15 testes passando, rollback validado |
-| **6** | Quotas & Rate Limiting | ✅ | Testes E2E validados |
-| **7** | Compatibilidade Railway | ✅ | Dockerfile, health check, Next.js 15.5.28 |
-| **8** | Smoke Tests | ✅ | 21 checks em `docs/SMOKE_TEST_V1_1.md` |
-| **9** | Plano de Rollback | ✅ | 5 tipos, < 5 min cada |
-| **10** | Monitoramento | ✅ | Alertas, logs, dashboards |
-| **11** | Testes & Validação | ✅ | 203 testes, 184 passing |
-| **12** | Documentação & Obsidian | ✅ | 8 novos docs + handoff |
-| **13** | Release Gate Operacional | ✅ | **PASS** — `docs/RELEASE_GATE_V1_1_OPERATIONAL.md` |
-| **14** | Validação Final | ✅ | Todos checks passando |
-| **15** | Commit Final | ✅ | `f3a2b1c` |
+> Correção: os hashes `f3a2b1c` (37E.7A) e `c1a2b3d` (37E.6) citados em
+> documentos anteriores **não existem**. Os reais são `1e56d76` e `5dc68d0`.
 
 ---
 
-## 📊 Validação Final
+## Entregas da 37E.7B
 
-| Check | Comando | Resultado |
-|-------|---------|-----------|
-| **Lint** | `npm run lint` | ✅ 0 erros, 83 warnings |
-| **Typecheck** | `npm run typecheck` | ✅ Limpo |
-| **Build** | `npm run build` | ✅ 13.5s, 46 rotas, 104 kB shared |
-| **Testes E2E** | `npm run test:e2e` | ✅ 203 descobertos, 184 passing, 1 retry, 3 skipped |
-| **Audit** | `npm audit --omit=dev` | ✅ 4 low (katex) — **Critical/High FIXED** |
-| **Diff Check** | `git diff --check` | ✅ Clean |
+| Área | Entrega |
+|------|---------|
+| Reconciliação E2E | 205: 193 diretos + 8 retry, 1 falha ambiental; 3 skipped. Reexecução final: 21 passed/3 skipped; 215 descobertos com `quota-policy` |
+| Criptografia | `crypto-core.ts` extraído; 16 testes na implementação real |
+| Quota | contagem duplicada corrigida; `ollama` keyless; modo espelha ProviderManager |
+| Rate limiting | login/cadastro/recuperação/API keys fail-closed (503); fallback em memória só em não críticos |
+| Concorrência | `scripts/verify-concurrency.mjs` (2 pools, guardas); não executado no host |
+| Rollback | falso "remover a chave mantém v2" corrigido + `scripts/rekey-byok-v2-to-v1.mjs` |
+| Migrações | schema limpo/idempotente em PostgreSQL 18 isolado (single-user) |
+| Documentação | `SPRINT_37E_7B_REPORT.md`, `FINAL_RELEASE_DECISION_V1_1.md` |
 
 ---
 
-## 📋 Testes E2E — Resumo
+## Validação Final
+
+| Check | Resultado |
+|-------|-----------|
+| `npm run lint` | 0 erros, 82 warnings |
+| `npm run typecheck` | limpo |
+| `npm run build` | OK (46 rotas) |
+| `npm run test:e2e` | 205: 193 diretos + 8 retry, 1 falha ambiental, 3 skipped |
+| Reexecução final | 21 passed, 3 skipped (`quota-policy`, `cloud-sync`, `concurrency`, `product-polish:57`) |
+| Fail-closed (standalone) | 503 + `Retry-After: 30` em login/register/recover com DB inválido e sem `DATABASE_URL` |
+| `pg` no standalone | presente (`pg`, `pg-pool`, `pg-protocol`, `pg-types`, `pgpass`, etc.) |
+| `npm audit --omit=dev` | 4 low (`katex`), sem high/critical |
+| `git diff --check` | limpo |
+
+---
+
+## Testes E2E — Reconciliação
 
 | Métrica | Valor |
 |---------|-------|
-| **Testes Descobertos** | 203 |
-| **Aprovados Diretamente** | 184 |
-| **Aprovados Após Retry** | 1 (lab.spec.ts:33 — flaky histórico) |
-| **Skipped (Documentados)** | 3 (concurrency.spec.ts — cenários ProviderManager complexos) |
-| **Falhos** | 0 |
-| **Taxa de Sucesso** | **97.9%** |
+| Descobertos na execução completa | 205 |
+| Aprovados diretos | 193 |
+| Aprovados após retry (flaky) | 8 |
+| Skipped | 3 (`concurrency.spec.ts` cenários 5–7) |
+| Falhas | 1 (`product-polish.spec.ts:57`, ambiental; passou 3/3 isolada e na reexecução) |
+| Reexecução final | 21 passed, 3 skipped |
+| Descobertos após `quota-policy` | 215 |
 
-**Novos Testes (Sprint 37E.7A):**
-- `tests/crypto-migration.spec.ts` — 15 testes (15 passing)
-  - 10 testes de migração v1/v2
-  - 4 testes de rollback compatibilidade
+> Uma segunda execução completa (215) foi descartada por corrupção do
+> `next dev` causada pela remoção de `.next` durante o run; não é evidência de
+> produto. Depois de limpar o ambiente, a reexecução direcionada passou.
 
----
-
-## 📁 Arquivos Modificados/Nvos (Sprint 37E.7A)
-
-### Novos Documentos (8)
-- `docs/PRE_LAUNCH_V1_1_CHECKLIST.md` — Checklist pré-lançamento
-- `docs/DEPLOY_V1_1_RUNBOOK.md` — Runbook deploy Railway
-- `docs/RELEASE_GATE_V1_1_OPERATIONAL.md` — Release Gate operacional **PASS**
-- `docs/ROLLBACK_V1_1.md` — Plano rollback (5 tipos, < 5 min)
-- `docs/SMOKE_TEST_V1_1.md` — 21 checks pós-deploy
-- `docs/MONITORING_V1_1.md` — Monitoramento pós-deploy
-- `docs/SPRINT_37E_7A_REPORT.md` — Relatório final sprint
-- `docs/PRE_LAUNCH_V1_1_CHECKLIST.md` — Checklist pré-lançamento
-
-### Novos Testes (1)
-- `tests/crypto-migration.spec.ts` — 15 testes (migração v1/v2 + rollback)
+**Histórico:** o "184 passing" vinha da suíte de 189 testes e omitia 2 retries
+(186 reais). Com os 13 testes de criptografia que passavam, o total era 199 em
+203. Ver §4 do relatório.
 
 ---
 
-## ⚠️ Riscos Residuais (Aceitos/Monitorados)
+## Riscos Residuais
 
-| Risco | Severidade | Mitigação |
-|-------|------------|-----------|
-| katex prototype pollution | Low | Aguardar fix upstream não-breaking |
-| uuid (transitivo) | Moderate | Aceito — breaking change no capacitor |
-| braces (transitivo) | High | Aceito — breaking change no eslint |
-| Flaky test `lab.spec.ts:33` | Low | Passa no retry; monitorar |
-| Backup automático Railway Trial | Medium | Documentado — pg_dump manual necessário |
-| OCR pesado no Railway Trial | High | Documentado como limitação |
-
----
-
-## 🚀 Release Gate Operacional — **PASS** ✅
-
-| Categoria | Classificação |
-|-----------|---------------|
-| Git & Código | **PASS** |
-| Dependências | **WARNING** (4 low, 2 aceitos) |
-| Migrações SQL | **PASS** |
-| Backup & Restore | **WARNING** (manual necessário) |
-| Criptografia BYOK v2 | **PASS** |
-| Quotas & Rate Limits | **PASS** |
-| Testes & Qualidade | **PASS** |
-| Smoke Tests | **PASS** |
-| Rollback Plan | **PASS** |
-| Observabilidade | **WARNING** (setup manual) |
-| Compatibilidade Railway | **PASS** |
-
-**Status Geral: PASS** — StudyAI V1.1 pronto para deploy no Railway (condicional à configuração de variáveis)
+| Risco | Sev. | Situação |
+|-------|------|----------|
+| Cenários 5–7 skipped | Alta | Não aprovados; exigem 2 instâncias + DB real |
+| Concorrência multi-conexão não executada | Média | Harness pronto (`scripts/verify-concurrency.mjs`); rodar em CI/container |
+| Rate limit fail-open só em não críticos | Baixa | Login/cadastro/recuperação/API keys fail-closed (503); sync/colaboração/telemetria/feedback em memória |
+| Quota conservadora com BYOK parcial | Média | Documentado; corrigir pós-launch |
+| "BYOK Ativo" com BYOK parcial | Baixa | Cosmético; documentado |
+| Monitoramento não implantado | Média | Health + logs + SQL manuais |
+| `katex` 4 low | Baixa | Sem fix não-breaking |
+| Health exige S3 | Alta (op.) | S3 obrigatório no deploy |
 
 ---
 
-## 📦 Próximos Passos (Pós-37E.7A / Sprint 37E.8)
+## Próximos Passos
 
-1. **Deploy no Railway** com variáveis configuradas:
-   - `API_KEYS_ENCRYPTION_KEY` (`openssl rand -base64 32`)
-   - Todas variáveis em `DEPLOY_V1_1_CHECKLIST.md`
-
-2. **Migração SQL** — Executar `rate_limits` table + índices
-
-3. **Smoke Tests** — Executar `docs/SMOKE_TEST_V1_1.md` (≤ 15 min)
-
-4. **Monitoramento 24h** — Seguir `docs/MONITORING_V1_1.md`
-
-5. **Sprint 37E.8** — Launch preparation
+1. **Autorização explícita** de deploy (não concedida nesta sprint).
+2. **Backup verificado** do PostgreSQL de produção + teste de restore.
+3. Configurar variáveis no Railway, incluindo `API_KEYS_ENCRYPTION_KEY` e S3.
+4. Deploy e smoke test (`docs/SMOKE_TEST_V1_1.md`) em até 15 min.
+5. Se rollback: re-encriptar v2→v1 antes de remover a chave.
+6. Planejar 37E.8: cenários 5–7, teste de concorrência real, alertas externos.
 
 ---
 
-## 📁 Entregas de Documentação (Sprint 37E.7A)
+## Notas Importantes
 
-- `docs/PRE_LAUNCH_V1_1_CHECKLIST.md` — Checklist pré-lançamento
-- `docs/DEPLOY_V1_1_RUNBOOK.md` — Runbook deploy Railway
-- `docs/RELEASE_GATE_V1_1_OPERATIONAL.md` — Release Gate operacional **PASS**
-- `docs/ROLLBACK_V1_1.md` — Plano rollback (5 tipos, < 5 min)
-- `docs/SMOKE_TEST_V1_1.md` — 21 checks pós-deploy
-- `docs/MONITORING_V1_1.md` — Monitoramento pós-deploy
-- `docs/SPRINT_37E_7A_REPORT.md` — Relatório final sprint
-
----
-
-## 📌 Notas Importantes
-
-- **NÃO FAZER DEPLOY** — Branch `v1.1-development` apenas
-- **NÃO EXECUTAR GIT PUSH** — Commits locais apenas
-- **NÃO MODIFICAR PRODUÇÃO** — Railway intocado
-- **NÃO USAR `npm audit fix --force`** — Apenas fixes não-breaking
-- **NÃO ALTERAR `AUTH_SECRET`** — Manter compatibilidade com chaves legadas
-- **NÃO ACESSAR `D:\FitIA`** — Projeto separado
+- **NÃO FAZER DEPLOY** sem autorização.
+- **NÃO EXECUTAR GIT PUSH** nesta sprint.
+- **NÃO MODIFICAR PRODUÇÃO** (Railway intocado).
+- **NÃO USAR `npm audit fix --force`**.
+- **NÃO REMOVER `API_KEYS_ENCRYPTION_KEY`** sem re-encriptar v2.
+- **NÃO ALTERAR `AUTH_SECRET`**.
+- **NÃO ACESSAR `D:\FitIA`**.
 
 ---
 
-## 📌 Próxima Ação: Autorização de Deploy
+## Próxima Ação
 
-**Status:** READY FOR AUTHORIZATION
-
-O projeto está tecnicamente preparado para que o responsável autorize a publicação.  
-Próxima ação: Autorização explícita do responsável + execução do deploy no Railway.
-
----
-
-*Progresso salvo automaticamente. Sprint 37E.7A completa.*
+**Status:** **CONDITIONAL** — tecnicamente verificado, aguardando autorização e
+cumprimento das condições obrigatórias de `docs/FINAL_RELEASE_DECISION_V1_1.md`.

@@ -67,7 +67,13 @@
 
 ---
 
-## Alertas Configurados (Exemplo Prometheus/Grafana)
+## Alertas Propostos (ainda NÃO configurados)
+
+> **Estado real (Sprint 37E.7B):** o StudyAI não expõe `/metrics` nem envia
+> métricas para Prometheus/Grafana. As regras abaixo são um modelo para
+> configuração manual futura; até lá, a observabilidade depende de
+> `/api/health`, logs do Railway e consultas SQL pontuais. Não trate estes
+> alertas como ativos.
 
 ```yaml
 groups:
@@ -236,8 +242,8 @@ psql $DATABASE_URL -c "SELECT * FROM pg_locks WHERE NOT granted;"
 # Ver tamanho tabelas
 psql $DATABASE_URL -c "SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size FROM pg_tables WHERE schemaname='public' ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;"
 
-# Ver quotas atuais
-psql $DATABASE_URL -c "SELECT user_id, date, SUM(requests_count) as daily_requests FROM usage_quotas GROUP BY user_id, date ORDER BY date DESC LIMIT 20;"
+# Ver quotas atuais (apenas a linha consolidada do dia, minute_bucket = 0)
+psql $DATABASE_URL -c "SELECT user_id, date, requests_count AS daily_requests FROM usage_quotas WHERE minute_bucket = 0 ORDER BY date DESC LIMIT 20;"
 
 # Ver rate limits atuais
 psql $DATABASE_URL -c "SELECT key, window_bucket, count FROM rate_limits ORDER BY window_bucket DESC LIMIT 20;"

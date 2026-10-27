@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { AuthService } from "@/server/auth/AuthService";
 import { apiError, jsonBody, publicOrigin, setAuthCookies } from "@/server/auth/http";
-import { rateLimit, requestAddress } from "@/server/security/RateLimit";
+import { rateLimitStrict, requestAddress } from "@/server/security/RateLimit";
+import { rateLimitRejection } from "@/server/security/RateLimitHttp";
 import { EmailService } from "@/server/auth/EmailService";
 
 export async function POST(request: Request) {
   try {
-    const limit = await rateLimit(`register:${requestAddress(request)}`, 5, 15 * 60_000);
-    if (!limit.allowed) return NextResponse.json({ error: "Muitas tentativas. Aguarde antes de tentar novamente." }, { status: 429 });
+    const limit = await rateLimitStrict(`register:${requestAddress(request)}`, 5, 15 * 60_000);
+    if (!limit.allowed) return rateLimitRejection(limit, "Muitas tentativas. Aguarde antes de tentar novamente.");
     EmailService.requireConfiguration();
     const input = await jsonBody<{ name: string; email: string; password: string; deviceId: string; deviceName: string }>(request);
     const result = await AuthService.register(input);

@@ -74,13 +74,26 @@ curl -sf "$BASE_URL" | grep -q "StudyAI" && echo "✅ Home OK" || { echo "❌ Ho
 echo "4. Login Page..."
 curl -sf "$BASE_URL/auth/login" | grep -q "Entrar" && echo "✅ Login Page OK" || { echo "❌ Login Page FAILED"; exit 1; }
 
-# 5. Auth API
+# 5. Auth API (rota real: /auth/session, sem prefixo /api)
 echo "5. Auth Check..."
-curl -sf "$BASE_URL/api/auth/session" | jq -e '.user' >/dev/null && echo "✅ Session OK" || echo "⚠️ No session (expected if not logged in)"
+curl -sf "$BASE_URL/auth/session" | jq -e '.user' >/dev/null && echo "✅ Session OK" || echo "⚠️ No session (expected if not logged in)"
 
 echo ""
 echo "=== Smoke Test Concluído ==="
 ```
+
+---
+
+## Classificação dos Checks (Sprint 37E.7B)
+
+| Classe | Itens | Observação |
+|--------|-------|------------|
+| **A. Automatizáveis antes do deploy** | 1, 2, 3, 4, 5, 6, 17, 20 | Cobertos por `npm run test:e2e` (com mocks/fixtures) ou pelo script acima contra um ambiente local |
+| **B. Manuais após o deploy** | 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 21 | Dependem de UI, áudio, download de arquivos ou storage real |
+| **C. Dependem de serviço externo** | 7 (provider), 8 (provider), 10 (TTS/navegador), 16 (OCR), 19 (S3) | Podem falhar por indisponibilidade externa; registrar como WARNING, não como falha do deploy |
+
+**Sequência curta (primeiros 5 min após publicar):** 1 → 2 → 4 → 5 → 6 → 8.
+Se qualquer um falhar, interromper e avaliar rollback antes de continuar.
 
 ---
 

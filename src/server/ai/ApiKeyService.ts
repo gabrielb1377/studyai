@@ -2,7 +2,7 @@ import "server-only";
 
 import { CloudDatabase } from "@/server/cloud/CloudDatabase";
 import { decryptSecret, encryptSecret } from "@/server/security/Crypto";
-import { rateLimit } from "@/server/security/RateLimit";
+import { rateLimitStrict } from "@/server/security/RateLimit";
 import type { AIProviderId } from "@/features/ai/AIProvider";
 import { isAIProviderId } from "@/features/ai/AIProvider";
 
@@ -78,6 +78,10 @@ export const ApiKeyService = {
   },
 
   async rateLimitSet(userId: string) {
-    return rateLimit(`apikey:set:${userId}`, 10, 60_000);
+    return rateLimitStrict(`apikey:set:${userId}`, 10, 60_000);
+  },
+
+  async rateLimitTest(userId: string) {
+    return rateLimitStrict(`apikey:test:${userId}`, 10, 60_000);
   },
 };

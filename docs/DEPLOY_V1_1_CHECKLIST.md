@@ -3,7 +3,8 @@
 **Versão:** V1.1  
 **Data:** 2026-10-24  
 **Branch:** `v1.1-development`  
-**Commit:** `b6610da` (Sprint 37E.5) → `c1a2b3d` (Sprint 37E.6)
+**Commit:** `5dc68d0` (Sprint 37E.6) → `1e56d76` (Sprint 37E.7A)
+**Verificação final:** Sprint 37E.7B (`docs/SPRINT_37E_7B_REPORT.md`)
 
 ---
 
@@ -11,11 +12,11 @@
 
 ### Código
 - [x] Branch `v1.1-development` limpa
-- [x] Commit `b6610da` (Sprint 37E.5) + `c1a2b3d` (Sprint 37E.6)
+- [x] Commits `5dc68d0` (37E.6) + `1e56d76` (37E.7A) + commit final 37E.7B
 - [x] `npm run lint` — 0 erros
 - [x] `npm run typecheck` — Limpo
 - [x] `npm run build` — 16.2s, 46 rotas, 104 kB shared
-- [x] `npm run test:e2e` — 184/189 passing (1 retry, 3 skipped)
+- [x] `npm run test:e2e` — resultado consolidado em `docs/SPRINT_37E_7B_REPORT.md` (3 cenários de concorrência permanecem skipped)
 - [x] `npm audit --omit=dev` — 4 low (katex), Critical/High FIXED
 - [x] `git diff --check` — Clean
 
@@ -86,26 +87,29 @@ railway up --detach
 git push railway v1.1-development:main
 ```
 
-### 3. Migração SQL (Pós-Deploy Inicial)
+### 3. Migração do Schema (Automática na Inicialização)
+
+O container executa `node scripts/db-migrate.mjs && node server.js` (ver
+`Dockerfile`). O `schema.sql` é aplicado em uma única transação e é idempotente
+(`CREATE TABLE/INDEX IF NOT EXISTS` + `ALTER ... IF NOT EXISTS`), então não é
+necessário rodar SQL manual após o deploy.
 
 ```bash
-# Conectar no PostgreSQL do Railway
-railway connect postgresql
-
--- Executar migração rate_limits
-CREATE TABLE IF NOT EXISTS rate_limits (
-  key TEXT NOT NULL,
-  window_bucket BIGINT NOT NULL,
-  count BIGINT NOT NULL DEFAULT 1,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (key, window_bucket)
-);
-CREATE INDEX IF NOT EXISTS rate_limits_bucket ON rate_limits(window_bucket);
-
--- Verificar
-SELECT to_regclass('public.rate_limits');
-\d rate_limits
+# Acompanhar a migração nos logs do deploy
+railway logs --tail 100 | Select-String "Schema PostgreSQL atualizado"
 ```
+
+**Verificação (somente leitura):**
+
+```bash
+railway connect postgresql
+SELECT to_regclass('public.rate_limits'), to_regclass('public.usage_quotas'),
+       to_regclass('public.user_api_keys');
+```
+
+**Pré-condição:** `DATABASE_URL` precisa estar configurada antes do primeiro
+boot. Se estiver ausente, `db-migrate.mjs` encerra com código 1 e o container
+não sobe — comportamento intencional (fail-closed).
 
 ### 4. Smoke Tests Pós-Deploy
 
@@ -159,7 +163,7 @@ Executar `docs/SMOKE_TEST_V1_1.md` — Target: ≤ 15 min
 |---------|---------|-------|
 | Código | `git checkout 2ca9a94 && npm run build && railway up` | < 5 min |
 | Schema `rate_limits` | `DROP TABLE rate_limits` | < 1 min |
-| Crypto v2 | Remover `API_KEYS_ENCRYPTION_KEY` no Railway | < 1 min |
+| Crypto v2 | **Re-encriptar v2→v1** (`scripts/rekey-byok-v2-to-v1.mjs --apply`) antes de remover a chave | Segundos a minutos |
 | Rate Limit | Reverter `RateLimit.ts` p/ in-memory | < 5 min |
 | Next.js | `npm install next@15.5.25` | < 5 min |
 

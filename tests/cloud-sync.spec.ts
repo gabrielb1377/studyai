@@ -80,13 +80,15 @@ test("cadastro, sessão persistente, logout, login e recuperação funcionam", a
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Enviar instruções" }).click();
   const status = page.getByRole("status");
-  await expect(status).toContainText("instruções");
+  // A primeira requisição a /auth/recover compila a rota no `next dev`;
+  // 15 s evita flakiness de compilação sem aumentar retries da suíte.
+  await expect(status).toContainText("instruções", { timeout: 15_000 });
   const token = (await status.textContent())?.match(/Token local:\s*(\S+)/)?.[1];
   expect(token).toBeTruthy();
   await page.goto(`/conta?reset=${encodeURIComponent(token!)}`);
   await page.getByLabel("Nova senha").fill("StudyAI2027secure");
   await page.getByRole("button", { name: "Alterar senha" }).click();
-  await expect(page.getByRole("status")).toContainText("Senha alterada");
+  await expect(page.getByRole("status")).toContainText("Senha alterada", { timeout: 15_000 });
   expect(cspViolations).toEqual([]);
 });
 

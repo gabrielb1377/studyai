@@ -4,6 +4,7 @@ import { ApiKeyService } from "@/server/ai/ApiKeyService";
 import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
 import { ProviderRegistry } from "@/features/ai/ProviderRegistry";
 import { isAIProviderId } from "@/features/ai/AIProvider";
+import { rateLimitRejection } from "@/server/security/RateLimitHttp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,10 @@ export async function POST(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    const limit = await ApiKeyService.rateLimitTest(user.sub);
+    if (!limit.allowed) {
+      return rateLimitRejection(limit, "Muitas tentativas. Tente novamente em instantes.");
+    }
     const body = await jsonBody<{ provider?: string; key?: string }>(request);
     if (!isAIProviderId(body.provider)) throw new Error("Provider de IA inválido.");
     const key = typeof body.key === "string" && body.key.trim().length > 0

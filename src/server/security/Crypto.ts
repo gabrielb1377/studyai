@@ -1,6 +1,13 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import {
+  decryptApiKey,
+  encryptApiKey,
+  getEncryptionVersion,
+  isV1Encryption,
+  isV2Encryption,
+} from "./crypto-core";
 
 const scrypt = promisify(scryptCallback);
 const encoder = new TextEncoder();
@@ -69,84 +76,18 @@ export function constantTimeEqual(left: string, right: string) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-const ENCRYPTION_SALT_V1 = Buffer.from("studyai-api-key-encryption-v1", "utf8");
-const ENCRYPTION_SALT_V2 = Buffer.from("studyai-api-key-encryption-v2", "utf8");
-
-async function encryptionKeyV1(): Promise<Buffer> {
-  return scrypt(secret(), ENCRYPTION_SALT_V1, 32) as Promise<Buffer>;
-}
-
-async function encryptionKeyV2(): Promise<Buffer> {
-  const apiKeySecret = apiKeysEncryptionSecret();
-  if (apiKeySecret) {
-    return scrypt(apiKeySecret, ENCRYPTION_SALT_V2, 32) as Promise<Buffer>;
-  }
-  // Fallback to v1 key for backward compatibility during migration
-  return encryptionKeyV1();
+function apiKeySecrets() {
+  return { authSecret: secret(), apiKeysEncryptionKey: apiKeysEncryptionSecret() };
 }
 
 export async function encryptSecret(plaintext: string): Promise<string> {
-  // Use v2 if API_KEYS_ENCRYPTION_KEY is configured, otherwise v1
-  const useV2 = !!apiKeysEncryptionSecret();
-  if (useV2) {
-    const key = await encryptionKeyV2();
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", key, iv);
-    const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-    const tag = cipher.getAuthTag();
-    return `enc:v2:${iv.toString("base64url")}:${tag.toString("base64url")}:${ciphertext.toString("base64url")}`;
-  } else {
-    // Legacy v1 encryption
-    const key = await encryptionKeyV1();
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", key, iv);
-    const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-    const tag = cipher.getAuthTag();
-    return `enc:v1:${iv.toString("base64url")}:${tag.toString("base64url")}:${ciphertext.toString("base64url")}`;
-  }
+  // v2 when API_KEYS_ENCRYPTION_KEY is configured, legacy v1 otherwise.
+  return encryptApiKey(plaintext, apiKeySecrets());
 }
 
 export async function decryptSecret(payload: string): Promise<string> {
-  const parts = payload.split(":");
-  if (parts.length !== 5 || parts[0] !== "enc") throw new Error("Formato de segredo inválido.");
-  const version = parts[1];
-  if (version === "v1") {
-    // Legacy v1 decryption
-    const key = await encryptionKeyV1();
-    const iv = Buffer.from(parts[2], "base64url");
-    const tag = Buffer.from(parts[3], "base64url");
-    const ciphertext = Buffer.from(parts[4], "base64url");
-    const decipher = createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAuthTag(tag);
-    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    return plaintext.toString("utf8");
-  } else if (version === "v2") {
-    // New v2 decryption
-    const key = await encryptionKeyV2();
-    const iv = Buffer.from(parts[2], "base64url");
-    const tag = Buffer.from(parts[3], "base64url");
-    const ciphertext = Buffer.from(parts[4], "base64url");
-    const decipher = createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAuthTag(tag);
-    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    return plaintext.toString("utf8");
-  } else {
-    throw new Error(`Versão de criptografia não suportada: ${version}`);
-  }
+  // v1 and v2 ciphertexts remain readable while the same secrets stay configured.
+  return decryptApiKey(payload, apiKeySecrets());
 }
 
-export function getEncryptionVersion(payload: string): "v1" | "v2" | "unknown" {
-  const parts = payload.split(":");
-  if (parts.length !== 5 || parts[0] !== "enc") return "unknown";
-  if (parts[1] === "v1") return "v1";
-  if (parts[1] === "v2") return "v2";
-  return "unknown";
-}
-
-export function isV1Encryption(payload: string): boolean {
-  return getEncryptionVersion(payload) === "v1";
-}
-
-export function isV2Encryption(payload: string): boolean {
-  return getEncryptionVersion(payload) === "v2";
-}
+export { getEncryptionVersion, isV1Encryption, isV2Encryption };

@@ -33,13 +33,16 @@
 
 **Quando usar:** Bug no código, regressão de feature, build quebrado
 
+**Pré-condição:** se a versão de destino não conhecer o envelope BYOK v2,
+executar **antes** o procedimento da seção 3 (re-encriptação v2 → v1).
+
 **Procedimento:**
 ```bash
-# 1. Identificar commit anterior estável
+# 1. Identificar a última versão de produção estável
 git log --oneline -10
 
-# 2. Fazer checkout do commit anterior (ex: 2ca9a94)
-git checkout 2ca9a94
+# 2. Fazer checkout do commit alvo (ex.: 5dc68d0, release V1.1)
+git checkout <commit-estavel>
 
 # 3. Rebuild
 npm run build
@@ -48,7 +51,9 @@ npm run build
 railway up --detach
 ```
 
-**Tempo estimado:** < 5 min (build) + deploy Railway (~2-3 min)
+**Tempo estimado:** build local ~15 s + deploy Railway (~2-3 min de build
+remoto). O tempo total **não foi medido em produção**; trate "< 5 min" como
+meta, não como garantia.
 
 **Validação pós-rollback:**
 - Health check `/api/health` → 200 OK
@@ -103,23 +108,47 @@ CREATE TABLE user_api_keys_backup_$(date +%s) AS SELECT * FROM user_api_keys;
 
 **Cenário:** `API_KEYS_ENCRYPTION_KEY` comprometida ou v2 com bug crítico
 
-**Procedimento:**
+**⚠️ Correção importante (verificada na Sprint 37E.7B):**
 
-1. **Remover variável de ambiente** `API_KEYS_ENCRYPTION_KEY` no Railway
-   - Railway Dashboard → Variables → Delete `API_KEYS_ENCRYPTION_KEY`
-   - Redeploy automático (ou `railway up`)
+Remover `API_KEYS_ENCRYPTION_KEY` **não mantém os registros `enc:v2:` legíveis**.
+O decrypt v2 deriva a chave de `API_KEYS_ENCRYPTION_KEY`; sem ela, o código cai
+no fallback da chave v1 e a autenticação GCM falha. `ApiKeyService.getDecrypted`
+captura o erro e devolve `undefined`, então o usuário perde silenciosamente o
+BYOK até a chave ser restaurada. A versão anterior à V1.1 também não conhece
+`enc:v2:`.
 
-2. **Verificar comportamento:**
-   - Novas chaves → salvas como `enc:v1:` (fallback para `AUTH_SECRET`)
-   - Chaves existentes `enc:v2:` → continuam legíveis (código lê ambos)
-   - Chaves existentes `enc:v1:` → continuam funcionando
+**Procedimento seguro (re-encriptar antes de remover a chave):**
 
-3. **Validação:**
-   - Salvar nova chave BYOK → aparece como `enc:v1:` no banco
-   - Chaves v2 existentes ainda descriptografam
-   - Health check `/api/health` → OK
+1. **Backup verificado** de `user_api_keys` (ver seção 2B).
+2. Ainda com a V1.1 em execução e `API_KEYS_ENCRYPTION_KEY` configurada, rodar
+   o script de re-encriptação em dry-run:
+   ```bash
+   DATABASE_URL=... AUTH_SECRET=... API_KEYS_ENCRYPTION_KEY=... \
+     node scripts/rekey-byok-v2-to-v1.mjs
+   ```
+3. Revisar a contagem (registros v2 encontrados, falhas = 0) e então aplicar:
+   ```bash
+   DATABASE_URL=... AUTH_SECRET=... API_KEYS_ENCRYPTION_KEY=... \
+     node scripts/rekey-byok-v2-to-v1.mjs --apply
+   ```
+   O modo `--apply` roda em uma transação: se **qualquer** registro falhar,
+   faz ROLLBACK e não grava nada.
+4. Confirmar que não restam linhas v2:
+   ```sql
+   SELECT COUNT(*) FROM user_api_keys WHERE encrypted_key LIKE 'enc:v2:%';
+   ```
+5. Só então remover `API_KEYS_ENCRYPTION_KEY` e reverter o código.
+   Novas chaves passam a ser gravadas em `enc:v1:`.
 
-**Tempo estimado:** < 1 min (redeploy Railway)
+**Rollback sem re-encriptar:** mantenha `API_KEYS_ENCRYPTION_KEY` configurada e
+**não** reverta para uma versão anterior à V1.1; nesse caso os registros v2
+continuam legíveis pela V1.1.
+
+**Validação:** salvar uma nova chave BYOK, reabrir Configurações → IA e testar o
+provider; nenhuma linha `enc:v2:` deve permanecer após a re-encriptação.
+
+**Tempo estimado:** alguns segundos para poucas chaves; proporcional ao volume
+de registros. O redeploy do Railway não foi medido.
 
 **⚠️ Risco:** Se `AUTH_SECRET` também for comprometido, **todas** as chaves ficam expostas. Neste caso, rotação completa de `AUTH_SECRET` + re-registro de todas as BYOK pelos usuários.
 
@@ -188,7 +217,7 @@ railway up
 | Bug crítico no código | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Migração SQL falhou | ❌ | ✅ (schema) | ❌ | ❌ | ❌ |
 | Dados corrompidos | ❌ | ✅ (dados) | ❌ | ❌ | ❌ |
-| `API_KEYS_ENCRYPTION_KEY` vazada | ❌ | ❌ | ✅ (remover var) | ❌ | ❌ |
+| `API_KEYS_ENCRYPTION_KEY` vazada | ❌ | ✅ (backup) | ✅ (re-encriptar v2→v1 + rotacionar) | ❌ | ❌ |
 | `AUTH_SECRET` vazado | ✅ (rotação) | ❌ | ✅ (rotação) | ❌ | ❌ |
 | `rate_limits` deadlock | ❌ | ❌ | ❌ | ✅ (in-memory) | ❌ |
 | Next.js 15.5.28 bug | ❌ | ❌ | ❌ | ❌ | ✅ |

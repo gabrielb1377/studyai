@@ -33,7 +33,7 @@ Destinado à equipe de engenharia responsável pelo deploy.
 npm run lint          # 0 erros
 npm run typecheck     # Limpo
 npm run build         # Sucesso
-npm run test:e2e      # 184/189 passing (1 retry, 3 skipped)
+npm run test:e2e      # consolidado em docs/SPRINT_37E_7B_REPORT.md (3 skipped)
 npm audit --omit=dev  # 4 low (katex), Critical/High FIXED
 git diff --check      # Clean
 ```
@@ -103,8 +103,10 @@ railway up --detach
 
 ### Opção B: Git Push (Deploy Automático)
 
+> Requer autorização explícita. Este runbook **não** autoriza merge/push em
+> `main`; use a branch de release configurada no Railway.
+
 ```bash
-# Push para branch que trigga deploy
 git push railway v1.1-development:main
 ```
 
@@ -120,36 +122,25 @@ railway status
 
 ---
 
-## 4. Migração SQL (Pós-Deploy Inicial)
+## 4. Migração do Schema (Automática)
 
-**Executar UMA VEZ após o primeiro deploy com o novo schema:**
+O `Dockerfile` executa `node scripts/db-migrate.mjs && node server.js`. A
+migração roda **a cada boot**, em transação única, e é idempotente. Não execute
+o SQL de `rate_limits` manualmente: ele já faz parte de
+`src/server/database/schema.sql`.
 
 ```bash
-# Conectar no PostgreSQL
+# Confirmar no log do deploy
+railway logs --tail 100
+# Esperado: "Schema PostgreSQL atualizado com sucesso."
+
+# Verificação somente leitura
 railway connect postgresql
-
--- Executar migração rate_limits
-CREATE TABLE IF NOT EXISTS rate_limits (
-  key TEXT NOT NULL,
-  window_bucket BIGINT NOT NULL,
-  count BIGINT NOT NULL DEFAULT 1,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (key, window_bucket)
-);
-CREATE INDEX IF NOT EXISTS rate_limits_bucket ON rate_limits(window_bucket);
-
--- Verificar
-SELECT to_regclass('public.rate_limits');
-\d rate_limits
+SELECT to_regclass('public.rate_limits'), to_regclass('public.usage_quotas');
 ```
 
-**Verificação esperada:**
-```
-    to_regclass
--------------------
- public.rate_limits
-(1 row)
-```
+**Falha esperada (fail-closed):** sem `DATABASE_URL`, o script sai com código 1
+e o container não inicia.
 
 ---
 

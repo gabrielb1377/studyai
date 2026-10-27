@@ -3,7 +3,14 @@
 **Data:** 2026-10-24  
 **Branch:** `v1.1-development`  
 **Commit Base:** `5dc68d0` (Sprint 37E.6)  
-**Commit Final:** `f3a2b1c` (Sprint 37E.7A)
+**Commit Final:** `1e56d76` (Sprint 37E.7A)
+
+> **Correção (Sprint 37E.7B):** o hash `f3a2b1c` citado originalmente neste
+> relatório não existe no repositório. O commit real da 37E.7A é `1e56d76`.
+> A contagem "184 passing" estava incompleta: a execução de 203 testes teve
+> **199 aprovações** (197 diretas + 2 após retry), 1 falha real em um teste de
+> criptografia mal escrito (corrigido na 37E.7B) e 3 skipped — ver
+> `docs/SPRINT_37E_7B_REPORT.md`.
 
 ---
 

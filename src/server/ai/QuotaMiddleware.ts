@@ -9,8 +9,7 @@ import { AIService } from "@/features/ai/AIService";
 import { normalizeAIError } from "@/features/ai/AIErrors";
 import type { AIManagerRequest } from "@/features/ai/AIProvider";
 import type { TutorStudyContext } from "@/types/tutor-context";
-
-const FALLBACK_ORDER: readonly AIProviderId[] = ["ollama", "gemini", "groq", "openrouter"];
+import { needsSharedQuota, providersToCheckFor } from "./quota-policy";
 
 export interface QuotaAwareAIRequest {
   history: Array<{ role: "user" | "assistant"; content: string }>;
@@ -53,21 +52,11 @@ export async function withQuotaEnforcement(
     const body = await request.json().catch(() => null);
     const bodyObj = body as { mode?: string; provider?: string } | null;
     
-    // Determine which providers might be used
-    let providersToCheck: AIProviderId[] = [];
-    if (bodyObj?.mode === "manual" && bodyObj?.provider) {
-      // Manual mode: only the specified provider
-      providersToCheck = [bodyObj.provider as AIProviderId];
-    } else {
-      // Automatic mode: check all providers in fallback order
-      providersToCheck = [...FALLBACK_ORDER];
-    }
+    // Determine which providers might be used (same rule as ProviderManager)
+    const providersToCheck = providersToCheckFor(bodyObj?.mode, bodyObj?.provider);
 
-    // Check if user has BYOK keys for ALL providers that might be used
-    const hasKeysForAllProviders = providersToCheck.every(provider => userApiKeys[provider]);
-
-    // If user has BYOK keys for ALL providers that might be used, bypass shared quota
-    if (hasKeysForAllProviders) {
+    // Shared quota is only needed when at least one provider in play has no BYOK key.
+    if (!needsSharedQuota(providersToCheck, userApiKeys)) {
       const response = await handler(request, userApiKeys, quotaInfo);
       return response;
     }
@@ -211,20 +200,10 @@ export async function withAIQuota(
     // Determine which providers might be used based on the request
     const bodyObj = body as { mode?: string; provider?: string } | null;
     
-    // Determine which providers might be used
-    let providersToCheck: string[] = [];
-    if (bodyObj?.mode === "manual" && bodyObj?.provider) {
-      // Manual mode: only the specified provider
-      providersToCheck = [bodyObj.provider];
-    } else {
-      // Automatic mode: check all providers in fallback order
-      providersToCheck = [...FALLBACK_ORDER];
-    }
+    // Determine which providers might be used (same rule as ProviderManager)
+    const providersToCheck = providersToCheckFor(bodyObj?.mode, bodyObj?.provider);
 
-    // Check if user has BYOK keys for ALL providers that might be used
-    const hasKeysForAllProviders = providersToCheck.every(provider => userApiKeys[provider]);
-
-    if (hasKeysForAllProviders) {
+    if (!needsSharedQuota(providersToCheck, userApiKeys)) {
       // User has BYOK for all providers that might be used - bypass quota
       const aiRequest = await createQuotaAwareAIRequest(request, body, userId, userApiKeys);
       return handler(request, aiRequest) as Promise<NextResponse | Response>;

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
 import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
 import { isAIProviderId } from "@/features/ai/AIProvider";
+import { rateLimitRejection } from "@/server/security/RateLimitHttp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     if (typeof body.key !== "string" || body.key.trim().length === 0) throw new Error("Informe a chave de API.");
     const limit = await ApiKeyService.rateLimitSet(user.sub);
     if (!limit.allowed) {
-      return NextResponse.json({ error: "Muitas tentativas. Tente novamente em instantes." }, { status: 429 });
+      return rateLimitRejection(limit, "Muitas tentativas. Tente novamente em instantes.");
     }
     await ApiKeyService.set(user.sub, body.provider, body.key);
     return NextResponse.json({ ok: true, provider: body.provider }, { headers: { "Cache-Control": "no-store" } });

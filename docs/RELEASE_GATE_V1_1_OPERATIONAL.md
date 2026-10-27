@@ -2,8 +2,13 @@
 
 **Data:** 2026-10-24  
 **Branch:** `v1.1-development`  
-**Commit:** `c1a2b3d`  
-**Avaliação:** **PASS** — Pronto para deploy no Railway
+**Commit:** `5dc68d0` (37E.6) → verificação final em `1e56d76` + 37E.7B
+**Avaliação:** **SUPERSEDED** — este gate operacional foi reavaliado na Sprint
+37E.7B. A decisão vigente está em `docs/FINAL_RELEASE_DECISION_V1_1.md`.
+
+> **Correção (Sprint 37E.7B):** o hash `c1a2b3d` não existe; o commit da 37E.6
+> é `5dc68d0`. A contagem de testes desta página (189/184) foi substituída pela
+> reconciliação da 37E.7B.
 
 ---
 
