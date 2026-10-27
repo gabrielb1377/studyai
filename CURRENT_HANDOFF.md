@@ -7,7 +7,7 @@ Atualizado em 27 de outubro de 2026.
 - **Branch:** `v1.1-development` (nada enviado/pushed)
 - **HEAD base 37E.8B:** `03a61ee4e83d575f71a30485b45eff0e0c6e065b`
 - **Commits 37E.8A:** `4e94f1b` pre-deploy; `03a61ee` handoff, ambos locais sem push
-- **Commit 37E.8B:** em preparação; sem push
+- **Commit 37E.8B:** `d669c60` (`chore(release): verify railway config and launch gate 37E.8B`); local, sem push
 - **Deploy:** **NÃO executado**. Railway intocado.
 - **Decisão:** **CONDITIONAL** — ver `docs/FINAL_RELEASE_DECISION_V1_1.md`
 
