@@ -26,13 +26,12 @@ test.describe("StudyAI V1.1 — Sprint 38 Features", () => {
 
     // Save exam
     await page.click("text=Salvar Prova");
-    await expect(page.locator("text=Cálculo II")).toBeVisible();
+    await expect(page.locator("h2:text('Prova Final')")).toBeVisible();
     await expect(page.locator("text=Plano Automático de Revisão")).toBeVisible();
   });
 
   test("Quiz and Explained Simulation workspace", async ({ page }) => {
     await page.goto("/estudo");
-    // Check if study page loads or redirects/shows empty state
     const heading = page.locator("h1");
     if (await heading.isVisible()) {
       const text = await heading.textContent();
