@@ -53,15 +53,15 @@ export const FlashcardService = {
     }));
   },
 
-  review(cards: readonly Flashcard[], cardId: string, wasCorrect: boolean, now = new Date().toISOString()) {
+  review(cards: readonly Flashcard[], cardId: string, rating: "errei" | "dificil" | "acertei" | boolean, now = new Date().toISOString()) {
     return cards.map((card) => card.id === cardId
       ? {
         ...card,
-        correctAnswers: card.correctAnswers + (wasCorrect ? 1 : 0),
-        wrongAnswers: card.wrongAnswers + (wasCorrect ? 0 : 1),
+        correctAnswers: card.correctAnswers + ((typeof rating === "boolean" ? rating : rating !== "errei") ? 1 : 0),
+        wrongAnswers: card.wrongAnswers + ((typeof rating === "boolean" ? !rating : rating === "errei") ? 1 : 0),
         lastReviewedAt: now,
         updatedAt: now,
-        ...ReviewScheduler.schedule(card, wasCorrect, new Date(now)),
+        ...ReviewScheduler.schedule(card, rating, new Date(now)),
       }
       : card,
     );

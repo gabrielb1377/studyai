@@ -30,9 +30,9 @@ export function FlashcardWorkspace({ study }: { study: StudyRecord }) {
     setIsAnswerVisible(false);
   };
 
-  const registerReview = (wasCorrect: boolean) => {
+  const registerReview = (rating: "errei" | "dificil" | "acertei") => {
     if (!currentCard) return;
-    review(currentCard.id, wasCorrect);
+    review(currentCard.id, rating);
     setIsAnswerVisible(false);
     if (cards.length > 1) setIndex((current) => (current + 1) % cards.length);
   };

@@ -1,4 +1,4 @@
-import { BookOpen, Bot, Database, FlaskConical, FolderTree, GraduationCap, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
+import { BookOpen, Bot, Calendar, Database, FlaskConical, FolderTree, GraduationCap, House, Library, Settings, Upload, UserRound, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export type NavigationItem = {

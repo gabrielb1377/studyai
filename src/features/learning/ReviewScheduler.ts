@@ -5,10 +5,11 @@ const DAY = 86_400_000;
 export type ReviewSchedule = Pick<Flashcard, "nextReviewAt" | "reviewIntervalDays" | "easeFactor" | "repetitions" | "reviewAlgorithm">;
 
 export const ReviewScheduler = {
-  schedule(card: Flashcard, wasCorrect: boolean, now = new Date(), algorithm: ReviewAlgorithm = "sm2"): ReviewSchedule {
+  schedule(card: Flashcard, rating: "errei" | "dificil" | "acertei" | boolean, now = new Date(), algorithm: ReviewAlgorithm = "sm2"): ReviewSchedule {
     // The contract already carries the algorithm so FSRS can replace the calculation without changing consumers.
     const activeAlgorithm: ReviewAlgorithm = algorithm === "fsrs" ? "sm2" : algorithm;
-    const quality = wasCorrect
+    const wasCorrect = typeof rating === "boolean" ? rating : rating !== "errei";
+    const quality = rating === "dificil" ? 3 : rating === "errei" ? 1 : rating === "acertei" ? 5 : wasCorrect
       ? card.difficulty === "easy" ? 5 : card.difficulty === "hard" ? 3 : 4
       : 1;
     let easeFactor = card.easeFactor ?? 2.5;

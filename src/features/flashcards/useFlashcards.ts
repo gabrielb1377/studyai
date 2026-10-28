@@ -55,14 +55,14 @@ export function useFlashcards(studyId?: string) {
     error,
     reviewedCount,
     generate,
-    review: (cardId: string, wasCorrect: boolean) => {
+    review: (cardId: string, rating: "errei" | "dificil" | "acertei" | boolean) => {
       const card = allCards.find((item) => item.id === cardId);
-      updateCards((current) => FlashcardService.review(current, cardId, wasCorrect));
+      updateCards((current) => FlashcardService.review(current, cardId, rating));
       if (card) LearningService.enqueueActivity({
         type: "flashcard",
         studyId: card.studyId,
-        correctAnswers: wasCorrect ? 1 : 0,
-        wrongAnswers: wasCorrect ? 0 : 1,
+        correctAnswers: (typeof rating === "boolean" ? rating : rating !== "errei") ? 1 : 0,
+        wrongAnswers: (typeof rating === "boolean" ? !rating : rating === "errei") ? 1 : 0,
       });
     },
     clearError: () => setError(null),

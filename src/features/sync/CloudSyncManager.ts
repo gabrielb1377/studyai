@@ -9,7 +9,7 @@ import type { ClientCloudRecord, ClientConflict, ClientSyncEntity, SyncMetadata 
 
 const KEY = "cloud-sync:v1";
 const stores = ["documents", "contents", "chunks", "embeddings", "studies", "notes", "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge", "academy", "lab", "metadata", "studio-documents"] as const satisfies readonly StorageStoreName[];
-const preferencePrefixes = ["studyai:workspace", "studyai:ai-settings", "studyai:platform-settings", "studyai:experience-settings", "studyai-theme", "studyai:sidebar", "studyai:language"];
+const preferencePrefixes = ["studyai:workspace", "studyai:ai-settings", "studyai:platform-settings", "studyai:experience-settings", "studyai-theme", "studyai:sidebar", "studyai:language", "studyai:exams"];
 let running: Promise<SyncMetadata> | undefined;
 let rerunRequested = false;
 let handshakeRequested = false;
