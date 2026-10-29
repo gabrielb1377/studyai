@@ -1,10 +1,7 @@
 import "server-only";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 let pool: Pool | undefined;
-let initialized: Promise<void> | undefined;
 
 export function hasPostgres(options: { allowMissing?: boolean } = {}) {
   const configured = Boolean(process.env.DATABASE_URL?.trim());
@@ -28,15 +25,6 @@ export function postgresPool() {
     connectionTimeoutMillis: 5_000,
   });
   return pool;
-}
-
-export async function initializePostgres() {
-  if (!hasPostgres()) return;
-  initialized ??= readFile(path.join(process.cwd(), "src/server/database/schema.sql"), "utf8")
-    .then((sql) => postgresPool().query(sql))
-    .then(() => undefined)
-    .catch((error) => { initialized = undefined; throw error; });
-  await initialized;
 }
 
 export async function postgresHealth() {
@@ -69,12 +57,10 @@ export async function postgresHealth() {
 }
 
 export async function query<T extends QueryResultRow>(text: string, values: unknown[] = []) {
-  await initializePostgres();
   return postgresPool().query<T>(text, values);
 }
 
 export async function transaction<T>(operation: (client: PoolClient) => Promise<T>) {
-  await initializePostgres();
   const client = await postgresPool().connect();
   try {
     await client.query("BEGIN");
