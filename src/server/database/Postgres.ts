@@ -46,11 +46,13 @@ export async function postgresHealth() {
     };
   } catch (error) {
     const classification = classifyPostgresError(error);
+    const urlInspection = inspectDatabaseUrl();
     console.error("[PostgreSQL Health Failure]", {
       category: classification.category,
       code: classification.code,
       name: classification.name,
       message: classification.messageSummary,
+      urlInspection,
       timestamp: new Date().toISOString(),
     });
 
@@ -65,6 +67,44 @@ export async function postgresHealth() {
   }
 }
 
+
+
+function inspectDatabaseUrl() {
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl) {
+    return { configured: false };
+  }
+
+  const hasWhitespace = /\s/.test(rawUrl);
+  const hasLeadingOrTrailingWhitespace = rawUrl !== rawUrl.trim();
+  let isValidSyntax = false;
+  let protocol: string | undefined;
+  let port: string | undefined;
+  let endsWithSupabasePooler = false;
+  let isHostnameBase = false;
+
+  try {
+    const parsed = new URL(rawUrl.trim());
+    isValidSyntax = true;
+    protocol = parsed.protocol;
+    port = parsed.port || (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:" ? "5432" : "");
+    endsWithSupabasePooler = parsed.hostname.endsWith(".pooler.supabase.com");
+    isHostnameBase = parsed.hostname.toLowerCase() === "base";
+  } catch {
+    isValidSyntax = false;
+  }
+
+  return {
+    configured: true,
+    isValidSyntax,
+    protocol,
+    port,
+    endsWithSupabasePooler,
+    isHostnameBase,
+    hasWhitespace,
+    hasLeadingOrTrailingWhitespace,
+  };
+}
 
 function classifyPostgresError(error: unknown): {
   category: string;
