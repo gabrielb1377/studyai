@@ -13,13 +13,19 @@ export function hasPostgres(options: { allowMissing?: boolean } = {}) {
 
 export function postgresPool() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não foi configurada.");
+  const caCert = process.env.DATABASE_CA_CERT?.trim();
+  const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+
   pool ??= new Pool({
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
     ssl: process.env.DATABASE_SSL === "false"
       ? false
-      : process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
+      : process.env.NODE_ENV === "production" || process.env.DATABASE_SSL === "true" || caCert
+        ? {
+            rejectUnauthorized,
+            ...(caCert ? { ca: caCert } : {}),
+          }
         : undefined,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
@@ -82,6 +88,10 @@ function inspectDatabaseUrl() {
   let port: string | undefined;
   let endsWithSupabasePooler = false;
   let isHostnameBase = false;
+  let sslmode: string | null = null;
+  let hasSslRootCert = false;
+  let hasSslCert = false;
+  let hasSslKey = false;
 
   try {
     const parsed = new URL(rawUrl.trim());
@@ -90,6 +100,10 @@ function inspectDatabaseUrl() {
     port = parsed.port || (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:" ? "5432" : "");
     endsWithSupabasePooler = parsed.hostname.endsWith(".pooler.supabase.com");
     isHostnameBase = parsed.hostname.toLowerCase() === "base";
+    sslmode = parsed.searchParams.get("sslmode");
+    hasSslRootCert = parsed.searchParams.has("sslrootcert");
+    hasSslCert = parsed.searchParams.has("sslcert");
+    hasSslKey = parsed.searchParams.has("sslkey");
   } catch {
     isValidSyntax = false;
   }
@@ -103,6 +117,11 @@ function inspectDatabaseUrl() {
     isHostnameBase,
     hasWhitespace,
     hasLeadingOrTrailingWhitespace,
+    sslmode,
+    hasSslRootCert,
+    hasSslCert,
+    hasSslKey,
+    hasCaCertEnv: Boolean(process.env.DATABASE_CA_CERT?.trim()),
   };
 }
 
