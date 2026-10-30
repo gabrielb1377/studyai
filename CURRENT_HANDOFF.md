@@ -1,5 +1,9 @@
 # Handoff atual — StudyAI V1.1 / Sprint 41
 
+## Atualização Sprint 41F
+
+Sprint ainda incompleta. A seleção automática que podia trocar silenciosamente de provedor foi temporariamente suspensa no gerenciador e na correção do Lab; a interface apresenta a limitação. Ainda não há fallback autorizado e configurável, consentimento para troca entre provedores, limites de custo ou confirmação do modelo para todos os fluxos. A quota de configurações legadas em modo automático pode continuar conservadora. O tratamento Gemini não repete erro 401 por texto ambíguo; a consulta de modelos OpenRouter preserva seu código HTTP. A Central de Ajuda ganhou categorias pesquisáveis e guia da Academy. O teste exploratório com duas contas sintéticas falhou: após troca de conta, o plano A permaneceu no `localStorage` acessível a B; o isolamento continua crítico. Typecheck/build passaram, lint 0 erros/69 avisos; Playwright dirigido 16/16 e 12/12 em rodadas diferentes, com mocks e sem serviços externos. Consulte `git log` para os commits locais e `docs/SPRINT_41_STATUS.md` para detalhes e pendências. Não presumir alterações do backend de produção ou serviços reais.
+
 Checkpoint de 30 de outubro de 2026. **Sprint 41 incompleta; não pressupor autorização para push, merge, deploy ou acesso a produção.** As seções históricas abaixo registram sprints anteriores e não descrevem necessariamente o estado atual da infraestrutura.
 
 ## Git e preservação

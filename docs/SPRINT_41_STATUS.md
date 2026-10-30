@@ -1,5 +1,15 @@
 # Sprint 41 — estado e validação
 
+## Atualização Sprint 41F — andamento
+
+**Ainda incompleta.** Como contenção temporária, o modo automático de troca entre provedores foi desabilitado no gerenciador e no Lab, e a interface informa essa limitação. A seleção de um provedor/modelo continua disponível; ainda falta implementar fallback por lista de modelos autorizados, consentimento individual entre provedores, limites de consumo e exibição consistente do modelo usado. A quota do modo automático legado permanece conservadora. A consulta de modelos OpenRouter preserva o status HTTP; respostas de autenticação do Gemini não são repetidas/classificadas como rate limit apenas pelo texto.
+
+A Central de Ajuda agora agrupa guias em categorias expansíveis, busca também nos passos e inclui um guia da Academy. Foram verificadas rolagem em dois tamanhos e navegação por teclado em testes locais; não há guia de fallback enquanto a funcionalidade estiver indisponível.
+
+As pendências de isolamento entre contas, proteção do gabarito, integração da Semana de Prova e validação real continuam abertas. Veja os resultados e hashes mais recentes em `CURRENT_HANDOFF.md` e no log Git; o histórico anterior abaixo permanece como registro da rodada Sprint 41.
+
+Validação 41F: `npm run typecheck` e `npm run build` isolado passaram; `npm run lint` passou com 0 erros e 69 avisos. Playwright dirigido: rodada de 16/16 aprovada (IA com mocks, ajuda e Workspace); outra de 12/12 aprovada após ajuste dos matchers de duas falhas iniciais de teste. Uma auditoria separada com duas contas sintéticas **falhou**: após sair da conta A e entrar na B, `localStorage["studyai:exams"]` ainda continha o plano de A. Uma primeira verificação apenas visual passou sem provar isolamento; o teste com inspeção do armazenamento expôs a falha. Harness exploratório está na cópia isolada `work/sprint41/tests/sprint41f-two-accounts-audit.spec.ts`, não commitado no repositório. Nenhuma credencial externa ou serviço real foi usado nesses testes. O acesso direto aos dados por B é demonstrado; validar também renderização e sincronização sem confundir espera de carregamento com isolamento.
+
 Checkpoint de 30 de outubro de 2026. **Sprint não concluída; não autoriza publicação.** Este registro descreve o repositório e os testes locais, não uma nova inspeção dos serviços externos.
 
 ## Estado Git
