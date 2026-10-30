@@ -2,6 +2,15 @@ import { BookOpen, Bot, Brain, Cloud, Cpu, FileQuestion, FolderOpen, Library, Me
 
 export const helpTopics = [
   {
+    id: "academy",
+    title: "Gerar conteúdo na Academy",
+    description: "Crie material, trilha ou projeto prático para um tema.",
+    keywords: ["academy", "material", "trilha", "projeto", "geração"],
+    icon: BookOpen,
+    href: "/academy",
+    steps: ["Abra a Academy e crie um estudo informando o tema e os objetivos.", "Escolha Gerar e selecione material de estudo, trilha ou projeto prático.", "Aguarde as etapas de geração e abra o conteúdo salvo para revisão.", "Se a geração falhar, confira a configuração de IA e tente novamente; seu conteúdo anterior permanece disponível."],
+  },
+  {
     id: "conta",
     title: "Criar conta e entrar",
     description: "Acesse sua conta para sincronizar seus estudos.",
