@@ -118,5 +118,5 @@ export async function POST(request: Request) {
       );
       return NextResponse.json(normalized.body, { status: normalized.status });
     }
-  });
+  }, { history: [], message: "Gerar conteúdo da Academy." });
 }
