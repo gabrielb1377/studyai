@@ -36,6 +36,12 @@ export const navigation = [
     description: "Estude qualquer tema sem importar arquivos",
   },
   {
+    href: "/provas",
+    label: "Semana de Prova",
+    icon: Calendar,
+    description: "Planeje suas revisões e provas",
+  },
+  {
     href: "/lab",
     label: "Laboratório",
     icon: FlaskConical,
