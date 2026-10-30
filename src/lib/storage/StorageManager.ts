@@ -1,6 +1,7 @@
 import { IndexedDB, type StorageTransaction } from "./IndexedDB";
 import { currentDatabaseName, setStudyDatabaseScope } from "./Database";
 import { Migration } from "./Migration";
+import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import {
   STORAGE_DATABASE_VERSION,
   STORAGE_MIGRATION_KEY,
@@ -80,6 +81,7 @@ export const StorageManager = {
   async setUserScope(userId?: string) {
     const changed = setStudyDatabaseScope(userId ? `user-${userId}` : "guest");
     if (!changed) return;
+    MaterialRuntimeStore.clear();
     initialization = undefined;
     await ready();
     if (typeof window !== "undefined") {
