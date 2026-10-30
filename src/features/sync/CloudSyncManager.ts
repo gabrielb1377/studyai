@@ -5,11 +5,11 @@ import { MaterialBinaryStorage } from "@/services/material-binary-storage";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import type { Material } from "@/types/material";
 import { CloudFileService } from "./CloudFileService";
+import { applySyncPreferences, syncPreferences } from "./SyncPreferences";
 import type { ClientCloudRecord, ClientConflict, ClientSyncEntity, SyncMetadata } from "./types";
 
 const KEY = "cloud-sync:v1";
 const stores = ["documents", "contents", "chunks", "embeddings", "studies", "notes", "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge", "academy", "lab", "metadata", "studio-documents"] as const satisfies readonly StorageStoreName[];
-const preferencePrefixes = ["studyai:workspace", "studyai:ai-settings", "studyai:platform-settings", "studyai:experience-settings", "studyai-theme", "studyai:sidebar", "studyai:language", "studyai:exams"];
 let running: Promise<SyncMetadata> | undefined;
 let rerunRequested = false;
 let handshakeRequested = false;
@@ -19,7 +19,7 @@ function stable(value:unknown):string{if(value===null||typeof value!=="object")r
 async function digest(value: unknown) { const bytes = new TextEncoder().encode(stable(value)); return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((item) => item.toString(16).padStart(2, "0")).join(""); }
 function idOf(record: unknown) { if (!record || typeof record !== "object") return; const value = record as Record<string, unknown>; return [value.id, value.studyId, value.chunkId, value.key].find((item): item is string => typeof item === "string"); }
 function entityFor(store: StorageStoreName, id: string): ClientSyncEntity { if (store === "metadata" && id.startsWith("mentor:")) return "mentor"; if (store === "metadata" && id.startsWith("learning-")) return "learning"; return store; }
-function localPreferences() { return Object.fromEntries(Object.entries(localStorage).filter(([key]) => preferencePrefixes.some((prefix) => key.startsWith(prefix)))); }
+function localPreferences() { return syncPreferences(localStorage); }
 
 async function loadMeta() { return await StorageManager.get<SyncMetadata>("metadata", KEY) ?? empty(); }
 function emitSyncState(meta: SyncMetadata) { window.dispatchEvent(new CustomEvent("studyai:cloud-sync", { detail: meta.state })); }
@@ -43,7 +43,7 @@ async function scan(meta: SyncMetadata) {
 }
 
 async function apply(record: ClientCloudRecord, meta?: SyncMetadata) {
-  if (record.entity === "workspace") { if (record.operation === "delete") return; for (const [key, value] of Object.entries(record.data as Record<string, string> ?? {})) localStorage.setItem(key, value); return; }
+  if (record.entity === "workspace") { if (record.operation === "delete") return; applySyncPreferences(localStorage, record.data); return; }
   const store = record.entity === "mentor" || record.entity === "learning" ? "metadata" : record.entity as StorageStoreName;
   if (!stores.includes(store as typeof stores[number])) return;
   if (record.operation === "delete") {
