@@ -1,4 +1,50 @@
-# Handoff Atual — Sprint 37E.8B: Railway Configuration & Authorization Gate
+# Handoff atual — StudyAI V1.1 / Sprint 41
+
+Checkpoint de 30 de outubro de 2026. **Sprint 41 incompleta; não pressupor autorização para push, merge, deploy ou acesso a produção.** As seções históricas abaixo registram sprints anteriores e não descrevem necessariamente o estado atual da infraestrutura.
+
+## Git e preservação
+
+- Projeto `D:\studyai`; branch `v1.1-development`; HEAD de implementação observado antes do commit deste checkpoint: `19cb815`.
+- Referência remota local observada: `origin/v1.1-development` em `331bc15`; branch local quatro commits à frente, nenhum atrás. Não foi feito fetch: a referência pode estar desatualizada. O hash do commit de documentação é o HEAD a obter com `git log -1` após o checkpoint.
+- Commits posteriores a essa referência: `3b54bb8` (seleção de IA e geração), `0215035` (Academy/quota), `f6bcb58` (menu Semana de Prova), `19cb815` (simulado e ferramentas). Estão locais segundo a referência observada.
+- A conversa anterior identificou `cc8634b` como commit publicado numa etapa; não há confirmação independente nesta tarefa do commit atualmente implantado ou de que a referência remota coincide com ele. Não rotular `331bc15` como deployment ativo sem verificação autorizada.
+- Preservar modificados: `package.json`, `package-lock.json`, `playwright.config.ts`, `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts`, `src/server/storage/ObjectStorage.ts`. Preservar não rastreados: `src/app/api/files/[id]/direct/route.ts`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts`, `scripts/generate-vercel-secret.ps1`. Upload direto é experimental e não foi aprovado para publicação. Não incluí-los em commits não relacionados.
+
+## Arquitetura e funções existentes
+
+Next.js 15/React 19/TypeScript, App Router e handlers Node.js. A aplicação possui importação e extração/OCR/transcrição, Biblioteca, estudos e Workspace, Tutor/Professor e Mentor, Academy/Studio, Lab, flashcards, quiz, notas, mapas, Semana de Prova, conta, ajuda e sincronização. Existência no código não garante funcionamento integral em produção.
+
+IA segue cliente → rotas internas → `AIService`/`ProviderManager` → providers; há seleção de modelos e chaves por usuário. Dados locais usam IndexedDB/OPFS via `StorageManager`; sincronização usa rotas de conta/cloud, PostgreSQL e armazenamento compatível com S3. O IndexedDB tem escopo por usuário, mas preferências em `localStorage` exigem revisão de isolamento. Ver `README.md` e `docs/ARQUITETURA_E_FLUXOS.md`, observando que descrições históricas de deploy podem estar desatualizadas.
+
+## Infraestrutura conhecida e limites
+
+O usuário informou aplicação online na Vercel e projeto Supabase `studyai-v1` em `sa-east-1`, com 31 tabelas e bucket privado `studyai-files`; PostgreSQL e credenciais S3 foram cadastrados na Vercel. Em diagnóstico anterior, `/api/health` foi relatado como degradado por PostgreSQL enquanto S3 estava disponível. Existem commits posteriores de diagnóstico/TLS (`42c7cbd`, `fa2f1e5`, `331bc15`), mas esta tarefa não consultou serviços, logs ou deployment: estado atual do PostgreSQL, S3, certificados e commit implantado **não verificados**. Não assumir que o problema antigo persiste ou foi resolvido.
+
+Não executar migrações automaticamente: `npm run db:migrate` é comando explícito e requer ambiente adequado. Não modificar Railway ou serviços de produção sem autorização. Não desabilitar TLS, autenticação ou CSRF. Nunca copiar valores de variáveis/segredos para documentação, logs, testes ou Git; `AUTH_SECRET` é a variável de autenticação, não `JWT_SECRET`. Preservar a chave de criptografia e planejar qualquer rotação antes de alterá-la.
+
+## Últimos testes conhecidos
+
+Na sessão Sprint 41: typecheck e build isolado aprovados; lint aprovado com 0 erros/69 avisos. Playwright dirigido teve rodada de 6 aprovados; rodada ampliada de 13 teve 11 aprovados e 2 timeouts, ambos aprovados em repetição com espera maior. Os testes de sincronização usam backend de desenvolvimento; Academy e geração de quiz usam mocks em casos relevantes. Não são validação de PostgreSQL/S3 ou de IA real. Detalhes e limitações em [docs/SPRINT_41_STATUS.md](docs/SPRINT_41_STATUS.md).
+
+## Pendências e próxima ação
+
+1. Continuar Sprint 41: fallback seguro por modelos previamente autorizados, com limite, custo, consentimento explícito entre provedores e sem repetição de falhas de autenticação/validação.
+2. Resolver isolamento das preferências entre contas e revisar gabarito: a resposta correta atualmente é enviada ao cliente antes da entrega. Testar troca de usuários, conflitos e preservação de dados.
+3. Investigar a queixa original de seleção no Modo Prova e os dois timeouts; validar os três modos Academy e demais fluxos de IA com serviços reais apenas quando autorizados.
+4. Integrar Semana de Prova com atividades e resultados, e completar melhorias de ajuda. Não declarar a sprint concluída enquanto pendências críticas permanecerem.
+
+## Comandos e documentos
+
+Confira primeiro `git status --short --branch`, `git log --oneline -n 10` e `git diff --cached --name-only`. Para desenvolvimento e checagens: `npm run dev`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm run test:e2e`. Use ambiente isolado sem credenciais externas; execute Playwright e build em momentos separados ou diretórios distintos para evitar conflito em `.next`. Verifique scripts/configuração atuais antes de rodar; não rodar migrações ou testes com serviços reais por padrão.
+
+- Estado e testes: [docs/SPRINT_41_STATUS.md](docs/SPRINT_41_STATUS.md).
+- Plano: [docs/ROADMAP_V1_2.md](docs/ROADMAP_V1_2.md).
+- Prompt para continuação: [docs/NEXT_SESSION_PROMPT.md](docs/NEXT_SESSION_PROMPT.md).
+- Documentos históricos de infraestrutura/testes permanecem em `docs/`; verificar data e contexto antes de aplicar.
+
+---
+
+# Histórico — Sprint 37E.8B: Railway Configuration & Authorization Gate
 
 Atualizado em 27 de outubro de 2026.
 
