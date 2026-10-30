@@ -176,6 +176,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
               <Badge variant="secondary">Questão {index + 1} de {questions.length}</Badge>
               <span className="text-xs text-muted-foreground">Modo Prova (Responda e finalize ao final)</span>
             </div>
+            <p className="text-xs text-muted-foreground">Esta prova é corrigida no dispositivo e não oferece sigilo do gabarito.</p>
             <h3 className="text-lg font-semibold">{currentQuestion.question}</h3>
             <div className="grid gap-2">
               {currentQuestion.alternatives.map((alt, altIdx) => {

@@ -13,6 +13,7 @@ for (const width of [1280, 390]) {
     await quiz.getByRole("button", { name: "Gerar primeiro simulado" }).click();
     await expect(quiz.getByText("Pergunta 1")).toBeVisible();
     await quiz.getByLabel("Modo do simulado").selectOption("exam");
+    await expect(quiz.getByText("Esta prova é corrigida no dispositivo e não oferece sigilo do gabarito.")).toBeVisible();
     for (const option of ["A", "B", "C", "D"]) {
       const button = quiz.getByRole("button", { name: `${option}. Opção ${option}` });
       await button.click();
