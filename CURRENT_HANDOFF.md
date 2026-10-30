@@ -229,3 +229,8 @@ Atualizado em 27 de outubro de 2026.
 
 **Status:** **CONDITIONAL** — tecnicamente verificado, aguardando autorização e
 cumprimento das condições obrigatórias de `docs/FINAL_RELEASE_DECISION_V1_1.md`.
+# Continuação da Sprint 41G.1
+
+**Não concluída; isolamento de contas ainda comprometido.** A geração do banco local agora rejeita operações que aguardam inicialização ou abertura do IndexedDB quando ocorre troca de escopo, incluindo A → B → A. Isso não protege os registros remanescentes de outros scripts da mesma origem, não cancela transações iniciadas e não resolve corridas de sincronização ou uploads. Não apagar dados existentes, não atribuir conteúdo legado sem dono automaticamente e não publicar esta alteração como solução completa.
+
+Próximos passos: definir proteção dos dados privados persistidos e recuperação offline/legada explícita; criar transição de sessão com bloqueio, cancelamento e invalidação de respostas, incluindo abas; associar cada envio à identidade autenticada no servidor; testar ownership, conflitos e exclusões com duas contas. O Modo Prova no servidor fica para a Sprint 41G.2. Ver `docs/SPRINT_41G_SECURITY_AUDIT.md`.

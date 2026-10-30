@@ -61,3 +61,6 @@ Checkpoint de 30 de outubro de 2026. **Sprint não concluída; não autoriza pub
 Já estavam não commitados: `package.json`, `package-lock.json`, `playwright.config.ts`, `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts`, `src/server/storage/ObjectStorage.ts`, `src/app/api/files/[id]/direct/route.ts`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts` e `scripts/generate-vercel-secret.ps1`. Não presumir que upload direto foi aprovado nem incluir esses arquivos em commits de outra tarefa.
 
 Consulte [CURRENT_HANDOFF.md](../CURRENT_HANDOFF.md), [roadmap](ROADMAP_V1_2.md) e [prompt da próxima sessão](NEXT_SESSION_PROMPT.md).
+# Sprint 41G.1 — atualização parcial
+
+O isolamento entre contas continua **não concluído**. Foi adicionada uma verificação de geração para evitar iniciar operações do IndexedDB depois de uma troca de escopo durante a inicialização ou abertura. Não há garantia de proteção dos dados persistidos na mesma origem nem de cancelamento das sincronizações em andamento. Consulte `docs/SPRINT_41G_SECURITY_AUDIT.md` antes de qualquer publicação. O Modo Prova protegido está reservado para a Sprint 41G.2.

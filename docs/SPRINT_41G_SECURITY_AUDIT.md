@@ -1,5 +1,15 @@
 # Sprint 41G — auditoria de isolamento e prova
 
+## Sprint 41G.1 — andamento parcial
+
+**Incompleta: não usar a troca de contas como fronteira de segurança.** A geração do banco local agora muda a cada troca de escopo. Operações que aguardam a inicialização e a abertura do IndexedDB são rejeitadas se a geração mudar, inclusive em A → B → A. Ao detectar a mudança em uma transação, o resultado é rejeitado e tenta-se abortar a transação, mas não há garantia de reversão de uma transação já concluída. Isso não protege dados persistidos contra scripts da mesma origem. Testes simulados verificam esses casos sem gravar registros.
+
+Permanecem abertos: transição de autenticação e múltiplas abas, sincronizações e uploads em andamento, respostas atrasadas, limpeza de caches e estado, conteúdo em localStorage, bancos IndexedDB antigos, OPFS e Cache Storage. O escopo não prova propriedade ou confidencialidade. Antes de remover qualquer conteúdo, definir recuperação explícita e preservação de alterações offline ainda não sincronizadas; não atribuir dados legados sem dono à conta ativa. A migração legada ainda pode ocorrer automaticamente no banco de visitante e não é um fluxo de recuperação com consentimento.
+
+`/sync` usa a identidade dos cookies no servidor, mas isso não vincula a requisição à identidade que iniciou a fila: uma troca de cookies durante processamento assíncrono ainda pode levar dados à conta errada. A auditoria de ownership em todas as APIs e os testes cruzados não foram concluídos. A correção da prova protegida pertence à Sprint 41G.2 e não foi alterada.
+
+Validação desta etapa: `typecheck` passou; `lint` passou com 69 avisos existentes. Playwright com módulos simulados: 6 aprovados, 0 falhos e 0 ignorados na última execução (3 corridas e 3 migração). A primeira execução teve duas falhas no próprio matcher, corrigidas na repetição. O build de uma cópia sem arquivos de ambiente falhou na resolução das fontes KaTeX pelo caminho da junção Windows para dependências em outra unidade; WSL não está instalado. O teste de navegador foi tentado em servidor isolado, mas a mesma falha impediu a aplicação de iniciar. Não houve testes com serviços reais. Faltam testes reais de navegador desktop/celular, API entre contas, sincronizações simultâneas, conflitos, exclusões e recuperação explícita.
+
 **Status: incompleta.** Não considerar esta versão segura para avaliações sigilosas ou troca de contas no mesmo navegador. Esta auditoria e os testes locais não acessam produção.
 
 ## Inventário e achados
