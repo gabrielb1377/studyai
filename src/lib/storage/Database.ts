@@ -27,6 +27,11 @@ const storeDefinitions: Record<StorageStoreName, { keyPath: string; indexes?: Ar
 let databasePromise: Promise<IDBDatabase> | undefined;
 const STORAGE_SCOPE_KEY = "studyai:storage-scope";
 let databaseScope = typeof localStorage === "undefined" ? "guest" : localStorage.getItem(STORAGE_SCOPE_KEY) || "guest";
+let databaseGeneration = 0;
+
+export function currentDatabaseGeneration() {
+  return databaseGeneration;
+}
 
 function scopedDatabaseName() {
   return databaseScope === "guest" ? STORAGE_DATABASE_NAME : `${STORAGE_DATABASE_NAME}:${databaseScope}`;
@@ -82,6 +87,7 @@ export function setStudyDatabaseScope(scope: string) {
   if (next === databaseScope) return false;
   resetDatabaseConnection();
   databaseScope = next;
+  databaseGeneration++;
   if (typeof localStorage !== "undefined") localStorage.setItem(STORAGE_SCOPE_KEY, next);
   return true;
 }

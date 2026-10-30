@@ -1,5 +1,5 @@
 import { IndexedDB, type StorageTransaction } from "./IndexedDB";
-import { currentDatabaseName, setStudyDatabaseScope } from "./Database";
+import { currentDatabaseGeneration, currentDatabaseName, setStudyDatabaseScope } from "./Database";
 import { Migration } from "./Migration";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import {
@@ -66,6 +66,18 @@ async function ready() {
   await initialization;
 }
 
+async function readyForOperation() {
+  const generation = currentDatabaseGeneration();
+  await ready();
+  return generation;
+}
+
+function assertGeneration(generation: number) {
+  if (generation !== currentDatabaseGeneration()) {
+    throw new StorageError("A conta mudou durante a operação de armazenamento. Tente novamente.", "TRANSACTION");
+  }
+}
+
 export type StorageDiagnostics = {
   database: string;
   version: number;
@@ -83,14 +95,14 @@ export const StorageManager = {
     if (!changed) return;
     MaterialRuntimeStore.clear();
     initialization = undefined;
-    await ready();
+    assertGeneration(await readyForOperation());
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(STORAGE_UPDATED_EVENT, { detail: { scopeChanged: true } }));
     }
   },
 
   async get<T>(store: StorageStoreName, key: IDBValidKey) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       return await IndexedDB.transaction([store], "readonly", (storage) => storage.get<T>(store, key));
     } catch (error) {
@@ -99,7 +111,7 @@ export const StorageManager = {
   },
 
   async getAll<T>(store: StorageStoreName) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       return await IndexedDB.transaction([store], "readonly", (storage) => storage.getAll<T>(store));
     } catch (error) {
@@ -108,7 +120,7 @@ export const StorageManager = {
   },
 
   async put<T>(store: StorageStoreName, value: T, options: { notify?: boolean } = {}) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       const key = await IndexedDB.transaction([store], "readwrite", (storage) => storage.put(store, value));
       if (options.notify !== false) emit(store, valueKey(value));
@@ -119,7 +131,7 @@ export const StorageManager = {
   },
 
   async putMany<T>(store: StorageStoreName, values: readonly T[]) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       await IndexedDB.transaction([store], "readwrite", async (storage) => {
         for (const value of values) await storage.put(store, value);
@@ -131,7 +143,7 @@ export const StorageManager = {
   },
 
   async replaceAll<T>(store: StorageStoreName, values: readonly T[]) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       await IndexedDB.transaction([store], "readwrite", async (storage) => {
         await storage.clear(store);
@@ -144,7 +156,7 @@ export const StorageManager = {
   },
 
   async delete(store: StorageStoreName, key: IDBValidKey) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       await IndexedDB.transaction([store], "readwrite", (storage) => storage.delete(store, key));
       emit(store);
@@ -157,7 +169,7 @@ export const StorageManager = {
     stores: readonly StorageStoreName[],
     operation: (storage: StorageTransaction) => Promise<T>,
   ) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       const result = await IndexedDB.transaction(stores, "readwrite", operation);
       stores.forEach(emit);
@@ -168,7 +180,7 @@ export const StorageManager = {
   },
 
   async paginate<T>(store: StorageStoreName, page: number, pageSize: number) {
-    await ready();
+    assertGeneration(await readyForOperation());
     const safePage = Math.max(1, Math.floor(page));
     const safeSize = Math.max(1, Math.floor(pageSize));
     const start = (safePage - 1) * safeSize;
@@ -184,7 +196,7 @@ export const StorageManager = {
   },
 
   async diagnostics(): Promise<StorageDiagnostics> {
-    await ready();
+    assertGeneration(await readyForOperation());
     const counts = Object.fromEntries(await Promise.all(STORAGE_STORES.map(async (store) => [
       store,
       await IndexedDB.transaction([store], "readonly", (storage) => storage.count(store)),
