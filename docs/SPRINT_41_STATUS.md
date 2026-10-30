@@ -1,5 +1,9 @@
 # Sprint 41 — estado e validação
 
+## Atualização Sprint 41G
+
+**Não concluída:** a prova protegida por servidor e o isolamento entre usuários permanecem pendentes. Foram implementadas contenções na migração de dados sem proprietário, limpeza do cache de materiais, filtragem das preferências recebidas por sincronização e aviso de que a prova atual é local e sem sigilo. O teste sintético A → B continua reprovado. Consulte [auditoria e plano de continuidade](SPRINT_41G_SECURITY_AUDIT.md).
+
 ## Atualização Sprint 41F — andamento
 
 **Ainda incompleta.** Como contenção temporária, o modo automático de troca entre provedores foi desabilitado no gerenciador e no Lab, e a interface informa essa limitação. A seleção de um provedor/modelo continua disponível; ainda falta implementar fallback por lista de modelos autorizados, consentimento individual entre provedores, limites de consumo e exibição consistente do modelo usado. A quota do modo automático legado permanece conservadora. A consulta de modelos OpenRouter preserva o status HTTP; respostas de autenticação do Gemini não são repetidas/classificadas como rate limit apenas pelo texto.

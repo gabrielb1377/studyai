@@ -1,5 +1,11 @@
 # Handoff atual — StudyAI V1.1 / Sprint 41
 
+## Atualização Sprint 41G
+
+**Incompleta: isolamento entre contas e sigilo de gabarito continuam comprometidos.** Um teste A → B com contas sintéticas confirmou que `studyai:exams` de A continua legível por B. O Modo Prova ainda devolve e armazena gabarito no cliente; a interface agora informa que é local e sem sigilo. Não existe ainda tentativa protegida/correção no servidor. O levantamento e o plano de continuidade estão em [docs/SPRINT_41G_SECURITY_AUDIT.md](docs/SPRINT_41G_SECURITY_AUDIT.md).
+
+Contenções locais: `fd8e50a` impede que migração legada sem dono seja automaticamente atribuída a uma conta, mantendo recuperação no banco visitante; `fd6dd97` limpa URLs de materiais em memória ao trocar escopo; `a5ed672` restringe chaves/valores aplicados por sincronização; `75c1a02` avisa sobre ausência de sigilo da prova local. Nenhuma delas representa isolamento completo contra scripts da mesma origem, nem resolve OPFS compartilhado ou sincronização pendente durante troca de conta.
+
 ## Atualização Sprint 41F
 
 Sprint ainda incompleta. A seleção automática que podia trocar silenciosamente de provedor foi temporariamente suspensa no gerenciador e na correção do Lab; a interface apresenta a limitação. Ainda não há fallback autorizado e configurável, consentimento para troca entre provedores, limites de custo ou confirmação do modelo para todos os fluxos. A quota de configurações legadas em modo automático pode continuar conservadora. O tratamento Gemini não repete erro 401 por texto ambíguo; a consulta de modelos OpenRouter preserva seu código HTTP. A Central de Ajuda ganhou categorias pesquisáveis e guia da Academy. O teste exploratório com duas contas sintéticas falhou: após troca de conta, o plano A permaneceu no `localStorage` acessível a B; o isolamento continua crítico. Typecheck/build passaram, lint 0 erros/69 avisos; Playwright dirigido 16/16 e 12/12 em rodadas diferentes, com mocks e sem serviços externos. Consulte `git log` para os commits locais e `docs/SPRINT_41_STATUS.md` para detalhes e pendências. Não presumir alterações do backend de produção ou serviços reais.
