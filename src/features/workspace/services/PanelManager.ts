@@ -2,7 +2,6 @@ import { WorkspaceState } from "./WorkspaceState";
 import type { WorkspacePanel, WorkspacePanelType } from "../types";
 
 const MIN_SIZE = 18;
-const MAX_PANELS = 6;
 
 function rebalance(panels: WorkspacePanel[]) {
   const visible = panels.filter((panel) => !panel.minimized);
@@ -12,7 +11,6 @@ function rebalance(panels: WorkspacePanel[]) {
 
 export const PanelManager = {
   add(panels: readonly WorkspacePanel[], type: WorkspacePanelType, resourceId?: string) {
-    if (panels.length >= MAX_PANELS) return [...panels];
     const size = 100 / (panels.filter((panel) => !panel.minimized).length + 1);
     return rebalance([...panels.map((panel) => ({ ...panel, size })), WorkspaceState.createPanel(type, size, resourceId)]);
   },

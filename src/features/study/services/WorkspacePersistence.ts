@@ -29,8 +29,9 @@ export type PdfViewState = {
 
 export type QuizViewState = {
   index: number;
-  answers: number[];
+  answers: Array<number | null>;
   isFinished: boolean;
+  mode?: "practice" | "exam";
 };
 
 export type StudyWorkspaceState = {
@@ -70,8 +71,9 @@ function normalize(value: unknown): StudyWorkspaceState {
     quiz: state.quiz && typeof state.quiz === "object"
       ? {
           index: typeof state.quiz.index === "number" ? Math.max(0, state.quiz.index) : 0,
-          answers: Array.isArray(state.quiz.answers) ? state.quiz.answers.filter((answer) => typeof answer === "number") : [],
+          answers: Array.isArray(state.quiz.answers) ? state.quiz.answers.map((answer) => typeof answer === "number" && Number.isInteger(answer) && answer >= 0 && answer < 4 ? answer : null) : [],
           isFinished: state.quiz.isFinished === true,
+          mode: state.quiz.mode === "exam" ? "exam" : "practice",
         }
       : { ...DEFAULT_STATE.quiz },
     noteId: typeof state.noteId === "string" ? state.noteId : undefined,

@@ -17,9 +17,9 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
   const { questions, results, error, isGenerating, generate, saveResult } = useQuiz(study.studyId);
   const stored = WorkspacePersistence.load(study.studyId).quiz;
   const [index, setIndex] = useState(stored.index);
-  const [answers, setAnswers] = useState<number[]>(stored.answers || []);
+  const [answers, setAnswers] = useState<Array<number | null>>(stored.answers || []);
   const [isFinished, setIsFinished] = useState(stored.isFinished);
-  const [mode, setMode] = useState<"practice" | "exam">("practice");
+  const [mode, setMode] = useState<"practice" | "exam">(stored.mode ?? "practice");
   const [showConfig, setShowConfig] = useState(false);
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
@@ -35,7 +35,12 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
     const next = [...answers];
     next[questionIndex] = alternativeIndex;
     setAnswers(next);
-    WorkspacePersistence.save(study.studyId, { quiz: { index, answers: next, isFinished } });
+    WorkspacePersistence.save(study.studyId, { quiz: { index, answers: next, isFinished, mode } });
+  };
+
+  const goToQuestion = (next: number) => {
+    setIndex(next);
+    WorkspacePersistence.save(study.studyId, { quiz: { index: next, answers, isFinished, mode } });
   };
 
   const submitExam = () => {
@@ -43,14 +48,14 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
     const wrong = questions.length - correct;
     saveResult(QuizService.createResult(study.studyId, questions.map((q) => q.id), correct, wrong));
     setIsFinished(true);
-    WorkspacePersistence.save(study.studyId, { quiz: { index, answers, isFinished: true } });
+    WorkspacePersistence.save(study.studyId, { quiz: { index, answers, isFinished: true, mode } });
   };
 
   const restart = () => {
     setIndex(0);
     setAnswers([]);
     setIsFinished(false);
-    WorkspacePersistence.save(study.studyId, { quiz: { index: 0, answers: [], isFinished: false } });
+    WorkspacePersistence.save(study.studyId, { quiz: { index: 0, answers: [], isFinished: false, mode } });
   };
 
   const latestResult = results[0];
@@ -64,7 +69,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
           <p className="mt-1 text-sm text-muted-foreground">{questions.length} questões disponíveis · Modo {mode === "practice" ? "Prática" : "Prova"}</p>
         </div>
         <div className="flex items-center gap-2">
-          <select className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium" value={mode} onChange={(e) => setMode(e.target.value as "practice" | "exam")}>
+          <select aria-label="Modo do simulado" className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium" value={mode} disabled={mode === "exam" && !isFinished && answers.some((answer) => answer != null)} onChange={(e) => { const nextMode = e.target.value as "practice" | "exam"; setMode(nextMode); WorkspacePersistence.save(study.studyId, { quiz: { index, answers, isFinished, mode: nextMode } }); }}>
             <option value="practice">Modo Prática</option>
             <option value="exam">Modo Prova</option>
           </select>
@@ -137,7 +142,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
                     <Badge variant={correct ? "default" : "destructive"}>{correct ? "Acertou" : "Errou"}</Badge>
                   </div>
                   <p className="font-medium">{q.question}</p>
-                  <p className="text-xs text-muted-foreground">Sua resposta: {userAns !== undefined ? q.alternatives[userAns] : "Não respondida"} {correct ? "" : `(Correta: ${q.alternatives[q.correctAnswer]})`}</p>
+                  <p className="text-xs text-muted-foreground">Sua resposta: {userAns != null ? q.alternatives[userAns] : "Não respondida"} {correct ? "" : `(Correta: ${q.alternatives[q.correctAnswer]})`}</p>
                   <div className="p-3 rounded-lg bg-background/80 border text-xs leading-relaxed mt-2">
                     <strong className="text-foreground">Explicação: </strong>{q.explanation}
                   </div>
@@ -154,10 +159,10 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
         <div className="space-y-4">
           <QuizQuestion question={currentQuestion} selectedAnswer={answers[index] ?? null} onAnswer={(alt) => handleAnswer(index, alt)} />
           <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0}><ChevronLeft className="size-4 mr-1" /> Anterior</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => goToQuestion(Math.max(0, index - 1))} disabled={index === 0}><ChevronLeft className="size-4 mr-1" /> Anterior</Button>
             <span className="text-xs text-muted-foreground">Questão {index + 1} de {questions.length}</span>
             <Button type="button" size="sm" onClick={() => {
-              if (index + 1 < questions.length) setIndex((i) => i + 1);
+              if (index + 1 < questions.length) goToQuestion(index + 1);
               else submitExam();
             }}>
               {index + 1 === questions.length ? "Finalizar Simulado" : "Próxima"} <ChevronRight className="size-4 ml-1" />
@@ -180,6 +185,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
                     key={alt}
                     type="button"
                     variant="outline"
+                    aria-pressed={selected}
                     className={`h-auto min-h-11 justify-start whitespace-normal px-4 py-3 text-left ${selected ? "border-primary bg-primary/10 font-semibold" : ""}`}
                     onClick={() => handleAnswer(index, altIdx)}
                   >
@@ -192,21 +198,21 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
           </Card>
 
           <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="outline" size="sm" onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0}><ChevronLeft className="size-4 mr-1" /> Anterior</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => goToQuestion(Math.max(0, index - 1))} disabled={index === 0}><ChevronLeft className="size-4 mr-1" /> Anterior</Button>
             <div className="flex gap-1">
               {questions.map((_, qIdx) => (
                 <button
                   key={qIdx}
                   type="button"
-                  onClick={() => setIndex(qIdx)}
-                  className={`size-7 rounded-lg text-xs font-semibold ${index === qIdx ? "bg-primary text-primary-foreground" : answers[qIdx] !== undefined ? "bg-accent text-accent-foreground border" : "border bg-card"}`}
+                  onClick={() => goToQuestion(qIdx)}
+                  className={`size-7 rounded-lg text-xs font-semibold ${index === qIdx ? "bg-primary text-primary-foreground" : answers[qIdx] != null ? "bg-accent text-accent-foreground border" : "border bg-card"}`}
                 >
                   {qIdx + 1}
                 </button>
               ))}
             </div>
             {index + 1 < questions.length ? (
-              <Button type="button" size="sm" onClick={() => setIndex((i) => i + 1)}>Próxima <ChevronRight className="size-4 ml-1" /></Button>
+              <Button type="button" size="sm" onClick={() => goToQuestion(index + 1)}>Próxima <ChevronRight className="size-4 ml-1" /></Button>
             ) : (
               <Button type="button" size="sm" onClick={submitExam} className="bg-primary text-primary-foreground">Entregar Prova</Button>
             )}
