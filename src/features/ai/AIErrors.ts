@@ -44,9 +44,8 @@ function suggestionFor(error: AIError) {
 
 export function isAIRateLimitError(error: unknown) {
   return error instanceof AIError && (
-    error.code === "RATE_LIMIT" ||
     error.status === 429 ||
-    /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)
+    (error.status >= 500 && error.status < 600 && (error.code === "RATE_LIMIT" || /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)))
   );
 }
 

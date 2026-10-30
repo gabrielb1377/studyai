@@ -53,7 +53,7 @@ export function createOpenAICompatibleProvider({
   const listModels = async (key: string, signal?: AbortSignal): Promise<AIModel[]> => {
     const response = await fetch(`${endpoint}/models${id === "openrouter" ? "/user" : ""}`, { headers: headers(key), cache: "no-store", signal });
     const data = await response.json().catch(() => null) as ModelsResponse | null;
-    if (!response.ok) throw new Error(`Não foi possível consultar os modelos do ${name}.`);
+    if (!response.ok) throw new AIError(`Não foi possível consultar os modelos do ${name}.`, "PROVIDER_ERROR", response.status, id);
     return (data?.data ?? []).flatMap((model) => model.id && model.active !== false && !(id === "groq" && /whisper|orpheus|prompt.guard/i.test(model.id)) ? [{ name: model.id, contextWindow: model.context_length }] : []);
   };
 

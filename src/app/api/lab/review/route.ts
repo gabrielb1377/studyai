@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAIRateLimitError, normalizeAIError } from "@/features/ai/AIErrors";
+import { normalizeAIError } from "@/features/ai/AIErrors";
 import { AIService } from "@/features/ai/AIService";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
 import { requireUser } from "@/server/auth/http";
@@ -7,7 +7,6 @@ import { aiProviderIds } from "@/features/ai/AIProvider";
 import { LabPromptBuilder } from "@/features/lab/services/LabPromptBuilder";
 import { isLabReviewRequest } from "@/features/lab/validators/lab-validation";
 import { isAIModelPreferences, isAIProviderId, isAISelectionMode, type AIModelPreferences, type AIProviderId, type AISelectionMode } from "@/features/ai/AIProvider";
-import { Telemetry } from "@/server/observability/Telemetry";
 import { withAIQuota, createQuotaAwareAIRequest } from "@/server/ai/QuotaMiddleware";
 
 export const runtime = "nodejs";
@@ -29,32 +28,7 @@ async function generateReview(body: Body & { request: Parameters<typeof LabPromp
     apiKeys: userApiKeys,
   } as const;
 
-  try {
-    return await AIService.generate(primaryRequest);
-  } catch (error) {
-    if (!isAIRateLimitError(error) || body.mode === "automatic") throw error;
-    Telemetry.metric({ name: "lab-ai-rate-limit", value: 1, unit: "count", source: "server" });
-    const status = await AIService.status({ force: true, signal });
-    const fallback = status.providers
-      .filter((provider) => provider.provider !== primaryProvider && provider.available && provider.models.length > 0)
-      .sort((left, right) => left.latencyMs - right.latencyMs)[0];
-    if (!fallback) throw error;
-
-    try {
-      const response = await AIService.generate({
-        ...primaryRequest,
-        provider: fallback.provider,
-        model: body.models?.[fallback.provider],
-        mode: "manual",
-        apiKeys: userApiKeys,
-      });
-      Telemetry.metric({ name: "lab-ai-fallback-success", value: 1, unit: "count", source: "server" });
-      return response;
-    } catch (fallbackError) {
-      Telemetry.metric({ name: "lab-ai-fallback-failure", value: 1, unit: "count", source: "server" });
-      throw fallbackError;
-    }
-  }
+  return AIService.generate(primaryRequest);
 }
 
 export async function POST(request: Request) {
@@ -74,5 +48,5 @@ export async function POST(request: Request) {
     if (normalized.status === 429) response.headers.set("Retry-After", String(RATE_LIMIT_RETRY_AFTER_SECONDS));
     return response;
   }
-});
+}, { history: [], message: "Corrigir exercício do laboratório." });
 }

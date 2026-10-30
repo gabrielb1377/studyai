@@ -51,7 +51,7 @@ function delay(duration: number, signal?: AbortSignal) {
 }
 
 function isHighDemand(status: number, message?: string) {
-  return status === 429 || status === 503 || /overload|high demand|resource exhausted/i.test(message ?? "");
+  return status === 429 || status === 503 || (status >= 500 && status < 600 && /overload|high demand|resource exhausted/i.test(message ?? ""));
 }
 
 async function fetchWithBackoff(url: string, init: RequestInit, signal: AbortSignal, maxAttempts = MAX_ATTEMPTS) {
@@ -177,7 +177,7 @@ export const GeminiProvider: AIProvider = {
       let activeModel = candidates[0];
       let response: Response | undefined;
       let data: GeminiResponse | null = null;
-      for (const candidate of candidates.slice(0, model?.trim() ? 1 : 4)) {
+      for (const candidate of candidates.slice(0, 1)) {
         activeModel = candidate;
         const outputLimit = Math.min(maxOutputTokens ?? candidate.outputTokenLimit ?? 8_192, candidate.outputTokenLimit ?? Number.MAX_SAFE_INTEGER);
         response = await fetchWithBackoff(`${API_URL}/${candidate.name}:generateContent`, {

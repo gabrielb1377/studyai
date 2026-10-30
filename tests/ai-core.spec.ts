@@ -93,14 +93,14 @@ test("Provider Manager mostra health e envia o modelo Ollama salvo pelo AI Core"
     .toMatchObject({ version: 3, mode: "manual", provider: "ollama", models: { ollama: "qwen3:8b" } });
 });
 
-test("modo automático escolhe o provider online de menor latência e atualiza o Dashboard", async ({ page }) => {
+test("troca automática fica indisponível sem consentimento e Dashboard mantém estatísticas", async ({ page }) => {
   await enableAdvancedMode(page);
   await mockManager(page);
   await page.goto("/configuracoes");
   await page.getByRole("button", { name: "IA", exact: true }).click();
-  await page.getByRole("button", { name: "Automático" }).click();
-  await expect(page.getByText(/Provider atual:/)).toContainText("ollama");
-  await expect(page.getByLabel("Provider de IA")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Automático" })).toBeDisabled();
+  await expect(page.getByText(/Provider atual:/)).toContainText("gemini");
+  await expect(page.getByLabel("Provider de IA")).toBeEnabled();
 
   await page.goto("/");
   await page.getByRole("button", { name: "Detalhes da ingestão" }).click();
@@ -109,5 +109,5 @@ test("modo automático escolhe o provider online de menor latência e atualiza o
   await expect(diagnostics).toContainText("1.234");
 
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("studyai:ai-settings") ?? "null")))
-    .toMatchObject({ version: 3, mode: "automatic" });
+    .toMatchObject({ version: 3, mode: "manual" });
 });

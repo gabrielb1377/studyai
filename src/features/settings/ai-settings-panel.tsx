@@ -111,12 +111,8 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
   }, [refreshStatus]);
 
   const activeStatus = useMemo(() => {
-    const statuses = managerStatus?.providers ?? [];
-    if (mode === "manual") return statuses.find((item) => item.provider === provider);
-    return [...statuses]
-      .filter((item) => item.available)
-      .sort((left, right) => left.latencyMs - right.latencyMs)[0];
-  }, [managerStatus, mode, provider]);
+    return (managerStatus?.providers ?? []).find((item) => item.provider === provider);
+  }, [managerStatus, provider]);
 
   const activeModel = activeStatus
     ? models[activeStatus.provider] ?? activeStatus.models[0]?.name ?? "—"
@@ -136,7 +132,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="text-base">Gerenciador de IA</CardTitle>
-            <CardDescription>Selecione manualmente ou deixe o StudyAI usar o provider online mais rápido.</CardDescription>
+            <CardDescription>Escolha o provedor e o modelo para suas solicitações.</CardDescription>
           </div>
           <Bot className="size-5 text-primary" aria-hidden="true" />
         </div>
@@ -152,7 +148,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
                 size="sm"
                 variant={mode === item ? "secondary" : "ghost"}
                 aria-pressed={mode === item}
-                disabled={!isReady}
+                disabled={!isReady || item === "automatic"}
                 onClick={() => {
                   setMode(item);
                   AISettings.saveMode(item);
@@ -164,8 +160,8 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
           </div>
           <p className="text-xs text-muted-foreground">
             {mode === "automatic"
-              ? "O menor tempo de resposta entre os providers online define a primeira tentativa."
-              : "Somente o provider escolhido será utilizado."}
+              ? "A troca automática entre provedores está temporariamente indisponível. O provedor escolhido será usado."
+              : "Somente o provedor escolhido será utilizado. A troca automática está temporariamente indisponível."}
           </p>
         </fieldset>
 
@@ -174,7 +170,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
           <select
             aria-label="Provider de IA"
             value={provider}
-            disabled={!isReady || mode === "automatic"}
+            disabled={!isReady}
             onChange={(event) => {
               const nextProvider = event.target.value as AIProviderId;
               setProvider(nextProvider);
@@ -188,7 +184,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
           </select>
         </label>
 
-        {mode === "manual" && (
+        {
           <label className="grid gap-2 text-sm font-medium sm:max-w-md">
             Modelo do provider
             <select
@@ -208,7 +204,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
               )) : <option value="">Nenhum modelo encontrado</option>}
             </select>
           </label>
-        )}
+        }
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div aria-live="polite" className="text-sm">

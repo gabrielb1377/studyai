@@ -16,8 +16,13 @@ import { AIResponseCache } from "./AIResponseCache";
 import type { AIStreamEvent } from "./AIProvider";
 import { TokenCounter } from "./TokenCounter";
 
-const FALLBACK_ORDER: readonly AIProviderId[] = ["ollama", "gemini", "groq", "openrouter"];
 const MAX_LOGS = 200;
+
+// Never repeat rejected authentication, permission or validation requests.
+function isRecoverableProviderError(error: unknown) {
+  if (!(error instanceof AIError) || error.code === "MISSING_API_KEY" || error.code === "INVALID_RESPONSE") return false;
+  return error.status === 429 || (error.status >= 500 && error.status < 600);
+}
 
 const providerRuntime = globalThis as typeof globalThis & {
   __studyAIProviderLogs?: AIProviderLog[];
@@ -32,15 +37,6 @@ function addLog(log: Omit<AIProviderLog, "id" | "timestamp">) {
     timestamp: new Date().toISOString(),
   });
   if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
-}
-
-async function automaticOrder(signal?: AbortSignal): Promise<AIProviderId[]> {
-  const statuses = await HealthService.checkAll({ signal });
-  const online = statuses
-    .filter((status) => status.available)
-    .sort((left, right) => left.latencyMs - right.latencyMs)
-    .map((status) => status.provider);
-  return [...online, ...FALLBACK_ORDER.filter((provider) => !online.includes(provider))];
 }
 
 function statistics(): AIProviderStatistics {
@@ -60,9 +56,9 @@ function statistics(): AIProviderStatistics {
 export const ProviderManager = {
   async generate(request: AIManagerRequest): Promise<AIResponse> {
     const preferred = request.provider ?? "gemini";
-    const candidates: AIProviderId[] = request.mode === "automatic" && !request.model && !request.models?.[preferred]
-      ? await automaticOrder(request.signal)
-      : [preferred];
+    // Cross-provider requests require an explicit consent mechanism, which is
+    // not yet available. Keep every request on the user's preferred provider.
+    const candidates: AIProviderId[] = [preferred];
     const attemptedProviders: AIProviderId[] = [];
     let lastError: unknown;
 
@@ -122,6 +118,7 @@ export const ProviderManager = {
         fallback,
         error: safeAIErrorLogMessage(measured.error),
       });
+      if (request.signal?.aborted || !isRecoverableProviderError(measured.error)) throw measured.error;
     }
 
     if (lastError instanceof AIError) throw lastError;
@@ -136,9 +133,7 @@ export const ProviderManager = {
 
   async *stream(request: AIManagerRequest): AsyncGenerator<AIStreamEvent> {
     const preferred = request.provider ?? "gemini";
-    const candidates: AIProviderId[] = request.mode === "automatic" && !request.model && !request.models?.[preferred]
-      ? await automaticOrder(request.signal)
-      : [preferred];
+    const candidates: AIProviderId[] = [preferred];
     const attemptedProviders: AIProviderId[] = [];
     let lastError: unknown;
 
@@ -202,7 +197,7 @@ export const ProviderManager = {
         lastError = error;
         const latencyMs = Math.round(performance.now() - startedAt);
         addLog({ provider: providerId, model: selectedModel, latencyMs, success: false, fallback, error: safeAIErrorLogMessage(error) });
-        if (emitted || request.mode !== "automatic") throw error;
+        if (emitted || request.mode !== "automatic" || request.signal?.aborted || !isRecoverableProviderError(error)) throw error;
       }
     }
 
