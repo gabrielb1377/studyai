@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   BookOpenCheck,
   BrainCircuit,
@@ -7,7 +9,10 @@ import {
   GitFork,
   GraduationCap,
   ListChecks,
+  Mic,
   Network,
+  Play,
+  Pause,
   Quote,
   Route,
   Sparkles,
@@ -25,7 +30,11 @@ import {
   type TeacherAction,
   type TeacherMaterialSelection,
   type TeacherPreferences,
+  type RateOption,
 } from "../types";
+import { TeacherAudioPlayer } from "./TeacherAudioPlayer";
+import { NarratedLessonPanel } from "./NarratedLessonPanel";
+import { VoiceInput } from "@/features/voice/components/VoiceInput";
 
 const tools: Array<{ action: TeacherAction; label: string; icon: typeof Route }> = [
   { action: "lesson_plan", label: "Plano de aula", icon: ListChecks },
@@ -34,25 +43,132 @@ const tools: Array<{ action: TeacherAction; label: string; icon: typeof Route }>
   { action: "timeline", label: "Linha do tempo", icon: Route },
   { action: "exercise", label: "Exercício", icon: BookOpenCheck },
   { action: "compare", label: "Comparar conceitos", icon: GitCompareArrows },
+  { action: "audio_lesson", label: "Aula narrada", icon: Mic },
 ];
+
+interface TeacherControlsProps {
+  context: TutorStudyContext | null;
+  disabled: boolean;
+  preferences: TeacherPreferences;
+  audioPreferences: {
+    voice: string;
+    rate: RateOption;
+    autoplay: boolean;
+  };
+  selection: TeacherMaterialSelection | null;
+  audioLessonMode: "idle" | "active" | "paused";
+  audioLessonSession: {
+    sessionId: string;
+    topic: string;
+    plan: string[];
+    currentStep: number;
+    completedSteps: number[];
+  } | null;
+  onPreferencesChange: (changes: Partial<TeacherPreferences>) => void;
+  onAudioPreferencesChange: (changes: Partial<{ voice: string; rate: RateOption; autoplay: boolean }>) => void;
+  onAction: (action: TeacherAction) => void;
+  onClearSelection: () => void;
+  onStartAudioLesson: (topic: string, plan: string[]) => void;
+  onAdvanceStep: () => void;
+  onPreviousStep: () => void;
+  onRepeatStep: () => void;
+  onPlayPause: () => void;
+  onStop: () => void;
+  onPauseLesson: () => void;
+  onResumeLesson: () => void;
+  onEndLesson: () => void;
+  onVoiceQuestion: (question: string) => void;
+}
 
 export function TeacherControls({
   context,
   disabled,
   preferences,
+  audioPreferences,
   selection,
+  audioLessonMode,
+  audioLessonSession,
   onPreferencesChange,
+  onAudioPreferencesChange,
   onAction,
   onClearSelection,
-}: {
-  context: TutorStudyContext | null;
-  disabled: boolean;
-  preferences: TeacherPreferences;
-  selection: TeacherMaterialSelection | null;
-  onPreferencesChange: (changes: Partial<TeacherPreferences>) => void;
-  onAction: (action: TeacherAction) => void;
-  onClearSelection: () => void;
-}) {
+  onStartAudioLesson,
+  onAdvanceStep,
+  onPreviousStep,
+  onRepeatStep,
+  onPlayPause,
+  onStop,
+  onPauseLesson,
+  onResumeLesson,
+  onEndLesson,
+  onVoiceQuestion,
+}: TeacherControlsProps) {
+  const isAudioLessonActive = audioLessonMode === "active" && audioLessonSession;
+  const isPlaying = audioLessonMode === "active";
+  const isPaused = audioLessonMode === "paused";
+  const [showVoiceInput, setShowVoiceInput] = useState(false);
+  void onStartAudioLesson;
+  void onPauseLesson;
+
+  const handleVoiceQuestion = (question: string) => {
+    if (onVoiceQuestion) {
+      onVoiceQuestion(question);
+    }
+    // After sending a question, hide the voice input
+    setShowVoiceInput(false);
+  };
+
+  if (isAudioLessonActive && audioLessonSession) {
+    return (
+      <div aria-label="Player de Aula Narrada" className="mb-4">
+        <TeacherAudioPlayer
+          text={audioLessonSession.plan[audioLessonSession.currentStep]}
+          stepIndex={audioLessonSession.currentStep}
+          totalSteps={audioLessonSession.plan.length}
+          onPlayPause={onPlayPause}
+          onStop={onStop}
+          onNextStep={onAdvanceStep}
+          onPrevStep={onPreviousStep}
+          onRepeat={onRepeatStep}
+          onRateChange={(rate) => onAudioPreferencesChange({ rate })}
+          onVoiceChange={(voice) => onAudioPreferencesChange({ voice })}
+          onToggleAutoplay={(enabled) => onAudioPreferencesChange({ autoplay: enabled })}
+          isPlaying={isPlaying}
+          isPaused={isPaused}
+          currentRate={audioPreferences.rate}
+          currentVoice={audioPreferences.voice}
+          autoplay={audioPreferences.autoplay}
+          disabled={disabled}
+        />
+
+        {/* Voice Input for asking questions during the lesson */}
+        <div className="mt-3 space-y-3">
+          {!showVoiceInput && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setShowVoiceInput(true)}
+              disabled={disabled}
+              className="w-full"
+            >
+              <Mic className="size-3.5 me-1" aria-hidden="true" />
+              Fazer pergunta por voz
+            </Button>
+          )}
+          {showVoiceInput && (
+            <VoiceInput
+              onSendMessage={handleVoiceQuestion}
+              disabled={disabled}
+              placeholder="Pergunte algo sobre a explicação atual..."
+              context={audioLessonSession.plan[audioLessonSession.currentStep]}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <aside aria-label="Controles do Professor" className="mb-4 rounded-xl border bg-secondary/20 p-3 sm:p-4">
       <div className="flex flex-wrap items-start gap-3">
@@ -125,6 +241,33 @@ export function TeacherControls({
         </div>
       </details>
 
+      {/* Narrated lesson (real AI-backed flow) */}
+      {!isAudioLessonActive && context && (
+        <NarratedLessonPanel
+          studyId={context.studyId}
+          topic={context.topic || context.title || "o tema atual"}
+          subject={context.subject || ""}
+          teaching={{
+            mode: "teacher",
+            action: "audio_lesson",
+            level: preferences.level,
+            method: preferences.method,
+            summaryStyle: preferences.summaryStyle,
+            voice: audioPreferences.voice,
+            rate: audioPreferences.rate,
+            autoplay: audioPreferences.autoplay,
+          }}
+          options={{
+            voice: audioPreferences.voice,
+            rate: audioPreferences.rate,
+            autoplay: audioPreferences.autoplay,
+            narrationEnabled: true,
+          }}
+          onClose={onEndLesson}
+          onQuestion={onVoiceQuestion}
+        />
+      )}
+
       {selection && (
         <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
           <div className="flex items-start gap-2">
@@ -139,6 +282,29 @@ export function TeacherControls({
             <div className="flex shrink-0 flex-wrap gap-1">
               <Button type="button" size="sm" disabled={disabled} onClick={() => onAction("explain_selection")}>Explicar este trecho</Button>
               <Button type="button" variant="ghost" size="sm" onClick={onClearSelection}>Limpar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audio Lesson Session Controls - shown when lesson was started but paused */}
+      {audioLessonSession && isPaused && (
+        <div className="mt-3 rounded-lg border bg-amber/5 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Pause className="size-4 text-amber-600" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-medium">Aula pausada</p>
+                <p className="text-xs text-muted-foreground">Etapa {audioLessonSession.currentStep + 1} de {audioLessonSession.plan.length}</p>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              <Button type="button" size="sm" variant="secondary" onClick={onResumeLesson} disabled={disabled}>
+                <Play className="size-3.5 me-1" aria-hidden="true" />Continuar
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={onEndLesson} disabled={disabled}>
+                <span className="size-3.5 me-1" aria-hidden="true">⏹</span>Encerrar
+              </Button>
             </div>
           </div>
         </div>

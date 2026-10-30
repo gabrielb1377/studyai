@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bot, RefreshCw } from "lucide-react";
+import { Bot, RefreshCw, Gauge, AlertTriangle, CheckCircle } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import type {
   AIManagerStatus,
   AIModelPreferences,
@@ -25,6 +26,15 @@ function formatMemory(bytes?: number) {
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
+interface QuotaData {
+  mode: "byok" | "shared";
+  daily: { used: number; limit: number; remaining: number; percent: number; resetAt: string };
+  minute: { used: number; limit: number; remaining: number; percent: number; resetAt: string };
+  warning: "none" | "approaching" | "critical";
+  usageStats: Array<{ date: string; requests: number; tokens: number }>;
+  hasAnyBYOK: boolean;
+}
+
 export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
   const [mode, setMode] = useState<AISelectionMode>("manual");
   const [provider, setProvider] = useState<AIProviderId>("gemini");
@@ -33,6 +43,8 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [testingProvider, setTestingProvider] = useState<AIProviderId | null>(null);
+  const [quotaData, setQuotaData] = useState<QuotaData | null>(null);
+  const [isLoadingQuota, setIsLoadingQuota] = useState(true);
 
   useEffect(() => {
     const settings = AISettings.load();
@@ -40,6 +52,25 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
     setProvider(settings.provider);
     setModels(settings.models);
     setIsReady(true);
+  }, []);
+
+  useEffect(() => {
+    const fetchQuota = async () => {
+      try {
+        const response = await fetch("/api/settings/ai/quota", { cache: "no-store" });
+        if (response.ok) {
+          const data = await response.json();
+          setQuotaData(data);
+        }
+      } catch {
+        // Silently fail - quota display is secondary
+      } finally {
+        setIsLoadingQuota(false);
+      }
+    };
+    fetchQuota();
+    const interval = window.setInterval(fetchQuota, 30_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const testProvider = async (providerId: AIProviderId) => {
@@ -90,6 +121,14 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
   const activeModel = activeStatus
     ? models[activeStatus.provider] ?? activeStatus.models[0]?.name ?? "—"
     : models[provider] ?? "—";
+
+  useEffect(() => {
+    const first = activeStatus?.available ? activeStatus.models[0]?.name : undefined;
+    if (isReady && mode === "manual" && first && !models[provider]) {
+      setModels((current) => ({ ...current, [provider]: first }));
+      AISettings.saveModel(provider, first);
+    }
+  }, [activeStatus, isReady, mode, models, provider]);
 
   return (
     <Card className="max-w-4xl shadow-none">
@@ -163,6 +202,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
               }}
               className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
+              {models[provider] && !activeStatus?.models.some((item) => item.name === models[provider]) && <option value={models[provider]}>Modelo salvo indisponível: {models[provider]}</option>}
               {activeStatus?.models.length ? activeStatus.models.map((item) => (
                 <option key={item.name} value={item.name}>{item.name}</option>
               )) : <option value="">Nenhum modelo encontrado</option>}
@@ -219,6 +259,86 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
           <div><p className="text-xs text-muted-foreground">Tokens</p><p className="mt-1 font-medium">{managerStatus?.statistics.tokens?.toLocaleString("pt-BR") ?? "—"}</p></div>
           <div><p className="text-xs text-muted-foreground">Fallbacks</p><p className="mt-1 font-medium">{managerStatus?.statistics.fallbacks ?? 0}</p></div>
         </div>}
+
+        {/* Quota Consumption Section */}
+        <section aria-label="Consumo de quota compartilhada" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium">Consumo de Quota Compartilhada</h3>
+            <Badge variant={quotaData?.mode === "byok" ? "secondary" : "default"} className="gap-1">
+              {quotaData?.mode === "byok" ? (
+                <> <CheckCircle className="size-3" /> BYOK Ativo </>
+              ) : (
+                <> <Gauge className="size-3" /> Modo Compartilhado </>
+              )}
+            </Badge>
+          </div>
+
+          {isLoadingQuota ? (
+            <div className="flex items-center justify-center py-4">
+              <Gauge className="size-5 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-sm text-muted-foreground">Carregando quota...</span>
+            </div>
+          ) : quotaData ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 rounded-lg border bg-muted/15 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Quota Diária</p>
+                      <p className="text-sm font-medium">{quotaData.daily.used} / {quotaData.daily.limit}</p>
+                    </div>
+                    <Badge variant={quotaData.warning === "critical" ? "destructive" : quotaData.warning === "approaching" ? "secondary" : "outline"}>
+                      {quotaData.warning === "critical" ? "Crítico" : quotaData.warning === "approaching" ? "Atenção" : "OK"}
+                    </Badge>
+                  </div>
+                  <Progress value={quotaData.daily.percent} className="h-2" />
+                  <p className="text-xs text-muted-foreground">
+                    Restam {quotaData.daily.remaining} de {quotaData.daily.limit} · Reset à meia-noite
+                  </p>
+                </div>
+
+                <div className="space-y-2 rounded-lg border bg-muted/15 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Quota por Minuto</p>
+                      <p className="text-sm font-medium">{quotaData.minute.used} / {quotaData.minute.limit}</p>
+                    </div>
+                    <Badge variant={quotaData.warning === "critical" ? "destructive" : quotaData.warning === "approaching" ? "secondary" : "outline"}>
+                      {quotaData.warning === "critical" ? "Crítico" : quotaData.warning === "approaching" ? "Atenção" : "OK"}
+                    </Badge>
+                  </div>
+                  <Progress value={quotaData.minute.percent} className="h-2" />
+                  <p className="text-xs text-muted-foreground">
+                    Restam {quotaData.minute.remaining} de {quotaData.minute.limit} · Reset em {new Date(quotaData.minute.resetAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+
+              {quotaData.warning !== "none" && (
+                <div className="rounded-lg border bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+                  <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">Quota se aproximando do limite</p>
+                    <p className="text-xs text-muted-foreground">
+                      {quotaData.warning === "critical"
+                        ? "Você atingiu 90% da quota. Configure sua própria chave API (BYOK) em Configurações → IA → Gerenciador de IA para continuar sem limites."
+                        : "Você atingiu 75% da quota. Considere configurar BYOK para evitar interrupções."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
+                <span>Últimos 30 dias: {quotaData.usageStats?.reduce((sum, day) => sum + day.requests, 0) ?? 0} requisições</span>
+                <span>Próximo reset diário: {new Date(quotaData.daily.resetAt).toLocaleString("pt-BR")}</span>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Não foi possível carregar informações de quota.
+            </p>
+          )}
+        </section>
       </CardContent>
     </Card>
   );

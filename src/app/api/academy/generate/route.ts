@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 import { AIError, normalizeAIError } from "@/features/ai/AIErrors";
 import {
   isAIModelPreferences,
@@ -10,6 +9,9 @@ import {
   type AISelectionMode,
 } from "@/features/ai/AIProvider";
 import { AIService } from "@/features/ai/AIService";
+import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { requireUser } from "@/server/auth/http";
+import { aiProviderIds } from "@/features/ai/AIProvider";
 import { TokenCounter } from "@/features/ai/TokenCounter";
 import { AcademyPromptBuilder } from "@/features/academy/services/AcademyPromptBuilder";
 import {
@@ -27,6 +29,7 @@ import {
   type AcademyStudy,
 } from "@/features/academy/types";
 import { AcademyGenerationParser } from "@/features/academy/validation/generation-parser";
+import { withAIQuota, createQuotaAwareAIRequest } from "@/server/ai/QuotaMiddleware";
 
 export const runtime = "nodejs";
 
@@ -60,58 +63,60 @@ function isRequest(value: unknown): value is AcademyGenerateRequest {
   if (!value || typeof value !== "object") return false;
   const body = value as Partial<AcademyGenerateRequest>;
   return isStudy(body.study) &&
-    academyContentKinds.includes(body.kind as AcademyContentKind) &&
-    academyGenerationModes.includes(body.generationMode as AcademyGenerationMode) &&
-    academyGenerationStages.includes(body.stage as AcademyGenerationStage) &&
-    (body.provider === undefined || isAIProviderId(body.provider)) &&
+    academyContentKinds.includes(body.kind as typeof academyContentKinds[number]) &&
+    academyGenerationModes.includes(body.generationMode as typeof academyGenerationModes[number]) &&
+    academyGenerationStages.includes(body.stage as typeof academyGenerationStages[number]) &&
     (body.mode === undefined || isAISelectionMode(body.mode)) &&
     (body.model === undefined || (typeof body.model === "string" && body.model.trim().length > 0)) &&
     isAIModelPreferences(body.models);
 }
 
 export async function POST(request: Request) {
-  const body: unknown = await request.json().catch(() => null);
+  // Clone para validar sem consumir o corpo que `withAIQuota` lerá em seguida.
+  const body: unknown = await request.clone().json().catch(() => null);
   if (!isRequest(body)) {
     return NextResponse.json({ error: "Os dados para gerar o conteúdo são inválidos." }, { status: 400 });
   }
-
-  try {
-    const prompt = AcademyPromptBuilder.build(body);
-    if (prompt.metrics.promptTokens > 8_000) {
-      return NextResponse.json({ error: "O contexto excedeu o limite seguro. Reduza a profundidade ou a duração." }, { status: 413 });
+  return withAIQuota(request, async (request, aiRequest) => {
+    try {
+      const prompt = AcademyPromptBuilder.build(body);
+      if (prompt.metrics.promptTokens > 8_000) {
+        return NextResponse.json({ error: "O contexto excedeu o limite seguro. Reduza a profundidade ou a duração." }, { status: 413 });
+      }
+      const response = await AIService.generate({
+        history: prompt.history,
+        message: prompt.message,
+        signal: request.signal,
+        model: body.model,
+        models: body.models,
+        mode: body.mode,
+        provider: body.provider,
+        apiKeys: aiRequest.apiKeys as Partial<Record<AIProviderId, string>> | undefined,
+        maxOutputTokens: body.stage === "outline" ? 2_048 : body.stage === "lessons" ? 8_192 : 4_096,
+        timeoutMs: 90_000,
+      });
+      const data = AcademyGenerationParser.parse(body.stage, response.text);
+      return NextResponse.json({
+        stage: body.stage,
+        data,
+        provider: response.provider,
+        model: response.model,
+        usage: response.usage ?? { inputTokens: 0 },
+        cached: response.execution?.cached ?? false,
+      });
+    } catch (error) {
+      const normalized = normalizeAIError(
+        error instanceof AIError
+          ? error
+          : new AIError(
+              error instanceof Error ? error.message : "O provider retornou uma resposta inválida.",
+              "INVALID_RESPONSE",
+              502,
+              body.provider,
+            ),
+        "Não foi possível gerar o conteúdo da Academy.",
+      );
+      return NextResponse.json(normalized.body, { status: normalized.status });
     }
-    const response = await AIService.generate({
-      history: prompt.history,
-      message: prompt.message,
-      signal: request.signal,
-      model: body.model,
-      models: body.models,
-      mode: body.mode,
-      provider: body.provider,
-      maxOutputTokens: body.stage === "outline" ? 2_048 : body.stage === "lessons" ? 8_192 : 4_096,
-      timeoutMs: 90_000,
-    });
-    const data = AcademyGenerationParser.parse(body.stage, response.text);
-    return NextResponse.json({
-      stage: body.stage,
-      data,
-      provider: response.provider,
-      model: response.model,
-      usage: response.usage ?? { inputTokens: TokenCounter.estimate(prompt.message) },
-      cached: response.execution?.cached ?? false,
-    });
-  } catch (error) {
-    const normalized = normalizeAIError(
-      error instanceof AIError
-        ? error
-        : new AIError(
-          error instanceof Error ? error.message : "O provider retornou uma resposta inválida.",
-          "INVALID_RESPONSE",
-          502,
-          body.provider,
-        ),
-      "Não foi possível gerar o conteúdo da Academy.",
-    );
-    return NextResponse.json(normalized.body, { status: normalized.status });
-  }
+  });
 }

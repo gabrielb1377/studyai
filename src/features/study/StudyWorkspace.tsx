@@ -48,6 +48,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
         name: material.name,
         type: toStudyMaterialType(material.fileType),
         mimeType: material.mimeType,
+        fileType: material.fileType,
         size: material.size,
         source: MaterialRuntimeStore.get(material.id)?.source,
         textContent: extracted?.extractedText,

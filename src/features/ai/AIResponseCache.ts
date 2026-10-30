@@ -10,9 +10,13 @@ const cache = runtime.__studyAICache ?? new Map<string, CacheEntry>();
 runtime.__studyAICache = cache;
 
 function keyFor(request: AIManagerRequest, provider: string, model?: string) {
+  const credential = request.apiKeys?.[provider as keyof NonNullable<typeof request.apiKeys>] ?? request.apiKey;
   return createHash("sha256").update(JSON.stringify({
     provider,
     model,
+    credentialFingerprint: credential
+      ? createHash("sha256").update(credential).digest("hex")
+      : undefined,
     history: request.history,
     message: request.message,
   })).digest("hex");

@@ -19,6 +19,8 @@ const QuizWorkspace = dynamic(() => import("@/features/quiz/QuizWorkspace").then
 const NotesWorkspace = dynamic(() => import("@/features/notes/NotesWorkspace").then((module) => module.NotesWorkspace), { loading });
 const KnowledgeMapView = dynamic(() => import("@/features/semantic/KnowledgeMapView").then((module) => module.KnowledgeMapView), { loading });
 const LabWorkspace = dynamic(() => import("@/features/lab/components/LabWorkspace").then((module) => module.LabWorkspace), { loading });
+const ExtractionReviewPanel = dynamic(() => import("@/features/ocr/components/ExtractionReviewPanel").then((module) => module.ExtractionReviewPanel), { loading });
+const AIQualityPanel = dynamic(() => import("@/features/ai-quality/components/AIQualityPanel").then((module) => module.default), { loading });
 
 export const WorkspacePanelContent = memo(function WorkspacePanelContent({ panel, study, materials, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange }: {
   panel: WorkspacePanel;
@@ -39,5 +41,7 @@ export const WorkspacePanelContent = memo(function WorkspacePanelContent({ panel
   if (panel.type === "notes") return <NotesWorkspace study={study} panelId={panel.id} />;
   if (panel.type === "lab") return <LabWorkspace studyId={study.studyId} compact />;
   if (panel.type === "knowledge") return <KnowledgeMapView studyId={study.studyId} />;
+  if (panel.type === "review") return <ExtractionReviewPanel materialId={panel.resourceId ?? materials[0]?.id} />;
+  if (panel.type === "ai-quality") return <AIQualityPanel />;
   return <StudyStatistics record={study} flashcards={flashcards} quizzes={quizzes} onProgressChange={onProgressChange} onStatusChange={onStatusChange} />;
 });

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { KnowledgeEngine } from "../src/features/learning/KnowledgeEngine";
+import { STORAGE_DATABASE_VERSION } from "../src/lib/storage/StorageVersion";
 import { LearningCalculator } from "../src/features/learning/LearningCalculator";
 import { createEmptyLearningProfile } from "../src/features/learning/LearningStorage";
 import { ReviewScheduler } from "../src/features/learning/ReviewScheduler";
@@ -92,9 +93,9 @@ test("Dashboard apresenta plano, streak e sinais de aprendizagem", async ({ page
 
 test("Tutor recebe perfil adaptativo antes de responder", async ({ page }) => {
   const studyId = await createRealStudy(page);
-  await page.evaluate(async ({ key, id }) => {
+  await page.evaluate(async ({ key, id, version }) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("studyai-db", 4); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result);
+      const request = indexedDB.open("studyai-db", version); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result);
     });
     const nowValue = new Date().toISOString();
     const profile = {
@@ -105,7 +106,7 @@ test("Tutor recebe perfil adaptativo antes de responder", async ({ page }) => {
     };
     await new Promise<void>((resolve, reject) => { const transaction = database.transaction("metadata", "readwrite"); transaction.objectStore("metadata").put({ key, value: profile, updatedAt: nowValue }); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); });
     database.close();
-  }, { key: "learning-profile:v1", id: studyId });
+  }, { key: "learning-profile:v1", id: studyId, version: STORAGE_DATABASE_VERSION });
   let adaptiveContext: { learning?: { classification: string; priority: string } } | undefined;
   await page.route("**/api/tutor", async (route) => {
     adaptiveContext = route.request().postDataJSON().context;
@@ -139,12 +140,12 @@ test("Flashcard registra o agendamento SM-2 no armazenamento", async ({ page }) 
 
 test("Quiz mostra evolução, pontos fortes ou fracos e recomendação", async ({ page }) => {
   const studyId = await createRealStudy(page);
-  await page.evaluate(async ({ id }) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", 4); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
+  await page.evaluate(async ({ id, version }) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", version); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
     const transaction = database.transaction("quizzes", "readwrite");
     transaction.objectStore("quizzes").put({ id: "question-learning", studyId: id, question: "Como vetores armazenam elementos?", alternatives: ["Por índices", "Sem ordem", "Sem posição", "Somente texto"], correctAnswer: 0, explanation: "Usam índices.", difficulty: "easy", createdAt: new Date().toISOString(), kind: "question", _storageOrder: 0 });
     await new Promise<void>((resolve, reject) => { transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); }); database.close();
-  }, { id: studyId });
+  }, { id: studyId, version: STORAGE_DATABASE_VERSION });
   await page.goto(`/estudo?tema=${studyId}&aba=quiz`);
   await page.getByRole("button", { name: /A\. Por índices/ }).click();
   await page.getByRole("button", { name: "Finalizar" }).click();

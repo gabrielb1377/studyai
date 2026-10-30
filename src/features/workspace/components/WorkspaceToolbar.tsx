@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Bot, BrainCircuit, ClipboardCheck, FileText, FlaskConical, Gauge, GraduationCap, LayoutGrid, Network, NotebookPen, Pause, Play, Plus, Save, Sparkles, Square } from "lucide-react";
+import { BookOpen, Bot, BrainCircuit, ClipboardCheck, FileText, FlaskConical, Gauge, GraduationCap, LayoutGrid, Network, NotebookPen, Pause, Play, Plus, Save, ScanText, SearchCheck, Sparkles, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -18,6 +18,8 @@ const tools: Array<{ type: WorkspacePanelType; label: string; icon: typeof BookO
   { type: "flashcards", label: "Flashcards", icon: BrainCircuit },
   { type: "quiz", label: "Quiz", icon: ClipboardCheck },
   { type: "notes", label: "Notas", icon: NotebookPen },
+  { type: "review", label: "Revisão", icon: ScanText },
+  { type: "ai-quality", label: "IA Quality", icon: SearchCheck },
   { type: "lab", label: "Lab", icon: FlaskConical },
   { type: "summaries", label: "Resumos", icon: FileText },
   { type: "dashboard", label: "Dashboard", icon: Gauge },

@@ -8,6 +8,7 @@ export type StudyMaterial = {
   size: number;
   source?: string;
   textContent?: string;
+  fileType?: string;
   chapters?: Array<{
     id: string;
     title: string;

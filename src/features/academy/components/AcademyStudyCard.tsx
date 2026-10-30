@@ -1,4 +1,4 @@
-import { BookOpen, Clock3, GraduationCap, Layers3, Sparkles } from "lucide-react";
+import { BookOpen, Clock3, GraduationCap, Layers3, Mic, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -7,11 +7,12 @@ import { academyLabels, type AcademyStudy } from "../types";
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
-export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfessor, isGenerating }: {
+export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfessor, onOuvirContent, isGenerating }: {
   study: AcademyStudy;
   onGenerate: () => void;
   onOpenContent: () => void;
   onOpenProfessor: () => void;
+  onOuvirContent?: () => void;
   isGenerating: boolean;
 }) {
   return (
@@ -45,6 +46,7 @@ export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfe
           <Button variant="outline" onClick={onGenerate} disabled={isGenerating}><Sparkles />{isGenerating ? "Gerando..." : "Gerar"}</Button>
           {study.contents.length ? <Button onClick={onOpenContent}><BookOpen />Abrir conteúdo</Button> : <Button disabled><BookOpen />Sem conteúdo</Button>}
           {study.contents.length ? <Button className="col-span-2" variant="secondary" onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button> : null}
+          {study.contents.length ? <Button variant="ghost" onClick={onOuvirContent ? onOuvirContent : undefined}><Mic />Ouvir conteúdo</Button> : null}
         </div>
       </CardContent>
     </Card>

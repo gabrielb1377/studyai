@@ -1,15 +1,21 @@
 import { StorageManager } from "@/lib/storage/StorageManager";
 import {
   extractionFileTypes,
+  ocrModes,
   type ExtractedContent,
+  type ExtractedPage,
   type ExtractionMetadata,
   type ExtractionStatus,
   type ExtractionStore,
+  type OcrPipelineInfo,
+  type PageMethod,
+  type PageStatus,
+  type PageQuality,
+  type QualityLevel,
   ingestionStageIds,
 } from "./ExtractionTypes";
 
 export const EXTRACTION_UPDATE_EVENT = "studyai:extraction-updated";
-const EMPTY_STORE: ExtractionStore = { version: 1, records: [] };
 
 function isStatus(value: unknown): value is ExtractionStatus {
   return value === "processing" || value === "extracted" || value === "error";
@@ -29,6 +35,51 @@ function isOptionalBoolean(value: unknown) {
 
 function isOptionalStringList(value: unknown) {
   return value === undefined || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+}
+
+const pageMethods: readonly PageMethod[] = ["native", "ocr", "none"];
+const pageStatuses: readonly PageStatus[] = ["ready", "review", "error"];
+const qualityLevels: readonly QualityLevel[] = ["good", "fair", "poor", "unknown"];
+
+function isPageQuality(value: unknown): value is PageQuality {
+  if (typeof value !== "object" || value === null) return false;
+  const quality = value as Partial<PageQuality>;
+  return qualityLevels.includes(quality.level as QualityLevel) && isOptionalStringList(quality.issues);
+}
+
+function isExtractedPage(value: unknown): value is ExtractedPage {
+  if (typeof value !== "object" || value === null) return false;
+  const page = value as Partial<ExtractedPage>;
+  return typeof page.page === "number" && Number.isInteger(page.page) && page.page > 0 &&
+    pageMethods.includes(page.method as PageMethod) &&
+    pageStatuses.includes(page.status as PageStatus) &&
+    typeof page.text === "string" && typeof page.originalText === "string" &&
+    typeof page.edited === "boolean" && typeof page.needsOcr === "boolean" &&
+    isOptionalString(page.editedAt) && isOptionalNumber(page.confidence) &&
+    isOptionalNumber(page.width) && isOptionalNumber(page.height) &&
+    isOptionalNumber(page.rotation) && isOptionalNumber(page.durationMs) &&
+    isPageQuality(page.quality) && isOptionalStringList(page.warnings) &&
+    Array.isArray(page.tables) && page.tables.every((table) => (
+      typeof table === "object" && table !== null &&
+      typeof table.id === "string" && typeof table.page === "number" &&
+      typeof table.markdown === "string" && typeof table.header === "boolean" &&
+      typeof table.complete === "boolean" && typeof table.columns === "number" &&
+      (table.source === "text" || table.source === "ocr") &&
+      isOptionalStringList(table.warnings) &&
+      Array.isArray(table.rows) && table.rows.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string"))
+    ));
+}
+
+function isPipelineInfo(value: unknown): value is OcrPipelineInfo {
+  if (typeof value !== "object" || value === null) return false;
+  const pipeline = value as Partial<OcrPipelineInfo>;
+  return typeof pipeline.version === "string" && ocrModes.includes(pipeline.mode as typeof ocrModes[number]) &&
+    (pipeline.engine === "tesseract.js" || pipeline.engine === "pdfjs" || pipeline.engine === "none") &&
+    typeof pipeline.pages === "number" && typeof pipeline.nativePages === "number" &&
+    typeof pipeline.ocrPages === "number" && typeof pipeline.failedPages === "number" &&
+    typeof pipeline.reviewedPages === "number" && typeof pipeline.cancelled === "boolean" &&
+    isOptionalStringList(pipeline.warnings) && isOptionalNumber(pipeline.durationMs) &&
+    typeof pipeline.createdAt === "string" && typeof pipeline.updatedAt === "string";
 }
 
 function isMetadata(value: unknown): value is ExtractionMetadata {
@@ -86,21 +137,26 @@ function isExtractedContent(value: unknown): value is ExtractedContent {
     extractionFileTypes.includes(content.fileType as typeof extractionFileTypes[number]) &&
     typeof content.extractedText === "string" && isMetadata(content.metadata) &&
     isStatus(content.status) && typeof content.createdAt === "string" &&
-    (content.error === undefined || typeof content.error === "string") && isPipelineData(content);
-}
-
-function isExtractionStore(value: unknown): value is ExtractionStore {
-  if (typeof value !== "object" || value === null) return false;
-  const store = value as Partial<ExtractionStore>;
-  return store.version === 1 && Array.isArray(store.records) &&
-    store.records.every(isExtractedContent);
+    (content.error === undefined || typeof content.error === "string") && isPipelineData(content) &&
+    (content.pages === undefined || (Array.isArray(content.pages) && content.pages.every(isExtractedPage))) &&
+    (content.pipeline === undefined || isPipelineInfo(content.pipeline));
 }
 
 export const ContentStorage = {
   async load(): Promise<ExtractionStore> {
-    const records = await StorageManager.getAll<unknown>("contents");
-    const store = { version: 1 as const, records };
-    return isExtractionStore(store) ? store : EMPTY_STORE;
+    const stored = await StorageManager.getAll<unknown>("contents");
+    const records: ExtractedContent[] = [];
+    for (const value of stored) {
+      if (isExtractedContent(value)) {
+        records.push(value);
+        continue;
+      }
+      // Preserva registros antigos ou parcialmente corrompidos sem descartar o material.
+      if (typeof value !== "object" || value === null) continue;
+      const fallback = { ...(value as ExtractedContent), pages: undefined, pipeline: undefined };
+      if (isExtractedContent(fallback)) records.push(fallback);
+    }
+    return { version: 1 as const, records };
   },
 
   async save(store: ExtractionStore) {
@@ -120,12 +176,19 @@ export const ContentStorage = {
           updatedAt: new Date().toISOString(),
         });
       }
-      if (record.metadata.ocrPerformed) {
+      if (record.metadata.ocrPerformed || record.pages?.length) {
         await storage.put("ocr", {
           id: `ocr-${record.id}`,
           fileId: record.fileId,
           studyId: record.studyId,
-          text: record.extractedText,
+          pipelineVersion: record.pipeline?.version ?? record.metadata.pipelineVersion,
+          mode: record.pipeline?.mode ?? record.metadata.extractionMode,
+          pages: record.pipeline?.pages ?? record.pages?.length ?? 0,
+          ocrPages: record.pipeline?.ocrPages ?? record.metadata.ocrPages,
+          nativePages: record.pipeline?.nativePages ?? record.metadata.nativePages,
+          failedPages: record.pipeline?.failedPages ?? record.metadata.failedPages,
+          reviewedPages: record.pipeline?.reviewedPages ?? record.metadata.reviewedPages,
+          quality: record.metadata.quality,
           confidence: record.metadata.ocrConfidence,
           updatedAt: new Date().toISOString(),
         });

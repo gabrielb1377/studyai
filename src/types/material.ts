@@ -16,7 +16,7 @@ export const materialFileTypes = [
 export type MaterialFileType = (typeof materialFileTypes)[number];
 export type MaterialCategory = "pdf" | "video" | "audio" | "slides" | "document" | "image";
 export type MaterialStatus = "processing" | "ready" | "error";
-export type AcademyMaterialKind = "free-study" | "learning-path" | "practical-project" | "summary" | "exercise" | "generated-pdf" | "generated-workbook" | "generated-presentation";
+export type AcademyMaterialKind = "free-study" | "learning-path" | "practical-project" | "summary" | "exercise" | "generated-pdf" | "generated-workbook" | "generated-presentation" | "generated-diagram";
 
 export type Material = {
   id: string;
@@ -48,6 +48,7 @@ export type Material = {
   academyStudyId?: string;
   academyContentId?: string;
   academyMaterialKind?: AcademyMaterialKind;
+  academyStudioDocumentId?: string;
   labProjectId?: string;
 };
 
@@ -60,5 +61,6 @@ export type MaterialFilter =
   | "lab"
   | "generated-pdf"
   | "generated-presentation"
+  | "generated-diagram"
   | "practical-project"
   | "learning-path";

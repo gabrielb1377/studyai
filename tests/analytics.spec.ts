@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { AnalyticsEngine } from "../src/features/analytics/AnalyticsEngine";
+import { STORAGE_DATABASE_VERSION } from "../src/lib/storage/StorageVersion";
 import { KnowledgeEngine } from "../src/features/learning/KnowledgeEngine";
 import { createEmptyLearningProfile } from "../src/features/learning/LearningStorage";
 import type { LearningProfile } from "../src/features/learning/types";
@@ -48,8 +49,8 @@ test("Analytics calcula evolução, retenção, heatmap e previsões com dados r
 
 test("Dashboard mostra Analytics e exporta relatórios CSV e PDF", async ({ page }) => {
   const studyId = await createRealStudy(page);
-  await page.evaluate(async ({ id }) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", 4); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
+  await page.evaluate(async ({ id, version }) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open("studyai-db", version); request.onerror = () => reject(request.error); request.onsuccess = () => resolve(request.result); });
     const timestamp = new Date().toISOString();
     const value = {
       id: "local-user", totalStudyMinutes: 45, timeBySubject: { Algoritmos: 45 },
@@ -59,7 +60,7 @@ test("Dashboard mostra Analytics e exporta relatórios CSV e PDF", async ({ page
     };
     await new Promise<void>((resolve, reject) => { const transaction = database.transaction("metadata", "readwrite"); transaction.objectStore("metadata").put({ key: "learning-profile:v1", value, updatedAt: timestamp }); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); });
     database.close();
-  }, { id: studyId });
+  }, { id: studyId, version: STORAGE_DATABASE_VERSION });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Analytics de aprendizagem" })).toBeVisible();
   await expect(page.getByText("Evolução semanal", { exact: true })).toBeVisible();

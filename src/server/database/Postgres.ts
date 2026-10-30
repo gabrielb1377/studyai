@@ -1,10 +1,7 @@
 import "server-only";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 let pool: Pool | undefined;
-let initialized: Promise<void> | undefined;
 
 export function hasPostgres(options: { allowMissing?: boolean } = {}) {
   const configured = Boolean(process.env.DATABASE_URL?.trim());
@@ -16,27 +13,24 @@ export function hasPostgres(options: { allowMissing?: boolean } = {}) {
 
 export function postgresPool() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não foi configurada.");
+  const caCert = process.env.DATABASE_CA_CERT?.trim();
+  const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+
   pool ??= new Pool({
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
     ssl: process.env.DATABASE_SSL === "false"
       ? false
-      : process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
+      : process.env.NODE_ENV === "production" || process.env.DATABASE_SSL === "true" || caCert
+        ? {
+            rejectUnauthorized,
+            ...(caCert ? { ca: caCert } : {}),
+          }
         : undefined,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
   });
   return pool;
-}
-
-export async function initializePostgres() {
-  if (!hasPostgres()) return;
-  initialized ??= readFile(path.join(process.cwd(), "src/server/database/schema.sql"), "utf8")
-    .then((sql) => postgresPool().query(sql))
-    .then(() => undefined)
-    .catch((error) => { initialized = undefined; throw error; });
-  await initialized;
 }
 
 export async function postgresHealth() {
@@ -57,6 +51,17 @@ export async function postgresHealth() {
       latencyMs: Math.round(performance.now() - startedAt),
     };
   } catch (error) {
+    const classification = classifyPostgresError(error);
+    const urlInspection = inspectDatabaseUrl();
+    console.error("[PostgreSQL Health Failure]", {
+      category: classification.category,
+      code: classification.code,
+      name: classification.name,
+      message: classification.messageSummary,
+      urlInspection,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       available: false,
       configured: true,
@@ -68,13 +73,139 @@ export async function postgresHealth() {
   }
 }
 
+
+
+function inspectDatabaseUrl() {
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl) {
+    return { configured: false };
+  }
+
+  const hasWhitespace = /\s/.test(rawUrl);
+  const hasLeadingOrTrailingWhitespace = rawUrl !== rawUrl.trim();
+  let isValidSyntax = false;
+  let protocol: string | undefined;
+  let port: string | undefined;
+  let endsWithSupabasePooler = false;
+  let isHostnameBase = false;
+  let sslmode: string | null = null;
+  let hasSslRootCert = false;
+  let hasSslCert = false;
+  let hasSslKey = false;
+
+  try {
+    const parsed = new URL(rawUrl.trim());
+    isValidSyntax = true;
+    protocol = parsed.protocol;
+    port = parsed.port || (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:" ? "5432" : "");
+    endsWithSupabasePooler = parsed.hostname.endsWith(".pooler.supabase.com");
+    isHostnameBase = parsed.hostname.toLowerCase() === "base";
+    sslmode = parsed.searchParams.get("sslmode");
+    hasSslRootCert = parsed.searchParams.has("sslrootcert");
+    hasSslCert = parsed.searchParams.has("sslcert");
+    hasSslKey = parsed.searchParams.has("sslkey");
+  } catch {
+    isValidSyntax = false;
+  }
+
+  return {
+    configured: true,
+    isValidSyntax,
+    protocol,
+    port,
+    endsWithSupabasePooler,
+    isHostnameBase,
+    hasWhitespace,
+    hasLeadingOrTrailingWhitespace,
+    sslmode,
+    hasSslRootCert,
+    hasSslCert,
+    hasSslKey,
+    hasCaCertEnv: Boolean(process.env.DATABASE_CA_CERT?.trim()),
+  };
+}
+
+function classifyPostgresError(error: unknown): {
+  category: string;
+  code?: string;
+  name?: string;
+  messageSummary: string;
+} {
+  if (!(error instanceof Error)) {
+    return {
+      category: "unknown",
+      messageSummary: String(error ?? "Unknown error"),
+    };
+  }
+
+  const err = error as Error & { code?: string; errno?: string | number; syscall?: string };
+  const code = err.code ?? (err.errno ? String(err.errno) : undefined);
+  const name = err.name;
+  const message = err.message.toLowerCase();
+
+  const sanitizedMessage = err.message
+    .replace(/postgres:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/postgresql:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/password=[^\s&]+/gi, "password=[REDACTED]")
+    .replace(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, "[IP]");
+
+  let category = "connection";
+
+  if (
+    code === "ENOTFOUND" ||
+    code === "EAI_AGAIN" ||
+    message.includes("enotfound") ||
+    message.includes("getaddrinfo")
+  ) {
+    category = "dns";
+  } else if (
+    code === "28P01" ||
+    code === "28000" ||
+    message.includes("password authentication failed") ||
+    message.includes("auth")
+  ) {
+    category = "authentication";
+  } else if (
+    code === "3D000" ||
+    (message.includes("database") && message.includes("does not exist"))
+  ) {
+    category = "database_not_found";
+  } else if (
+    code === "ETIMEDOUT" ||
+    message.includes("timeout") ||
+    message.includes("timed out")
+  ) {
+    category = "timeout";
+  } else if (
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    message.includes("connection refused") ||
+    message.includes("reset")
+  ) {
+    category = "connection_refused_or_reset";
+  } else if (
+    message.includes("ssl") ||
+    message.includes("tls") ||
+    message.includes("certificate") ||
+    message.includes("self signed") ||
+    name.includes("TLSSocket")
+  ) {
+    category = "tls_ssl";
+  }
+
+  return {
+    category,
+    ...(code ? { code } : {}),
+    ...(name ? { name } : {}),
+    messageSummary: sanitizedMessage.length > 200 ? sanitizedMessage.slice(0, 200) + "..." : sanitizedMessage,
+  };
+}
+
 export async function query<T extends QueryResultRow>(text: string, values: unknown[] = []) {
-  await initializePostgres();
   return postgresPool().query<T>(text, values);
 }
 
 export async function transaction<T>(operation: (client: PoolClient) => Promise<T>) {
-  await initializePostgres();
   const client = await postgresPool().connect();
   try {
     await client.query("BEGIN");

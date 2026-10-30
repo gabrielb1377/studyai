@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BetaReadinessPanel } from "@/features/release/BetaReadinessPanel";
 
 const AISettingsPanel = dynamic(() => import("./ai-settings-panel").then((module) => module.AISettingsPanel), { loading: () => <SettingsLoading /> });
+const ApiKeySettings = dynamic(() => import("./api-key-settings").then((module) => module.ApiKeySettings), { loading: () => <SettingsLoading /> });
 const PlatformSettings = dynamic(() => import("./platform-settings").then((module) => module.PlatformSettings), { loading: () => <SettingsLoading /> });
 
 const categories = [
@@ -51,7 +52,7 @@ export function SettingsHub() {
       </nav>
       <div className="min-w-0 space-y-5">
         {category === "interface" && <><ExperienceSettings /><AppearanceSettings /></>}
-        {category === "ai" && <AISettingsPanel advanced={experience.mode === "advanced"} />}
+        {category === "ai" && <><AISettingsPanel advanced={experience.mode === "advanced"} /><ApiKeySettings /></>}
         {platformSection && <PlatformSettings section={platformSection} />}
         {category === "account" && <SettingsLinkCard icon={UserRound} title="Conta e perfil" description="Nome, email, idioma, dispositivos e sessão." action="Abrir Conta" />}
         {category === "cloud" && <SettingsLinkCard icon={Cloud} title="Cloud Sync" description="Sincronização, backups, conflitos e compartilhamentos." action="Gerenciar sincronização" />}

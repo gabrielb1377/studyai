@@ -5,6 +5,8 @@ import type {
   ExtractionMetadata,
   ExtractionResult,
 } from "./ExtractionTypes";
+import { pagesFromSections } from "../ocr/structure";
+import { inspectPdf } from "../ocr/pdf";
 
 function baseMetadata(file: File): ExtractionMetadata {
   const now = new Date().toISOString();
@@ -118,39 +120,26 @@ async function loadZip(file: File) {
 }
 
 async function extractPdf(file: File): Promise<ExtractionResult> {
-  const { pdfjs } = await import("react-pdf");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-  const documentProxy = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const inspection = await inspectPdf(file);
   const sections: DocumentSection[] = [];
-  let documentTitle: string | undefined;
-
-  try {
-    const documentMetadata = await documentProxy.getMetadata().catch(() => null);
-    const info = documentMetadata?.info as { Title?: string } | undefined;
-    documentTitle = info?.Title?.trim() || undefined;
-    if (documentTitle) sections.push({ type: "title", text: documentTitle });
-
-    for (let pageNumber = 1; pageNumber <= documentProxy.numPages; pageNumber += 1) {
-      const page = await documentProxy.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const text = content.items.map((item) => "str" in item ? item.str : "").filter(Boolean).join(" ").trim();
-      if (text) sections.push({ type: "paragraph", text, page: pageNumber });
-    }
-
-    const extractedText = sectionsToText(sections);
-    return {
-      extractedText,
-      sections,
-      metadata: {
-        ...baseMetadata(file),
-        title: documentTitle,
-        pageCount: documentProxy.numPages,
-        hasTextLayer: extractedText.trim().length > 0,
-      },
-    };
-  } finally {
-    await documentProxy.destroy();
+  const documentTitle = inspection.title;
+  if (documentTitle) sections.push({ type: "title", text: documentTitle });
+  for (const page of inspection.pages) {
+    if (page.text) sections.push({ type: "paragraph", text: page.text, page: page.page });
   }
+
+  const extractedText = sectionsToText(sections);
+  return {
+    extractedText,
+    sections,
+    pages: pagesFromSections(sections),
+    metadata: {
+      ...baseMetadata(file),
+      title: documentTitle,
+      pageCount: inspection.numPages,
+      hasTextLayer: extractedText.trim().length > 0,
+    },
+  };
 }
 
 async function extractDocx(file: File): Promise<ExtractionResult> {
@@ -170,7 +159,7 @@ async function extractDocx(file: File): Promise<ExtractionResult> {
       sections.push(...parseDocumentXml(await entry.async("string"), definition.type));
     }
   }
-  return { extractedText: sectionsToText(sections), sections, metadata: baseMetadata(file) };
+  return { extractedText: sectionsToText(sections), sections, pages: pagesFromSections(sections), metadata: baseMetadata(file) };
 }
 
 async function extractPptx(file: File): Promise<ExtractionResult> {
@@ -203,6 +192,7 @@ async function extractPptx(file: File): Promise<ExtractionResult> {
   return {
     extractedText: sectionsToText(sections),
     sections,
+    pages: pagesFromSections(sections, { slideMode: true }),
     metadata: { ...baseMetadata(file), pageCount: slideEntries.length },
   };
 }
@@ -228,9 +218,11 @@ async function extractTxt(file: File): Promise<ExtractionResult> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { encoding, offset } = detectTextEncoding(bytes);
   const extractedText = new TextDecoder(encoding).decode(bytes.slice(offset));
+  const sections = extractedText.split(/\n{2,}/).filter(Boolean).map((text) => ({ type: "paragraph" as const, text }));
   return {
     extractedText,
-    sections: extractedText.split(/\n{2,}/).filter(Boolean).map((text) => ({ type: "paragraph", text })),
+    sections,
+    pages: pagesFromSections(sections),
     metadata: { ...baseMetadata(file), encoding },
   };
 }

@@ -11,6 +11,8 @@ const panelTitles: Record<WorkspacePanelType, string> = {
   lab: "Laboratório",
   knowledge: "Mapa de Conhecimento",
   dashboard: "Dashboard do tema",
+  review: "Revisão de extração",
+  "ai-quality": "AI Quality Lab",
 };
 
 export const WorkspaceState = {

@@ -103,8 +103,12 @@ export const ContextBuilder = {
     let usedCharacters = 0;
 
     for (const chunk of chunks) {
+      const { pageStart, pageEnd } = chunk.metadata;
+      const pageLabel = pageStart
+        ? pageEnd && pageEnd !== pageStart ? `páginas ${pageStart}–${pageEnd}` : `p. ${pageStart}`
+        : "";
       const section = [
-        `[Fonte: ${chunk.metadata.sourceName} | trecho ${chunk.chunkIndex + 1} | relevância ${chunk.score}]`,
+        `[Fonte: ${chunk.metadata.sourceName}${pageLabel ? ` | ${pageLabel}` : ""} | trecho ${chunk.chunkIndex + 1} | relevância ${chunk.score}]`,
         chunk.text,
       ].join("\n");
       const separatorLength = sections.length > 0 ? 2 : 0;

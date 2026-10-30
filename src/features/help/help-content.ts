@@ -2,6 +2,42 @@ import { BookOpen, Bot, Brain, Cloud, Cpu, FileQuestion, FolderOpen, Library, Me
 
 export const helpTopics = [
   {
+    id: "conta",
+    title: "Criar conta e entrar",
+    description: "Acesse sua conta para sincronizar seus estudos.",
+    keywords: ["cadastro", "login", "senha", "recuperação"],
+    icon: Cloud,
+    href: "/conta",
+    steps: ["Abra Conta e escolha criar uma conta ou entrar.", "Informe seu nome, email e uma senha com pelo menos 10 caracteres, uma letra e um número.", "Se esqueceu a senha, solicite a recuperação pelo email cadastrado.", "Para sincronizar, entre na mesma conta em cada dispositivo."],
+  },
+  {
+    id: "ia-cloud",
+    title: "Configurar Gemini, Groq ou OpenRouter",
+    description: "Cadastre sua chave e selecione o provedor e o modelo.",
+    keywords: ["ia", "gemini", "groq", "openrouter", "chave", "modelo"],
+    icon: Cpu,
+    href: "/configuracoes",
+    steps: ["Abra Configurações e entre em IA.", "Cadastre a chave do provedor escolhido na seção de chaves pessoais.", "Atualize o status, selecione o provedor e escolha um modelo disponível.", "Se a conexão ou o modelo falhar, confira a chave e tente outro modelo."],
+  },
+  {
+    id: "semana-de-prova",
+    title: "Preparar a Semana de Prova",
+    description: "Organize a preparação e acompanhe seus estudos.",
+    keywords: ["semana", "prova", "plano", "simulado"],
+    icon: FileQuestion,
+    href: "/provas",
+    steps: ["Abra Semana de Prova e crie uma prova com data, matéria e assuntos.", "Confira o plano sugerido e marque os assuntos concluídos.", "Use Continuar Estudando para abrir o Workspace."],
+  },
+  {
+    id: "problemas",
+    title: "Resolver problemas comuns",
+    description: "Confira conexão, sincronização e configuração de IA.",
+    keywords: ["erro", "problema", "offline", "indisponível", "sincronização"],
+    icon: MessageCircleQuestion,
+    href: "/configuracoes",
+    steps: ["Confira se há conexão com a internet e se você entrou na conta correta.", "Em Configurações de IA, teste o provedor e confira a chave e o modelo.", "Se a sincronização estiver pendente, aguarde a reconexão e confira a página Conta.", "Se o problema continuar, use Reportar problema na Central de Ajuda."],
+  },
+  {
     id: "importar",
     title: "Como importar materiais",
     description: "Adicione um arquivo ou uma pasta e acompanhe o processamento.",

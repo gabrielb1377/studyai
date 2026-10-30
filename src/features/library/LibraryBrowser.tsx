@@ -21,7 +21,7 @@ import { useQuiz } from "@/features/quiz/useQuiz";
 import { useSummaries } from "@/features/summaries/hooks/useSummaries";
 
 export type LibraryView = "grid" | "list" | "compact";
-type SmartFilter = "none" | "most-studied" | "least-studied" | "never-reviewed" | "today" | "recent" | "ocr" | "transcription" | "no-summary" | "no-quiz" | "no-flashcards";
+type SmartFilter = "none" | "most-studied" | "least-studied" | "never-reviewed" | "today" | "recent" | "ocr" | "pending-review" | "transcription" | "no-summary" | "no-quiz" | "no-flashcards";
 
 const libraryViews = [
   { value: "grid", label: "Grade", icon: Grid2X2 },
@@ -57,6 +57,7 @@ export function LibraryBrowser() {
     if (smartFilter === "today") return base.filter((material) => new Date(material.importedAt).toDateString() === new Date().toDateString());
     if (smartFilter === "recent") return base.filter((material) => Date.now() - new Date(material.updatedAt).getTime() <= 7 * 86_400_000).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     if (smartFilter === "ocr") return base.filter((material) => extractedContents.some((content) => content.fileId === material.fileId && content.metadata.ocrPerformed));
+    if (smartFilter === "pending-review") return base.filter((material) => extractedContents.some((content) => content.fileId === material.fileId && content.pages?.some((page) => page.status === "review" || page.status === "error")));
     if (smartFilter === "transcription") return base.filter((material) => extractedContents.some((content) => content.fileId === material.fileId && content.metadata.transcriptionPerformed));
     if (smartFilter === "no-summary") return base.filter((material) => !summaries.some((summary) => summary.studyId === material.studyId));
     if (smartFilter === "no-quiz") return base.filter((material) => !quizQuestions.some((question) => question.studyId === material.studyId));
@@ -184,7 +185,7 @@ export function LibraryBrowser() {
             {item.label}
           </Button>
         ))}
-        <label className="ml-auto flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground">Filtro inteligente<select aria-label="Filtro inteligente" value={smartFilter} onChange={(event) => setSmartFilter(event.target.value as SmartFilter)} className="max-w-44 bg-transparent text-foreground outline-none"><option value="none">Nenhum</option><option value="most-studied">Mais estudados</option><option value="least-studied">Menos estudados</option><option value="never-reviewed">Nunca revisados</option><option value="today">Importados hoje</option><option value="recent">Recentes</option><option value="ocr">Com OCR</option><option value="transcription">Com transcrição</option><option value="no-summary">Sem resumo</option><option value="no-quiz">Sem quiz</option><option value="no-flashcards">Sem flashcards</option></select></label>
+        <label className="ml-auto flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground">Filtro inteligente<select aria-label="Filtro inteligente" value={smartFilter} onChange={(event) => setSmartFilter(event.target.value as SmartFilter)} className="max-w-44 bg-transparent text-foreground outline-none"><option value="none">Nenhum</option><option value="most-studied">Mais estudados</option><option value="least-studied">Menos estudados</option><option value="never-reviewed">Nunca revisados</option><option value="today">Importados hoje</option><option value="recent">Recentes</option><option value="ocr">Com OCR</option><option value="pending-review">Com revisão pendente</option><option value="transcription">Com transcrição</option><option value="no-summary">Sem resumo</option><option value="no-quiz">Sem quiz</option><option value="no-flashcards">Sem flashcards</option></select></label>
       </div>
       <section aria-labelledby="materials-heading" className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-6">

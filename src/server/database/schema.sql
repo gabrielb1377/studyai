@@ -203,6 +203,37 @@ CREATE TABLE IF NOT EXISTS collaboration_activity (
 );
 CREATE INDEX IF NOT EXISTS collaboration_activity_room ON collaboration_activity(room_id,created_at DESC);
 
+CREATE TABLE IF NOT EXISTS user_api_keys (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  encrypted_key TEXT NOT NULL,
+  key_hint TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, provider)
+);
+
+CREATE TABLE IF NOT EXISTS usage_quotas (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  minute_bucket INT NOT NULL DEFAULT 0,
+  requests_count BIGINT NOT NULL DEFAULT 0,
+  tokens_count BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, date, minute_bucket)
+);
+CREATE INDEX IF NOT EXISTS usage_quotas_user_date ON usage_quotas(user_id, date);
+CREATE INDEX IF NOT EXISTS usage_quotas_user_minute ON usage_quotas(user_id, minute_bucket);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT NOT NULL,
+  window_bucket BIGINT NOT NULL,
+  count BIGINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (key, window_bucket)
+);
+CREATE INDEX IF NOT EXISTS rate_limits_bucket ON rate_limits(window_bucket);
+
 CREATE TABLE IF NOT EXISTS collaboration_progress (
   room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
   resource_id TEXT NOT NULL REFERENCES room_resources(id) ON DELETE CASCADE,

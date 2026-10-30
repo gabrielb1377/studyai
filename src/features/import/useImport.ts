@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
+import { OCRService } from "@/features/extraction/OCRService";
+import type { OcrMode } from "@/features/extraction/ExtractionTypes";
 import { OrganizationService } from "@/features/organization/OrganizationService";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
@@ -23,6 +25,14 @@ export function useImport() {
   const [phase, setPhase] = useState<ImportPhase>("idle");
   const [feedback, setFeedback] = useState("");
   const [duplicateConflicts, setDuplicateConflicts] = useState<DuplicateConflict[]>([]);
+  const [ocrMode, setOcrMode] = useState<OcrMode>("auto");
+  const abortRef = useRef<AbortController | null>(null);
+
+  function cancelImport() {
+    abortRef.current?.abort();
+    void OCRService.cancel();
+    setFeedback("Cancelando o processamento. As páginas já concluídas serão preservadas.");
+  }
 
   async function addFiles(incoming: File[]): Promise<AddFilesResult> {
     const unsupported = incoming.filter((file) => !isSupportedFile(file));
@@ -157,6 +167,8 @@ export function useImport() {
 
     setFeedback("");
     setPhase("processing");
+    const controller = new AbortController();
+    abortRef.current = controller;
     const pendingFiles = files.filter(
       (file) => file.status === "uploaded" || file.status === "error",
     );
@@ -193,7 +205,9 @@ export function useImport() {
     );
 
     const results = await ExtractionPipeline.run(extractionInputs, {
-      onProgress: ({ fileId, status, progress, stage, message, errorDetails }) => {
+      ocrMode,
+      signal: controller.signal,
+      onProgress: ({ fileId, status, progress, stage, message, errorDetails, cancelled }) => {
         void MaterialService.update(fileId, {
           progress,
           status: status === "extracted" ? "ready" : status,
@@ -204,13 +218,14 @@ export function useImport() {
               status: status === "extracted" ? "complete" : status,
               progress,
               stage,
-              message,
+              message: cancelled ? "Cancelado; conteúdo parcial preservado." : message,
               errorDetails,
             }
           : file,
         ));
       },
     });
+    abortRef.current = null;
     for (const result of results) {
       if (result.status === "error") {
         await MaterialService.update(result.fileId, {
@@ -227,6 +242,12 @@ export function useImport() {
       }
     }
     setPhase("complete");
+    if (controller.signal.aborted) {
+      setFiles((current) => current.map((file) => file.status === "processing"
+        ? { ...file, status: "uploaded", progress: 0, message: "Cancelado antes do processamento." }
+        : file));
+      setFeedback("Importação cancelada. Os arquivos e páginas já concluídos foram preservados.");
+    }
   }
 
   const overallProgress = useMemo(
@@ -250,5 +271,8 @@ export function useImport() {
     removeFile,
     importFiles,
     resolveDuplicates,
+    ocrMode,
+    setOcrMode,
+    cancelImport,
   };
 }

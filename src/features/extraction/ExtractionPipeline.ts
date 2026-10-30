@@ -14,6 +14,7 @@ import {
 import { MediaExtractionPipeline } from "./MediaExtractionPipeline";
 import { TextNormalizationService } from "./TextNormalizationService";
 import { KnowledgeService } from "@/features/semantic/KnowledgeService";
+import { pagesToText, sectionsFromPages } from "../ocr/structure";
 import type {
   ExtractedContent,
   ExtractionFileType,
@@ -21,10 +22,13 @@ import type {
   ExtractionProgress,
   IngestionStageId,
   IngestionStageStatus,
+  OcrMode,
 } from "./ExtractionTypes";
 
 type PipelineOptions = {
   onProgress?: (progress: ExtractionProgress) => void;
+  ocrMode?: OcrMode;
+  signal?: AbortSignal;
 };
 
 function createRecord(
@@ -76,6 +80,7 @@ export const ExtractionPipeline = {
     const results: ExtractedContent[] = [];
 
     for (const input of inputs) {
+      if (options.signal?.aborted) break;
       const studyId = input.studyId;
       const fileType = input.file.name.split(".").pop()?.toLowerCase() as ExtractionFileType;
       let currentStage: IngestionStageId = "extraction";
@@ -93,11 +98,22 @@ export const ExtractionPipeline = {
 
       try {
         const extraction = await MediaExtractionPipeline.extract(input.file, fileType, {
+          ocrMode: options.ocrMode,
+          signal: options.signal,
           onProgress: (progress) => options.onProgress?.({
             fileId: input.id,
             status: "processing",
             progress: Math.min(65, Math.max(10, Math.round(progress * 0.6))),
             stage: currentStage,
+          }),
+          onPage: (page, pages) => options.onProgress?.({
+            fileId: input.id,
+            status: "processing",
+            progress: Math.min(65, Math.max(10, Math.round(15 + (page / Math.max(1, pages)) * 50))),
+            stage: "ocr",
+            page,
+            pages,
+            message: `Processando página ${page} de ${pages}.`,
           }),
           onStage: async (stage, status, message) => {
             currentStage = stage;
@@ -108,10 +124,22 @@ export const ExtractionPipeline = {
         currentStage = "normalization";
         record = await setStage(record, "normalization", "processing", "Corrigindo Unicode, espaços e quebras de linha.");
         const normalizedText = TextNormalizationService.normalize(extraction.extractedText);
-        const normalizedSections = extraction.sections?.map((section) => ({
-          ...section,
-          text: TextNormalizationService.normalize(section.text),
-        })).filter((section) => section.text.length > 0);
+        const normalizedPages = extraction.pages?.length
+          ? extraction.pages.map((page) => ({
+              ...page,
+              text: TextNormalizationService.normalize(page.text),
+              originalText: TextNormalizationService.normalize(page.originalText),
+            }))
+          : undefined;
+        const normalizedSections = normalizedPages?.length
+          ? sectionsFromPages(normalizedPages, {
+              slideMode: fileType === "pptx",
+              fallbackTitle: extraction.metadata.title,
+            })
+          : extraction.sections?.map((section) => ({
+              ...section,
+              text: TextNormalizationService.normalize(section.text),
+            })).filter((section) => section.text.length > 0);
         record = await setStage(record, "normalization", "completed", "Texto normalizado antes da indexação.");
         options.onProgress?.({ fileId: input.id, status: "processing", progress: 70, stage: "normalization" });
 
@@ -121,8 +149,9 @@ export const ExtractionPipeline = {
         record = {
           ...record,
           ...extraction,
-          extractedText: normalizedText,
+          extractedText: normalizedPages ? pagesToText(normalizedPages) : normalizedText,
           sections: normalizedSections,
+          pages: normalizedPages ?? record.pages,
           metadata: extraction.metadata,
           status: "extracted",
         };
@@ -204,7 +233,10 @@ export const ExtractionPipeline = {
           status: "extracted",
           progress: 100,
           stage: "indexed",
-          message: record.errorDetails ? "Extraído com aviso de indexação." : "Pipeline concluído.",
+          cancelled: record.pipeline?.cancelled,
+          message: record.pipeline?.cancelled
+            ? "Processamento cancelado; o conteúdo concluído foi preservado."
+            : record.errorDetails ? "Extraído com aviso de indexação." : "Pipeline concluído.",
           errorDetails: record.errorDetails,
         });
         results.push(record);

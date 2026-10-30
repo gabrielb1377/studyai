@@ -75,6 +75,66 @@ export type DocumentSection = {
   level?: number;
   page?: number;
   slide?: number;
+  tableId?: string;
+};
+
+export const ocrModes = ["auto", "native", "force"] as const;
+export type OcrMode = (typeof ocrModes)[number];
+
+export type PageMethod = "native" | "ocr" | "none";
+export type PageStatus = "ready" | "review" | "error";
+export type QualityLevel = "good" | "fair" | "poor" | "unknown";
+
+export type PageQuality = {
+  level: QualityLevel;
+  issues: string[];
+};
+
+export type ExtractedTable = {
+  id: string;
+  page: number;
+  markdown: string;
+  header: boolean;
+  complete: boolean;
+  source: "text" | "ocr";
+  warnings: string[];
+  rows: string[][];
+  columns: number;
+};
+
+export type ExtractedPage = {
+  page: number;
+  method: PageMethod;
+  status: PageStatus;
+  text: string;
+  originalText: string;
+  edited: boolean;
+  editedAt?: string;
+  needsOcr: boolean;
+  confidence?: number;
+  quality: PageQuality;
+  tables: ExtractedTable[];
+  warnings: string[];
+  width?: number;
+  height?: number;
+  rotation?: number;
+  durationMs?: number;
+};
+
+export type OcrPipelineInfo = {
+  version: string;
+  mode: OcrMode;
+  engine: "tesseract.js" | "pdfjs" | "none";
+  pages: number;
+  nativePages: number;
+  ocrPages: number;
+  failedPages: number;
+  reviewedPages: number;
+  cancelled: boolean;
+  durationMs?: number;
+  warnings: string[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type TranscriptionSegment = {
@@ -116,6 +176,14 @@ export type ExtractionMetadata = {
   hasTextLayer?: boolean;
   ocrPerformed?: boolean;
   ocrConfidence?: number;
+  extractionMode?: OcrMode;
+  pipelineVersion?: string;
+  ocrPages?: number;
+  nativePages?: number;
+  failedPages?: number;
+  reviewedPages?: number;
+  hasScannedPages?: boolean;
+  quality?: QualityLevel;
   transcriptionPerformed?: boolean;
   transcriptionModel?: string;
   transcriptionConfidence?: number;
@@ -131,6 +199,8 @@ export type ExtractedContent = {
   fileType: ExtractionFileType;
   extractedText: string;
   sections?: DocumentSection[];
+  pages?: ExtractedPage[];
+  pipeline?: OcrPipelineInfo;
   transcription?: {
     segments: TranscriptionSegment[];
     chapters: MediaChapter[];
@@ -146,7 +216,7 @@ export type ExtractedContent = {
 
 export type ExtractionResult = Pick<
   ExtractedContent,
-  "extractedText" | "metadata" | "sections" | "transcription"
+  "extractedText" | "metadata" | "sections" | "transcription" | "pages" | "pipeline"
 >;
 
 export type ExtractionStore = {
@@ -166,5 +236,8 @@ export type ExtractionProgress = {
   progress: number;
   stage?: IngestionStageId;
   message?: string;
+  page?: number;
+  pages?: number;
+  cancelled?: boolean;
   errorDetails?: ExtractionErrorDetails;
 };

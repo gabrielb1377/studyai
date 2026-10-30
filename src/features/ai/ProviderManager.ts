@@ -60,7 +60,7 @@ function statistics(): AIProviderStatistics {
 export const ProviderManager = {
   async generate(request: AIManagerRequest): Promise<AIResponse> {
     const preferred = request.provider ?? "gemini";
-    const candidates: AIProviderId[] = request.mode === "automatic"
+    const candidates: AIProviderId[] = request.mode === "automatic" && !request.model && !request.models?.[preferred]
       ? await automaticOrder(request.signal)
       : [preferred];
     const attemptedProviders: AIProviderId[] = [];
@@ -71,9 +71,9 @@ export const ProviderManager = {
       const provider = ProviderRegistry.get(providerId);
       const fallback = attemptedProviders.length > 0;
       attemptedProviders.push(providerId);
-      const selectedModel = request.models?.[providerId] ?? (providerId === preferred ? request.model : undefined);
+      const selectedModel = (providerId === preferred ? request.model : undefined) ?? request.models?.[providerId];
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
-      const cached = AIResponseCache.get(cacheKey);
+      const cached = selectedModel ? null : AIResponseCache.get(cacheKey);
       if (cached) {
         return {
           ...cached,
@@ -88,6 +88,7 @@ export const ProviderManager = {
       const measured = await LatencyService.measure(() => provider.generate({
         ...request,
         model: selectedModel,
+        apiKey: request.apiKeys?.[providerId] ?? request.apiKey,
       }));
 
       if (!("error" in measured)) {
@@ -135,7 +136,7 @@ export const ProviderManager = {
 
   async *stream(request: AIManagerRequest): AsyncGenerator<AIStreamEvent> {
     const preferred = request.provider ?? "gemini";
-    const candidates: AIProviderId[] = request.mode === "automatic"
+    const candidates: AIProviderId[] = request.mode === "automatic" && !request.model && !request.models?.[preferred]
       ? await automaticOrder(request.signal)
       : [preferred];
     const attemptedProviders: AIProviderId[] = [];
@@ -145,9 +146,9 @@ export const ProviderManager = {
       const provider = ProviderRegistry.get(providerId);
       const fallback = attemptedProviders.length > 0;
       attemptedProviders.push(providerId);
-      const selectedModel = request.models?.[providerId] ?? (providerId === preferred ? request.model : undefined);
+      const selectedModel = (providerId === preferred ? request.model : undefined) ?? request.models?.[providerId];
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
-      const cached = AIResponseCache.get(cacheKey);
+      const cached = selectedModel ? null : AIResponseCache.get(cacheKey);
       if (cached) {
         for (const line of cached.text.match(/.{1,80}(?:\s|$)/g) ?? [cached.text]) {
           yield { type: "delta", text: line };
@@ -166,7 +167,7 @@ export const ProviderManager = {
       let emitted = false;
       try {
         if (provider.stream) {
-          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true })) {
+          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey })) {
             if (event.type === "delta") {
               emitted = true;
               yield event;
@@ -184,7 +185,7 @@ export const ProviderManager = {
             return;
           }
         } else {
-          const response = await provider.generate({ ...request, model: selectedModel, stream: false });
+          const response = await provider.generate({ ...request, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey });
           for (const line of response.text.match(/.{1,80}(?:\s|$)/g) ?? [response.text]) {
             emitted = true;
             yield { type: "delta", text: line };
@@ -208,11 +209,11 @@ export const ProviderManager = {
     throw lastError ?? new AIError("Nenhum provider de IA está disponível.", "PROVIDER_UNAVAILABLE", 503, preferred);
   },
 
-  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
+  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal; apiKey?: string }) {
     return HealthService.check(providerId, options);
   },
 
-  async status(options?: { force?: boolean; signal?: AbortSignal }): Promise<AIManagerStatus> {
+  async status(options?: { force?: boolean; signal?: AbortSignal; apiKeys?: Partial<Record<AIProviderId, string>> }): Promise<AIManagerStatus> {
     const statuses = await HealthService.checkAll(options);
     return {
       providers: statuses.map((status) => {

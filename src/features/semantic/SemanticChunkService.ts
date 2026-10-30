@@ -35,6 +35,7 @@ export const SemanticChunkService = {
       const namedConcepts = concepts.filter((concept) => conceptIds.includes(concept.id));
       const header = namedConcepts.length > 0 ? `Conceitos: ${namedConcepts.map((concept) => concept.name).join(", ")}` : "";
       const text = [header, ...group.map((block) => block.text)].filter(Boolean).join("\n\n");
+      const pages = group.map((block) => block.page).filter((page): page is number => typeof page === "number");
       return {
         id: semanticId("semantic-chunk", content.id, String(chunkIndex), text.slice(0, 180)),
         studyId: content.studyId,
@@ -59,6 +60,7 @@ export const SemanticChunkService = {
           relationIds: relationIdsFor(conceptIds, relations),
           chapter: group.find((block) => block.chapter)?.chapter,
           section: group.find((block) => block.section)?.section,
+          ...(pages.length > 0 ? { pageStart: Math.min(...pages), pageEnd: Math.max(...pages) } : {}),
         },
       } satisfies SemanticChunk;
     });

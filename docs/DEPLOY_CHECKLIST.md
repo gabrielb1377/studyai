@@ -6,7 +6,8 @@ Use este roteiro depois de cada implantação de produção. Registre data, vers
 
 - [ ] A URL pública abre por HTTPS sem aviso de certificado.
 - [ ] `APP_URL`, `NEXT_PUBLIC_APP_URL` e domínio correspondem à URL pública.
-- [ ] `/api/health` responde `200` e `status: ok`.
+- [ ] `/api/health/live` responde `200` e `check: "liveness"` (sem DB/S3).
+- [ ] `/api/health` responde `200` e `status: ok` (readiness com DB/schema/S3).
 - [ ] PostgreSQL aparece conectado e `schemaReady` é verdadeiro.
 - [ ] Object Storage aparece disponível em modo `s3`.
 - [ ] `npm run db:migrate` foi executado com sucesso.
@@ -89,7 +90,7 @@ Use este roteiro depois de cada implantação de produção. Registre data, vers
 - [ ] PostgreSQL foi adicionado e ligado por `DATABASE_URL`.
 - [ ] Bucket S3 foi criado/conectado.
 - [ ] Variáveis foram configuradas no ambiente Production.
-- [ ] Health check usa `/api/health`.
+- [ ] Healthcheck de reinício usa `/api/health/live`; readiness/monitoramento usa `/api/health`.
 - [ ] Deploy automático foi testado uma vez.
 - [ ] URL pública foi testada no celular.
 - [ ] Domínio customizado e DNS foram configurados, se utilizados.
