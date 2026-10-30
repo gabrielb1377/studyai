@@ -51,15 +51,15 @@ export function HelpCenter() {
         <span className="hidden sm:inline">Ajuda</span>
       </Button>
       <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setSelected(null); setQuery(""); } }}>
-        <DialogContent className="max-h-[min(760px,90dvh)] max-w-3xl overflow-hidden p-0">
-          <div className="border-b px-5 py-5 sm:px-7">
+        <DialogContent className="flex max-h-[min(760px,90dvh)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+          <div className="shrink-0 border-b px-5 py-5 pr-12 sm:px-7 sm:pr-12">
             <DialogTitle className="text-xl">{selected?.title ?? "Como podemos ajudar?"}</DialogTitle>
             <DialogDescription className="mt-1.5">
               {selected?.description ?? "Encontre respostas rápidas sem sair do que está fazendo."}
             </DialogDescription>
           </div>
           {selected ? (
-            <div className="overflow-y-auto px-5 py-5 sm:px-7">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
               <ol className="space-y-3">
                 {selected.steps.map((step, index) => (
                   <li key={step} className="flex gap-3 rounded-xl border bg-muted/30 p-4 text-sm leading-6">
@@ -76,7 +76,7 @@ export function HelpCenter() {
               </div>
             </div>
           ) : (
-            <div className="min-h-0 overflow-y-auto px-5 pb-6 sm:px-7">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 sm:px-7">
               <div className="sticky top-0 z-10 bg-background py-4">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

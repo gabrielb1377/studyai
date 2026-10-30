@@ -122,6 +122,14 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
     ? models[activeStatus.provider] ?? activeStatus.models[0]?.name ?? "—"
     : models[provider] ?? "—";
 
+  useEffect(() => {
+    const first = activeStatus?.available ? activeStatus.models[0]?.name : undefined;
+    if (isReady && mode === "manual" && first && !models[provider]) {
+      setModels((current) => ({ ...current, [provider]: first }));
+      AISettings.saveModel(provider, first);
+    }
+  }, [activeStatus, isReady, mode, models, provider]);
+
   return (
     <Card className="max-w-4xl shadow-none">
       <CardHeader>
@@ -194,6 +202,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
               }}
               className="h-10 rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
+              {models[provider] && !activeStatus?.models.some((item) => item.name === models[provider]) && <option value={models[provider]}>Modelo salvo indisponível: {models[provider]}</option>}
               {activeStatus?.models.length ? activeStatus.models.map((item) => (
                 <option key={item.name} value={item.name}>{item.name}</option>
               )) : <option value="">Nenhum modelo encontrado</option>}

@@ -7,6 +7,7 @@ import { aiProviderIds, type AIProviderId } from "@/features/ai/AIProvider";
 import { ApiKeyService } from "./ApiKeyService";
 import { AIService } from "@/features/ai/AIService";
 import { normalizeAIError } from "@/features/ai/AIErrors";
+import { AIError } from "@/features/ai/AIErrors";
 import type { AIManagerRequest } from "@/features/ai/AIProvider";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import { needsSharedQuota, providersToCheckFor } from "./quota-policy";
@@ -172,13 +173,17 @@ export async function createQuotaAwareAIRequest(
 
 export async function withAIQuota(
   request: Request,
-  handler: (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>
+  handler: (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>,
+  prepared?: { history: QuotaAwareAIRequest["history"]; message: string }
 ): Promise<NextResponse | Response> {
   try {
     // Lê um clone: o corpo original continua disponível para handlers que
     // validam o payload novamente (ex.: diagrams, lab, audio-lesson). Um
     // Request só pode ser consumido uma vez.
-    const body = await request.clone().json().catch(() => null);
+    const originalBody = await request.clone().json().catch(() => null);
+    const body = prepared && originalBody && typeof originalBody === "object"
+      ? { ...originalBody, ...prepared, chunks: undefined, context: undefined }
+      : originalBody;
     if (!body || typeof body !== "object") {
       return NextResponse.json({ code: "INVALID_REQUEST", error: "Corpo da requisição inválido." }, { status: 400 });
     }
@@ -187,17 +192,15 @@ export async function withAIQuota(
     const userId = user.sub;
 
     // Load user's BYOK keys
-    let userApiKeys: Partial<Record<string, string>> = {};
-    try {
-      const entries = await Promise.all(
-        (await import("@/features/ai/AIProvider")).aiProviderIds.map(async (provider) => [
-          provider,
-          await (await import("./ApiKeyService")).ApiKeyService.getDecrypted(user.sub, provider),
-        ] as const)
-      );
-      for (const [provider, key] of entries) if (key) userApiKeys[provider] = key;
-    } catch {
-      userApiKeys = {};
+    const userApiKeys: Partial<Record<string, string>> = {};
+    const entries = await Promise.allSettled(aiProviderIds.map((provider) => ApiKeyService.getDecrypted(user.sub, provider)));
+    const requestedProvider = (body as { provider?: string }).provider ?? "gemini";
+    for (const [index, entry] of entries.entries()) {
+      const provider = aiProviderIds[index];
+      if (entry.status === "fulfilled" && entry.value) userApiKeys[provider] = entry.value;
+      if (entry.status === "rejected" && provider === requestedProvider) {
+        throw new AIError("Não foi possível ler a chave salva deste provedor. Confira Configurações de IA.", "PROVIDER_ERROR", 503, provider);
+      }
     }
 
     // Determine which providers might be used based on the request

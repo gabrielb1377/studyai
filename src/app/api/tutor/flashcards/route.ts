@@ -39,7 +39,7 @@ function parseCards(value: string): GeneratedFlashcard[] | null {
   try {
     const cards: unknown = JSON.parse(value.replace(/^```json\s*|\s*```$/g, "").trim());
     return Array.isArray(cards) && cards.length > 0 && cards.every((card) =>
-      Boolean(card) && typeof card.question === "string" && typeof card.answer === "string" &&
+      Boolean(card) && typeof card.question === "string" && card.question.trim().length > 0 && typeof card.answer === "string" && card.answer.trim().length > 0 &&
       (card.difficulty === "easy" || card.difficulty === "medium" || card.difficulty === "hard"),
     ) ? cards.slice(0, 8) as GeneratedFlashcard[] : null;
   } catch {
@@ -48,6 +48,8 @@ function parseCards(value: string): GeneratedFlashcard[] | null {
 }
 
 export async function POST(request: Request) {
+  const body: unknown = await request.clone().json().catch(() => null);
+  if (!isRequest(body)) return NextResponse.json({ error: "Dados para criar flashcards inválidos." }, { status: 400 });
   return withAIQuota(request, async (request, aiRequest) => {
     try {
       const response = await AIService.generate({
@@ -62,10 +64,10 @@ export async function POST(request: Request) {
       });
       const cards = parseCards(response.text);
       if (!cards) return NextResponse.json({ error: "O provider não retornou flashcards em um formato válido." }, { status: 502 });
-      return NextResponse.json({ cards });
+      return NextResponse.json({ cards, provider: response.provider, model: response.model });
     } catch (error) {
       const normalized = normalizeAIError(error, "Erro inesperado ao criar flashcards.");
       return NextResponse.json(normalized.body, { status: normalized.status });
     }
-  });
+  }, { history: [], message: PromptBuilder.flashcards(body.title, body.subject, body.chunks) });
 }

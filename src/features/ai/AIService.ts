@@ -12,11 +12,11 @@ export const AIService = {
     return ProviderManager.stream(request);
   },
 
-  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
+  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal; apiKey?: string }) {
     return ProviderManager.inspect(providerId, options);
   },
 
-  status(options?: { force?: boolean; signal?: AbortSignal }) {
+  status(options?: { force?: boolean; signal?: AbortSignal; apiKeys?: Partial<Record<AIProviderId, string>> }) {
     return ProviderManager.status(options);
   },
 };

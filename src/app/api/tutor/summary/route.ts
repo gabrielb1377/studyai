@@ -46,6 +46,9 @@ function isSummaryRequest(value: unknown): value is SummaryRequest {
 }
 
 export async function POST(request: Request) {
+  const body: unknown = await request.clone().json().catch(() => null);
+  if (!isSummaryRequest(body)) return NextResponse.json({ error: "Dados para criar resumo inválidos." }, { status: 400 });
+  const prompt = PromptBuilder.summary(body.history, body.context, body.chunks);
   return withAIQuota(request, async (request, aiRequest) => {
     try {
       const response = await AIService.generate({
@@ -63,5 +66,5 @@ export async function POST(request: Request) {
       const normalized = normalizeAIError(error, "Erro inesperado ao gerar o resumo.");
       return NextResponse.json(normalized.body, { status: normalized.status });
     }
-  });
+  }, { history: [...prompt.history], message: prompt.message });
 }
