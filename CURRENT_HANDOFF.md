@@ -1,10 +1,14 @@
 # Handoff atual — StudyAI V1.1 / Sprint 41
 
-## Atualização Sprint 41G
+## Atualização Sprint 41G.1B
 
-**Incompleta: isolamento entre contas e sigilo de gabarito continuam comprometidos.** Um teste A → B com contas sintéticas confirmou que `studyai:exams` de A continua legível por B. O Modo Prova ainda devolve e armazena gabarito no cliente; a interface agora informa que é local e sem sigilo. Não existe ainda tentativa protegida/correção no servidor. O levantamento e o plano de continuidade estão em [docs/SPRINT_41G_SECURITY_AUDIT.md](docs/SPRINT_41G_SECURITY_AUDIT.md).
+**Encerrada localmente.** A troca de conta agora invalida operações pendentes: `SessionOperationManager` marca cada tarefa assíncrona com usuário e geração, aborta requisições em voo e rejeita resultados atrasados com `SessionChangedError`; `SessionLocalData` descarta e restaura os dados privados por conta; `/sync` e `/api/files/[id]` passam a exigir `x-studyai-session-user` igual ao usuário do JWT (`requireSessionOwner`, `409 SESSION_CHANGED`).
 
-Contenções locais: `fd8e50a` impede que migração legada sem dono seja automaticamente atribuída a uma conta, mantendo recuperação no banco visitante; `fd6dd97` limpa URLs de materiais em memória ao trocar escopo; `a5ed672` restringe chaves/valores aplicados por sincronização; `75c1a02` avisa sobre ausência de sigilo da prova local. Nenhuma delas representa isolamento completo contra scripts da mesma origem, nem resolve OPFS compartilhado ou sincronização pendente durante troca de conta.
+**Commits locais:** `9553c72` (guarda de sessão no código) e `861bd0b` (testes e configuração do runner). **Testes:** `tests/sprint41g1b-session.spec.ts` **6/6 aprovados**; `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos.
+
+**Limites da evidência:** os testes usam módulos transpilados em memória com `fetch` simulado, não duas contas reais de navegador. Isolamento completo entre contas **não foi demonstrado** (dados já persistidos, múltiplas abas, OPFS/Cache Storage legados e sincronizações simultâneas seguem sem prova). Riscos e próximos testes em [docs/SPRINT_41G_SECURITY_AUDIT.md](docs/SPRINT_41G_SECURITY_AUDIT.md).
+
+**Sprint 41G.2 (Modo Prova protegido): não implementada.** Não existem `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` nem `POST /api/exam/grade` no repositório; o Modo Prova atual continua local e sem sigilo de gabarito. A implementação é o próximo passo (ver "Pendências e próxima ação" abaixo).
 
 ## Atualização Sprint 41F
 

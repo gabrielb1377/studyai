@@ -1,8 +1,16 @@
 # Sprint 41 — estado e validação
 
-## Atualização Sprint 41G
+## Atualização Sprint 41G.1B — encerrada localmente
 
-**Não concluída:** a prova protegida por servidor e o isolamento entre usuários permanecem pendentes. Foram implementadas contenções na migração de dados sem proprietário, limpeza do cache de materiais, filtragem das preferências recebidas por sincronização e aviso de que a prova atual é local e sem sigilo. O teste sintético A → B continua reprovado. Consulte [auditoria e plano de continuidade](SPRINT_41G_SECURITY_AUDIT.md).
+**Encerrada com evidências.** A troca de conta passou a invalidar operações pendentes. `SessionOperationManager` marca cada tarefa assíncrona com o usuário e a geração que a iniciou, aborta requisições em voo na transição e rejeita resultados atrasados com `SessionChangedError` antes de gravá-los. `SessionLocalData` remove de `localStorage` as chaves privadas da conta anterior, guarda-as no escopo dessa conta e só as restaura quando o dono coincide; caso contrário o conteúdo permanece em recuperação, sem ser atribuído à nova conta. As rotas `/sync` e `/api/files/[id]` (GET, PUT e DELETE) exigem que `x-studyai-session-user` coincida com o usuário do JWT em `requireSessionOwner`, devolvendo `409 SESSION_CHANGED`.
+
+**Commits locais:** `9553c72` (guarda de sessão no código) e `861bd0b` (testes e configuração do runner).
+
+**Testes:** `tests/sprint41g1b-session.spec.ts` — **6/6 aprovados** (A → B → A com aborto de geração, preferências escopadas por conta, rejeição de identidade divergente na API, upload abortado na troca sem confirmação, resposta atrasada bloqueada, sincronização após logout sem gravação). `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos.
+
+**Limitações da evidência:** os testes carregam módulos transpilados em memória com `fetch` simulado e não usam duas contas reais de navegador, nem inspecionam respostas reais da API. Isolamento completo **não foi demonstrado**: seguem sem prova os dados já persistidos, múltiplas abas concorrentes, OPFS/Cache Storage legados e sincronizações simultâneas entre dispositivos. O erro de fontes KaTeX não reapareceu nesta execução (é sensível ao caminho do projeto).
+
+**Sprint 41G.2 (Modo Prova protegido): não implementada.** Não existem `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` nem `POST /api/exam/grade` no repositório. O Modo Prova atual (`src/features/exam/*`) continua local e sem sigilo de gabarito. Consulte [auditoria e plano de continuidade](SPRINT_41G_SECURITY_AUDIT.md).
 
 ## Atualização Sprint 41F — andamento
 
