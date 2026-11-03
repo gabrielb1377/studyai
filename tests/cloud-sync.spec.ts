@@ -63,6 +63,12 @@ async function sync(page: Page) {
 
 async function expectHistory(page:Page,recordId:string){await expect.poll(async()=>{const response=await page.request.get("/sync/history");const data=await response.json() as {history:Array<{recordId:string}>};return data.history.some((item)=>item.recordId===recordId);},{timeout:15_000}).toBe(true);}
 
+async function sessionHeaders(page: Page) {
+  const response = await page.request.get("/auth/session");
+  const session = await response.json() as { user: { id: string } };
+  return { "x-studyai-session-user": session.user.id };
+}
+
 test("cadastro, sessão persistente, logout, login e recuperação funcionam", async ({ page }) => {
   const cspViolations: string[] = [];
   page.on("console", (message) => { if (message.type() === "error" && message.text().includes("Content Security Policy")) cspViolations.push(message.text()); });
@@ -137,7 +143,7 @@ test("sync incremental mantém fila offline, backup, compartilhamento e arquivo"
   await sync(page);
   const uploadResponse = await uploaded;
   expect(uploadResponse.ok(), await uploadResponse.text()).toBe(true);
-  const fileResponse = await page.request.get("/api/files/cloud-file-1");
+  const fileResponse = await page.request.get("/api/files/cloud-file-1", { headers: await sessionHeaders(page) });
   const downloaded = await fileResponse.text();
   expect(fileResponse.ok(), downloaded).toBe(true);
   expect(downloaded).toBe("conteúdo cloud");
@@ -201,7 +207,7 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
       const directory = await root.getDirectoryHandle("studyai-materials", { create: false }).catch(() => null);
       return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
     }, materialId))).toBe(false);
-    const remoteFile = await secondPage.request.get(`/api/files/${materialId}`);
+    const remoteFile = await secondPage.request.get(`/api/files/${materialId}`, { headers: await sessionHeaders(secondPage) });
     expect(remoteFile.ok()).toBe(true);
     await secondPage.evaluate(async ({ id, bytes }) => {
       const root = await navigator.storage.getDirectory();
@@ -219,7 +225,7 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
     expect(cachedBeforeDelete).toBe(true);
 
     const csrf = await firstPage.evaluate(() => document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? "");
-    const deletedFile = await firstPage.request.delete(`/api/files/${materialId}`, { headers: { "x-csrf-token": csrf } });
+    const deletedFile = await firstPage.request.delete(`/api/files/${materialId}`, { headers: { "x-csrf-token": csrf, ...await sessionHeaders(firstPage) } });
     expect(deletedFile.ok()).toBe(true);
     await firstPage.evaluate(async ({ id, version }) => {
       const scope = localStorage.getItem("studyai:storage-scope") || "guest";

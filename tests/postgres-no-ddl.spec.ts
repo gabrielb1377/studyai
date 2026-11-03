@@ -28,7 +28,7 @@ test("consulta de arquivo pela API não inicializa ou altera o esquema", async (
   const cloud = load("src/server/cloud/CloudDatabase.ts", { "server-only": {}, "@/server/database/Postgres": postgres, "@/server/storage/ObjectStorage": { ObjectStorage: {} } });
   const route = load("src/app/api/files/[id]/route.ts", {
     "@/server/cloud/CloudDatabase": cloud,
-    "@/server/auth/http": { requireUser: () => ({ sub: "user" }), apiError: (error: unknown) => { throw error; } },
+    "@/server/auth/http": { requireUser: () => ({ sub: "user" }), requireSessionOwner: () => undefined, apiError: (error: unknown) => { throw error; } },
     "@/server/security/Crypto": {},
     "@/server/security/RateLimit": {},
   });
