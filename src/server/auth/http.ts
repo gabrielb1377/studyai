@@ -56,6 +56,13 @@ export function publicOrigin(request: Request) {
   return new URL(request.url).origin;
 }
 
+export function requireSessionOwner(request: Request, userId: string) {
+  const expected = request.headers.get("x-studyai-session-user") ?? "";
+  if (!expected || !constantTimeEqual(expected, userId)) {
+    throw new Response(JSON.stringify({ error: "SESSION_CHANGED" }), { status: 409, headers: { "content-type": "application/json" } });
+  }
+}
+
 export function apiError(error: unknown) {
   if (error instanceof Response) {
     // Convert plain Response to NextResponse by cloning

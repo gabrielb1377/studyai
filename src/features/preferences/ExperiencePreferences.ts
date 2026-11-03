@@ -62,6 +62,11 @@ function emit() {
 
 export const ExperiencePreferencesService = {
   get: read,
+  invalidate() {
+    cache = defaults;
+    serializedCache = "";
+    if (typeof window !== "undefined") emit();
+  },
   update(changes: Partial<ExperiencePreferences>) {
     const next = { ...read(), ...changes };
     const serialized = JSON.stringify(next);

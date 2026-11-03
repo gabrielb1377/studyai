@@ -1,5 +1,6 @@
 import type { AccountSession } from "./types";
 import { DeviceManager } from "@/features/platform/DeviceManager";
+import type { SessionOperation } from "./SessionOperationManager";
 
 function deviceId() {
   const key = "studyai:device-id";
@@ -12,11 +13,20 @@ function deviceName() { return DeviceManager.detect().name; }
 function csrf() { return document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? ""; }
 function hasSessionMarker() { return document.cookie.split(";").some((item) => item.trim() === "studyai_session=1"); }
 
-async function request<T>(url: string, init?: RequestInit) {
+type SessionRequestInit = RequestInit & { operation?: SessionOperation };
+
+async function request<T>(url: string, init?: SessionRequestInit) {
+  const operation = init?.operation;
+  const requestInit: SessionRequestInit = { ...(init ?? {}) };
+  delete requestInit.operation;
+  operation?.assertCurrent();
   let body=init?.body;const extraHeaders:Record<string,string>={};
   if(url==="/sync"&&typeof body==="string"&&body.length>50_000&&"CompressionStream" in window){const stream=new Blob([body]).stream().pipeThrough(new CompressionStream("gzip"));body=await new Response(stream).blob();extraHeaders["content-encoding"]="gzip";}
-  const response = await fetch(url, { ...init, body, headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...extraHeaders, ...(init?.headers ?? {}), ...(init?.method && init.method !== "GET" ? { "x-csrf-token": csrf() } : {}) } });
+  operation?.assertCurrent();
+  const response = await fetch(url, { ...requestInit, signal: operation?.signal ?? init?.signal, body, headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...extraHeaders, ...(init?.headers ?? {}), ...(operation ? { "x-studyai-session-user": operation.userId } : {}), ...(init?.method && init.method !== "GET" ? { "x-csrf-token": csrf() } : {}) } });
+  operation?.assertCurrent();
   const data = await response.json().catch(() => ({})) as T & { error?: string };
+  operation?.assertCurrent();
   if (!response.ok) throw new Error(data.error || "Não foi possível concluir a operação.");
   return data;
 }

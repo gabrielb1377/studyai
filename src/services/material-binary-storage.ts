@@ -1,4 +1,5 @@
 import type { Material } from "@/types/material";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 const DIRECTORY_NAME = "studyai-materials";
 
@@ -12,7 +13,11 @@ async function directory(create = false) {
   if (!storage.getDirectory) return null;
   try {
     const root = await storage.getDirectory();
-    return await root.getDirectoryHandle(DIRECTORY_NAME, { create });
+    const base = await root.getDirectoryHandle(DIRECTORY_NAME, { create });
+    const session = SessionOperationManager.current();
+    if (session.suspended) return null;
+    const scope = session.userId ? `user-${session.userId.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "guest";
+    return await base.getDirectoryHandle(scope, { create });
   } catch {
     return null;
   }

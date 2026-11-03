@@ -12,8 +12,8 @@ export function CloudSyncProvider() {
     if (!session) return;
     let timer: number | undefined;
     let notifyWhenComplete = !navigator.onLine;
-    const schedule = (event?:Event) => { if(event?.type===STORAGE_UPDATED_EVENT&&(event as CustomEvent<{key?:IDBValidKey}>).detail?.key==="cloud-sync:v1")return;window.clearTimeout(timer); timer = window.setTimeout(() => { void CloudSyncManager.syncNow(); }, 800); };
-    const online = () => { void CloudSyncManager.syncNow(); };
+    const schedule = (event?:Event) => { if(event?.type===STORAGE_UPDATED_EVENT&&(event as CustomEvent<{key?:IDBValidKey}>).detail?.key==="cloud-sync:v1")return;window.clearTimeout(timer); timer = window.setTimeout(() => { void CloudSyncManager.syncNow({ userId: session.user.id }).catch(() => undefined); }, 800); };
+    const online = () => { void CloudSyncManager.syncNow({ userId: session.user.id }).catch(() => undefined); };
     const syncState = (event: Event) => {
       const state = (event as CustomEvent<{ status?: string; lastSyncAt?: string }>).detail;
       if (state.status === "offline" || state.status === "error") notifyWhenComplete = true;
@@ -24,7 +24,7 @@ export function CloudSyncProvider() {
     };
     window.addEventListener(STORAGE_UPDATED_EVENT, schedule); window.addEventListener("studyai:workspace-updated", schedule); window.addEventListener("online", online); window.addEventListener("offline", schedule);
     window.addEventListener("studyai:cloud-sync", syncState);
-    void CloudSyncManager.syncNow(); const interval = window.setInterval(online, 60_000);
+    void CloudSyncManager.syncNow({ userId: session.user.id }).catch(() => undefined); const interval = window.setInterval(online, 60_000);
     return () => { window.clearTimeout(timer); window.clearInterval(interval); window.removeEventListener(STORAGE_UPDATED_EVENT, schedule); window.removeEventListener("studyai:workspace-updated", schedule); window.removeEventListener("online", online); window.removeEventListener("offline", schedule); window.removeEventListener("studyai:cloud-sync", syncState); };
   }, [session]);
   return null;
