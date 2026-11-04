@@ -16,9 +16,17 @@
 
 **Testes.** `tests/exam-attempt-server.spec.ts` — 16 testes simulados/focados (criação, validação, correção, idempotência, concorrência, acesso cross-user, retomada, PG indisponível, autenticação, rejeição de gabarito, geração sanitizada). `tests/sprint41-workspace.spec.ts` — fluxos protegido (desktop/mobile com `GET /auth/session`, `POST/GET /api/exam/attempt`, `POST /api/exam/grade`) e regressão prática. `npm run typecheck`, `npm run lint` e `npm run build` aprovados (apenas avisos pré-existentes).
 
-**Restrições respeitadas.** Sem push, merge, deploy, migrations em produção, alteração no Railway/PostgreSQL/S3/credenciais nem PR #1 remoto. Não comitar `package.json`, `package-lock.json`, `CloudFileService.ts`, `CloudDatabase.ts`, `ObjectStorage.ts`, `src/app/api/files/[id]/direct/`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts` e `scripts/generate-vercel-secret.ps1`.SECURITY_AUDIT.md).
+**Restrições respeitadas.** Sem push, merge, deploy, migrations em produção, alteração no Railway/PostgreSQL/S3/credenciais nem PR #1 remoto. Não comitar `package.json`, `package-lock.json`, `CloudFileService.ts`, `CloudDatabase.ts`, `ObjectStorage.ts`, `src/app/api/files/[id]/direct/`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts` e `scripts/generate-vercel-secret.ps1`.
 
-**Sprint 41G.2 (Modo Prova protegido): não implementada.** Não existem `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` nem `POST /api/exam/grade` no repositório; o Modo Prova atual continua local e sem sigilo de gabarito. A implementação é o próximo passo (ver "Pendências e próxima ação" abaixo).
+**Sprint 41G.2B (Modo Prova protegido): encerrada localmente.** `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` e `POST /api/exam/grade` existem e estão commitados localmente (e156dd1, 9678bed, 5e65e58). O Modo Prática continua local e inalterado.
+
+## Atualização Sprint 41G.2C — Validação real do Modo Prova protegido (em andamento, BLOQUEADA)
+
+**O que foi feito.** Preparados testes reais de integração contra PostgreSQL (`tests/exam-attempt-integration.spec.ts`) cobrindo criação, retomada, correção, idempotência, concorrência, isolamento entre usuários e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa" (`tests/exam-attempt-server.spec.ts`). `typecheck`, `lint` e `build` aprovados; Playwright dirigido: 22 aprovados, 6 pulados (os 6 exigem banco não produtivo).
+
+**BLOQUEIO: validação real com PostgreSQL não executada.** Não há banco PostgreSQL não produtivo disponível neste ambiente (sem `DATABASE_URL`, sem `psql`, sem Docker). Conforme instruído, não foram inventadas credenciais nem usado produção. A migration `migrations/0001_exam_attempts.sql` existe e é idempotente, mas `npm run db:migrate` não pôde ser executada contra um banco real. Os testes de integração estão gados por `DATABASE_URL` (não produtiva) e pulam automaticamente até que um banco esteja disponível.
+
+**Próxima ação.** Quando um PostgreSQL não produtivo estiver disponível, executar `npm run db:migrate` (apenas contra banco não produtivo) e rodar `tests/exam-attempt-integration.spec.ts` para validar a integração real. A sprint 41G.2C **não está concluída** enquanto a integração real com PostgreSQL não for validada.
 
 ## Atualização Sprint 41F
 

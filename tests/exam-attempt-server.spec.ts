@@ -105,8 +105,18 @@ const SECURE_PAYLOAD = {
   difficulty: "medium",
 };
 
-function loadSecureRoute(database: unknown, http: Record<string, unknown>, generated = GENERATED) {
-  const serverModule = loadModule("src/server/exam/ExamAttemptServer.ts", {
+type SecureRouteOptions = {
+  generated?: typeof GENERATED;
+  generate?: () => Promise<{ text: string }>;
+  serverModuleOverride?: unknown;
+};
+
+function loadSecureRoute(
+  database: unknown,
+  http: Record<string, unknown>,
+  { generated = GENERATED, generate, serverModuleOverride }: SecureRouteOptions = {},
+) {
+  const serverModule = serverModuleOverride ?? loadModule("src/server/exam/ExamAttemptServer.ts", {
     "server-only": {},
     "node:crypto": { randomUUID: () => crypto.randomUUID() },
     "@/server/database/Postgres": database,
@@ -116,7 +126,7 @@ function loadSecureRoute(database: unknown, http: Record<string, unknown>, gener
     "@/server/auth/http": http,
     "@/server/database/Postgres": database,
     "@/server/exam/ExamAttemptServer": serverModule,
-    "@/features/ai/AIService": { AIService: { generate: async () => ({ text: JSON.stringify(generated), provider: "mock", model: "mock" }) } },
+    "@/features/ai/AIService": { AIService: { generate: generate ?? (async () => ({ text: JSON.stringify(generated), provider: "mock", model: "mock" })) } },
     "@/features/ai/PromptBuilder": { PromptBuilder: { examQuiz: () => "prompt" } },
     "@/server/ai/QuotaMiddleware": {
       withAIQuota: async (request: Request, handler: (request: Request, aiRequest: Record<string, unknown>) => Promise<unknown>) =>
@@ -299,6 +309,33 @@ test("rota POST /api/exam/attempt gera no servidor e devolve somente questões s
   expect(JSON.stringify(body.questions)).not.toContain("explanation");
   expect(api.table.size).toBe(1);
   expect(JSON.stringify([...api.table.values()][0])).toContain("correctAnswer");
+});
+
+test("rota POST /api/exam/attempt: falha de IA não persiste tentativa nem chama create", async () => {
+  const { api, database } = createFakePostgres();
+  let createCalls = 0;
+  const serverModule = loadModule("src/server/exam/ExamAttemptServer.ts", {
+    "server-only": {},
+    "node:crypto": { randomUUID: () => crypto.randomUUID() },
+    "@/server/database/Postgres": {
+      ...database,
+      query: async () => {
+        createCalls += 1;
+        throw new Error("create não deveria ser chamado quando a IA falha");
+      },
+    },
+  }) as { ExamAttemptServer: { create: () => unknown } };
+  const http = authenticatedHttp();
+  const route = loadSecureRoute(database, http, {
+    generate: async () => {
+      throw new Error("PROVIDER_UNAVAILABLE");
+    },
+    serverModuleOverride: serverModule,
+  });
+  const response = await route.POST(post("http://local/api/exam/attempt", SECURE_PAYLOAD));
+  expect(response.status).not.toBe(200);
+  expect(createCalls).toBe(0);
+  expect(api.table.size).toBe(0);
 });
 
 test("rota POST /api/exam/grade: 401 sem autenticação", async () => {

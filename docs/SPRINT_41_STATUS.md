@@ -18,7 +18,15 @@
 
 **Limitações da evidência:** os testes carregam módulos transpilados em memória com `fetch` simulado e não usam duas contas reais de navegador, nem inspecionam respostas reais da API. Isolamento completo **não foi demonstrado**: seguem sem prova os dados já persistidos, múltiplas abas concorrentes, OPFS/Cache Storage legados e sincronizações simultâneas entre dispositivos. O erro de fontes KaTeX não reapareceu nesta execução (é sensível ao caminho do projeto).
 
-**Sprint 41G.2 (Modo Prova protegido): não implementada.** Não existem `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` nem `POST /api/exam/grade` no repositório. O Modo Prova atual (`src/features/exam/*`) continua local e sem sigilo de gabarito. Consulte [auditoria e plano de continuidade](SPRINT_41G_SECURITY_AUDIT.md).
+**Sprint 41G.2B (Modo Prova protegido): encerrada localmente.** `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` e `POST /api/exam/grade` existem e estão commitados localmente. O Modo Prova atual continua local e sem sigilo de gabarito apenas no Modo Prática; o Modo Prova protegido armazena o gabarito somente no servidor. Consulte [auditoria](SPRINT_41G_SECURITY_AUDIT.md).
+
+## Atualização Sprint 41G.2C — Validação real do Modo Prova protegido (em andamento, BLOQUEADA)
+
+**O que foi feito.** Preparados testes reais de integração contra PostgreSQL (`tests/exam-attempt-integration.spec.ts`) cobrindo criação, retomada, correção, idempotência, concorrência, isolamento entre usuários e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa". `typecheck`, `lint` e `build` aprovados; Playwright dirigido: 22 aprovados, 6 pulados.
+
+**BLOQUEIO.** Não há banco PostgreSQL não produtivo disponível neste ambiente (sem `DATABASE_URL`, sem `psql`, sem Docker). Não foram inventadas credenciais nem usado produção. A migration `migrations/0001_exam_attempts.sql` existe e é idempotente, mas `npm run db:migrate` não pôde ser executada contra um banco real. Os testes de integração pulam automaticamente até que um banco não produtivo esteja disponível.
+
+**A sprint 41G.2C não está concluída** enquanto a integração real com PostgreSQL não for validada.
 
 ## Atualização Sprint 41F — andamento
 
