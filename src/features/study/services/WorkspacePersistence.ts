@@ -1,7 +1,9 @@
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+
 export const workspaceTabs = ["material", "ia", "mentor", "knowledge", "flashcards", "quiz", "notes", "lab", "revisao", "ia-quality"] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
-export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
+export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
 
 export type PdfAnnotation = {
   id: string;
@@ -52,6 +54,12 @@ const VERSION = 1;
 const PREFIX = "studyai:workspace:";
 const LAST_STUDY_KEY = "studyai:workspace-current";
 
+function currentUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  const session = SessionOperationManager.current();
+  return session.userId ?? null;
+}
+
 const DEFAULT_STATE: StudyWorkspaceState = {
   activeTab: "material",
   pdf: {},
@@ -97,6 +105,7 @@ function normalize(value: unknown): StudyWorkspaceState {
 export const WorkspacePersistence = {
   load(studyId: string): StudyWorkspaceState {
     if (typeof window === "undefined") return normalize(null);
+    if (!currentUserId()) return normalize(null);
     try {
       const parsed: unknown = JSON.parse(window.localStorage.getItem(`${PREFIX}${studyId}`) ?? "null");
       return normalize(parsed);
@@ -106,6 +115,8 @@ export const WorkspacePersistence = {
   },
 
   save(studyId: string, changes: Partial<StudyWorkspaceState>) {
+    if (typeof window === "undefined") return normalize(null);
+    if (!currentUserId()) return normalize(null);
     const next = { ...this.load(studyId), ...changes, updatedAt: new Date().toISOString() };
     window.localStorage.setItem(`${PREFIX}${studyId}`, JSON.stringify({ version: VERSION, ...next }));
     window.localStorage.setItem(LAST_STUDY_KEY, studyId);

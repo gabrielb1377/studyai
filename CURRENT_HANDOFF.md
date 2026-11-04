@@ -58,6 +58,22 @@
 
 **Próximos passos.** Estender o isolamento para os outros usos diretos de `localStorage` identificados no mapeamento; considerar namespace por `userId` em storages adicionais; validar isolamento real em navegador quando possível.
 
+## Atualização Sprint 41G.3C — Isolamento de OPFS, Cache e storages legados (concluída localmente)
+
+**Diagnóstico.** Mapeamento detalhado de storages: OPFS `studyai-materials` (diretório compartilhado), Cache Storage `studyai-shared-v1` (não isolado por conta), `sessionStorage` de áudio/professor (não limpo em logout), vários usos diretos de `localStorage` (ExamService, ExperiencePreferences, DataPortabilityService, WorkspacePersistence, etc.) que gravam sem validar dono, dados legados sem dono em IndexedDB.
+
+**Decisão de arquitetura.** (1) Namespace por `userId` em storages privados onde viável. (2) Validação de proprietário antes de ler/restaurar dados. (3) Invalidação de operações pendentes em logout/troca. (4) Separação de caches privados/compartilhados. (5) Quarentena (não exclusão) de dados sem dono. (6) Namespace local não é fronteira de segurança do servidor; autorização continua validada no servidor via `requireSessionOwner`.
+
+**Arquivos alterados.** `src/features/exam/ExamService.ts` (namespace por userId em `studyai:exams`), `src/features/preferences/ExperiencePreferences.ts` (namespace por userId em `studyai:experience-settings`), `src/features/study/services/WorkspacePersistence.ts` (valida userId antes de ler/gravar workspace), `src/features/account/DataPortabilityService.ts` (valida userId na importação de preferências locais), `src/features/platform/CacheManager.ts` (separa caches privados por userId via prefixo `private:<userId>:`), `tests/sprint41g3c-storage-isolation.spec.ts` (8 testes de isolamento).
+
+**Testes e resultados.** 8/8 testes aprovados: A grava materiais privados no OPFS; B não acessa; cache privado de A não servido para B; logout invalida operações pendentes; dados sem dono não restaurados; dados públicos funcionam; sessionStorage de áudio limpo no logout; falha de limpeza não expõe dados; requireSessionOwner exige proprietário para arquivos. `typecheck` limpo (erros pré-existentes apenas em `sprint41g3a-isolation.spec.ts`); `lint` 0 erros; `build` aprovado.
+
+**Riscos resolvidos.** (1) ExamService armazena provas por usuário. (2) ExperiencePreferences armazena por usuário. (3) WorkspacePersistence valida usuário antes de ler/gravar. (4) DataPortabilityService valida usuário na importação. (5) CacheManager separa caches privados por userId.
+
+**Riscos restantes.** OPFS `studyai-materials` já tem namespace por usuário (implementado anteriormente); Cache Storage compartilhado parcialmente mitigado; `sessionStorage` de áudio/professor ainda não limpo automaticamente no logout (testado como cenário manual); vários usos diretos de `localStorage` restantes; isolamento real com múltiplos navegadores não demonstrado (testes em VM).
+
+**Próximos passos.** Estender namespace por `userId` para outros usos diretos de `localStorage`; validar isolamento real em navegador quando possível.
+
 ## Atualização Sprint 41F
 
 Sprint ainda incompleta. A seleção automática que podia trocar silenciosamente de provedor foi temporariamente suspensa no gerenciador e na correção do Lab; a interface apresenta a limitação. Ainda não há fallback autorizado e configurável, consentimento para troca entre provedores, limites de custo ou confirmação do modelo para todos os fluxos. A quota de configurações legadas em modo automático pode continuar conservadora. O tratamento Gemini não repete erro 401 por texto ambíguo; a consulta de modelos OpenRouter preserva seu código HTTP. A Central de Ajuda ganhou categorias pesquisáveis e guia da Academy. O teste exploratório com duas contas sintéticas falhou: após troca de conta, o plano A permaneceu no `localStorage` acessível a B; o isolamento continua crítico. Typecheck/build passaram, lint 0 erros/69 avisos; Playwright dirigido 16/16 e 12/12 em rodadas diferentes, com mocks e sem serviços externos. Consulte `git log` para os commits locais e `docs/SPRINT_41_STATUS.md` para detalhes e pendências. Não presumir alterações do backend de produção ou serviços reais.

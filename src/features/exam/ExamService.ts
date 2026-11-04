@@ -1,7 +1,18 @@
 import type { Exam, ExamPlanItem } from "@/types/exam";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
-const STORAGE_KEY = "studyai:exams";
+const STORAGE_KEY_PREFIX = "studyai:exams:";
 const UPDATE_EVENT = "studyai:exams-updated";
+
+function storageKey(userId: string) {
+  return `${STORAGE_KEY_PREFIX}${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function currentUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  const session = SessionOperationManager.current();
+  return session.userId ?? null;
+}
 
 function isExamList(value: unknown): value is Exam[] {
   return Array.isArray(value) && value.every((item) =>
@@ -16,8 +27,10 @@ function isExamList(value: unknown): value is Exam[] {
 export const ExamService = {
   load(): Exam[] {
     if (typeof window === "undefined") return [];
+    const userId = currentUserId();
+    if (!userId) return [];
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey(userId));
       if (!raw) return [];
       const parsed: unknown = JSON.parse(raw);
       return isExamList(parsed) ? parsed : [];
@@ -28,7 +41,9 @@ export const ExamService = {
 
   save(exams: readonly Exam[]) {
     if (typeof window === "undefined") return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(exams));
+    const userId = currentUserId();
+    if (!userId) return;
+    localStorage.setItem(storageKey(userId), JSON.stringify(exams));
     window.dispatchEvent(new Event(UPDATE_EVENT));
   },
 
