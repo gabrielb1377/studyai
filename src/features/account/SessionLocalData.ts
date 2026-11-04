@@ -41,24 +41,35 @@ export const SessionLocalData = {
     const values = snapshot();
     const persistedOwner = localStorage.getItem(ACTIVE_OWNER_KEY) ?? undefined;
     const owner = persistedOwner ?? ownerHint;
+    // Limpa os dados locais ANTES de tentar gravar metadados, para que
+    // mesmo em caso de falha na gravação os dados privados não fiquem
+    // expostos no localStorage para a próxima sessão/usuário.
+    clearActiveData();
+    localStorage.removeItem(ACTIVE_OWNER_KEY);
     if (Object.keys(values).length > 0) {
       const expectedDatabase = owner ? `studyai-db:user-${owner}` : "studyai-db";
       if (currentDatabaseName() !== expectedDatabase) await StorageManager.setUserScope(owner);
       const key = owner ? PRIVATE_DATA_KEY : `${RECOVERY_PREFIX}${Date.now()}-${crypto.randomUUID()}`;
       await StorageManager.put("metadata", { key, value: values, updatedAt: new Date().toISOString(), owner }, { notify: false });
     }
-    clearActiveData();
-    localStorage.removeItem(ACTIVE_OWNER_KEY);
   },
 
   async resume(userId: string) {
     clearActiveData();
     const record = await StorageManager.get<LocalDataRecord>("metadata", PRIVATE_DATA_KEY);
+    // Dados privados só são restaurados quando o dono do registro coincide com o usuário.
+    // Dados sem dono identificável ou de outro usuário permanecem em quarentena (não restaurados).
     if (record?.owner === userId) {
       for (const [key, value] of Object.entries(record.value)) if (isPrivateSessionKey(key)) localStorage.setItem(key, value);
     }
     localStorage.setItem(ACTIVE_OWNER_KEY, userId);
     ExperiencePreferencesService.invalidate();
+  },
+
+  /** Limpa o proprietário da sessão ativa sem restaurar dados de nenhum usuário. Usado em logout. */
+  clearOwner() {
+    clearActiveData();
+    localStorage.removeItem(ACTIVE_OWNER_KEY);
   },
 
   clearRuntime: clearActiveData,

@@ -40,6 +40,24 @@
 
 **Próxima ação.** A sprint 41G.3A está concluída localmente. O isolamento completo entre contas reais de navegador segue como pendência da 41G geral.
 
+## Atualização Sprint 41G.3B — Isolamento real do armazenamento local (concluída localmente)
+
+**Diagnóstico inicial.** Mapeamento de todos os storages locais: `localStorage` (chaves privadas compartilhadas na mesma origem; vários usos diretos gravam sem validar dono), `sessionStorage` (áudio/professor sem limpeza em logout), IndexedDB (nomes por escopo de usuário, mas scripts de mesma origem podem acessar), OPFS `studyai-materials` (diretório compartilhado, sem controle de acesso por usuário), Cache Storage `studyai-shared-v1` (não isolado por conta), estado em memória (SessionOperationManager marca usuário e geração), filas de sync/upload (CloudSyncManager verifica `running.userId`).
+
+**Riscos identificados.** (1) `localStorage` compartilhado na mesma origem sem validação de dono em todos os usos diretos; (2) OPFS sem controle de acesso por usuário; (3) Cache Storage não isolado nem limpo no logout; (4) `sessionStorage` de áudio/professor não limpo em logout; (5) dados legados sem dono podem ser importados; (6) sem validação real com múltiplos navegadores.
+
+**Decisão de arquitetura.** (1) Reforçar `SessionLocalData`: `suspend()` limpa `clearActiveData()` ANTES de gravar metadados (mesmo em falha de gravação os dados locais são limpos); adicionado `clearOwner()` para logout explícito. (2) `resume()` restaura apenas se `record.owner === userId` (dados sem dono permanecem em quarentena). (3) Não excluir dados antigos sem dono automaticamente. (4) Validação de proprietário no servidor mantida via `requireSessionOwner`. (5) Namespace local não é fronteira de segurança do servidor.
+
+**Arquivos alterados.** `src/features/account/SessionLocalData.ts` (reforço de isolamento: clearActiveData antes de gravar metadados, clearOwner para logout), `tests/sprint41g3b-storage-isolation.spec.ts` (8 testes de isolamento: A→B restauração, logout, A→B→A invalidação, dados sem dono, requireSessionOwner, sync pendente rejeitado, falha de limpeza não expõe dados, dados públicos preservados).
+
+**Testes e resultados.** 8/8 testes de isolamento aprovados; `typecheck` limpo (erros restantes são pré-existentes em `sprint41g3a-isolation.spec.ts`); `lint` 0 erros nos arquivos alterados; `build` aprovado.
+
+**Riscos resolvidos.** (1) `suspend()` agora limpa dados locais antes de gravar metadados, evitando exposição em caso de falha; (2) `clearOwner()` permite logout sem restaurar dados de nenhum usuário; (3) `resume()` não restaura dados sem dono identificado.
+
+**Riscos restantes.** OPFS `studyai-materials` continua como diretório compartilhado; Cache Storage `studyai-shared-v1` não isolado por conta; `sessionStorage` de áudio/professor não limpo em logout; vários usos diretos de `localStorage` (ExamService, ExperiencePreferences, DataPortabilityService, etc.) gravam sem validação de dono individual; isolamento real com múltiplos navegadores/abas simultâneas não demonstrado (testes em VM).
+
+**Próximos passos.** Estender o isolamento para os outros usos diretos de `localStorage` identificados no mapeamento; considerar namespace por `userId` em storages adicionais; validar isolamento real em navegador quando possível.
+
 ## Atualização Sprint 41F
 
 Sprint ainda incompleta. A seleção automática que podia trocar silenciosamente de provedor foi temporariamente suspensa no gerenciador e na correção do Lab; a interface apresenta a limitação. Ainda não há fallback autorizado e configurável, consentimento para troca entre provedores, limites de custo ou confirmação do modelo para todos os fluxos. A quota de configurações legadas em modo automático pode continuar conservadora. O tratamento Gemini não repete erro 401 por texto ambíguo; a consulta de modelos OpenRouter preserva seu código HTTP. A Central de Ajuda ganhou categorias pesquisáveis e guia da Academy. O teste exploratório com duas contas sintéticas falhou: após troca de conta, o plano A permaneceu no `localStorage` acessível a B; o isolamento continua crítico. Typecheck/build passaram, lint 0 erros/69 avisos; Playwright dirigido 16/16 e 12/12 em rodadas diferentes, com mocks e sem serviços externos. Consulte `git log` para os commits locais e `docs/SPRINT_41_STATUS.md` para detalhes e pendências. Não presumir alterações do backend de produção ou serviços reais.
