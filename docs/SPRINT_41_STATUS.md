@@ -20,13 +20,15 @@
 
 **Sprint 41G.2B (Modo Prova protegido): encerrada localmente.** `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` e `POST /api/exam/grade` existem e estão commitados localmente. O Modo Prova atual continua local e sem sigilo de gabarito apenas no Modo Prática; o Modo Prova protegido armazena o gabarito somente no servidor. Consulte [auditoria](SPRINT_41G_SECURITY_AUDIT.md).
 
-## Atualização Sprint 41G.2C — Validação real do Modo Prova protegido (em andamento, BLOQUEADA)
+## Atualização Sprint 41G.2C — Validação real do Modo Prova protegido (VALIDADA COM POSTGRESQL)
 
-**O que foi feito.** Preparados testes reais de integração contra PostgreSQL (`tests/exam-attempt-integration.spec.ts`) cobrindo criação, retomada, correção, idempotência, concorrência, isolamento entre usuários e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa". `typecheck`, `lint` e `build` aprovados; Playwright dirigido: 22 aprovados, 6 pulados.
+**Status:** concluída.
 
-**BLOQUEIO.** Não há banco PostgreSQL não produtivo disponível neste ambiente (sem `DATABASE_URL`, sem `psql`, sem Docker). Não foram inventadas credenciais nem usado produção. A migration `migrations/0001_exam_attempts.sql` existe e é idempotente, mas `npm run db:migrate` não pôde ser executada contra um banco real. Os testes de integração pulam automaticamente até que um banco não produtivo esteja disponível.
+**O que foi feito.** Testes reais de integração contra PostgreSQL local descartável (`studyai_41g2c_test`, porta 5432, PostgreSQL 18) executados com sucesso (`tests/exam-attempt-integration.spec.ts`): criação, retomada, correção, idempotência, concorrência, isolamento cross-user e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa". Migration `migrations/0001_exam_attempts.sql` inspecionada e confirmada idempotente.
 
-**A sprint 41G.2C não está concluída** enquanto a integração real com PostgreSQL não for validada.
+**Banco utilizado.** PostgreSQL 18 local, banco `studyai_41g2c_test`, descartável/de teste, sem credenciais de produção. `DATABASE_URL` definida apenas como variável de ambiente para execução dos testes.
+
+**Resultado.** 7/7 testes de integração real aprovados; 21/21 testes simulados aprovados; `typecheck`, `lint` (0 erros), `build` aprovados.
 
 ## Atualização Sprint 41F — andamento
 

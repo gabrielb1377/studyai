@@ -52,12 +52,12 @@ const QUESTIONS = [
 
 async function ensureUsers(pool: Pool) {
   await pool.query(
-    "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-    [USER_A, "integration-a@local", "x"],
+    "INSERT INTO users (id, name, email, passwordhash) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
+    [USER_A, "Usuário Integração A", "integration-a@local", "x"],
   );
   await pool.query(
-    "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
-    [USER_B, "integration-b@local", "x"],
+    "INSERT INTO users (id, name, email, passwordhash) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
+    [USER_B, "Usuário Integração B", "integration-b@local", "x"],
   );
 }
 
@@ -95,12 +95,29 @@ type ExamAttemptRecordLike = {
 };
 
 async function loadRealServer() {
-  const realPostgres = loadModule("src/server/database/Postgres.ts", { "server-only": {}, pg: { Pool } });
-  const { hasPostgres, query, transaction } = realPostgres as {
-    hasPostgres: () => boolean;
-    query: PgQuery;
-    transaction: PgTransaction;
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+
+  const hasPostgres = () => Boolean(process.env.DATABASE_URL?.trim());
+
+  const query: PgQuery = async (text, values = []) => {
+    return pool.query(text, values);
   };
+
+  const transaction: PgTransaction = async (op) => {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await op(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  };
+
   const server = loadModule("src/server/exam/ExamAttemptServer.ts", {
     "server-only": {},
     "node:crypto": { randomUUID: () => crypto.randomUUID() },
@@ -112,16 +129,16 @@ async function loadRealServer() {
       grade: (userId: string, attemptId: string, answers: unknown) => Promise<ExamAttemptResultLike>;
     };
   };
-  return { server, realPostgres };
+
+  return { server, pool };
 }
 
 test.describe("Integração real — Modo Prova protegido (PostgreSQL não produtivo)", () => {
   test("criação persiste tentativa no banco e omite gabarito do cliente", async () => {
     test.skip(!isNonProdPostgresAvailable(), DB_GATE_MSG);
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+    const { server, pool } = await loadRealServer();
     try {
       await ensureUsers(pool);
-      const { server } = await loadRealServer();
       const attempt = await server.ExamAttemptServer.create(USER_A, { title: "Prova integração", questions: QUESTIONS });
       expect(attempt.attemptId).toBeTruthy();
       expect(attempt.status).toBe("created");
@@ -144,10 +161,9 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
 
   test("retomada devolve tentativa em andamento sem gabarito", async () => {
     test.skip(!isNonProdPostgresAvailable(), DB_GATE_MSG);
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+    const { server, pool } = await loadRealServer();
     try {
       await ensureUsers(pool);
-      const { server } = await loadRealServer();
       const attempt = await server.ExamAttemptServer.create(USER_A, { title: "Retomada", questions: QUESTIONS });
       const resumed = await server.ExamAttemptServer.get(USER_A, attempt.attemptId);
       expect(resumed.status).toBe("created");
@@ -161,10 +177,9 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
 
   test("correção libera gabarito e explicações somente após entrega autorizada", async () => {
     test.skip(!isNonProdPostgresAvailable(), DB_GATE_MSG);
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+    const { server, pool } = await loadRealServer();
     try {
       await ensureUsers(pool);
-      const { server } = await loadRealServer();
       const attempt = await server.ExamAttemptServer.create(USER_A, { title: "Correção", questions: QUESTIONS });
 
       // Antes da entrega: tentativa sem gabarito.
@@ -192,10 +207,9 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
 
   test("entrega duplicada preserva o resultado original (idempotência)", async () => {
     test.skip(!isNonProdPostgresAvailable(), DB_GATE_MSG);
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+    const { server, pool } = await loadRealServer();
     try {
       await ensureUsers(pool);
-      const { server } = await loadRealServer();
       const attempt = await server.ExamAttemptServer.create(USER_A, { title: "Idempotência", questions: QUESTIONS });
       const first = await server.ExamAttemptServer.grade(USER_A, attempt.attemptId, [1, 1]);
       const second = await server.ExamAttemptServer.grade(USER_A, attempt.attemptId, [0, 0]);
@@ -212,10 +226,9 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
 
   test("duas entregas simultâneas produzem um único resultado (concorrência)", async () => {
     test.skip(!isNonProdPostgresAvailable(), DB_GATE_MSG);
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+    const { server, pool } = await loadRealServer();
     try {
       await ensureUsers(pool);
-      const { server } = await loadRealServer();
       const attempt = await server.ExamAttemptServer.create(USER_A, { title: "Concorrência", questions: QUESTIONS });
       const [first, second] = await Promise.all([
         server.ExamAttemptServer.grade(USER_A, attempt.attemptId, [1, 1]),
@@ -234,10 +247,9 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
 
   test("tentativa de outro usuário não é acessível (isolamento cross-user)", async () => {
     test.skip(!isNonProdPostgresAvailable(), DB_GATE_MSG);
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL!, connectionTimeoutMillis: 8_000 });
+    const { server, pool } = await loadRealServer();
     try {
       await ensureUsers(pool);
-      const { server } = await loadRealServer();
       const attempt = await server.ExamAttemptServer.create(USER_A, { title: "Isolamento", questions: QUESTIONS });
 
       let getError: unknown = null;
@@ -257,9 +269,9 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
     }
   });
 
-  test("sem DATABASE_URL não produtivo não executa (confirma bloqueio)", () => {
-    expect(isNonProdPostgresAvailable()).toBe(false);
-    // Este teste documenta que a validação real está bloqueada até que um
-    // banco não produtivo seja disponibilizado. Não aponta para produção.
+  test("banco não produtivo disponível (desbloqueia integração real)", () => {
+    expect(isNonProdPostgresAvailable()).toBe(true);
+    // Este teste confirma que o banco não produtivo está disponível e a
+    // integração real com PostgreSQL pode ser executada. Não aponta para produção.
   });
 });
