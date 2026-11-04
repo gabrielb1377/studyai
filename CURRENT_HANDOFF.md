@@ -28,7 +28,17 @@
 
 **Resultado.** 7/7 testes de integração real aprovados; 21/21 testes simulados aprovados; `typecheck`, `lint` (0 erros), `build` aprovados.
 
-**Próxima ação.** A sprint 41G.2C está concluída quanto à validação real com PostgreSQL. O isolamento completo entre contas reais de navegador segue como pendência da 41G geral (não demostrado nesta sprint).
+## Atualização Sprint 41G.3A — Auditoria final de isolamento entre contas (concluída localmente)
+
+**O que foi auditado.** Fluxos de isolamento entre contas: `SessionOperationManager` (invalidação de operações por geração), `SessionLocalData` (`isPrivateSessionKey`, `suspend`/`resume` por dono), `CloudDatabase` (isolamento cross-user em registros de sync em memória), rotas de arquivo (`/api/files/[id]`, `/api/files/[id]/direct`), rotas de prova protegida (`/api/exam/attempt`, `/api/exam/grade`) e `requireSessionOwner`/`requireUser` no servidor.
+
+**O que foi implementado.** Testes de auditoria em `tests/sprint41g3a-isolation.spec.ts` (12 testes): A → B → A com operações antigas rejeitadas, `isPrivateSessionKey` identifica chaves privadas, `SessionLocalData.resume` não restaura dados de outro usuário, `CloudDatabase` isola registros por usuário, `requireSessionOwner` rejeita header divergente, `requireUser` rejeita sem sessão, rotas de arquivo e prova exigem proprietário da sessão.
+
+**Resultado.** 12/12 testes de auditoria aprovados; `typecheck`, `lint` (0 erros), `build` aprovados.
+
+**Limites.** Testes usam módulos transpilados em VM (não navegadores reais). Isolamento completo entre dois navegadores reais simultâneos **não foi demonstrado** nesta sprint. Isso segue como pendência da 41G geral.
+
+**Próxima ação.** A sprint 41G.3A está concluída localmente. O isolamento completo entre contas reais de navegador segue como pendência da 41G geral.
 
 ## Atualização Sprint 41F
 
