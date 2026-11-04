@@ -245,3 +245,23 @@ CREATE TABLE IF NOT EXISTS collaboration_progress (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (room_id,resource_id,user_id)
 );
+
+-- Sprint 41G.2A: tentativas protegidas do Modo Prova.
+-- O gabarito e as explicações vivem apenas aqui; o cliente recebe
+-- questões sanitizadas e o resultado completo só após a entrega autorizada.
+-- Tabela dedicada de propósito: sync_records é lido por /sync e vazaria o gabarito.
+CREATE TABLE IF NOT EXISTS exam_attempts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created','in_progress','completed')),
+  title TEXT,
+  questions JSONB NOT NULL,
+  answers JSONB,
+  score NUMERIC,
+  correct_count INTEGER,
+  total_count INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS exam_attempts_user_status ON exam_attempts(user_id, status);
