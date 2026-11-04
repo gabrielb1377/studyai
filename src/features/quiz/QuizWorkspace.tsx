@@ -8,10 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import type { StudyRecord } from "@/types/study-engine";
 import { QuizService } from "./QuizService";
 import { QuizQuestion } from "./QuizQuestion";
+import { SecureExamPanel } from "./SecureExamPanel";
 import { useQuiz } from "./useQuiz";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
 import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
-import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
+
 
 export function QuizWorkspace({ study }: { study: StudyRecord }) {
   const { questions, results, error, isGenerating, generate, saveResult } = useQuiz(study.studyId);
@@ -31,16 +32,21 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
   const currentQuestion = questions[index];
   const canGenerate = hasStructuredStudyContent(study);
 
+  const savePractice = (changes: { index: number; answers: Array<number | null>; isFinished: boolean; mode: "practice" | "exam" }) => {
+    const current = WorkspacePersistence.load(study.studyId).quiz;
+    WorkspacePersistence.save(study.studyId, { quiz: { ...current, ...changes } });
+  };
+
   const handleAnswer = (questionIndex: number, alternativeIndex: number) => {
     const next = [...answers];
     next[questionIndex] = alternativeIndex;
     setAnswers(next);
-    WorkspacePersistence.save(study.studyId, { quiz: { index, answers: next, isFinished, mode } });
+    savePractice({ index, answers: next, isFinished, mode });
   };
 
   const goToQuestion = (next: number) => {
     setIndex(next);
-    WorkspacePersistence.save(study.studyId, { quiz: { index: next, answers, isFinished, mode } });
+    savePractice({ index: next, answers, isFinished, mode });
   };
 
   const submitExam = () => {
@@ -48,38 +54,39 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
     const wrong = questions.length - correct;
     saveResult(QuizService.createResult(study.studyId, questions.map((q) => q.id), correct, wrong));
     setIsFinished(true);
-    WorkspacePersistence.save(study.studyId, { quiz: { index, answers, isFinished: true, mode } });
+    savePractice({ index, answers, isFinished: true, mode });
   };
 
   const restart = () => {
     setIndex(0);
     setAnswers([]);
     setIsFinished(false);
-    WorkspacePersistence.save(study.studyId, { quiz: { index: 0, answers: [], isFinished: false, mode } });
+    savePractice({ index: 0, answers: [], isFinished: false, mode });
   };
 
   const latestResult = results[0];
-  const insight = KnowledgeEngine.quizInsight(results);
 
   return (
     <section aria-labelledby="quiz-workspace-title" className="space-y-4 rounded-xl border bg-card p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="quiz-workspace-title" className="text-lg font-semibold tracking-tight">Simulado & Quiz Explicado</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{questions.length} questões disponíveis · Modo {mode === "practice" ? "Prática" : "Prova"}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{mode === "practice" ? `${questions.length} questões disponíveis · Modo Prática` : "Questões geradas e corrigidas no servidor"}</p>
         </div>
         <div className="flex items-center gap-2">
-          <select aria-label="Modo do simulado" className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium" value={mode} disabled={mode === "exam" && !isFinished && answers.some((answer) => answer != null)} onChange={(e) => { const nextMode = e.target.value as "practice" | "exam"; setMode(nextMode); WorkspacePersistence.save(study.studyId, { quiz: { index, answers, isFinished, mode: nextMode } }); }}>
+          <select aria-label="Modo do simulado" className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium" value={mode} onChange={(e) => { const nextMode = e.target.value as "practice" | "exam"; const current = WorkspacePersistence.load(study.studyId).quiz; setMode(nextMode); WorkspacePersistence.save(study.studyId, { quiz: { ...current, index, answers, isFinished, mode: nextMode } }); }}>
             <option value="practice">Modo Prática</option>
-            <option value="exam">Modo Prova</option>
+            <option value="exam">Modo Prova protegido</option>
           </select>
-          <Button type="button" variant="outline" onClick={() => setShowConfig(!showConfig)} disabled={isGenerating || !canGenerate}>
-            <Plus className="size-4 mr-1" /> {isGenerating ? "Criando..." : "Novo Simulado"}
-          </Button>
+          {mode === "practice" && (
+            <Button type="button" variant="outline" onClick={() => setShowConfig(!showConfig)} disabled={isGenerating || !canGenerate}>
+              <Plus className="size-4 mr-1" /> {isGenerating ? "Criando..." : "Novo Simulado"}
+            </Button>
+          )}
         </div>
       </div>
 
-      {showConfig && (
+      {mode === "practice" && showConfig && (
         <Card className="p-4 border-primary/30 bg-card/60 space-y-3">
           <h3 className="text-sm font-semibold">Configurar Simulado</h3>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -106,6 +113,10 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
         </Card>
       )}
 
+      {mode === "exam" ? (
+        <SecureExamPanel study={study} />
+      ) : (
+        <>
       {error && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
 
       {!currentQuestion ? (
@@ -155,7 +166,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
             <Button type="button" variant="outline" onClick={restart}><RotateCcw className="size-4 mr-2" /> Refazer Simulado</Button>
           </div>
         </Card>
-      ) : mode === "practice" ? (
+      ) : (
         <div className="space-y-4">
           <QuizQuestion question={currentQuestion} selectedAnswer={answers[index] ?? null} onAnswer={(alt) => handleAnswer(index, alt)} />
           <div className="flex items-center justify-between gap-3">
@@ -169,62 +180,14 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
             </Button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <Card className="p-6 space-y-4 shadow-none">
-            <div className="flex items-center justify-between">
-              <Badge variant="secondary">Questão {index + 1} de {questions.length}</Badge>
-              <span className="text-xs text-muted-foreground">Modo Prova (Responda e finalize ao final)</span>
-            </div>
-            <p className="text-xs text-muted-foreground">Esta prova é corrigida no dispositivo e não oferece sigilo do gabarito.</p>
-            <h3 className="text-lg font-semibold">{currentQuestion.question}</h3>
-            <div className="grid gap-2">
-              {currentQuestion.alternatives.map((alt, altIdx) => {
-                const selected = answers[index] === altIdx;
-                return (
-                  <Button
-                    key={alt}
-                    type="button"
-                    variant="outline"
-                    aria-pressed={selected}
-                    className={`h-auto min-h-11 justify-start whitespace-normal px-4 py-3 text-left ${selected ? "border-primary bg-primary/10 font-semibold" : ""}`}
-                    onClick={() => handleAnswer(index, altIdx)}
-                  >
-                    <span className="mr-2 font-semibold">{"ABCD"[altIdx]}.</span>
-                    {alt}
-                  </Button>
-                );
-              })}
-            </div>
-          </Card>
-
-          <div className="flex items-center justify-between gap-3">
-            <Button type="button" variant="outline" size="sm" onClick={() => goToQuestion(Math.max(0, index - 1))} disabled={index === 0}><ChevronLeft className="size-4 mr-1" /> Anterior</Button>
-            <div className="flex gap-1">
-              {questions.map((_, qIdx) => (
-                <button
-                  key={qIdx}
-                  type="button"
-                  onClick={() => goToQuestion(qIdx)}
-                  className={`size-7 rounded-lg text-xs font-semibold ${index === qIdx ? "bg-primary text-primary-foreground" : answers[qIdx] != null ? "bg-accent text-accent-foreground border" : "border bg-card"}`}
-                >
-                  {qIdx + 1}
-                </button>
-              ))}
-            </div>
-            {index + 1 < questions.length ? (
-              <Button type="button" size="sm" onClick={() => goToQuestion(index + 1)}>Próxima <ChevronRight className="size-4 ml-1" /></Button>
-            ) : (
-              <Button type="button" size="sm" onClick={submitExam} className="bg-primary text-primary-foreground">Entregar Prova</Button>
-            )}
-          </div>
-        </div>
       )}
 
       {isGenerating && (
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <LoaderCircle className="size-4 animate-spin" /> A IA está gerando o simulado fundamentado nos materiais...
         </p>
+      )}
+        </>
       )}
     </section>
   );

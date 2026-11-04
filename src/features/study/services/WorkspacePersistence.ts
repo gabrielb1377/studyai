@@ -32,6 +32,10 @@ export type QuizViewState = {
   answers: Array<number | null>;
   isFinished: boolean;
   mode?: "practice" | "exam";
+  /** Tentativa protegida ativa; nunca contém o gabarito. */
+  attemptId?: string;
+  secureAnswers?: Array<number | null>;
+  secureFinished?: boolean;
 };
 
 export type StudyWorkspaceState = {
@@ -60,6 +64,12 @@ function isWorkspaceTab(value: unknown): value is WorkspaceTab {
   return typeof value === "string" && workspaceTabs.includes(value as WorkspaceTab);
 }
 
+function normalizeAnswers(value: unknown): Array<number | null> {
+  return Array.isArray(value)
+    ? value.map((answer) => typeof answer === "number" && Number.isInteger(answer) && answer >= 0 && answer < 5 ? answer : null)
+    : [];
+}
+
 function normalize(value: unknown): StudyWorkspaceState {
   if (!value || typeof value !== "object") return { ...DEFAULT_STATE, pdf: {}, quiz: { ...DEFAULT_STATE.quiz } };
   const state = value as Partial<StudyWorkspaceState>;
@@ -71,9 +81,12 @@ function normalize(value: unknown): StudyWorkspaceState {
     quiz: state.quiz && typeof state.quiz === "object"
       ? {
           index: typeof state.quiz.index === "number" ? Math.max(0, state.quiz.index) : 0,
-          answers: Array.isArray(state.quiz.answers) ? state.quiz.answers.map((answer) => typeof answer === "number" && Number.isInteger(answer) && answer >= 0 && answer < 4 ? answer : null) : [],
+          answers: normalizeAnswers(state.quiz.answers),
           isFinished: state.quiz.isFinished === true,
           mode: state.quiz.mode === "exam" ? "exam" : "practice",
+          attemptId: typeof state.quiz.attemptId === "string" && state.quiz.attemptId ? state.quiz.attemptId : undefined,
+          secureAnswers: normalizeAnswers(state.quiz.secureAnswers),
+          secureFinished: state.quiz.secureFinished === true,
         }
       : { ...DEFAULT_STATE.quiz },
     noteId: typeof state.noteId === "string" ? state.noteId : undefined,
