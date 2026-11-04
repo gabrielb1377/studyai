@@ -8,6 +8,16 @@
 
 **Limites da evidência:** os testes usam módulos transpilados em memória com `fetch` simulado, não duas contas reais de navegador. Isolamento completo entre contas **não foi demonstrado** (dados já persistidos, múltiplas abas, OPFS/Cache Storage legados e sincronizações simultâneas seguem sem prova). Riscos e próximos testes em [docs/SPRINT_41G_SECURITY_AUDIT.md](docs/SPRINT_41G_SECURITY_AUDIT.md).
 
+## Atualização Sprint 41G.2B — encerrada localmente
+
+**O que foi implementado.** Modo Prova protegido concluído: `POST /api/exam/attempt` exige autenticação, CSRF e proprietário da sessão, rejeita `questions` enviado pelo cliente e gera/valida questões no servidor usando `PromptBuilder.examQuiz`, `AIService` + `withAIQuota`. O gabarito completo fica apenas no PostgreSQL (`exam_attempts`, migration `0001_exam_attempts`); o cliente recebe somente questões sanitizadas (`id`, `question`, `alternativas`, dificuldade opcional). `GET /api/exam/attempt?id=` devolve a tentativa em andamento sem gabarito e, após a conclusão, o resultado autorizado. `POST /api/exam/grade` corrige transacionalmente com `FOR UPDATE`, idempotente, impede sobrescrita de tentativa concluída e rejeita tentativas de outros usuários. Sem fallback em memória; PostgreSQL indisponível devolve 503 antes da chamada de IA.
+
+**Integração UI.** `QuizWorkspace` alterna entre Modo Prática (local, `QuizService`/`/api/tutor/quiz`, inalterado) e Modo Prova protegido (`SecureExamPanel` via `SecureExamClient`), com geração por quantidade/dificuldade, seleção A/B/C/D/E, navegação, respostas marcadas, progresso, entrega, resultado pós-entrega e retomada por `WorkspacePersistence` (`attemptId`, `secureAnswers`, `secureFinished`).
+
+**Testes.** `tests/exam-attempt-server.spec.ts` — 16 testes simulados/focados (criação, validação, correção, idempotência, concorrência, acesso cross-user, retomada, PG indisponível, autenticação, rejeição de gabarito, geração sanitizada). `tests/sprint41-workspace.spec.ts` — fluxos protegido (desktop/mobile com `GET /auth/session`, `POST/GET /api/exam/attempt`, `POST /api/exam/grade`) e regressão prática. `npm run typecheck`, `npm run lint` e `npm run build` aprovados (apenas avisos pré-existentes).
+
+**Restrições respeitadas.** Sem push, merge, deploy, migrations em produção, alteração no Railway/PostgreSQL/S3/credenciais nem PR #1 remoto. Não comitar `package.json`, `package-lock.json`, `CloudFileService.ts`, `CloudDatabase.ts`, `ObjectStorage.ts`, `src/app/api/files/[id]/direct/`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts` e `scripts/generate-vercel-secret.ps1`.SECURITY_AUDIT.md).
+
 **Sprint 41G.2 (Modo Prova protegido): não implementada.** Não existem `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` nem `POST /api/exam/grade` no repositório; o Modo Prova atual continua local e sem sigilo de gabarito. A implementação é o próximo passo (ver "Pendências e próxima ação" abaixo).
 
 ## Atualização Sprint 41F

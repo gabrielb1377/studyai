@@ -6,7 +6,15 @@
 
 **Commits locais:** `9553c72` (guarda de sessão no código) e `861bd0b` (testes e configuração do runner).
 
-**Testes:** `tests/sprint41g1b-session.spec.ts` — **6/6 aprovados** (A → B → A com aborto de geração, preferências escopadas por conta, rejeição de identidade divergente na API, upload abortado na troca sem confirmação, resposta atrasada bloqueada, sincronização após logout sem gravação). `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos.
+**Testes:** `tests/sprint41g1b-session.spec.ts` — **6/6 aprovados** (A → B → A com aborto de geração, preferências escopadas por conta, rejeição de identidade divergente na API, upload abortado na troca sem confirmação, resposta atrasada bloqueada, 
+
+## Atualização Sprint 41G.2B — encerrada localmente
+
+**Status:** concluída localmente, sem push/deploy.
+
+**Entregas.** Modo Prova protegido com criação, correção e retomada no servidor: autenticação/CSRF/proprietário da sessão em `POST /api/exam/attempt`; geração server-side de questões com `PromptBuilder.examQuiz`, `AIService` e `withAIQuota`; tabela `exam_attempts` via migration `0001_exam_attempts` (sem alterar tabelas existentes); resposta inicial sem gabarito/explicação; correção transacional idempotente em `POST /api/exam/grade`; rejeição de cross-user e POST sem `questions`. UI protegida (`SecureExamPanel`/`SecureExamClient`) integrada ao `QuizWorkspace`, mantendo Modo Prática local inalterado. Testes focados simulados em `tests/exam-attempt-server.spec.ts` (16 aprovados) e fluxos de workspace protegido/prática em `tests/sprint41-workspace.spec.ts` (aprovados). `typecheck`, `lint` e `build` aprovados (0 erros, apenas avisos pré-existentes).
+
+**Limites.** Os testes Playwright de API usam módulos transpilados em VM com PostgreSQL simulado; não há banco de produção nem migração aplicada em produção. Migração `migrations/0001_exam_attempts.sql` já existe, mas `npm run db:migrate` não foi executado neste sprint.sincronização após logout sem gravação). `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos.
 
 **Limitações da evidência:** os testes carregam módulos transpilados em memória com `fetch` simulado e não usam duas contas reais de navegador, nem inspecionam respostas reais da API. Isolamento completo **não foi demonstrado**: seguem sem prova os dados já persistidos, múltiplas abas concorrentes, OPFS/Cache Storage legados e sincronizações simultâneas entre dispositivos. O erro de fontes KaTeX não reapareceu nesta execução (é sensível ao caminho do projeto).
 
