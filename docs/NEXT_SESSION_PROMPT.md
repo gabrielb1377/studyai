@@ -1,29 +1,51 @@
 # Prompt reutilizável — próxima sessão
 
 ```text
-Continue a Sprint 41 do StudyAI em D:\studyai, branch v1.1-development.
-Comece lendo CURRENT_HANDOFF.md, docs/SPRINT_41_STATUS.md e docs/ROADMAP_V1_2.md.
-Confirme o Git e as instruções AGENTS.md atuais, inclusive HEAD e divergência com a
-referência remota disponível. O checkpoint de documentação registra uma fotografia,
-não presuma que o ambiente externo ou o Git continuem iguais.
+Continue o StudyAI em D:\studyai, branch v1.1-development.
 
-Preserve integralmente as alterações experimentais não commitadas de upload direto
-S3, os respectivos testes, package.json/lock e playwright.config.ts, bem como
-scripts/generate-vercel-secret.ps1. Não use reset --hard, git clean, push, merge
-ou deploy; não altere Railway ou dados/credenciais de produção. Não exiba segredos.
+Antes de programar, leia AGENTS.md/RTK.md, CURRENT_HANDOFF.md,
+docs/PROJECT_AUDIT_2026-11-05.md, docs/SPRINT_41_STATUS.md,
+docs/SPRINT_41G_SECURITY_AUDIT.md e docs/ROADMAP_V1_2.md. Confirme o estado real
+com git status --short, git status -sb e git log -15 --oneline --decorate. Não
+presuma que o HEAD ou a referência remota continuam iguais e não faça fetch sem
+autorização.
 
-Priorize o restante P0 da Sprint 41: investigar e implementar fallback de IA seguro
-e opcional com autorização explícita, limites, restrição de custos e testes; revisar
-isolamento de preferências entre contas e proteção real do gabarito; investigar os
-timeouts e a queixa original de cliques do simulado. Depois trate a integração de
-Semana de Prova e a ajuda. Não substitua fluxos reais por respostas simuladas.
+Fotografia de 7/11/2026: branch v1.1-development, HEAD ainda 5eb5637;
+origin/v1.1-development conhecido localmente em 331bc15, sem fetch. A Sprint 41
+não está concluída e a 41G.3D continua não commitada. Preserve todas as mudanças:
+package.json/lock, AuthProvider, SyncPreferences, CloudFileService,
+TeacherAudioSessionStorage, CloudDatabase, ObjectStorage, rota direta de arquivo,
+config/testes 41G.3D, testes de deploy/upload e
+scripts/generate-vercel-secret.ps1. O upload direto S3 é experimental.
 
-Antes de editar, rastreie os fluxos completos e avalie riscos de migração/perda de
-dados. Use mocks e dados sintéticos, sem acessar serviços de produção. Execute
-typecheck, lint, build isolado e testes focados relevantes, separando Playwright de
-build para evitar conflitos de .next. Registre quantidades, falhas e repetições.
-Use commits locais isolados apenas para alterações validadas e nunca inclua o trabalho
-experimental em commits não relacionados. Atualize a documentação e informe riscos,
-testes reais, HEAD e o que ainda exige validação na Vercel. Não declare a sprint
-concluída enquanto houver funcionalidade crítica quebrada ou não validada.
+Resultados da 41G.3D-FINAL: etapa concluída localmente e não commitada. Typecheck
+e build aprovados; lint com 0 erros e 68 avisos preexistentes; 90 testes distintos
+aprovados: 69 lógicos/mockados, 6 PostgreSQL reais locais, Storage 4/4, cloud sync
+4/4, Workspace/Modo Prova 4/4, A → B → A desktop 1/1, Cache Storage 1/1 e mobile
+simulado 390 × 844 1/1. Houve intermitências do runner combinado em cadastro,
+sync após restore e conflito; os casos passaram isolados. Não houve aparelho
+físico, produção, IA paga, S3 externo ou homologação.
+
+Próximo trabalho recomendado: revisar o diff e, somente se autorizado, criar um
+commit local isolado da 41G.3D sem misturar o upload direto. O banco local
+`studyai_41g2c_test` foi comprovado como descartável e os 6 testes passaram com
+URL somente no processo e `STUDYAI_ALLOW_LOCAL_DB_TESTS=1`; não repetir sem
+revalidar loopback, conteúdo sintético e ausência de dados importantes.
+
+Depois execute typecheck, lint, build e testes focados em sequência. Separe testes
+unitários dos de navegador e não misture build/Playwright no mesmo .next. Use
+PostgreSQL descartável somente com confirmação explícita; o portão dos testes
+rejeita host remoto, banco sem nome de teste, produção e ausência da flag opt-in.
+Não use IA paga, credenciais reais ou serviços de produção. Registre aprovados,
+falhos e ignorados por classe.
+
+Ainda pendentes na Sprint 41: fallback de IA consentido/limitado, integração real
+da Semana de Prova, validação Academy/IA em homologação e suíte completa estável.
+Não iniciar Sprint 42 ou 43B enquanto os gates P0 da Sprint 41 permanecerem
+abertos, salvo mudança explícita de prioridade.
+
+Não use git reset, clean, stash, checkout --, rebase ou operações destrutivas. Não
+faça push, merge, deploy, migração ou alteração em Railway/Vercel/Supabase. Não
+modifique .env nem exponha segredos. Crie commits locais isolados somente quando a
+tarefa da próxima sessão autorizar e os testes correspondentes estiverem claros.
 ```

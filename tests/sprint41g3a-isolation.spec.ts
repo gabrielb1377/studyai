@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import type { SessionOperation } from "../src/features/account/SessionOperationManager";
 
 function loadModule(file: string, dependencies: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const source = readFileSync(path.join(process.cwd(), file), "utf8");
@@ -73,17 +74,19 @@ test.describe("Auditoria de isolamento — Sprint 41G.3A", () => {
 
   test("isPrivateSessionKey identifica chaves privadas por usuário e não identifica públicas", () => {
     const { isPrivateSessionKey } = loadModule("src/features/account/SessionLocalData.ts", {
-      "@/lib/storage/StorageManager": { put: async () => {}, get: async () => null },
+      "@/lib/storage/StorageManager": { StorageManager: { put: async () => {}, get: async () => null } },
       "@/lib/storage/Database": { currentDatabaseName: () => "studyai-db" },
       "@/services/material-runtime-store": { MaterialRuntimeStore: { clear: () => {} } },
       "@/features/search/GlobalSearchService": { GlobalSearchService: { clearCache: () => {} } },
       "@/features/preferences/ExperiencePreferences": { ExperiencePreferencesService: { invalidate: () => {} } },
-      "@/features/sync/SyncPreferences": { isSyncPreferenceKey: (key: string) => ["studyai:workspace", "studyai:ai-settings", "studyai:platform-settings", "studyai:experience-settings", "studyai-theme", "studyai:sidebar", "studyai:language", "studyai:exams"].some((p) => key.startsWith(p)) },
+      "@/features/sync/SyncPreferences": { isSyncPreferenceKey: (key: string) => ["studyai:workspace", "studyai:ai-settings", "studyai:experience-settings", "studyai:exams"].some((p) => key.startsWith(p)) },
     }) as { isPrivateSessionKey: (key: string) => boolean; };
 
     expect(isPrivateSessionKey("studyai:exams")).toBe(true);
     expect(isPrivateSessionKey("studyai:workspace:study-1")).toBe(true);
     expect(isPrivateSessionKey("studyai:ai-settings")).toBe(true);
+    expect(isPrivateSessionKey("studyai-theme")).toBe(false);
+    expect(isPrivateSessionKey("studyai:platform-settings")).toBe(false);
     expect(isPrivateSessionKey("studyai:active-session-owner")).toBe(false);
     expect(isPrivateSessionKey("studyai:dados-publicos")).toBe(false);
     expect(isPrivateSessionKey("outra-chave-qualquer")).toBe(false);
@@ -94,15 +97,15 @@ test.describe("Auditoria de isolamento — Sprint 41G.3A", () => {
     localStorage.setItem("studyai:active-session-owner", "user-b");
 
     const { SessionLocalData } = loadModule("src/features/account/SessionLocalData.ts", {
-      "@/lib/storage/StorageManager": {
+      "@/lib/storage/StorageManager": { StorageManager: {
         put: async () => {},
         get: async () => ({ key: "session-local-preferences:v1", value: { "studyai:exams": "plano-de-a" }, updatedAt: new Date().toISOString(), owner: "user-a" }),
-      },
+      } },
       "@/lib/storage/Database": { currentDatabaseName: () => "studyai-db:user-user-c" },
       "@/services/material-runtime-store": { MaterialRuntimeStore: { clear: () => {} } },
       "@/features/search/GlobalSearchService": { GlobalSearchService: { clearCache: () => {} } },
       "@/features/preferences/ExperiencePreferences": { ExperiencePreferencesService: { invalidate: () => {} } },
-      "@/features/sync/SyncPreferences": { isSyncPreferenceKey: (key: string) => ["studyai:workspace", "studyai:ai-settings", "studyai:platform-settings", "studyai:experience-settings", "studyai-theme", "studyai:sidebar", "studyai:language", "studyai:exams"].some((p) => key.startsWith(p)) },
+      "@/features/sync/SyncPreferences": { isSyncPreferenceKey: (key: string) => ["studyai:workspace", "studyai:ai-settings", "studyai:experience-settings", "studyai:exams"].some((p) => key.startsWith(p)) },
     }, { localStorage, crypto }) as {
       SessionLocalData: { resume: (userId: string) => Promise<void>; };
     };

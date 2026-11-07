@@ -17,12 +17,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const sessionRef = useRef<AccountSession | null>(null);
   const transition = useRef<Promise<unknown>>(Promise.resolve());
-  const runTransition = useCallback(<T,>(operation: () => Promise<{ session: AccountSession | null; value: T }>, announce = true) => {
+  const runTransition = useCallback(<T,>(operation: () => Promise<{ session: AccountSession | null; value: T }>, announce = true, persistCurrent = true) => {
     const next = transition.current.catch(() => undefined).then(async () => {
       setIsLoading(true);
       SessionOperationManager.beginTransition();
-      await SessionLocalData.suspend(sessionRef.current?.user.id);
       try {
+        if (persistCurrent) await SessionLocalData.suspend(sessionRef.current?.user.id);
+        else SessionLocalData.clearOwner();
         const result = await operation();
         await StorageManager.setUserScope(result.session?.user.id);
         if (result.session) await SessionLocalData.resume(result.session.user.id);
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void AuthClient.request("/auth/refresh", { method: "POST" }).then(() => refresh()).catch(() => undefined);
     }, 12 * 60_000);
     const otherTabChanged = (event: StorageEvent) => {
-      if (event.key === SESSION_CHANGE_KEY) void runTransition(async () => ({ session: await AuthClient.restoreSession(), value: undefined }), false).catch(() => undefined);
+      if (event.key === SESSION_CHANGE_KEY) void runTransition(async () => ({ session: await AuthClient.restoreSession(), value: undefined }), false, false).catch(() => undefined);
     };
     window.addEventListener("storage", otherTabChanged);
     return () => { window.clearInterval(interval); window.removeEventListener("storage", otherTabChanged); };
@@ -70,7 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await AuthClient.register(name, email, password);
       return { session: await AuthClient.restoreSession(), value: result };
     }),
-    logout: () => runTransition(async () => { await AuthClient.logout(); return { session: null, value: undefined }; }),
+    logout: () => runTransition(async () => {
+      await AuthClient.logout();
+      SessionLocalData.clearOwner();
+      return { session: null, value: undefined };
+    }),
   }), [isLoading, refresh, runTransition, session]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

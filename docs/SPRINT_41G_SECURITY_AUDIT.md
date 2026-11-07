@@ -1,65 +1,88 @@
-# Sprint 41G — auditoria de isolamento e prova
+# Sprint 41G — auditoria de isolamento e Modo Prova
 
-## Sprint 41G.1B — encerrada localmente
+Atualizada em **7 de novembro de 2026**. Esta versão substitui as conclusões contraditórias anteriores.
 
-**O que foi implementado.** `SessionOperationManager` centraliza a identidade da sessão ativa: cada operação assíncrona recebe o `userId` e a geração vigentes, escuta um `AbortSignal` e precisa passar em `assertCurrent()` antes de gravar qualquer resultado. A troca de conta chama `beginTransition()` (incrementa a geração, suspende novas operações e aborta as existentes) e `activate(userId)` ao final. `AuthProvider` serializa as transições, publica a troca para outras abas via `localStorage` e só libera a interface depois de suspender os dados privados. `SessionLocalData` retira de `localStorage` as chaves privadas da conta anterior, guarda-as no escopo daquela conta e as restaura somente quando o dono coincide; sem dono correspondente o conteúdo fica em recuperação, sem ser atribuído à nova conta.
+## Conclusão atual
 
-**Rejeição de respostas atrasadas e cancelamento.** `CloudSyncManager` vincula cada ciclo à identidade que o iniciou, abandona o ciclo anterior quando a geração muda e descarta resultados tardios com `SessionChangedError`. `CloudFileService` e `MaterialBinaryStor
+- Modo Prova protegido: **CONCLUÍDO LOCALMENTE**, com validação histórica em PostgreSQL descartável.
+- Isolamento entre contas: **VALIDADO LOCALMENTE NO ESCOPO DA 41G.3D**, com duas contas sintéticas, duas abas, reload, inspeção de `localStorage`, sync/OPFS, Cache Storage, desktop, mobile simulado e rejeição cross-user na API. Continua limitado contra scripts executados na mesma origem.
+- Sprint 41G.3D: **CONCLUÍDA LOCALMENTE E NÃO COMMITADA**; PostgreSQL descartável, Cache Storage, desktop/mobile simulado, typecheck, lint e build passaram.
+- Sprint 41G como um todo: **NÃO CONCLUÍDA**.
 
-## Sprint 41G.2B — Modo Prova protegido (encerrado localmente)
+## Controles existentes
 
-**O que foi implementado.** `POST /api/exam/attempt` exige `x-studyai-session-user` igual ao usuário do JWT (`requireSessionOwner`, 409) mais CSRF e autenticação, rejeita `questions` enviado pelo cliente e cria questões exclusivamente no servidor a partir de `{studyId, title, subject, chunks, count, difficulty}`. O gabarito/explicações nunca são devolvidos antes da entrega; o cliente recebe somente questões sanitizadas. `GET /api/exam/attempt?id=` retorna a tentativa sem gabarito e, somente após conclusão, o resultado autorizado. `POST /api/exam/grade` usa `SELECT ... FOR UPDATE`, impõe `status <> 'completed'` na atualização e retorna o mesmo resultado para duplicatas/concorrência, rejeitando tentativas de outros usuários (404). Não há fallback em memória; `DATABASE_URL` ausente ou PostgreSQL indisponível falha com 503 antes da geração de IA.
+### Sessão e operações assíncronas
 
-**Limites da evidência.** Testes usam módulos transpilados em VM com PostgreSQL simulado; não testam banco real nem migração em produção. Migração `migrations/0001_exam_attempts.sql` existe mas não foi aplicada em produção.
+`SessionOperationManager` mantém `userId`, geração, suspensão e `AbortSignal`. `AuthProvider` inicia uma transição, invalida operações antigas, troca o escopo local, restaura somente o novo usuário e reativa a interface. `CloudSyncManager` e `CloudFileService` verificam a operação antes de aplicar resultados.
 
-## Sprint 41G.2C — Validação real do Modo Prova protegido (VALIDADA COM POSTGRESQL)
+As APIs `/sync`, `/api/files/[id]` e `/api/exam/*` autorizam pelo JWT e usam `x-studyai-session-user` apenas para detectar uma requisição iniciada por outra geração. O cabeçalho não concede acesso por si próprio.
 
-**O que foi feito.** Testes reais de integração contra PostgreSQL local descartável (`studyai_41g2c_test`, porta 5432, PostgreSQL 18) executados com sucesso (`tests/exam-attempt-integration.spec.ts`): criação, retomada, correção, idempotência, concorrência, isolamento cross-user e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa". Confirmado que `ProviderManager.generate` usa apenas o provedor preferido do usuário (`candidates = [preferred]`), sem fallback silencioso entre provedores; a rota retorna 503 antes da IA quando PostgreSQL está indisponível e não persiste tentativa em falha de IA.
+### Armazenamento local
 
-**Banco utilizado.** PostgreSQL 18 local, banco `studyai_41g2c_test`, descartável/de teste, sem credenciais de produção.
+- IndexedDB muda de nome por escopo de conta.
+- OPFS de materiais usa subdiretório por usuário.
+- `ExamService`, `ExperiencePreferences`, `WorkspacePersistence`, portabilidade e caches privados usam ou validam o usuário ativo.
+- Dados legados sem dono não são atribuídos automaticamente a uma conta autenticada.
+- `SessionLocalData` limpa chaves privadas antes de tentar persistir a cópia da conta anterior.
 
-**Resultado.** 7/7 testes de integração real aprovados contra PostgreSQL real; 21/21 testes simulados aprovados. Migration `migrations/0001_exam_attempts.sql` confirmada idempotente e compatível com o schema existente (`users(id)`).age` recebem o mesmo guarda, de modo que uploads em voo são cancelados e não confirmam resultado após a troca. No servidor, `/sync` e `/api/files/[id]` (GET, PUT e DELETE) exigem que o cabeçalho `x-studyai-session-user` coincida com o usuário do JWT por meio de `requireSessionOwner`, devolvendo `409 SESSION_CHANGED` em caso de divergência.
+Esses namespaces evitam leitura acidental pela aplicação. Eles não impedem que um script executado na mesma origem enumere bancos, OPFS, caches ou `localStorage`; a fronteira de segurança continua sendo a autorização do servidor e a prevenção de execução de script não confiável.
 
-**Validação.** `tests/sprint41g1b-session.spec.ts` — **6/6 aprovados**: A → B → A com aborto de geração, preferências escopadas por conta, rejeição de identidade divergente na API, upload abortado na troca sem confirmação, resposta atrasada bloqueada e sincronização após logout sem gravação. `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos. Commits locais `9553c72` e `861bd0b`.
+### Modo Prova protegido
 
-**Limitações da evidência.** Os testes carregam os módulos transpilados em memória com `fetch` simulado; **não** houve duas contas reais em navegador nem inspeção das respostas reais da API. Não há prova de isolamento dos dados já persistidos contra scripts da mesma origem, de janelas com múltiplas abas efetivamente concorrentes, de OPFS/Cache Storage legados ou de sincronizações simultâneas entre dispositivos. Não houve testes com serviços reais. O build com fontes KaTeX não foi reproduzido nesta execução (o erro é sensível ao caminho do projeto e não reapareceu).
+`POST /api/exam/attempt` exige autenticação, CSRF e proprietário da sessão, rejeita questões enviadas pelo cliente e gera as questões no servidor. O navegador recebe somente `id`, enunciado, alternativas e dificuldade opcional. O gabarito e as explicações ficam em `exam_attempts`.
 
-**Status: 41G.1B encerrada localmente; isolamento completo NÃO comprovado.** Não considerar esta versão segura para avaliações sigilosas nem afirmar isolamento entre contas sem testes negativos com duas contas reais. Esta auditoria e os testes locais não acessam produção.
+`POST /api/exam/grade` corrige com transação e bloqueio de linha, associa a tentativa ao usuário, rejeita acesso cruzado e é idempotente para reenvios. `GET /api/exam/attempt` retoma a tentativa sem gabarito e devolve o resultado somente após conclusão.
 
-## Inventário e achados
+O modo prática permanece local e recebe `correctAnswer`; por isso não oferece sigilo de avaliação. A UI deve continuar distinguindo os dois modos.
 
-- `localStorage` inclui planos (`studyai:exams`), configurações de IA, perfil acadêmico e preferências de experiência, workspace/posição/respostas, notas por painel, opções do Professor e aulas, seleção de biblioteca, áudio, laboratório de qualidade e editor Studio. Essas chaves são compartilhadas na origem e não são uma fronteira de segurança por usuário. A sincronização coleta prefixos de preferências para `workspace:preferences`.
-- Nenhuma utilização direta de `sessionStorage` foi encontrada na busca por código de aplicação. Isso não prova ausência em dependências ou no navegador.
-- O IndexedDB tem nomes por escopo de usuário e guarda documentos, estudos, notas, resumos, flashcards, quizzes, histórico e metadados. Nomes por conta impedem uso acidental por componentes, mas scripts na mesma origem podem acessá-los; não equivalem a autorização ou criptografia.
-- O OPFS mantém binários em `studyai-materials`, diretório compartilhado entre contas. Os IDs não são controle de acesso. A recuperação, migração e isolamento de binários existentes ainda precisam ser desenhados sem perda de dados.
-- `MaterialRuntimeStore` mantinha arquivos e URLs de objeto em memória entre trocas de escopo. Agora limpa e revoga esses URLs quando `StorageManager.setUserScope` efetivamente altera o escopo; outros caches, componentes e tarefas em andamento precisam de auditoria e invalidação abrangentes.
-- Cache Storage inclui `studyai-shared-v1` para compartilhamento de arquivos, além dos caches gerenciados por `CacheManager` e service worker. Avaliar retenção, arquivos pendentes, escopo de conta e limpeza sem perda; não presumir que todos são públicos ou que logout os limpa.
-- `CloudSyncManager` tem fila, manifesto e estado em IndexedDB e processos assíncronos em variáveis de módulo. Ao trocar de conta, operações pendentes podem continuar após a sessão/cookies ou banco ativo mudar. A separação dos registros no backend por `user.sub` não elimina essa corrida no cliente. A aplicação agora restringe chaves de preferências recebidas aos prefixos previstos e a valores texto, mas isso **não** isola contas nem cancela sincronizações.
-- As rotas `/sync` e `/api/files/[id]` usam a identidade autenticada; esse fato, isoladamente, não comprova todos os cenários de autorização, nem foi verificado contra produção.
+## Evidências por etapa
 
-## Migração e dados existentes
+| Etapa | Evidência | Status |
+| --- | --- | --- |
+| 41G.1B | `9553c72`, `861bd0b`; 6/6 testes específicos novamente aprovados | CONCLUÍDA LOCALMENTE |
+| 41G.2B | `e156dd1`, `9678bed`; navegador protegido aprovado com mocks | CONCLUÍDA LOCALMENTE |
+| 41G.2C | `8dd7a75`; PostgreSQL real descartável em 4/11 e 6/6 repetidos com gate seguro em 6–7/11 | CONCLUÍDA LOCALMENTE |
+| 41G.3A | `3c1dbe1`; typecheck e teste incompatível corrigidos na 41G.3D | VALIDADA LOCALMENTE |
+| 41G.3B | `971bee5`; casos focados aprovados | CONCLUÍDA LOCALMENTE |
+| 41G.3C | `5eb5637`; casos focados aprovados | CONCLUÍDA LOCALMENTE |
+| 41G.3D | arquivos modificados/não rastreados; PostgreSQL, Cache Storage, desktop/mobile simulado e gates de qualidade verdes | CONCLUÍDA LOCALMENTE, NÃO COMMITADA |
 
-`Migration.run()` anteriormente lia chaves legadas sem dono e as importava para o banco ativo, inclusive de usuário autenticado; então removia as chaves. Agora bancos autenticados registram a versão de migração sem importar ou remover esse conteúdo. O banco de visitante pode recuperar os registros legados existentes; a migração só remove as chaves após a transação local. Se o nome do banco mudar durante a leitura inicial, a migração falha antes de gravar. Isso é uma contenção parcial: a recuperação de dados sem dono ainda não tem fluxo explícito de identificação/consentimento e não deve ser atribuída automaticamente à próxima conta. Uma verificação isolada não cobre todas as corridas de transações e abas.
+## Evidência 41G.3D-FINAL
 
-## Gabarito e necessidade de backend
+O banco `studyai_41g2c_test` foi validado além do nome: serviço PostgreSQL 18 local, conexão em loopback, apenas as duas contas sintéticas da integração e nenhuma outra conta. O gate exigiu `STUDYAI_ALLOW_LOCAL_DB_TESTS=1`, ambiente de teste, host loopback e nome descartável. `DATABASE_URL` existiu somente no processo. Os 6 casos cobriram payload inicial sem gabarito, retomada, correção no servidor, idempotência, concorrência e acesso cruzado. A tabela de tentativas ficou vazia ao final.
 
-`/api/tutor/quiz` devolve `correctAnswer` e `explanation` em cada questão. `QuizService` persiste esses campos localmente e `QuizWorkspace` corrige a prova no navegador. Logo, ocultar a explicação na interface não protege o gabarito. O modo existente foi identificado na interface como local e sem sigilo; a proteção por tentativa vinculada ao usuário, armazenamento seguro no servidor, correção transacional, idempotência e limite de tentativas **ainda não foi implementada**. Não usar o modo local como avaliação protegida.
+O teste de Cache Storage registrou o Service Worker real no Chromium, manteve um cache público compartilhado e caches privados de A e B. A conta B não recebeu o marcador privado de A pela aplicação; a interface de B removeu apenas seu próprio cache, e A removeu o seu após novo login. Nenhuma resposta de rota autenticada/API apareceu em Cache Storage. A retenção proposital do cache de A após logout simulou falha de limpeza sem exposição pela aplicação.
 
-Para concluir, projetar armazenamento no servidor que não fique disponível por `/sync`, migração explícita e separada, associação à identidade autenticada, verificações de autorização, expiração, limites, submissão atômica e testes de concorrência/idempotência. Preservar o modo prática e documentar a opção offline sem garantia de sigilo. Não criar tabelas em requisições ou migrar produção automaticamente.
+Limite explícito: qualquer JavaScript que já execute na mesma origem pode chamar `caches.keys()` e abrir esses caches. O controle atual evita mistura acidental entre sessões; proteção contra script não confiável depende de CSP, prevenção de XSS e autorização do servidor. O cache `studyai-shared-v1` é transitório para share target e permaneceu disponível; ele não recebeu respostas autenticadas no teste.
 
-## Riscos abertos e próximos testes
+A regressão mobile usou viewport Chromium simulado de 390 × 844, não aparelho físico. Login/logout, A → B → A, tema, navegação, Biblioteca, sync e reload passaram sem marcador cruzado.
 
-1. Reproduzir e corrigir A → B → A sem expor `localStorage`, sem perda e sem atribuição automática dos dados legados. Prefixos por usuário não protegem contra scripts da mesma origem; definir quais dados podem permanecer no dispositivo.
-2. Impedir que qualquer envio, resposta, arquivo ou evento de sincronização iniciados por A sejam aplicados sob B, inclusive mudança de cookie, reload e múltiplas abas. Validar identidade também no backend.
-3. Limpar e invalidar estados React, caches e handles em logout/troca; resolver OPFS e Cache Storage sem apagar dados irrecuperáveis.
-4. Implementar e testar tentativas protegidas: payload inicial sem gabarito, acesso cruzado negado, submissão concorrente/duplicada, correção no servidor e desktop/celular.
-5. Confirmar comportamento offline e plano de migração/recuperação com dados sintéticos, incluindo falha, interrupção e rollback.
+## Falhas reproduzidas e correções em 6/11/2026
 
-As alterações parciais e resultados efetivos ficam também no handoff e nos commits locais; não são autorização para push ou deploy.
+1. As duas referências ausentes a `SessionOperation` foram corrigidas com importação de tipo, sem `any` ou supressão.
+2. O mock 41G.3A passou a expor o membro nomeado `StorageManager`, como o módulo real.
+3. Tema, idioma, sidebar e preferências de plataforma foram classificados como preferências do dispositivo. Workspace, IA, experiência e provas continuam privados/sincronizáveis por conta.
+4. A sessão de áudio do Professor usa chave por usuário no IndexedDB, valida a geração antes de aplicar resultados e recupera o registro legado no banco já escopado sem apagá-lo.
+5. Eventos de outra aba limpam o runtime sem persistir novamente dados que a aba iniciadora já transferiu, evitando atribuição cruzada durante A → B → A.
+6. Os testes cloud gravavam OPFS na pasta antiga; o harness foi atualizado para `studyai-materials/<escopo>`. Restore, conflito, upload/download e exclusão passaram em navegador.
+7. A integração PostgreSQL foi repetida com o gate seguro: 6/6 aprovados no banco local descartável, sem deixar tentativas persistidas.
 
-## Validação local
+## Dados legados e recuperação
 
-- `npm run typecheck`: aprovado; `npm run lint`: 0 erros, 69 avisos; `npm run build` aprovado na cópia isolada. A validação ocorreu sem conexão com bancos ou credenciais de produção.
-- Playwright em cópia isolada: rodada de armazenamento/sincronização com 10 aprovados e 1 falha (painel de conflito não apareceu); o caso de conflito passou em repetição. Outra rodada focada teve 6 aprovados: três testes de migração, um de cache, um de filtragem de preferências e a repetição de conflito. Os testes de migração e cache usam dependências simuladas.
-- Rodada de Workspace e auditoria A → B: 3 aprovados (incluindo desktop e celular simulados) e 1 falha; `studyai:exams` de A permaneceu acessível após login em B. Esse harness exploratório com contas sintéticas fica em `work/sprint41/tests/sprint41f-two-accounts-audit.spec.ts` na cópia isolada, não no repositório.
-- Não foi executado um teste completo de A → B → A, corridas de sincronização na troca de identidade ou avaliação protegida no servidor. Não houve testes com serviços reais. Repetição bem-sucedida do caso de conflito não elimina possível intermitência.
+Dados sem proprietário ficam em quarentena/escopo guest e não são importados automaticamente para a próxima conta. Isso evita atribuição indevida, mas ainda falta uma experiência explícita de recuperação que mostre origem, conteúdo, destino e consentimento antes de qualquer importação.
+
+Não apagar automaticamente bancos, OPFS ou caches legados. Qualquer limpeza precisa de inventário, exportação/backup local e confirmação. `studyai-theme`, idioma, sidebar e preferências de plataforma são intencionalmente globais ao dispositivo; preferências de estudo e IA permanecem privadas por conta.
+
+## Upload direto experimental
+
+A rota não rastreada `src/app/api/files/[id]/direct/route.ts` vincula tokens temporários ao usuário e material, usa chave S3 com prefixo do usuário, valida tamanho/MIME/hash e confirma ownership pelo JWT. O fluxo também possui cancelamento no cliente. Ainda não está aprovado porque depende de alterações não commitadas, não foi testado contra armazenamento compatível real nesta auditoria e precisa revisão final de CORS, headers assinados, limpeza de objetos pendentes e concorrência.
+
+## Riscos restantes e testes obrigatórios
+
+1. Repetir em aparelho móvel físico; o teste atual usa viewport Chromium simulado.
+2. Estabilizar as intermitências do runner combinado de cadastro, sync após restore e renderização de conflito, que passaram quando isoladas.
+3. Testes negativos adicionais de API para backup, compartilhamento e colaboração; sync, arquivos e prova já possuem cobertura focada.
+4. Experiência explícita de recuperação para dados guest/sem proprietário; a sessão de áudio legada no banco de um usuário já é recuperável.
+5. Manter CSP/XSS e autorização do servidor como fronteira; Cache Storage e namespaces locais não protegem contra scripts da mesma origem.
+
+Não usar a conclusão local como homologação de produção. A Sprint 41G.3D pode ser considerada concluída localmente, mas publicação ainda depende da revisão/commit autorizado e dos gates restantes da Sprint 41.

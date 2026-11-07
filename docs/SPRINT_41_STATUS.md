@@ -1,92 +1,95 @@
-# Sprint 41 — estado e validação
+# Sprint 41 — estado real em 7/11/2026
 
-## Atualização Sprint 41G.1B — encerrada localmente
+**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. A 41G.3D foi concluída localmente e continua não commitada; ainda faltam as pendências funcionais maiores da Sprint 41 e homologação autorizada.
 
-**Encerrada com evidências.** A troca de conta passou a invalidar operações pendentes. `SessionOperationManager` marca cada tarefa assíncrona com o usuário e a geração que a iniciou, aborta requisições em voo na transição e rejeita resultados atrasados com `SessionChangedError` antes de gravá-los. `SessionLocalData` remove de `localStorage` as chaves privadas da conta anterior, guarda-as no escopo dessa conta e só as restaura quando o dono coincide; caso contrário o conteúdo permanece em recuperação, sem ser atribuído à nova conta. As rotas `/sync` e `/api/files/[id]` (GET, PUT e DELETE) exigem que `x-studyai-session-user` coincida com o usuário do JWT em `requireSessionOwner`, devolvendo `409 SESSION_CHANGED`.
+## Fechamento 41G.3D-FINAL
 
-**Commits locais:** `9553c72` (guarda de sessão no código) e `861bd0b` (testes e configuração do runner).
+- PostgreSQL 18 local descartável `studyai_41g2c_test`, em `127.0.0.1:5432`: 6/6 integrações aprovadas, sem migração, criação ou exclusão de banco. Antes e depois havia duas contas sintéticas conhecidas, nenhuma conta não sintética e zero tentativas persistidas.
+- Cache Storage em Chromium: 1/1 aprovado para A → B, conteúdo público, caches privados, exclusão de respostas autenticadas e limpeza escopada. Cache local não é fronteira contra script da mesma origem.
+- Desktop: Storage 4/4, A → B → A com duas abas 1/1, cloud sync 4/4 e Workspace/Modo Prova 4/4.
+- Mobile: 1/1 em Chromium com viewport simulado 390 × 844. Não equivale a dispositivo físico.
+- Qualidade: typecheck aprovado; lint com 0 erros e 68 avisos; build aprovado com 48 páginas.
+- Contagem única do fechamento: 90 aprovados, 0 casos obrigatórios definitivamente falhos e 0 ignorados. Rodadas combinadas tiveram três falhas intermitentes, todas aprovadas isoladamente; o harness cloud ainda requer estabilização.
 
-**Testes:** `tests/sprint41g1b-session.spec.ts` — **6/6 aprovados** (A → B → A com aborto de geração, preferências escopadas por conta, rejeição de identidade divergente na API, upload abortado na troca sem confirmação, resposta atrasada bloqueada, 
+## Evidência Git
 
-## Atualização Sprint 41G.2B — encerrada localmente
+- Branch: `v1.1-development`.
+- HEAD: `5eb5637`.
+- Referência remota conhecida: `origin/v1.1-development` em `331bc15`, sem `fetch` nesta auditoria.
+- Alterações experimentais de upload direto e 41G.3D permanecem fora de commit.
 
-**Status:** concluída localmente, sem push/deploy.
+## Reconstrução das etapas
 
-**Entregas.** Modo Prova protegido com criação, correção e retomada no servidor: autenticação/CSRF/proprietário da sessão em `POST /api/exam/attempt`; geração server-side de questões com `PromptBuilder.examQuiz`, `AIService` e `withAIQuota`; tabela `exam_attempts` via migration `0001_exam_attempts` (sem alterar tabelas existentes); resposta inicial sem gabarito/explicação; correção transacional idempotente em `POST /api/exam/grade`; rejeição de cross-user e POST sem `questions`. UI protegida (`SecureExamPanel`/`SecureExamClient`) integrada ao `QuizWorkspace`, mantendo Modo Prática local inalterado. Testes focados simulados em `tests/exam-attempt-server.spec.ts` (16 aprovados) e fluxos de workspace protegido/prática em `tests/sprint41-workspace.spec.ts` (aprovados). `typecheck`, `lint` e `build` aprovados (0 erros, apenas avisos pré-existentes).
+| Etapa | Status real | Evidência e limite |
+| --- | --- | --- |
+| Sprint 41 inicial | CONCLUÍDA LOCALMENTE | `0215035` corrige contrato Academy/quota; `f6bcb58` inclui Semana de Prova na navegação; `19cb815` preserva estado do simulado e libera abertura de ferramentas. Fluxos externos não foram validados. |
+| Sprint 41F | PARCIALMENTE IMPLEMENTADA | `165d351` melhora Ajuda; `b57167b` suspende troca não consentida de provider. Não existe fallback econômico completo com consentimento, limite e modelo efetivo uniforme. |
+| Sprint 41G / contenção inicial | PARCIALMENTE IMPLEMENTADA | `fd8e50a`, `fd6dd97`, `a5ed672`, `75c1a02`, `6304b53` e `c821830` contêm migração indevida, limpam cache e documentam que o modo local não protege gabarito. |
+| Sprint 41G.1B | CONCLUÍDA LOCALMENTE | `9553c72`, `861bd0b`, `1d08d83`. Geração de sessão, aborto e `x-studyai-session-user`; 6/6 testes específicos passaram novamente. Não demonstra fronteira de segurança na mesma origem. |
+| Sprint 41G.2A | NÃO IDENTIFICADA COMO ENTREGA SEPARADA | A auditoria e preparação foram absorvidas pelas etapas de contenção e 41G.2B; não há commit ou documento que sustente uma conclusão independente. |
+| Sprint 41G.2B | CONCLUÍDA LOCALMENTE | `e156dd1`, `9678bed`, `5e65e58`. Tentativa protegida, gabarito no servidor, correção transacional e UI. Teste de navegador protegido passou nesta auditoria com mocks. |
+| Sprint 41G.2C | CONCLUÍDA LOCALMENTE | `bc909d4` e `8dd7a75`. Em 4/11 foram registrados 7/7 casos contra PostgreSQL 18 descartável e 21/21 simulados. Em 6/11 o gate falhou com segurança; em 6–7/11 o banco foi comprovado como local/descartável e 6/6 casos passaram. |
+| Sprint 41G.3A | VALIDADA LOCALMENTE | `3c1dbe1`. A 41G.3D corrigiu a importação de `SessionOperation` e o mock de `StorageManager`; typecheck e casos focados passaram. |
+| Sprint 41G.3B | CONCLUÍDA LOCALMENTE | `971bee5`. Limpeza antes de persistir, quarentena de dados sem dono e `clearOwner`; casos focados passaram. |
+| Sprint 41G.3C | CONCLUÍDA LOCALMENTE | `5eb5637`. Escopo por usuário para provas, preferências, workspace, portabilidade e cache; casos focados e fluxos de navegador passaram. |
+| Sprint 41G.3D | CONCLUÍDA LOCALMENTE, NÃO COMMITADA | Corrigiu preferências de dispositivo, transição entre abas, áudio escopado e resposta atrasada. PostgreSQL descartável 6/6, Cache Storage, desktop e mobile simulado passaram. Não houve homologação de produção ou aparelho físico. |
 
-**Limites.** Os testes Playwright de API usam módulos transpilados em VM com PostgreSQL simulado; não há banco de produção nem migração aplicada em produção. Migração `migrations/0001_exam_attempts.sql` já existe, mas `npm run db:migrate` não foi executado neste sprint.sincronização após logout sem gravação). `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos.
+## Funcionalidades atuais
 
-**Limitações da evidência:** os testes carregam módulos transpilados em memória com `fetch` simulado e não usam duas contas reais de navegador, nem inspecionam respostas reais da API. Isolamento completo **não foi demonstrado**: seguem sem prova os dados já persistidos, múltiplas abas concorrentes, OPFS/Cache Storage legados e sincronizações simultâneas entre dispositivos. O erro de fontes KaTeX não reapareceu nesta execução (é sensível ao caminho do projeto).
+### Implementadas e verificadas localmente
 
-**Sprint 41G.2B (Modo Prova protegido): encerrada localmente.** `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` e `POST /api/exam/grade` existem e estão commitados localmente. O Modo Prova atual continua local e sem sigilo de gabarito apenas no Modo Prática; o Modo Prova protegido armazena o gabarito somente no servidor. Consulte [auditoria](SPRINT_41G_SECURITY_AUDIT.md).
+- Sessões assíncronas identificadas por usuário e geração, com aborto e descarte de resposta atrasada.
+- Rotas `/sync`, `/api/files/[id]` e Modo Prova protegido verificam o usuário autenticado e o proprietário declarado da sessão.
+- Modo Prova protegido não envia `correctAnswer` ou explicação no payload inicial; correção fica no servidor.
+- Modo Prática continua local e só revela explicação depois da resposta; não deve ser apresentado como avaliação sigilosa.
+- Central de Ajuda possui categorias, busca, Academy, rolagem e teclado.
+- Semana de Prova possui CRUD local básico, plano por dias e progresso manual.
 
-## Atualização Sprint 41G.2C — Validação real do Modo Prova protegido (VALIDADA COM POSTGRESQL)
+### Implementadas sem validação externa nesta auditoria
 
-**Status:** concluída.
+- Três modalidades Academy: material, trilha e projeto prático.
+- Tutor, Professor, flashcards, quiz, resumos, Lab e IA Quality com providers reais.
+- PostgreSQL/S3/Vercel/Supabase com o HEAD atual.
+- Sincronização entre dispositivos reais e múltiplas abas concorrentes.
+- Upload direto S3, que permanece experimental e parcialmente não rastreado.
 
-**O que foi feito.** Testes reais de integração contra PostgreSQL local descartável (`studyai_41g2c_test`, porta 5432, PostgreSQL 18) executados com sucesso (`tests/exam-attempt-integration.spec.ts`): criação, retomada, correção, idempotência, concorrência, isolamento cross-user e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa". Migration `migrations/0001_exam_attempts.sql` inspecionada e confirmada idempotente.
+### Pendências críticas
 
-**Banco utilizado.** PostgreSQL 18 local, banco `studyai_41g2c_test`, descartável/de teste, sem credenciais de produção. `DATABASE_URL` definida apenas como variável de ambiente para execução dos testes.
+1. Revisar e autorizar um commit isolado da 41G.3D, preservando os experimentos de upload direto.
+2. Estabilizar as intermitências do runner de cadastro/sync/conflitos e repetir em aparelho móvel físico quando disponível.
+3. Finalizar fallback de IA consentido, limitado e transparente.
+4. Integrar Semana de Prova a estudos, materiais, flashcards, quizzes, simulados e resultados sem duplicação.
+5. Validar Academy e IA com serviços reais somente em homologação autorizada.
+6. Repetir mobile/desktop; scripts da mesma origem continuam fora da fronteira oferecida por namespaces locais.
 
-**Resultado.** 7/7 testes de integração real aprovados; 21/21 testes simulados aprovados; `typecheck`, `lint` (0 erros), `build` aprovados.
+## Testes executados nesta auditoria
 
-## Atualização Sprint 41F — andamento
+| Classe | Comando/escopo | Resultado |
+| --- | --- | --- |
+| Estático | `npm run typecheck` | APROVADO. |
+| Estático | `npm run lint` | APROVADO: 0 erros, 68 avisos preexistentes fora do escopo. |
+| Build local | `npm run build` | APROVADO: Next.js 15.5.28, 48 páginas; KaTeX não falhou. |
+| Unitário/mockado | sessão, prova e isolamento | 69 aprovados, 0 falhos. |
+| Integração real local | PostgreSQL descartável | 6 aprovados, 0 falhos, 0 ignorados. |
+| Unitário/mockado | IA, quotas, sem DDL, upload e deploy | 27 aprovados. |
+| Navegador local | Workspace, Academy e Ajuda | 8 aprovados. |
+| Navegador local | Storage | 4 aprovados, 0 falhos. |
+| Unitário focado | 41G.3D | 10 aprovados, 0 falhos; conjunto 41G.3A/3D/preferências: 23 aprovados. |
+| Navegador local | A → B → A e duas abas | 1 aprovado, 0 falhos. |
+| Navegador local | Cloud sync, conflito, restore, arquivo e OPFS | 4 aprovados, 0 falhos. |
+| Navegador local | Cache Storage | 1 aprovado, 0 falhos. |
+| Navegador local | Mobile simulado 390 × 844 | 1 aprovado, 0 falhos. |
 
-**Ainda incompleta.** Como contenção temporária, o modo automático de troca entre provedores foi desabilitado no gerenciador e no Lab, e a interface informa essa limitação. A seleção de um provedor/modelo continua disponível; ainda falta implementar fallback por lista de modelos autorizados, consentimento individual entre provedores, limites de consumo e exibição consistente do modelo usado. A quota do modo automático legado permanece conservadora. A consulta de modelos OpenRouter preserva o status HTTP; respostas de autenticação do Gemini não são repetidas/classificadas como rate limit apenas pelo texto.
+Os casos de Storage foram executados no runner de navegador isolado e passaram. Nenhum teste acessou IA paga ou produção.
 
-A Central de Ajuda agora agrupa guias em categorias expansíveis, busca também nos passos e inclui um guia da Academy. Foram verificadas rolagem em dois tamanhos e navegação por teclado em testes locais; não há guia de fallback enquanto a funcionalidade estiver indisponível.
+## Critérios para encerrar a Sprint 41
 
-As pendências de isolamento entre contas, proteção do gabarito, integração da Semana de Prova e validação real continuam abertas. Veja os resultados e hashes mais recentes em `CURRENT_HANDOFF.md` e no log Git; o histórico anterior abaixo permanece como registro da rodada Sprint 41.
+- Typecheck, lint e build aprovados no mesmo HEAD.
+- Testes 41G.3A–D verdes e alterações revisadas/commitadas mediante autorização.
+- Teste negativo com duas contas de navegador e inspeção das respostas da API.
+- Política de dados legados e preferências definida sem perda silenciosa.
+- Fallback consentido e limites de consumo validados, ou decisão explícita de manter fallback desativado para o release.
+- Semana de Prova integrada ao menos ao conjunto mínimo aprovado, ou escopo formalmente movido para a Sprint 45.
+- Academy/IA e infraestrutura validadas em homologação autorizada, com os resultados separados dos mocks.
 
-Validação 41F: `npm run typecheck` e `npm run build` isolado passaram; `npm run lint` passou com 0 erros e 69 avisos. Playwright dirigido: rodada de 16/16 aprovada (IA com mocks, ajuda e Workspace); outra de 12/12 aprovada após ajuste dos matchers de duas falhas iniciais de teste. Uma auditoria separada com duas contas sintéticas **falhou**: após sair da conta A e entrar na B, `localStorage["studyai:exams"]` ainda continha o plano de A. Uma primeira verificação apenas visual passou sem provar isolamento; o teste com inspeção do armazenamento expôs a falha. Harness exploratório está na cópia isolada `work/sprint41/tests/sprint41f-two-accounts-audit.spec.ts`, não commitado no repositório. Nenhuma credencial externa ou serviço real foi usado nesses testes. O acesso direto aos dados por B é demonstrado; validar também renderização e sincronização sem confundir espera de carregamento com isolamento.
-
-Checkpoint de 30 de outubro de 2026. **Sprint não concluída; não autoriza publicação.** Este registro descreve o repositório e os testes locais, não uma nova inspeção dos serviços externos.
-
-## Estado Git
-
-- Branch: `v1.1-development`. HEAD da implementação antes do checkpoint de documentação: `19cb815`.
-- `0215035`: prepara os dados para o middleware de quota na geração Academy.
-- `f6bcb58`: adiciona Semana de Prova ao menu principal.
-- `19cb815`: persiste estado do simulado e remove o limite que impedia abertura de ferramentas.
-- A referência remota local `origin/v1.1-development` estava em `331bc15`, quatro commits atrás do HEAD; não houve fetch nesta auditoria, portanto isso não confirma o estado remoto atual. `3b54bb8`, anterior aos três commits acima, também estava apenas na branch local segundo essa referência.
-
-## Implementado localmente
-
-- Academy: `src/app/api/academy/generate/route.ts` fornece `history` e `message` preparados ao middleware de quota. Antes, a construção antecipada do prompt recebia campos ausentes. A correção não prova que todas as respostas reais dos provedores são válidas.
-- Semana de Prova: entrada para `/provas` em `src/lib/navigation.ts`.
-- Simulado: `QuizWorkspace.tsx` e `WorkspacePersistence.ts` guardam respostas, modo e posição, preservando lacunas em respostas não preenchidas. O modo prova mostra seleção sem exibir explicação na interface antes da entrega.
-- Estudos: removido o limite de seis painéis em `PanelManager.ts`, que podia impedir a abertura de outra ferramenta e selecionar painel incorreto. Revisão, IA Quality, Lab e Resumos abriram em teste local depois de outros painéis.
-
-## Validado localmente na sessão anterior
-
-- `npm run typecheck`: aprovado. `npm run lint`: aprovado, 0 erros e 69 avisos. `npm run build`: aprovado em cópia isolada, sem credenciais externas configuradas.
-- Playwright dirigido: uma rodada com 6 aprovados, incluindo testes de rotas de flashcards/quiz com mocks, contrato Academy com mocks e Workspace. Outra rodada teve 13 testes: 11 passaram e 2 expiraram com espera de 5 segundos; ambos passaram em repetição com expectativa de 20 segundos. Não somar esses números como casos únicos nem tratá-los como suíte completa.
-- Simulado: seleção e alteração A–D, navegação, atualização de página, Enter, pontuação e entrega em 1280 px e 390 px; respostas de geração simuladas. O modo prática e toque físico não foram integralmente validados nessa rodada.
-- Sincronização: testes de desenvolvimento passaram para fila incremental/offline, conflitos entre dois contextos e exclusão sincronizada. Não comprovam uso do PostgreSQL/S3 de produção nem isolamento completo na troca de contas.
-- Os testes que expiraram foram integração Academy com abertura no Professor e cadastro/sessão: o primeiro aguardava navegação e o segundo ainda estava carregando o cadastro. A repetição passou; a causa precisa ser investigada com tempos, compilação e possíveis falhas intermitentes, sem assumir que foi apenas lentidão.
-- A causa dos cliques que não respondiam no ambiente publicado não foi reproduzida conclusivamente.
-
-## Não validado em produção após as alterações
-
-- Geração real de material, trilha e projeto Academy; disponibilidade, timeout e formatos dependem de provedor/modelo reais.
-- Tutor, flashcards, quiz e demais fluxos de IA com a nova versão.
-- Conexão PostgreSQL, TLS e S3 com esta versão; o build isolado não acessou esses serviços.
-- Comportamento após publicação em PC e celular, inclusive teclado e toque físico.
-
-## Pendências críticas
-
-1. Implementar fallback opcional e limitado: modelo escolhido primeiro; outro modelo previamente autorizado do mesmo provedor apenas para falhas recuperáveis; outro provedor apenas com consentimento explícito. Não repetir falhas de autenticação, permissão ou validação. Exibir modelo efetivo e troca, considerar custo e não persistir resposta parcial. O modo automático existente pode alternar provedores e precisa ser revisto antes de alegar que cumpre essa política.
-2. Isolar preferências e planos entre contas no mesmo navegador: IndexedDB tem escopo por usuário, mas dados e preferências em `localStorage` usados na sincronização são compartilhados. Investigar migração sem perda e testar troca de conta, conflitos e reconexão.
-3. Integrar planos existentes de Semana de Prova a estudos, materiais, flashcards, quizzes e progresso somente por associações válidas; não duplicar dados.
-4. Evoluir Central de Ajuda: categorias expansíveis, guias e solução de problemas, mantendo pesquisa e rolagem existentes; não documentar fallback como funcional antes de implementá-lo.
-5. Revisar o gabarito: as questões incluem a resposta correta no navegador antes da entrega. Ocultação visual não é sigilo; definir e testar correção e proteção apropriadas.
-6. Investigar os dois timeouts descritos acima e reproduzir/diagnosticar a queixa original de seleção do simulado no ambiente apropriado.
-
-## Arquivos experimentais a preservar
-
-Já estavam não commitados: `package.json`, `package-lock.json`, `playwright.config.ts`, `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts`, `src/server/storage/ObjectStorage.ts`, `src/app/api/files/[id]/direct/route.ts`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts` e `scripts/generate-vercel-secret.ps1`. Não presumir que upload direto foi aprovado nem incluir esses arquivos em commits de outra tarefa.
-
-Consulte [CURRENT_HANDOFF.md](../CURRENT_HANDOFF.md), [roadmap](ROADMAP_V1_2.md) e [prompt da próxima sessão](NEXT_SESSION_PROMPT.md).
-# Sprint 41G.1 — atualização parcial
-
-O isolamento entre contas continua **não concluído**. Foi adicionada uma verificação de geração para evitar iniciar operações do IndexedDB depois de uma troca de escopo durante a inicialização ou abertura. Não há garantia de proteção dos dados persistidos na mesma origem nem de cancelamento das sincronizações em andamento. Consulte `docs/SPRINT_41G_SECURITY_AUDIT.md` antes de qualquer publicação. O Modo Prova protegido está reservado para a Sprint 41G.2.
+Consulte [PROJECT_AUDIT_2026-11-05.md](PROJECT_AUDIT_2026-11-05.md), [SPRINT_41G_SECURITY_AUDIT.md](SPRINT_41G_SECURITY_AUDIT.md) e [ROADMAP_V1_2.md](ROADMAP_V1_2.md).

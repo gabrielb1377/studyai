@@ -137,7 +137,8 @@ test("sync incremental mantém fila offline, backup, compartilhamento e arquivo"
   await putRecord(page, "documents", { id: "cloud-file-1", name: "cloud.txt", extension: "txt", mimeType: "text/plain", type: "text", size: 13, lastModified: Date.now(), status: "ready", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
   await page.evaluate(async () => {
     const storage = navigator.storage as StorageManager & { getDirectory(): Promise<FileSystemDirectoryHandle> };
-    const root = await storage.getDirectory(); const directory = await root.getDirectoryHandle("studyai-materials", { create: true }); const handle = await directory.getFileHandle("cloud-file-1", { create: true }); const writable = await handle.createWritable(); await writable.write(new File(["conteúdo cloud"], "cloud.txt", { type: "text/plain" })); await writable.close();
+    const scope = localStorage.getItem("studyai:storage-scope") || "guest";
+    const root = await storage.getDirectory(); const base = await root.getDirectoryHandle("studyai-materials", { create: true }); const directory = await base.getDirectoryHandle(scope, { create: true }); const handle = await directory.getFileHandle("cloud-file-1", { create: true }); const writable = await handle.createWritable(); await writable.write(new File(["conteúdo cloud"], "cloud.txt", { type: "text/plain" })); await writable.close();
   });
   const uploaded = page.waitForResponse((item) => item.url().includes("/api/files/cloud-file-1") && item.request().method() === "PUT");
   await sync(page);
@@ -191,8 +192,10 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
       status: "ready",
     });
     await firstPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const base = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const directory = await base.getDirectoryHandle(scope, { create: true });
       const handle = await directory.getFileHandle(id, { create: true });
       const writable = await handle.createWritable();
       await writable.write(new File(["conteúdo material"], "material-remoto.txt", { type: "text/plain" }));
@@ -203,23 +206,29 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
     await login(secondPage, email);
     await sync(secondPage);
     await expect.poll(async () => (await secondPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials", { create: false }).catch(() => null);
+      const base = await root.getDirectoryHandle("studyai-materials", { create: false }).catch(() => null);
+      const directory = await base?.getDirectoryHandle(scope, { create: false }).catch(() => null);
       return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
     }, materialId))).toBe(false);
     const remoteFile = await secondPage.request.get(`/api/files/${materialId}`, { headers: await sessionHeaders(secondPage) });
     expect(remoteFile.ok()).toBe(true);
     await secondPage.evaluate(async ({ id, bytes }) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const base = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const directory = await base.getDirectoryHandle(scope, { create: true });
       const handle = await directory.getFileHandle(id, { create: true });
       const writable = await handle.createWritable();
       await writable.write(new Uint8Array(bytes));
       await writable.close();
     }, { id: materialId, bytes: [...new Uint8Array(await remoteFile.body())] });
     const cachedBeforeDelete = await secondPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials");
+      const base = await root.getDirectoryHandle("studyai-materials");
+      const directory = await base.getDirectoryHandle(scope);
       return directory.getFileHandle(id).then(() => true).catch(() => false);
     }, materialId);
     expect(cachedBeforeDelete).toBe(true);
@@ -237,8 +246,10 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
     await sync(firstPage);
     await sync(secondPage);
     const cachedAfterDelete = await secondPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials").catch(() => null);
+      const base = await root.getDirectoryHandle("studyai-materials").catch(() => null);
+      const directory = await base?.getDirectoryHandle(scope).catch(() => null);
       return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
     }, materialId);
     expect(cachedAfterDelete).toBe(false);

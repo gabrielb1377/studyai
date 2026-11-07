@@ -21,13 +21,22 @@ function loadModule(file: string, dependencies: Record<string, unknown>, globals
  * em vez de falhar ou apontar para produção.
  */
 function isNonProdPostgresAvailable(): boolean {
-  return Boolean(process.env.DATABASE_URL?.trim()) && process.env.NODE_ENV !== "production";
+  const connectionString = process.env.DATABASE_URL?.trim();
+  if (!connectionString || process.env.NODE_ENV === "production" || process.env.STUDYAI_ALLOW_LOCAL_DB_TESTS !== "1") return false;
+  try {
+    const url = new URL(connectionString);
+    const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+    const databaseName = url.pathname.slice(1);
+    return isLoopback && /(?:^|[-_])(test|testing|ci|scratch|disposable)(?:$|[-_])/i.test(databaseName);
+  } catch {
+    return false;
+  }
 }
 
 const DB_GATE_MSG = [
-  "Integração real com PostgreSQL bloqueada: defina DATABASE_URL para um banco",
-  "não produtivo e NÃO defina NODE_ENV=production. Nenhuma credencial de",
-  "produção será usada. Teste pulado até que um banco não produtivo esteja disponível.",
+  "Integração real com PostgreSQL bloqueada: defina DATABASE_URL para um banco local",
+  "descartável cujo nome contenha test/testing/ci/scratch/disposable e confirme com",
+  "STUDYAI_ALLOW_LOCAL_DB_TESTS=1. NODE_ENV=production nunca é aceito.",
 ].join(" ");
 
 const USER_A = "integration-exam-user-a";
@@ -269,9 +278,4 @@ test.describe("Integração real — Modo Prova protegido (PostgreSQL não produ
     }
   });
 
-  test("banco não produtivo disponível (desbloqueia integração real)", () => {
-    expect(isNonProdPostgresAvailable()).toBe(true);
-    // Este teste confirma que o banco não produtivo está disponível e a
-    // integração real com PostgreSQL pode ser executada. Não aponta para produção.
-  });
 });

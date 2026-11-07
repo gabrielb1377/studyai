@@ -1,304 +1,121 @@
-# Handoff atual — StudyAI V1.1 / Sprint 41
+# Handoff atual — StudyAI V1.1
 
-## Atualização Sprint 41G.1B
+Atualizado em **7 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
 
-**Encerrada localmente.** A troca de conta agora invalida operações pendentes: `SessionOperationManager` marca cada tarefa assíncrona com usuário e geração, aborta requisições em voo e rejeita resultados atrasados com `SessionChangedError`; `SessionLocalData` descarta e restaura os dados privados por conta; `/sync` e `/api/files/[id]` passam a exigir `x-studyai-session-user` igual ao usuário do JWT (`requireSessionOwner`, `409 SESSION_CHANGED`).
+## Fechamento local da Sprint 41G.3D
 
-**Commits locais:** `9553c72` (guarda de sessão no código) e `861bd0b` (testes e configuração do runner). **Testes:** `tests/sprint41g1b-session.spec.ts` **6/6 aprovados**; `npm run typecheck` e `npm run build` aprovados; `npm run lint` com 0 erros e 69 avisos.
+A Sprint 41G.3D está **CONCLUÍDA LOCALMENTE, NÃO COMMITADA E NÃO HOMOLOGADA EM PRODUÇÃO**. O PostgreSQL 18 local foi identificado por loopback (`127.0.0.1:5432`), banco descartável `studyai_41g2c_test`, somente duas contas sintéticas conhecidas e nenhuma tentativa de prova antes da execução. Os 6 testes de integração passaram e deixaram `exam_attempts` vazio. Nenhum banco foi criado, removido ou migrado.
 
-**Limites da evidência:** os testes usam módulos transpilados em memória com `fetch` simulado, não duas contas reais de navegador. Isolamento completo entre contas **não foi demonstrado** (dados já persistidos, múltiplas abas, OPFS/Cache Storage legados e sincronizações simultâneas seguem sem prova). Riscos e próximos testes em [docs/SPRINT_41G_SECURITY_AUDIT.md](docs/SPRINT_41G_SECURITY_AUDIT.md).
+Cache Storage passou em Chromium real: a troca A → B preservou conteúdo público, não apresentou dados privados de A pela aplicação, manteve caches privados escopados e não armazenou respostas de `/auth`, `/sync`, `/profile`, `/backup`, `/share` ou `/api`. Uma limpeza intencionalmente ausente no logout não expôs o cache de A à conta B; a limpeza pela interface removeu apenas o cache privado da conta ativa. Um script executado na mesma origem ainda consegue enumerar Cache Storage, portanto nomes por usuário evitam uso acidental, mas não formam fronteira contra XSS.
 
-## Atualização Sprint 41G.2B — encerrada localmente
+A regressão mobile passou em Chromium com viewport **simulado** de 390 × 844, cobrindo login/logout, A → B → A, tema global, navegação, Biblioteca, sincronização, reload e ausência do marcador privado de A em B. Não houve teste em aparelho físico.
 
-**O que foi implementado.** Modo Prova protegido concluído: `POST /api/exam/attempt` exige autenticação, CSRF e proprietário da sessão, rejeita `questions` enviado pelo cliente e gera/valida questões no servidor usando `PromptBuilder.examQuiz`, `AIService` + `withAIQuota`. O gabarito completo fica apenas no PostgreSQL (`exam_attempts`, migration `0001_exam_attempts`); o cliente recebe somente questões sanitizadas (`id`, `question`, `alternativas`, dificuldade opcional). `GET /api/exam/attempt?id=` devolve a tentativa em andamento sem gabarito e, após a conclusão, o resultado autorizado. `POST /api/exam/grade` corrige transacionalmente com `FOR UPDATE`, idempotente, impede sobrescrita de tentativa concluída e rejeita tentativas de outros usuários. Sem fallback em memória; PostgreSQL indisponível devolve 503 antes da chamada de IA.
+Resultado final sem duplicar casos: **90 testes distintos aprovados** — 69 lógicos/mockados, 6 PostgreSQL reais locais, 4 Storage em navegador, 4 cloud sync, 4 Workspace/Modo Prova, 1 A → B → A desktop, 1 Cache Storage e 1 mobile. Houve intermitências no runner combinado: cadastro preso na inicialização, sync após restore ainda marcado como ativo e conflito não renderizado; os casos passaram isoladamente em servidor fresco. Isso permanece risco de estabilidade do harness.
+
+## Estado Git
 
-**Integração UI.** `QuizWorkspace` alterna entre Modo Prática (local, `QuizService`/`/api/tutor/quiz`, inalterado) e Modo Prova protegido (`SecureExamPanel` via `SecureExamClient`), com geração por quantidade/dificuldade, seleção A/B/C/D/E, navegação, respostas marcadas, progresso, entrega, resultado pós-entrega e retomada por `WorkspacePersistence` (`attemptId`, `secureAnswers`, `secureFinished`).
-
-**Testes.** `tests/exam-attempt-server.spec.ts` — 16 testes simulados/focados (criação, validação, correção, idempotência, concorrência, acesso cross-user, retomada, PG indisponível, autenticação, rejeição de gabarito, geração sanitizada). `tests/sprint41-workspace.spec.ts` — fluxos protegido (desktop/mobile com `GET /auth/session`, `POST/GET /api/exam/attempt`, `POST /api/exam/grade`) e regressão prática. `npm run typecheck`, `npm run lint` e `npm run build` aprovados (apenas avisos pré-existentes).
-
-**Restrições respeitadas.** Sem push, merge, deploy, migrations em produção, alteração no Railway/PostgreSQL/S3/credenciais nem PR #1 remoto. Não comitar `package.json`, `package-lock.json`, `CloudFileService.ts`, `CloudDatabase.ts`, `ObjectStorage.ts`, `src/app/api/files/[id]/direct/`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts` e `scripts/generate-vercel-secret.ps1`.
-
-**Sprint 41G.2B (Modo Prova protegido): encerrada localmente.** `ExamAttemptServer`, `SecureQuestion`, `POST /api/exam/attempt` e `POST /api/exam/grade` existem e estão commitados localmente (e156dd1, 9678bed, 5e65e58). O Modo Prática continua local e inalterado.
-
-## Atualização Sprint 41G.2C — Validação real do Modo Prova protegido (VALIDADA COM POSTGRESQL)
-
-**O que foi feito.** Testes reais de integração contra PostgreSQL local descartável (`studyai_41g2c_test`, porta 5432, PostgreSQL 18) executados com sucesso (`tests/exam-attempt-integration.spec.ts`): criação, retomada, correção, idempotência, concorrência, isolamento cross-user e ausência de `correctAnswer`/`explicação` antes da entrega. Adicionado teste simulado de "falha de IA não persiste tentativa" (`tests/exam-attempt-server.spec.ts`). Migration `migrations/0001_exam_attempts.sql` inspecionada e confirmada idempotente (`CREATE TABLE IF NOT EXISTS`, não altera tabelas existentes). Tabela `exam_attempts` já existente no banco de teste com schema compatível (FK para `users(id)`).
-
-**Banco utilizado.** PostgreSQL 18 local (`postgresql-x64-18`, serviço Windows), banco `studyai_41g2c_test`, porta 5432. Banco descartável/de teste, sem credenciais de produção. `DATABASE_URL` definida apenas como variável de ambiente para execução dos testes (não gravada em `.env.local` nem commitada).
-
-**Resultado.** 7/7 testes de integração real aprovados; 21/21 testes simulados aprovados; `typecheck`, `lint` (0 erros), `build` aprovados.
-
-## Atualização Sprint 41G.3A — Auditoria final de isolamento entre contas (concluída localmente)
-
-**O que foi auditado.** Fluxos de isolamento entre contas: `SessionOperationManager` (invalidação de operações por geração), `SessionLocalData` (`isPrivateSessionKey`, `suspend`/`resume` por dono), `CloudDatabase` (isolamento cross-user em registros de sync em memória), rotas de arquivo (`/api/files/[id]`, `/api/files/[id]/direct`), rotas de prova protegida (`/api/exam/attempt`, `/api/exam/grade`) e `requireSessionOwner`/`requireUser` no servidor.
-
-**O que foi implementado.** Testes de auditoria em `tests/sprint41g3a-isolation.spec.ts` (12 testes): A → B → A com operações antigas rejeitadas, `isPrivateSessionKey` identifica chaves privadas, `SessionLocalData.resume` não restaura dados de outro usuário, `CloudDatabase` isola registros por usuário, `requireSessionOwner` rejeita header divergente, `requireUser` rejeita sem sessão, rotas de arquivo e prova exigem proprietário da sessão.
-
-**Resultado.** 12/12 testes de auditoria aprovados; `typecheck`, `lint` (0 erros), `build` aprovados.
-
-**Limites.** Testes usam módulos transpilados em VM (não navegadores reais). Isolamento completo entre dois navegadores reais simultâneos **não foi demonstrado** nesta sprint. Isso segue como pendência da 41G geral.
-
-**Próxima ação.** A sprint 41G.3A está concluída localmente. O isolamento completo entre contas reais de navegador segue como pendência da 41G geral.
-
-## Atualização Sprint 41G.3B — Isolamento real do armazenamento local (concluída localmente)
-
-**Diagnóstico inicial.** Mapeamento de todos os storages locais: `localStorage` (chaves privadas compartilhadas na mesma origem; vários usos diretos gravam sem validar dono), `sessionStorage` (áudio/professor sem limpeza em logout), IndexedDB (nomes por escopo de usuário, mas scripts de mesma origem podem acessar), OPFS `studyai-materials` (diretório compartilhado, sem controle de acesso por usuário), Cache Storage `studyai-shared-v1` (não isolado por conta), estado em memória (SessionOperationManager marca usuário e geração), filas de sync/upload (CloudSyncManager verifica `running.userId`).
-
-**Riscos identificados.** (1) `localStorage` compartilhado na mesma origem sem validação de dono em todos os usos diretos; (2) OPFS sem controle de acesso por usuário; (3) Cache Storage não isolado nem limpo no logout; (4) `sessionStorage` de áudio/professor não limpo em logout; (5) dados legados sem dono podem ser importados; (6) sem validação real com múltiplos navegadores.
-
-**Decisão de arquitetura.** (1) Reforçar `SessionLocalData`: `suspend()` limpa `clearActiveData()` ANTES de gravar metadados (mesmo em falha de gravação os dados locais são limpos); adicionado `clearOwner()` para logout explícito. (2) `resume()` restaura apenas se `record.owner === userId` (dados sem dono permanecem em quarentena). (3) Não excluir dados antigos sem dono automaticamente. (4) Validação de proprietário no servidor mantida via `requireSessionOwner`. (5) Namespace local não é fronteira de segurança do servidor.
-
-**Arquivos alterados.** `src/features/account/SessionLocalData.ts` (reforço de isolamento: clearActiveData antes de gravar metadados, clearOwner para logout), `tests/sprint41g3b-storage-isolation.spec.ts` (8 testes de isolamento: A→B restauração, logout, A→B→A invalidação, dados sem dono, requireSessionOwner, sync pendente rejeitado, falha de limpeza não expõe dados, dados públicos preservados).
-
-**Testes e resultados.** 8/8 testes de isolamento aprovados; `typecheck` limpo (erros restantes são pré-existentes em `sprint41g3a-isolation.spec.ts`); `lint` 0 erros nos arquivos alterados; `build` aprovado.
-
-**Riscos resolvidos.** (1) `suspend()` agora limpa dados locais antes de gravar metadados, evitando exposição em caso de falha; (2) `clearOwner()` permite logout sem restaurar dados de nenhum usuário; (3) `resume()` não restaura dados sem dono identificado.
-
-**Riscos restantes.** OPFS `studyai-materials` continua como diretório compartilhado; Cache Storage `studyai-shared-v1` não isolado por conta; `sessionStorage` de áudio/professor não limpo em logout; vários usos diretos de `localStorage` (ExamService, ExperiencePreferences, DataPortabilityService, etc.) gravam sem validação de dono individual; isolamento real com múltiplos navegadores/abas simultâneas não demonstrado (testes em VM).
-
-**Próximos passos.** Estender o isolamento para os outros usos diretos de `localStorage` identificados no mapeamento; considerar namespace por `userId` em storages adicionais; validar isolamento real em navegador quando possível.
-
-## Atualização Sprint 41G.3C — Isolamento de OPFS, Cache e storages legados (concluída localmente)
-
-**Diagnóstico.** Mapeamento detalhado de storages: OPFS `studyai-materials` (diretório compartilhado), Cache Storage `studyai-shared-v1` (não isolado por conta), `sessionStorage` de áudio/professor (não limpo em logout), vários usos diretos de `localStorage` (ExamService, ExperiencePreferences, DataPortabilityService, WorkspacePersistence, etc.) que gravam sem validar dono, dados legados sem dono em IndexedDB.
-
-**Decisão de arquitetura.** (1) Namespace por `userId` em storages privados onde viável. (2) Validação de proprietário antes de ler/restaurar dados. (3) Invalidação de operações pendentes em logout/troca. (4) Separação de caches privados/compartilhados. (5) Quarentena (não exclusão) de dados sem dono. (6) Namespace local não é fronteira de segurança do servidor; autorização continua validada no servidor via `requireSessionOwner`.
-
-**Arquivos alterados.** `src/features/exam/ExamService.ts` (namespace por userId em `studyai:exams`), `src/features/preferences/ExperiencePreferences.ts` (namespace por userId em `studyai:experience-settings`), `src/features/study/services/WorkspacePersistence.ts` (valida userId antes de ler/gravar workspace), `src/features/account/DataPortabilityService.ts` (valida userId na importação de preferências locais), `src/features/platform/CacheManager.ts` (separa caches privados por userId via prefixo `private:<userId>:`), `tests/sprint41g3c-storage-isolation.spec.ts` (8 testes de isolamento).
-
-**Testes e resultados.** 8/8 testes aprovados: A grava materiais privados no OPFS; B não acessa; cache privado de A não servido para B; logout invalida operações pendentes; dados sem dono não restaurados; dados públicos funcionam; sessionStorage de áudio limpo no logout; falha de limpeza não expõe dados; requireSessionOwner exige proprietário para arquivos. `typecheck` limpo (erros pré-existentes apenas em `sprint41g3a-isolation.spec.ts`); `lint` 0 erros; `build` aprovado.
-
-**Riscos resolvidos.** (1) ExamService armazena provas por usuário. (2) ExperiencePreferences armazena por usuário. (3) WorkspacePersistence valida usuário antes de ler/gravar. (4) DataPortabilityService valida usuário na importação. (5) CacheManager separa caches privados por userId.
-
-**Riscos restantes.** OPFS `studyai-materials` já tem namespace por usuário (implementado anteriormente); Cache Storage compartilhado parcialmente mitigado; `sessionStorage` de áudio/professor ainda não limpo automaticamente no logout (testado como cenário manual); vários usos diretos de `localStorage` restantes; isolamento real com múltiplos navegadores não demonstrado (testes em VM).
-
-**Próximos passos.** Estender namespace por `userId` para outros usos diretos de `localStorage`; validar isolamento real em navegador quando possível.
-
-## Atualização Sprint 41F
-
-Sprint ainda incompleta. A seleção automática que podia trocar silenciosamente de provedor foi temporariamente suspensa no gerenciador e na correção do Lab; a interface apresenta a limitação. Ainda não há fallback autorizado e configurável, consentimento para troca entre provedores, limites de custo ou confirmação do modelo para todos os fluxos. A quota de configurações legadas em modo automático pode continuar conservadora. O tratamento Gemini não repete erro 401 por texto ambíguo; a consulta de modelos OpenRouter preserva seu código HTTP. A Central de Ajuda ganhou categorias pesquisáveis e guia da Academy. O teste exploratório com duas contas sintéticas falhou: após troca de conta, o plano A permaneceu no `localStorage` acessível a B; o isolamento continua crítico. Typecheck/build passaram, lint 0 erros/69 avisos; Playwright dirigido 16/16 e 12/12 em rodadas diferentes, com mocks e sem serviços externos. Consulte `git log` para os commits locais e `docs/SPRINT_41_STATUS.md` para detalhes e pendências. Não presumir alterações do backend de produção ou serviços reais.
-
-Checkpoint de 30 de outubro de 2026. **Sprint 41 incompleta; não pressupor autorização para push, merge, deploy ou acesso a produção.** As seções históricas abaixo registram sprints anteriores e não descrevem necessariamente o estado atual da infraestrutura.
-
-## Git e preservação
-
-- Projeto `D:\studyai`; branch `v1.1-development`; HEAD de implementação observado antes do commit deste checkpoint: `19cb815`.
-- Referência remota local observada: `origin/v1.1-development` em `331bc15`; branch local quatro commits à frente, nenhum atrás. Não foi feito fetch: a referência pode estar desatualizada. O hash do commit de documentação é o HEAD a obter com `git log -1` após o checkpoint.
-- Commits posteriores a essa referência: `3b54bb8` (seleção de IA e geração), `0215035` (Academy/quota), `f6bcb58` (menu Semana de Prova), `19cb815` (simulado e ferramentas). Estão locais segundo a referência observada.
-- A conversa anterior identificou `cc8634b` como commit publicado numa etapa; não há confirmação independente nesta tarefa do commit atualmente implantado ou de que a referência remota coincide com ele. Não rotular `331bc15` como deployment ativo sem verificação autorizada.
-- Preservar modificados: `package.json`, `package-lock.json`, `playwright.config.ts`, `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts`, `src/server/storage/ObjectStorage.ts`. Preservar não rastreados: `src/app/api/files/[id]/direct/route.ts`, `tests/deploy-security.spec.ts`, `tests/direct-upload.spec.ts`, `scripts/generate-vercel-secret.ps1`. Upload direto é experimental e não foi aprovado para publicação. Não incluí-los em commits não relacionados.
-
-## Arquitetura e funções existentes
-
-Next.js 15/React 19/TypeScript, App Router e handlers Node.js. A aplicação possui importação e extração/OCR/transcrição, Biblioteca, estudos e Workspace, Tutor/Professor e Mentor, Academy/Studio, Lab, flashcards, quiz, notas, mapas, Semana de Prova, conta, ajuda e sincronização. Existência no código não garante funcionamento integral em produção.
-
-IA segue cliente → rotas internas → `AIService`/`ProviderManager` → providers; há seleção de modelos e chaves por usuário. Dados locais usam IndexedDB/OPFS via `StorageManager`; sincronização usa rotas de conta/cloud, PostgreSQL e armazenamento compatível com S3. O IndexedDB tem escopo por usuário, mas preferências em `localStorage` exigem revisão de isolamento. Ver `README.md` e `docs/ARQUITETURA_E_FLUXOS.md`, observando que descrições históricas de deploy podem estar desatualizadas.
-
-## Infraestrutura conhecida e limites
-
-O usuário informou aplicação online na Vercel e projeto Supabase `studyai-v1` em `sa-east-1`, com 31 tabelas e bucket privado `studyai-files`; PostgreSQL e credenciais S3 foram cadastrados na Vercel. Em diagnóstico anterior, `/api/health` foi relatado como degradado por PostgreSQL enquanto S3 estava disponível. Existem commits posteriores de diagnóstico/TLS (`42c7cbd`, `fa2f1e5`, `331bc15`), mas esta tarefa não consultou serviços, logs ou deployment: estado atual do PostgreSQL, S3, certificados e commit implantado **não verificados**. Não assumir que o problema antigo persiste ou foi resolvido.
-
-Não executar migrações automaticamente: `npm run db:migrate` é comando explícito e requer ambiente adequado. Não modificar Railway ou serviços de produção sem autorização. Não desabilitar TLS, autenticação ou CSRF. Nunca copiar valores de variáveis/segredos para documentação, logs, testes ou Git; `AUTH_SECRET` é a variável de autenticação, não `JWT_SECRET`. Preservar a chave de criptografia e planejar qualquer rotação antes de alterá-la.
-
-## Últimos testes conhecidos
-
-Na sessão Sprint 41: typecheck e build isolado aprovados; lint aprovado com 0 erros/69 avisos. Playwright dirigido teve rodada de 6 aprovados; rodada ampliada de 13 teve 11 aprovados e 2 timeouts, ambos aprovados em repetição com espera maior. Os testes de sincronização usam backend de desenvolvimento; Academy e geração de quiz usam mocks em casos relevantes. Não são validação de PostgreSQL/S3 ou de IA real. Detalhes e limitações em [docs/SPRINT_41_STATUS.md](docs/SPRINT_41_STATUS.md).
-
-## Pendências e próxima ação
-
-1. Continuar Sprint 41: fallback seguro por modelos previamente autorizados, com limite, custo, consentimento explícito entre provedores e sem repetição de falhas de autenticação/validação.
-2. Resolver isolamento das preferências entre contas e revisar gabarito: a resposta correta atualmente é enviada ao cliente antes da entrega. Testar troca de usuários, conflitos e preservação de dados.
-3. Investigar a queixa original de seleção no Modo Prova e os dois timeouts; validar os três modos Academy e demais fluxos de IA com serviços reais apenas quando autorizados.
-4. Integrar Semana de Prova com atividades e resultados, e completar melhorias de ajuda. Não declarar a sprint concluída enquanto pendências críticas permanecerem.
-
-## Comandos e documentos
-
-Confira primeiro `git status --short --branch`, `git log --oneline -n 10` e `git diff --cached --name-only`. Para desenvolvimento e checagens: `npm run dev`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm run test:e2e`. Use ambiente isolado sem credenciais externas; execute Playwright e build em momentos separados ou diretórios distintos para evitar conflito em `.next`. Verifique scripts/configuração atuais antes de rodar; não rodar migrações ou testes com serviços reais por padrão.
-
-- Estado e testes: [docs/SPRINT_41_STATUS.md](docs/SPRINT_41_STATUS.md).
-- Plano: [docs/ROADMAP_V1_2.md](docs/ROADMAP_V1_2.md).
-- Prompt para continuação: [docs/NEXT_SESSION_PROMPT.md](docs/NEXT_SESSION_PROMPT.md).
-- Documentos históricos de infraestrutura/testes permanecem em `docs/`; verificar data e contexto antes de aplicar.
-
----
-
-# Histórico — Sprint 37E.8B: Railway Configuration & Authorization Gate
-
-Atualizado em 27 de outubro de 2026.
-
-## Estado
-
-- **Branch:** `v1.1-development` (nada enviado/pushed)
-- **HEAD base 37E.8B:** `03a61ee4e83d575f71a30485b45eff0e0c6e065b`
-- **Commits 37E.8A:** `4e94f1b` pre-deploy; `03a61ee` handoff, ambos locais sem push
-- **Commit 37E.8B:** `d669c60` (`chore(release): verify railway config and launch gate 37E.8B`); local, sem push
-- **Deploy:** **NÃO executado**. Railway intocado.
-- **Decisão:** **CONDITIONAL** — ver `docs/FINAL_RELEASE_DECISION_V1_1.md`
-
-## Resultado Sprint 37E.8B (investigação Railway)
-
-- Railway docs oficiais: `.railway/railway.ts` é interpretado por `railway
-  config plan/apply`, não automaticamente no deploy; `railway.toml` é CaC legacy
-  para service existente configurado para o ler. Um service não pode ser
-  gerenciado pelos dois; sunset CaC anunciado para 2026-12-01.
-- CI: `.github/workflows/deploy.yml` em `main` constrói/pusha imagem GHCR e chama
-  webhook opcional `DEPLOY_WEBHOOK_URL`; presença/destino não verificados. Não há
-  workflow para executar Railway IaC. Trigger e deployment remoto ativo não são
-  conhecidos.
-- CLI `5.63.1`, `railway whoami` Unauthorized. Sem login/token, sem comando remoto
-  adicional. Railway service/config path/deploy/domain/DB/S3/env names/resources/
-  restart/logs/alerts ficam **NÃO VERIFICADOS**.
-- Nenhum arquivo de configuração de infra foi alterado. Owner deve escolher
-  legacy CaC temporário ou migração planejada para IaC após inspeção read-only e
-  `config plan` revisado; não executar `apply` sem aprovação explícita.
-- Railway healthcheck é apenas gate do startup/deploy, não monitor contínuo. Live
-  `/api/health/live` é liveness; `/api/health` é readiness dependente de DB/S3.
-- Artefato do container: Dockerfile Node 22 multi-stage; `npm ci`, `npm run
-  build`; runtime `db-migrate.mjs && node server.js`, port padrão 3000/0.0.0.0;
-  config/PORT/restart remotos desconhecidos.
-- Validação 37E.8B: lint 0 erros/75 warnings; typecheck/build PASS; audit 4 low
-  transitivos (exit 1); Playwright dirigido 38/38; `db:migrate` repetida 2x na
-  cópia sintética isolada; standalone live 200/readiness 503 sem DB/S3.
-- Gate **CONDITIONAL**. Ver `docs/SPRINT_37E_8B_REPORT.md`,
-  `docs/RAILWAY_CONFIGURATION_DECISION.md` e
-  `docs/LAUNCH_AUTHORIZATION_CHECKLIST.md`.
-
-## Entregas Sprint 37E.8A (pré-deploy local)
-
-- `railway whoami` respondeu **Unauthorized**; nenhuma autenticação automática
-  foi feita. Railway, deployments, secrets, domínio, DB, S3, volumes, recursos e
-  logs remotos estão **NÃO VERIFICADOS**.
-- Divergência local pendente: `.railway/railway.ts` aponta branch `main` e
-  `/api/health`; `railway.toml` usa Dockerfile e `/api/health/live`. Não alterei
-  IaC/configuração remota; owner deve decidir o alvo antes de autorização.
-- `pg_dump`/`pg_restore` PostgreSQL 18.4: restore local com registros sintéticos
-  de user, placeholder BYOK, quota e rate limit passou; arquivos em pasta Temp
-  aprovada fora do Git. Isso **não valida backup de produção**.
-- `db:migrate` duas aplicações consecutivas passaram em DB isolado restaurado;
-  harness app **8/8**; Playwright direcionado crypto/health/quota **30/30**.
-- Health standalone production simulado: live 200; readiness 503 com DB e S3
-  indisponíveis; body público sem configuração/segredos/erro detalhado.
-- S3 implementa objetos e metadados localmente, mas bucket/versioning/retention/
-  restore/custo remotos são desconhecidos. Monitoramento remoto/alertas também.
-- **Release Gate CONDITIONAL**: revisar `docs/SPRINT_37E_8A_REPORT.md`,
-  `docs/RAILWAY_PRE_DEPLOY_V1_1.md` e
-  `docs/PRODUCTION_MIGRATION_PLAN_V1_1.md` antes de qualquer janela.
-
-> Correção: os hashes `f3a2b1c` (37E.7A) e `c1a2b3d` (37E.6) citados em
-> documentos anteriores **não existem**. Os reais são `1e56d76` e `5dc68d0`.
-
----
-
-## Entregas da 37E.7B (baseline)
-
-| Área | Entrega |
-|------|---------|
-| Reconciliação E2E | 205: 193 diretos + 8 retry, 1 falha ambiental; 3 skipped. Reexecução final: 21 passed/3 skipped; 215 descobertos com `quota-policy` |
-| Criptografia | `crypto-core.ts` extraído; 16 testes na implementação real |
-| Quota | contagem duplicada corrigida; `ollama` keyless; modo espelha ProviderManager |
-| Rate limiting | login/cadastro/recuperação/API keys fail-closed (503); fallback em memória só em não críticos |
-| Concorrência | Harness de 2 pools preparado, mas ainda sem execução no baseline |
-| Rollback | falso "remover a chave mantém v2" corrigido + `scripts/rekey-byok-v2-to-v1.mjs` |
-| Migrações | schema limpo/idempotente em PostgreSQL 18 isolado (single-user) |
-| Documentação | `SPRINT_37E_7B_REPORT.md`, `FINAL_RELEASE_DECISION_V1_1.md` |
-
-## Entregas 37E.7C (validação local concluída)
-
-| Área | Estado |
-|------|--------|
-| PostgreSQL real | Cluster descartável `pg37e7c`, porta 55433, multi-conexão comprovada (duas sessões `pg_sleep(3)` simultâneas) |
-| Harness SQL | `scripts/verify-concurrency.mjs`: **7/7 PASS**, inclui cenário A exato (restante=1; contadores 500/501; 1 autorizada) |
-| Cenários de aplicação 5–7 / E-F | Standalone em duas instâncias + DB real: **8/8 PASS**, incluindo F2 com quota única e stream truncado |
-| Defeito corrigido | Leitura dupla do body em Tutor/Academy/middleware causava `400 INVALID_REQUEST`; handlers agora validam clone do Request |
-| Health | `/api/health/live` sem dependências; `/api/health` continua readiness DB/schema/S3; Docker/Railway apontam liveness |
-| E2E | 218/218 casos únicos aprovados: 212 diretos + 6 retries; 0 falhas residuais ou skipped |
-| Build/lint/typecheck | Build OK; typecheck OK; lint 0 erros e 75 warnings |
-| Relatórios | `docs/SPRINT_37E_7C_REPORT.md`, `docs/CONCURRENCY_VALIDATION_V1_1.md`, `docs/E2E_STABILITY_V1_1.md` |
-
----
-
-## Validação 37E.7C (E2E reconciliado)
-
-| Check | Resultado |
-|-------|-----------|
-| `npm run lint` | PASS: 0 erros; 75 warnings |
-| `npm run typecheck` | limpo |
-| `npm run build` | PASS; produção compilada e rotas estáticas geradas |
-| `npm run test:e2e` | 218 descobertos; 212 diretos + 6 após retry; 1 falha observada corrigida e aprovada direcionadamente; 0 falhas residuais/skipped |
-| Harness SQL | **7/7 PASS** no PostgreSQL 18.4 multi-conexão (`studyai_37e7c`, 55433) |
-| Harness app | **8/8 PASS**; duas instâncias standalone + DB de teste; Cenários 5–7, E/F e stream truncado F2 |
-| Liveness/readiness | `/api/health/live`=200 sem DB/S3; `/api/health`=503 com DB indisponível |
-| Fail-closed | login/register/recover/quota negados com banco indisponível |
-| `npm audit --omit=dev` | 4 low transitivos (`katex`), sem high/critical; correção automática requer breaking change |
-| `git diff --check` | PASS |
-
----
-
-## E2E 37E.7C — reconciliação final
-
-| Métrica | Valor |
-|---------|-------|
-| Descobertos | 218 |
-| Aprovados diretamente | 212 |
-| Aprovados após retry (flaky) | 6 |
-| Falha observada/corrigida | 1 expectativa antiga de `/api/health`; passou após atualização para `/api/health/live` |
-| Falhas residuais | 0 |
-| Skipped | 0 |
-| Interrompidos/não executados | 0; os 82 finais foram retomados e executados |
-
-> Histórico 37E.7B: uma segunda execução completa (215) foi descartada por corrupção do
-> `next dev` causada pela remoção de `.next` durante o run; não é evidência de
-> produto. Depois de limpar o ambiente, a reexecução direcionada passou.
-
-**Histórico 37E.7B (não é resultado atual):** o "184 passing" vinha da suíte de 189 testes e omitia 2 retries
-(186 reais). Com os 13 testes de criptografia que passavam, o total era 199 em
-203. Ver §4 do relatório.
-
----
-
-## Riscos Residuais
-
-| Risco | Sev. | Situação |
-|-------|------|----------|
-| Rate limit fail-open só em não críticos | Baixa | Login/cadastro/recuperação/API keys fail-closed (503); sync/colaboração/telemetria/feedback em memória |
-| Quota conservadora com BYOK parcial | Média | Documentado; corrigir pós-launch |
-| "BYOK Ativo" com BYOK parcial | Baixa | Cosmético; documentado |
-| Monitoramento não implantado | Média | Health + logs + SQL manuais |
-| `katex` 4 low | Baixa | Sem fix não-breaking |
-| Readiness exige S3 | Média (op.) | Readiness retorna 503; liveness usado no healthcheck para evitar reinício por falha transitória |
-
----
-
-## Próximos Passos
-
-1. **Autorização explícita** de deploy (não concedida nesta sprint).
-2. **Backup verificado** do PostgreSQL de produção + teste de restore.
-3. Configurar variáveis no Railway, incluindo `API_KEYS_ENCRYPTION_KEY` e S3.
-4. Deploy e smoke test (`docs/SMOKE_TEST_V1_1.md`) em até 15 min.
-5. Se rollback: re-encriptar v2→v1 antes de remover a chave.
-6. A suíte E2E de 218 testes está reconciliada; manter o Release Gate CONDITIONAL pelos gates operacionais.
-7. Planejar alertas externos e gates operacionais; concorrência 5–7 já foi executada.
-
----
-
-## Notas Importantes
-
-- **NÃO FAZER DEPLOY** sem autorização.
-- **NÃO EXECUTAR GIT PUSH** nesta sprint.
-- **NÃO MODIFICAR PRODUÇÃO** (Railway intocado).
-- **NÃO USAR `npm audit fix --force`**.
-- **NÃO REMOVER `API_KEYS_ENCRYPTION_KEY`** sem re-encriptar v2.
-- **NÃO ALTERAR `AUTH_SECRET`**.
-- **NÃO ACESSAR `D:\FitIA`**.
-
----
-
-## Próxima Ação
-
-**Status:** **CONDITIONAL** — tecnicamente verificado, aguardando autorização e
-cumprimento das condições obrigatórias de `docs/FINAL_RELEASE_DECISION_V1_1.md`.
-# Continuação da Sprint 41G.1
-
-**Não concluída; isolamento de contas ainda comprometido.** A geração do banco local agora rejeita operações que aguardam inicialização ou abertura do IndexedDB quando ocorre troca de escopo, incluindo A → B → A. Isso não protege os registros remanescentes de outros scripts da mesma origem, não cancela transações iniciadas e não resolve corridas de sincronização ou uploads. Não apagar dados existentes, não atribuir conteúdo legado sem dono automaticamente e não publicar esta alteração como solução completa.
-
-Próximos passos: definir proteção dos dados privados persistidos e recuperação offline/legada explícita; criar transição de sessão com bloqueio, cancelamento e invalidação de respostas, incluindo abas; associar cada envio à identidade autenticada no servidor; testar ownership, conflitos e exclusões com duas contas. O Modo Prova no servidor fica para a Sprint 41G.2. Ver `docs/SPRINT_41G_SECURITY_AUDIT.md`.
+- Projeto: `D:\studyai`.
+- Branch: `v1.1-development`.
+- HEAD: `5eb5637d8f36cb8289112cd0380ab577411beb11` — isolamento de OPFS, cache e storages legados da Sprint 41G.3C.
+- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **26 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
+- Nenhum arquivo está staged. Nenhum commit foi criado nesta auditoria.
+
+Alterações rastreadas preservadas:
+
+- `package.json` e `package-lock.json` — dependência do presigner S3.
+- `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts` e `src/server/storage/ObjectStorage.ts` — upload direto experimental.
+- `src/features/account/AuthProvider.tsx`, `src/features/sync/SyncPreferences.ts` e `src/features/teacher/services/TeacherAudioSessionStorage.ts` — correções experimentais da Sprint 41G.3D.
+- `tests/sprint41g3a-isolation.spec.ts`, `tests/sprint41g-sync-preferences.spec.ts`, `tests/cloud-sync.spec.ts` e `tests/exam-attempt-integration.spec.ts` — regressões e portões de teste da 41G.3D.
+
+Arquivos não rastreados preservados:
+
+- `scripts/generate-vercel-secret.ps1`.
+- `src/app/api/files/[id]/direct/route.ts`.
+- `tests/deploy-security.spec.ts`.
+- `tests/direct-upload.spec.ts`.
+- `tests/sprint41g3d-session-isolation.spec.ts`.
+- `tests/sprint41g3d-browser-isolation.spec.ts` e `playwright.41g3d.browser.config.ts`.
+- `tests/sprint41g3d-cache-browser.spec.ts` e `tests/sprint41g3d-mobile-regression.spec.ts`.
+
+## Arquitetura confirmada
+
+O produto usa Next.js 15, React 19 e TypeScript. A interface chama Route Handlers internos; integrações de IA passam por `AIService` e `ProviderManager`. Autenticação própria usa cookies HTTP-only, CSRF e `AUTH_SECRET`. Persistência local combina IndexedDB por escopo de conta, OPFS por usuário, `localStorage` e Cache Storage. Sincronização usa `CloudSyncManager`, APIs autenticadas e PostgreSQL; arquivos podem usar S3 compatível.
+
+O código possui modo em memória quando PostgreSQL não está configurado. Migração de banco é comando explícito (`npm run db:migrate`); o código normal não executa DDL automaticamente. O estado atual de Vercel, Supabase, Railway, PostgreSQL e S3 não foi consultado nesta auditoria.
+
+## Funcionalidades verificadas no código
+
+- Conta: cadastro, login, refresh, logout, verificação, recuperação, troca de email/senha, sessões e exclusão.
+- Biblioteca/importação: PDF, documentos, imagens, áudio/vídeo, OCR/transcrição, IndexedDB/OPFS e busca.
+- Estudo: Tutor, Professor, Mentor, notas, resumos, flashcards, quiz, Lab, IA Quality e Academy/Studio.
+- Academy: material de estudo, trilha e projeto prático; parser estruturado, persistência e exportação PDF/PPTX. Geração real por provedor não foi validada nesta auditoria.
+- Semana de Prova: criação local, assuntos, prioridades, plano por dias e progresso manual. Ainda não está integrada a materiais, flashcards, quizzes, simulados ou resultados.
+- Modo Prova protegido: tentativa vinculada ao usuário, payload inicial sem gabarito, correção transacional no servidor e retomada. O modo prática continua local e contém gabarito no navegador por definição.
+- Central de Ajuda: categorias expansíveis, busca, guia Academy, rolagem e navegação por teclado.
+
+## Situação das Sprints 40 e 41
+
+- Sprint 40: **CONCLUÍDA LOCALMENTE**, sem validação de IA real. Melhorou seleção de modelo, erros de providers e ajuda.
+- Sprint 41 inicial: **CONCLUÍDA LOCALMENTE** nos commits `0215035`, `f6bcb58` e `19cb815`.
+- Sprint 41F: **PARCIALMENTE IMPLEMENTADA**. O fallback silencioso entre providers foi suspenso e a ajuda avançou; fallback consentido, limites econômicos e modelo efetivo ainda não foram concluídos.
+- Sprint 41G.1B: **CONCLUÍDA LOCALMENTE** nos commits `9553c72`, `861bd0b` e `1d08d83`; não prova isolamento contra scripts da mesma origem nem múltiplas abas reais.
+- Sprint 41G.2B: **CONCLUÍDA LOCALMENTE** nos commits `e156dd1`, `9678bed` e `5e65e58`.
+- Sprint 41G.2C: **CONCLUÍDA LOCALMENTE** em `8dd7a75`, com PostgreSQL local descartável em 4/11 e repetição segura de 6/6 casos em 6–7/11.
+- Sprint 41G.3A: **VALIDADA LOCALMENTE** após importar o tipo ausente e corrigir o mock de `StorageManager`.
+- Sprints 41G.3B e 41G.3C: **CONCLUÍDAS LOCALMENTE**, com testes de módulo aprovados nesta auditoria, mas sem teste negativo completo entre duas contas reais.
+- Sprint 41G.3D: **CONCLUÍDA LOCALMENTE E NÃO COMMITADA**. PostgreSQL descartável, Cache Storage, desktop/mobile simulado, typecheck, lint e build passaram. Produção e aparelho físico não foram validados.
+- Sprint 41 geral: **NÃO CONCLUÍDA**.
+
+## Testes executados em 6–7/11/2026
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Aprovado. |
+| `npm run lint` | Aprovado: 0 erros, 68 avisos preexistentes fora do escopo. |
+| `npm run build` | Aprovado; 48 páginas geradas. O erro de fontes KaTeX não reapareceu. |
+| Sessão, prova protegida e isolamento 41G | 69 aprovados, 0 falhos. |
+| PostgreSQL local descartável | 6 aprovados, 0 falhos, 0 ignorados; estado inicial e final sem tentativas persistidas. |
+| IA, quotas, DDL, upload direto e segurança de deploy | 27 aprovados; 4 casos de navegador foram executados no runner incorreto e repetidos separadamente. |
+| Armazenamento em navegador | 4 aprovados, 0 falhos. |
+| Workspace, Academy e Ajuda em navegador | 8 aprovados, 0 falhos. |
+| 41G.3D focado | 10 aprovados, 0 falhos; conjunto 41G.3A/3D/preferências: 23 aprovados. |
+| Navegador A → B → A | 1 aprovado: duas contas sintéticas, duas abas, reload, preferências globais e API cross-user. |
+| Cloud sync em navegador | 4 aprovados: sessão, restore, conflito, arquivo, exclusão e OPFS escopado. |
+| Cache Storage em Chromium | 1 aprovado: escopo privado, conteúdo público, APIs autenticadas excluídas e falha de limpeza segura. |
+| Mobile simulado 390 × 844 | 1 aprovado: conta, tema, navegação, Biblioteca, sync, reload e isolamento A → B → A. |
+
+Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produção ou IA real.
+
+## Riscos e bloqueios
+
+1. Manter o gate PostgreSQL: loopback, banco descartável comprovado, ambiente não produtivo e `STUDYAI_ALLOW_LOCAL_DB_TESTS=1`.
+2. Repetir a regressão em aparelho móvel físico e manter a observação de que namespaces locais não são fronteira contra scripts da mesma origem.
+3. Revisar e, mediante autorização, criar commit isolado da 41G.3D sem misturar upload direto.
+4. Investigar e estabilizar as intermitências do runner cloud sem mascará-las com retries.
+5. Manter o upload direto fora de publicação até revisão e testes; ele continua experimental e não rastreado em parte.
+6. Finalizar fallback de IA com consentimento, limites e transparência do modelo usado.
+7. Integrar Semana de Prova às atividades reais e ao progresso sem duplicação.
+8. Validar Academy, IA, PostgreSQL e S3 em homologação autorizada.
+
+## Próximo trabalho recomendado
+
+Revisar o diff da **41G.3D** e, somente mediante autorização, criar um commit local isolado sem misturar upload direto. Depois estabilizar o harness cloud e retomar as pendências funcionais da Sprint 41 — fallback consentido, Semana de Prova e homologação de Academy/IA — antes de iniciar a Sprint 42.
+
+## Comandos e documentação
+
+```powershell
+git status --short
+git log -10 --oneline --decorate
+npm run typecheck
+npm run lint
+npm run build
+npm run test:e2e
+```
+
+Não executar `npm run db:migrate` sem banco não produtivo identificado e autorização específica. Leia:
+
+- `docs/PROJECT_AUDIT_2026-11-05.md` — auditoria completa.
+- `docs/SPRINT_41_STATUS.md` — status e evidências da Sprint 41.
+- `docs/SPRINT_41G_SECURITY_AUDIT.md` — riscos de isolamento e Modo Prova.
+- `docs/ROADMAP_V1_2.md` — roadmap reconciliado.
+- `docs/NEXT_SESSION_PROMPT.md` — prompt de continuidade.

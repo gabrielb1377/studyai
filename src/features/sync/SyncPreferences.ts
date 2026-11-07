@@ -1,7 +1,23 @@
-const preferencePrefixes = ["studyai:workspace", "studyai:ai-settings", "studyai:platform-settings", "studyai:experience-settings", "studyai-theme", "studyai:sidebar", "studyai:language", "studyai:exams"];
+const accountPreferencePrefixes = [
+  "studyai:workspace",
+  "studyai:ai-settings",
+  "studyai:experience-settings",
+  "studyai:exams",
+];
+
+const devicePreferencePrefixes = [
+  "studyai-theme",
+  "studyai:sidebar",
+  "studyai:language",
+  "studyai:platform-settings",
+];
 
 export function isSyncPreferenceKey(key: string) {
-  return preferencePrefixes.some((prefix) => key.startsWith(prefix));
+  return accountPreferencePrefixes.some((prefix) => key.startsWith(prefix));
+}
+
+export function isDevicePreferenceKey(key: string) {
+  return devicePreferencePrefixes.some((prefix) => key.startsWith(prefix));
 }
 
 export function syncPreferences(storage: Storage) {

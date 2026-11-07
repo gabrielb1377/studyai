@@ -9,8 +9,16 @@ test("sincronização aplica apenas preferências permitidas e valores texto", (
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const compiled = { exports: {} };
   vm.runInContext(js, vm.createContext({ module: compiled, exports: compiled.exports }));
-  const { applySyncPreferences } = compiled.exports as { applySyncPreferences: (storage: object, data: unknown) => void };
+  const { applySyncPreferences, isDevicePreferenceKey, isSyncPreferenceKey } = compiled.exports as {
+    applySyncPreferences: (storage: object, data: unknown) => void;
+    isDevicePreferenceKey: (key: string) => boolean;
+    isSyncPreferenceKey: (key: string) => boolean;
+  };
   const values = new Map<string, string>();
-  applySyncPreferences({ setItem: (key: string, value: string) => values.set(key, value) }, { "studyai:exams": "[]", "studyai:storage-scope": "user-other", "studyai:offline-session": "active", "studyai:ai-settings": { provider: "gemini" } });
+  applySyncPreferences({ setItem: (key: string, value: string) => values.set(key, value) }, { "studyai:exams": "[]", "studyai-theme": "dark", "studyai:platform-settings": "{}", "studyai:storage-scope": "user-other", "studyai:offline-session": "active", "studyai:ai-settings": { provider: "gemini" } });
   expect([...values.entries()]).toEqual([["studyai:exams", "[]"]]);
+  expect(isSyncPreferenceKey("studyai-theme")).toBe(false);
+  expect(isSyncPreferenceKey("studyai:platform-settings")).toBe(false);
+  expect(isDevicePreferenceKey("studyai-theme")).toBe(true);
+  expect(isDevicePreferenceKey("studyai:platform-settings")).toBe(true);
 });
