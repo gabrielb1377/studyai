@@ -1,10 +1,12 @@
 import { AISettings } from "./AISettings";
+import type { AIFallbackOffer } from "./AIProvider";
 
 type AIErrorResponse = {
   error?: string;
   code?: string;
   provider?: string;
   suggestion?: string;
+  fallback?: AIFallbackOffer;
 };
 
 export class AIClientError extends Error {
@@ -18,11 +20,37 @@ export class AIClientError extends Error {
     public readonly status?: number,
     options?: ErrorOptions,
     retryAfterMs?: number,
+    public readonly fallback?: AIFallbackOffer,
   ) {
     super(message, options);
     this.name = "AIClientError";
     this.retryAfterMs = retryAfterMs;
   }
+}
+
+function configuredPayload(payload: Record<string, unknown>) {
+  const settings = AISettings.load();
+  const provider = typeof payload.provider === "string" ? payload.provider : settings.provider;
+  return {
+    ...payload,
+    mode: payload.mode ?? settings.mode,
+    provider,
+    model: payload.model ?? settings.models[provider as keyof typeof settings.models],
+    models: payload.models ?? settings.models,
+  };
+}
+
+function clientError(data: AIErrorResponse | null, fallbackMessage: string, status?: number, retryAfter?: number) {
+  return new AIClientError(
+    data?.error ?? fallbackMessage,
+    data?.code ?? (status ? "HTTP_ERROR" : "INVALID_RESPONSE"),
+    data?.provider,
+    data?.suggestion,
+    status,
+    undefined,
+    retryAfter,
+    data?.fallback,
+  );
 }
 
 function retryAfterMs(value: string | null) {
@@ -46,13 +74,7 @@ export const AIClient = {
       response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...payload,
-          mode: settings.mode,
-          provider: settings.provider,
-          model: settings.models[settings.provider],
-          models: settings.models,
-        }),
+        body: JSON.stringify(configuredPayload(payload)),
         signal: options.signal,
       });
     } catch (error) {
@@ -76,6 +98,7 @@ export const AIClient = {
         response.status,
         undefined,
         retryAfterMs(response.headers.get("retry-after")),
+        data?.fallback,
       );
     }
     return data;
@@ -86,23 +109,21 @@ export const AIClient = {
     payload: Record<string, unknown>,
     options: { onDelta: (text: string) => void; signal?: AbortSignal; fallbackMessage: string },
   ) {
-    const settings = AISettings.load();
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        stream: true,
-        mode: settings.mode,
-        provider: settings.provider,
-        model: settings.models[settings.provider],
-        models: settings.models,
-      }),
-      signal: options.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(configuredPayload({ ...payload, stream: true })),
+        signal: options.signal,
+      });
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
+      throw new AIClientError("Não foi possível conectar ao serviço de IA.", "NETWORK_ERROR", undefined, undefined, undefined, { cause: error });
+    }
     if (!response.ok || !response.body) {
       const data = await response.json().catch(() => null) as AIErrorResponse | null;
-      throw new Error(data?.error ?? options.fallbackMessage);
+      throw clientError(data, options.fallbackMessage, response.status, retryAfterMs(response.headers.get("retry-after")));
     }
     if (response.headers.get("content-type")?.includes("application/json")) {
       const data = await response.json().catch(() => null) as T | null;
@@ -123,16 +144,16 @@ export const AIClient = {
       buffer = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.trim()) continue;
-        const event = JSON.parse(line) as { type: "delta" | "done" | "error"; text?: string; response?: T; error?: string };
+        const event = JSON.parse(line) as { type: "delta" | "done" | "error"; text?: string; response?: T; error?: string; code?: string; provider?: string; suggestion?: string; fallback?: AIFallbackOffer };
         if (event.type === "delta" && event.text) options.onDelta(event.text);
         if (event.type === "done" && event.response) completed = event.response;
-        if (event.type === "error") throw new Error(event.error ?? options.fallbackMessage);
+        if (event.type === "error") throw clientError(event, options.fallbackMessage);
       }
     }
     if (buffer.trim()) {
-      const event = JSON.parse(buffer) as { type: "done" | "error"; response?: T; error?: string };
+      const event = JSON.parse(buffer) as { type: "done" | "error"; response?: T; error?: string; code?: string; provider?: string; suggestion?: string; fallback?: AIFallbackOffer };
       if (event.type === "done" && event.response) completed = event.response;
-      if (event.type === "error") throw new Error(event.error ?? options.fallbackMessage);
+      if (event.type === "error") throw clientError(event, options.fallbackMessage);
     }
     if (!completed) throw new Error(options.fallbackMessage);
     return completed;

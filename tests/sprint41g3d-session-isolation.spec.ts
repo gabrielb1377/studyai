@@ -98,6 +98,42 @@ test.describe("Isolamento de sessão e armazenamento — Sprint 41G.3D", () => {
     expect(localStorage.getItem("studyai:exams")).toBeNull();
   });
 
+  test("Modo offline preserva preferências sem atribuí-las a uma conta", async () => {
+    const localStorage = fakeLocalStorage();
+    localStorage.setItem("studyai:offline-session", "active");
+    localStorage.setItem("studyai:ai-settings", JSON.stringify({ version: 3, mode: "manual", provider: "groq", models: {} }));
+    let record: unknown = null;
+    const { isSyncPreferenceKey } = loadModule("src/features/sync/SyncPreferences.ts", {}) as { isSyncPreferenceKey: (key: string) => boolean };
+    const StorageManager = {
+      put: async (_store: string, value: unknown) => { record = value; },
+      get: async () => record,
+      setUserScope: async () => {},
+    };
+    const { SessionLocalData } = loadModule("src/features/account/SessionLocalData.ts", {
+      "@/lib/storage/StorageManager": { StorageManager },
+      "@/lib/storage/Database": { currentDatabaseName: () => "studyai-db" },
+      "@/services/material-runtime-store": { MaterialRuntimeStore: { clear: () => {} } },
+      "@/features/search/GlobalSearchService": { GlobalSearchService: { clearCache: () => {} } },
+      "@/features/preferences/ExperiencePreferences": { ExperiencePreferencesService: { invalidate: () => {} } },
+      "@/features/sync/SyncPreferences": { isSyncPreferenceKey },
+    }, { localStorage, crypto }) as {
+      SessionLocalData: {
+        offlineOwnerHint: () => string | undefined;
+        suspend: (ownerHint?: string) => Promise<void>;
+        resumeOffline: () => Promise<void>;
+        resume: (userId: string) => Promise<void>;
+      };
+    };
+
+    await SessionLocalData.suspend(SessionLocalData.offlineOwnerHint());
+    expect(localStorage.getItem("studyai:ai-settings")).toBeNull();
+    await SessionLocalData.resumeOffline();
+    expect(JSON.parse(localStorage.getItem("studyai:ai-settings") ?? "null")).toMatchObject({ provider: "groq" });
+
+    await SessionLocalData.resume("user-b");
+    expect(localStorage.getItem("studyai:ai-settings")).toBeNull();
+  });
+
   test("Cenário 3: A→B→A invalida operações da geração antiga", () => {
     const { SessionOperationManager } = loadModule("src/features/account/SessionOperationManager.ts", {}) as {
       SessionOperationManager: { activate: (id?: string) => void; start: (id?: string) => { generation: number; signal: AbortSignal; assertCurrent: () => void; release: () => void }; };

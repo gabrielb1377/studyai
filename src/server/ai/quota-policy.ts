@@ -5,7 +5,8 @@ import type { AIProviderId } from "@/features/ai/AIProvider";
  *
  * Mantidas fora do `QuotaMiddleware` (que é `server-only`) para poderem ser
  * exercitadas por testes sem subir o servidor. A semântica espelha o
- * `ProviderManager`: apenas o modo `automatic` percorre a cadeia de fallback.
+ * `ProviderManager`: uma requisição usa somente o provider escolhido. Uma
+ * alternativa só entra na política após consentimento explícito.
  */
 
 export const FALLBACK_ORDER: readonly AIProviderId[] = ["ollama", "gemini", "groq", "openrouter"];
@@ -14,10 +15,11 @@ export const FALLBACK_ORDER: readonly AIProviderId[] = ["ollama", "gemini", "gro
 export const KEYLESS_PROVIDERS: readonly string[] = ["ollama"];
 
 export function providersToCheckFor(
-  mode: string | undefined,
-  provider: string | undefined
+  _mode: string | undefined,
+  provider: string | undefined,
+  consentedProvider?: string,
 ): AIProviderId[] {
-  if (mode === "automatic") return [...FALLBACK_ORDER];
+  if (consentedProvider) return [consentedProvider as AIProviderId];
   return [(provider as AIProviderId | undefined) ?? "gemini"];
 }
 
@@ -25,8 +27,8 @@ export function providersToCheckFor(
  * `true` quando pelo menos um provider que pode ser usado não tem chave BYOK.
  * Nesse caso a quota compartilhada precisa ser autorizada antes da chamada.
  *
- * Limite conhecido: com BYOK parcial em modo automático, a quota é consumida
- * mesmo que o provider BYOK vença a chamada (comportamento conservador).
+ * A autorização é feita por tentativa. Assim, a tentativa alternativa
+ * consentida não herda indevidamente a credencial ou a quota da primária.
  */
 export function needsSharedQuota(
   providers: readonly string[],

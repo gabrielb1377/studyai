@@ -123,6 +123,7 @@ test("modelo escolhido não troca silenciosamente de provedor", async () => {
   const registry = { get: (id: string) => ({ generate: async () => { attempts.push(id); throw new TestAIError("modelo indisponível"); } }) };
   const deps: Record<string, unknown> = {
     "server-only": {}, "./AIErrors": { AIError: TestAIError, safeAIErrorLogMessage: () => "indisponível" },
+    "./AIProvider": { aiProviderIds: ["gemini", "ollama", "openrouter", "groq"] },
     "./HealthService": { HealthService: { checkAll: async () => [] } }, "./ProviderRegistry": { ProviderRegistry: registry },
     "./LatencyService": { LatencyService: { measure: async (operation: () => Promise<unknown>) => { try { return { value: await operation(), latencyMs: 1 }; } catch (error) { return { error, latencyMs: 1 }; } } } },
     "./AIResponseCache": { AIResponseCache: { keyFor: () => "key", get: () => undefined, set: () => undefined } },
@@ -146,6 +147,7 @@ test("limite de uso não troca provider no modo automático legado nem em stream
   const registry = { get: (id: string) => ({ generate: async () => { attempts.push(id); throw new TestAIError("RATE_LIMIT", 429); }, async *stream() { attempts.push(id); throw new TestAIError("RATE_LIMIT", 429); yield { type: "delta", text: "" }; } }) };
   const deps: Record<string, unknown> = {
     "server-only": {}, "./AIErrors": { AIError: TestAIError, safeAIErrorLogMessage: () => "RATE_LIMIT" },
+    "./AIProvider": { aiProviderIds: ["gemini", "ollama", "openrouter", "groq"] },
     "./HealthService": { HealthService: { checkAll: async () => [{ provider: "groq", available: true, latencyMs: 1 }] } },
     "./ProviderRegistry": { ProviderRegistry: registry },
     "./LatencyService": { LatencyService: { measure: async (operation: () => Promise<unknown>) => { try { return { value: await operation(), latencyMs: 1 }; } catch (error) { return { error, latencyMs: 1 }; } } } },

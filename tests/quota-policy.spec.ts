@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import {
-  FALLBACK_ORDER,
   needsSharedQuota,
   providersToCheckFor,
 } from "../src/server/ai/quota-policy";
@@ -28,18 +27,19 @@ test.describe("Política de quota por credencial (Cenários 6 e 7)", () => {
     expect(needsSharedQuota(["ollama", "gemini", "groq", "openrouter"], allCloud)).toBe(false);
   });
 
-  test("automático sem nenhuma chave consome quota compartilhada", () => {
-    expect(needsSharedQuota(providersToCheckFor("automatic", undefined), {})).toBe(true);
+  test("modo automático legado permanece no provider primário", () => {
+    expect(providersToCheckFor("automatic", "gemini")).toEqual(["gemini"]);
+    expect(needsSharedQuota(providersToCheckFor("automatic", "gemini"), {})).toBe(true);
   });
 
-  test("automático com BYOK para todos os providers cloud não consome quota", () => {
-    expect(needsSharedQuota(providersToCheckFor("automatic", undefined), allCloud)).toBe(false);
+  test("automático com BYOK do provider primário não consome quota", () => {
+    expect(needsSharedQuota(providersToCheckFor("automatic", "gemini"), allCloud)).toBe(false);
   });
 
-  test("automático com BYOK parcial consome quota de forma conservadora", () => {
-    // Cenário 6: Gemini BYOK pode vencer, mas Groq/OpenRouter compartilhados
-    // ainda podem ser acionados pelo fallback; a quota é autorizada antes.
-    expect(needsSharedQuota(providersToCheckFor("automatic", undefined), gemini)).toBe(true);
+  test("fallback consentido verifica somente a alternativa autorizada", () => {
+    expect(providersToCheckFor("manual", "gemini", "groq")).toEqual(["groq"]);
+    expect(needsSharedQuota(providersToCheckFor("manual", "gemini", "groq"), gemini)).toBe(true);
+    expect(needsSharedQuota(providersToCheckFor("manual", "gemini", "groq"), { groq: "gsk-test" })).toBe(false);
   });
 
   test("modo ausente espelha ProviderManager (manual, default gemini)", () => {
@@ -48,8 +48,8 @@ test.describe("Política de quota por credencial (Cenários 6 e 7)", () => {
     expect(needsSharedQuota(providersToCheckFor(undefined, undefined), {})).toBe(true);
   });
 
-  test("apenas 'automatic' percorre a cadeia completa de fallback", () => {
-    expect(providersToCheckFor("automatic", "groq")).toEqual([...FALLBACK_ORDER]);
+  test("nenhum modo percorre cadeia de fallback sem consentimento", () => {
+    expect(providersToCheckFor("automatic", "groq")).toEqual(["groq"]);
     expect(providersToCheckFor("manual", "groq")).toEqual(["groq"]);
     expect(providersToCheckFor("qualquer-outro", "openrouter")).toEqual(["openrouter"]);
   });

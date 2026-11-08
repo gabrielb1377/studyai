@@ -35,6 +35,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     conversations,
     context,
     error,
+    pendingFallback,
     isLoading,
     clearError,
     setError,
@@ -43,6 +44,8 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     deleteConversation,
     selectConversation,
     sendMessage,
+    acceptFallback,
+    declineFallback,
   } = useTutor(instanceId);
   const { summaries, saveSummary, deleteSummary } = useSummaries();
   const [query, setQuery] = useState("");
@@ -221,6 +224,39 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
               <X className="size-4" aria-hidden="true" />
             </Button>
           </div>
+        )}
+        {pendingFallback && (
+          <aside className="mb-4 rounded-xl border border-amber-500/35 bg-amber-500/5 p-4" aria-label="Alternativa de provedor de IA">
+            <p className="text-sm font-semibold">O provedor escolhido não respondeu</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Sua mensagem foi preservada. Nenhuma alternativa será usada sem sua confirmação.
+            </p>
+            <div className="mt-3 space-y-2">
+              {pendingFallback.alternatives.map((alternative) => (
+                <div key={`${alternative.provider}:${alternative.model}`} className="flex flex-col gap-2 rounded-lg border bg-background/70 p-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{alternative.provider} · {alternative.model}</p>
+                    <p className="text-xs text-muted-foreground">{alternative.notice}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isLoading}
+                    onClick={() => {
+                      void acceptFallback(alternative.provider).then((sent) => {
+                        if (sent) setDraft("");
+                      });
+                    }}
+                  >
+                    Usar esta alternativa
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={declineFallback} disabled={isLoading}>
+              Cancelar e manter mensagem
+            </Button>
+          </aside>
         )}
         {context?.document && (
           <aside className="mb-4" aria-label="Contexto identificado do documento">

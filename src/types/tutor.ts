@@ -28,6 +28,7 @@ export type TutorMessage = {
     provider?: string;
     model?: string;
     cached?: boolean;
+    fallbackUsed?: boolean;
     inputTokens?: number;
     outputTokens?: number;
     contextTokens?: number;

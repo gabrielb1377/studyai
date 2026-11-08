@@ -70,11 +70,38 @@ export type AIProviderStatus = {
 
 export type AIModelPreferences = Partial<Record<AIProviderId, string>>;
 
+export type AIFallbackCost = "local" | "byok" | "shared_quota";
+
+export type AIFallbackAlternative = {
+  provider: AIProviderId;
+  model: string;
+  cost: AIFallbackCost;
+  notice: string;
+};
+
+export type AIFallbackConsent = {
+  requestId: string;
+  originalProvider: AIProviderId;
+  provider: AIProviderId;
+  model: string;
+};
+
+export type AIFallbackOffer = {
+  requestId: string;
+  primaryProvider: AIProviderId;
+  primaryModel?: string;
+  alternatives: AIFallbackAlternative[];
+};
+
 export type AIManagerRequest = AIRequest & {
   provider?: AIProviderId;
   mode?: AISelectionMode;
   models?: AIModelPreferences;
   apiKeys?: Partial<Record<AIProviderId, string>>;
+  requestId?: string;
+  requestOwner?: string;
+  fallbackPolicy?: "consent";
+  fallbackConsent?: AIFallbackConsent;
 };
 
 export type AIProviderLog = {

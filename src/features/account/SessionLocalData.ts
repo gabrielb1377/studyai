@@ -8,6 +8,8 @@ import { currentDatabaseName } from "@/lib/storage/Database";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 
 const ACTIVE_OWNER_KEY = "studyai:active-session-owner";
+const OFFLINE_SESSION_KEY = "studyai:offline-session";
+const OFFLINE_OWNER = "offline-session";
 const PRIVATE_DATA_KEY = "session-local-preferences:v1";
 const RECOVERY_PREFIX = "session-local-recovery:v1:";
 const extraPrivatePrefixes = [
@@ -36,6 +38,10 @@ function clearActiveData() {
   ExperiencePreferencesService.invalidate();
 }
 
+function storageOwner(owner?: string) {
+  return owner === OFFLINE_OWNER ? undefined : owner;
+}
+
 export const SessionLocalData = {
   async suspend(ownerHint?: string) {
     const values = snapshot();
@@ -47,8 +53,9 @@ export const SessionLocalData = {
     clearActiveData();
     localStorage.removeItem(ACTIVE_OWNER_KEY);
     if (Object.keys(values).length > 0) {
-      const expectedDatabase = owner ? `studyai-db:user-${owner}` : "studyai-db";
-      if (currentDatabaseName() !== expectedDatabase) await StorageManager.setUserScope(owner);
+      const databaseOwner = storageOwner(owner);
+      const expectedDatabase = databaseOwner ? `studyai-db:user-${databaseOwner}` : "studyai-db";
+      if (currentDatabaseName() !== expectedDatabase) await StorageManager.setUserScope(databaseOwner);
       const key = owner ? PRIVATE_DATA_KEY : `${RECOVERY_PREFIX}${Date.now()}-${crypto.randomUUID()}`;
       await StorageManager.put("metadata", { key, value: values, updatedAt: new Date().toISOString(), owner }, { notify: false });
     }
@@ -64,6 +71,14 @@ export const SessionLocalData = {
     }
     localStorage.setItem(ACTIVE_OWNER_KEY, userId);
     ExperiencePreferencesService.invalidate();
+  },
+
+  offlineOwnerHint() {
+    return localStorage.getItem(OFFLINE_SESSION_KEY) === "active" ? OFFLINE_OWNER : undefined;
+  },
+
+  async resumeOffline() {
+    await this.resume(OFFLINE_OWNER);
   },
 
   /** Limpa o proprietário da sessão ativa sem restaurar dados de nenhum usuário. Usado em logout. */

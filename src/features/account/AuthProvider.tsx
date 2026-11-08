@@ -22,15 +22,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       SessionOperationManager.beginTransition();
       try {
-        if (persistCurrent) await SessionLocalData.suspend(sessionRef.current?.user.id);
+        if (persistCurrent) await SessionLocalData.suspend(sessionRef.current?.user.id ?? SessionLocalData.offlineOwnerHint());
         else SessionLocalData.clearOwner();
         const result = await operation();
+        const nextOwner = result.session?.user.id ?? SessionLocalData.offlineOwnerHint();
         await StorageManager.setUserScope(result.session?.user.id);
         if (result.session) await SessionLocalData.resume(result.session.user.id);
+        else if (SessionLocalData.offlineOwnerHint()) await SessionLocalData.resumeOffline();
         else SessionLocalData.clearRuntime();
         sessionRef.current = result.session;
         setSession(result.session);
-        SessionOperationManager.activate(result.session?.user.id);
+        SessionOperationManager.activate(nextOwner);
         if (announce) localStorage.setItem(SESSION_CHANGE_KEY, crypto.randomUUID());
         return result.value;
       } catch (error) {

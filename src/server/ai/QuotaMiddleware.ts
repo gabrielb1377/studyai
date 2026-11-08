@@ -3,7 +3,7 @@
 import { NextResponse } from "next/server";
 import { QuotaService } from "./QuotaService";
 import { requireUser } from "@/server/auth/http";
-import { aiProviderIds, type AIProviderId } from "@/features/ai/AIProvider";
+import { aiProviderIds, type AIFallbackConsent, type AIProviderId } from "@/features/ai/AIProvider";
 import { ApiKeyService } from "./ApiKeyService";
 import { AIService } from "@/features/ai/AIService";
 import { normalizeAIError } from "@/features/ai/AIErrors";
@@ -21,6 +21,33 @@ export interface QuotaAwareAIRequest {
   provider?: AIProviderId;
   stream?: boolean;
   apiKeys: Partial<Record<AIProviderId, string>> | undefined;
+  requestId?: string;
+  requestOwner?: string;
+  fallbackPolicy?: "consent";
+  fallbackConsent?: AIFallbackConsent;
+}
+
+const quotaRuntime = globalThis as typeof globalThis & {
+  __studyAIFallbackQuotaAttempts?: Map<string, { expiresAt: number; promise: ReturnType<typeof QuotaService.checkAndConsume> }>;
+};
+const fallbackQuotaAttempts = quotaRuntime.__studyAIFallbackQuotaAttempts ?? new Map();
+quotaRuntime.__studyAIFallbackQuotaAttempts = fallbackQuotaAttempts;
+
+function consumeSharedQuota(userId: string, body: { requestId?: string; fallbackConsent?: AIFallbackConsent }) {
+  const consent = body.fallbackConsent;
+  if (!body.requestId || !consent || consent.requestId !== body.requestId) {
+    return QuotaService.checkAndConsume(userId, { provider: "shared", useSharedKeys: true });
+  }
+  const now = Date.now();
+  for (const [key, attempt] of fallbackQuotaAttempts) {
+    if (attempt.expiresAt <= now) fallbackQuotaAttempts.delete(key);
+  }
+  const key = `${userId}:${body.requestId}:${consent.provider}`;
+  const existing = fallbackQuotaAttempts.get(key);
+  if (existing) return existing.promise;
+  const promise = QuotaService.checkAndConsume(userId, { provider: "shared", useSharedKeys: true });
+  fallbackQuotaAttempts.set(key, { expiresAt: now + 5 * 60_000, promise });
+  return promise;
 }
 
 export async function withQuotaEnforcement(
@@ -51,10 +78,10 @@ export async function withQuotaEnforcement(
 
     // Determine which providers might be used based on the request
     const body = await request.json().catch(() => null);
-    const bodyObj = body as { mode?: string; provider?: string } | null;
+    const bodyObj = body as { mode?: string; provider?: string; fallbackConsent?: AIFallbackConsent } | null;
     
     // Determine which providers might be used (same rule as ProviderManager)
-    const providersToCheck = providersToCheckFor(bodyObj?.mode, bodyObj?.provider);
+    const providersToCheck = providersToCheckFor(bodyObj?.mode, bodyObj?.provider, bodyObj?.fallbackConsent?.provider);
 
     // Shared quota is only needed when at least one provider in play has no BYOK key.
     if (!needsSharedQuota(providersToCheck, userApiKeys)) {
@@ -137,6 +164,9 @@ export async function createQuotaAwareAIRequest(
     teaching?: unknown;
     context?: { studyId?: string } | unknown;
     chunks?: unknown[];
+    requestId?: string;
+    fallbackPolicy?: "consent";
+    fallbackConsent?: AIFallbackConsent;
   },
   userId: string,
   userApiKeys: Partial<Record<string, string>>
@@ -168,6 +198,10 @@ export async function createQuotaAwareAIRequest(
     provider: body.provider as AIProviderId | undefined,
     stream: body.stream,
     apiKeys: Object.keys(userApiKeys).length > 0 ? userApiKeys : undefined,
+    requestId: body.requestId,
+    requestOwner: userId,
+    fallbackPolicy: body.fallbackPolicy,
+    fallbackConsent: body.fallbackConsent,
   };
 }
 
@@ -194,7 +228,8 @@ export async function withAIQuota(
     // Load user's BYOK keys
     const userApiKeys: Partial<Record<string, string>> = {};
     const entries = await Promise.allSettled(aiProviderIds.map((provider) => ApiKeyService.getDecrypted(user.sub, provider)));
-    const requestedProvider = (body as { provider?: string }).provider ?? "gemini";
+    const bodyObj = body as { mode?: string; provider?: string; requestId?: string; fallbackConsent?: AIFallbackConsent };
+    const requestedProvider = bodyObj.fallbackConsent?.provider ?? bodyObj.provider ?? "gemini";
     for (const [index, entry] of entries.entries()) {
       const provider = aiProviderIds[index];
       if (entry.status === "fulfilled" && entry.value) userApiKeys[provider] = entry.value;
@@ -204,10 +239,8 @@ export async function withAIQuota(
     }
 
     // Determine which providers might be used based on the request
-    const bodyObj = body as { mode?: string; provider?: string } | null;
-    
     // Determine which providers might be used (same rule as ProviderManager)
-    const providersToCheck = providersToCheckFor(bodyObj?.mode, bodyObj?.provider);
+    const providersToCheck = providersToCheckFor(bodyObj.mode, bodyObj.provider, bodyObj.fallbackConsent?.provider);
 
     if (!needsSharedQuota(providersToCheck, userApiKeys)) {
       // User has BYOK for all providers that might be used - bypass quota
@@ -216,11 +249,7 @@ export async function withAIQuota(
     }
 
     // Otherwise, check quota for shared key usage
-    const { QuotaService } = await import("./QuotaService");
-    const quotaCheck = await QuotaService.checkAndConsume(userId, {
-      provider: "shared",
-      useSharedKeys: true,
-    });
+    const quotaCheck = await consumeSharedQuota(userId, bodyObj);
 
     if (!quotaCheck.allowed) {
       const dayEnd = new Date();

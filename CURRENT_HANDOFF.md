@@ -1,10 +1,22 @@
 # Handoff atual — StudyAI V1.1
 
-Atualizado em **7 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
+Atualizado em **8 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
+
+## Sprint 41H.1 — regressões do AI Core
+
+A Sprint 41H.1 está **VALIDADA LOCALMENTE, NÃO COMMITADA E NÃO HOMOLOGADA COM PROVIDERS REAIS**. As três regressões tinham origem no escopo da sessão offline introduzido pelo isolamento 41G: preferências privadas eram corretamente removidas da área ativa, mas o modo offline não possuía proprietário explícito para restaurá-las; além disso, o modo avançado dependia da identidade ativa e ficava oculto. A ausência do health do Ollama era apresentação, não contrato da API. O timeout do dashboard era o Playwright aguardando um botão avançado que não havia sido renderizado, não timeout do provider.
+
+O modo offline agora usa a identidade local explícita `offline-session`, armazenada separadamente das contas. Preferências offline sobrevivem ao reload, mas um usuário autenticado não restaura esses dados. Nenhum dado legado sem proprietário é reivindicado automaticamente. O fallback consentido da 41H não foi alterado.
+
+## Sprint 41H — fallback consentido
+
+A Sprint 41H está **IMPLEMENTADA LOCALMENTE NO NÚCLEO DE IA E NO TUTOR, NÃO COMMITADA E NÃO HOMOLOGADA COM SERVIÇOS REAIS**. Falhas recuperáveis do provedor primário agora geram uma oferta segura, sem chamar alternativa. O usuário vê provedor, modelo e impacto de consumo, pode autorizar exatamente uma alternativa ou cancelar mantendo mensagem e conversa. A tentativa autorizada é vinculada à requisição e ao usuário, passa novamente pela política de quota e possui idempotência em memória por cinco minutos. Respostas parciais são preservadas e nunca reenviadas automaticamente.
+
+O escopo deliberado desta etapa é o Tutor e o gerenciador central. Academy, flashcards, quiz, resumo, Lab, diagramas e áudio continuam sem troca automática entre provedores e ainda não possuem a interface de consentimento. A idempotência não é durável entre instâncias serverless; para garantia global será necessário armazenamento compartilhado, sem migração nesta etapa.
 
 ## Fechamento local da Sprint 41G.3D
 
-A Sprint 41G.3D está **CONCLUÍDA LOCALMENTE, NÃO COMMITADA E NÃO HOMOLOGADA EM PRODUÇÃO**. O PostgreSQL 18 local foi identificado por loopback (`127.0.0.1:5432`), banco descartável `studyai_41g2c_test`, somente duas contas sintéticas conhecidas e nenhuma tentativa de prova antes da execução. Os 6 testes de integração passaram e deixaram `exam_attempts` vazio. Nenhum banco foi criado, removido ou migrado.
+A Sprint 41G.3D está **CONCLUÍDA LOCALMENTE E REGISTRADA NO COMMIT `03f163b`, SEM HOMOLOGAÇÃO EM PRODUÇÃO**. O PostgreSQL 18 local foi identificado por loopback (`127.0.0.1:5432`), banco descartável `studyai_41g2c_test`, somente duas contas sintéticas conhecidas e nenhuma tentativa de prova antes da execução. Os 6 testes de integração passaram e deixaram `exam_attempts` vazio. Nenhum banco foi criado, removido ou migrado.
 
 Cache Storage passou em Chromium real: a troca A → B preservou conteúdo público, não apresentou dados privados de A pela aplicação, manteve caches privados escopados e não armazenou respostas de `/auth`, `/sync`, `/profile`, `/backup`, `/share` ou `/api`. Uma limpeza intencionalmente ausente no logout não expôs o cache de A à conta B; a limpeza pela interface removeu apenas o cache privado da conta ativa. Um script executado na mesma origem ainda consegue enumerar Cache Storage, portanto nomes por usuário evitam uso acidental, mas não formam fronteira contra XSS.
 
@@ -16,16 +28,17 @@ Resultado final sem duplicar casos: **90 testes distintos aprovados** — 69 ló
 
 - Projeto: `D:\studyai`.
 - Branch: `v1.1-development`.
-- HEAD: `5eb5637d8f36cb8289112cd0380ab577411beb11` — isolamento de OPFS, cache e storages legados da Sprint 41G.3C.
-- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **26 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
-- Nenhum arquivo está staged. Nenhum commit foi criado nesta auditoria.
+- HEAD: `03f163bae0f435ab66df6d3adfb7f2dd83ade5e2` — checkpoint aprovado da Sprint 41G.3D.
+- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **27 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
+- Nenhum arquivo está staged. Nenhum commit foi criado nas Sprints 41H/41H.1.
 
 Alterações rastreadas preservadas:
 
 - `package.json` e `package-lock.json` — dependência do presigner S3.
 - `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts` e `src/server/storage/ObjectStorage.ts` — upload direto experimental.
-- `src/features/account/AuthProvider.tsx`, `src/features/sync/SyncPreferences.ts` e `src/features/teacher/services/TeacherAudioSessionStorage.ts` — correções experimentais da Sprint 41G.3D.
-- `tests/sprint41g3a-isolation.spec.ts`, `tests/sprint41g-sync-preferences.spec.ts`, `tests/cloud-sync.spec.ts` e `tests/exam-attempt-integration.spec.ts` — regressões e portões de teste da 41G.3D.
+- Núcleo de IA, quota, rota e interface do Tutor — implementação não commitada da Sprint 41H.
+- `tests/ai-provider-sprint40.spec.ts`, `tests/quota-policy.spec.ts` e os novos testes `sprint41h-*` — cobertura mockada e de navegador da Sprint 41H.
+- `src/features/account/AuthProvider.tsx`, `src/features/account/SessionLocalData.ts`, `tests/helpers/experience.ts` e `tests/sprint41g3d-session-isolation.spec.ts` — correção e regressão da identidade offline na 41H.1.
 
 Arquivos não rastreados preservados:
 
@@ -33,9 +46,7 @@ Arquivos não rastreados preservados:
 - `src/app/api/files/[id]/direct/route.ts`.
 - `tests/deploy-security.spec.ts`.
 - `tests/direct-upload.spec.ts`.
-- `tests/sprint41g3d-session-isolation.spec.ts`.
-- `tests/sprint41g3d-browser-isolation.spec.ts` e `playwright.41g3d.browser.config.ts`.
-- `tests/sprint41g3d-cache-browser.spec.ts` e `tests/sprint41g3d-mobile-regression.spec.ts`.
+- `tests/sprint41h-ai-fallback.spec.ts` e `tests/sprint41h-tutor-consent.spec.ts` pertencem à 41H e ainda não foram commitados.
 
 ## Arquitetura confirmada
 
@@ -63,10 +74,12 @@ O código possui modo em memória quando PostgreSQL não está configurado. Migr
 - Sprint 41G.2C: **CONCLUÍDA LOCALMENTE** em `8dd7a75`, com PostgreSQL local descartável em 4/11 e repetição segura de 6/6 casos em 6–7/11.
 - Sprint 41G.3A: **VALIDADA LOCALMENTE** após importar o tipo ausente e corrigir o mock de `StorageManager`.
 - Sprints 41G.3B e 41G.3C: **CONCLUÍDAS LOCALMENTE**, com testes de módulo aprovados nesta auditoria, mas sem teste negativo completo entre duas contas reais.
-- Sprint 41G.3D: **CONCLUÍDA LOCALMENTE E NÃO COMMITADA**. PostgreSQL descartável, Cache Storage, desktop/mobile simulado, typecheck, lint e build passaram. Produção e aparelho físico não foram validados.
+- Sprint 41G.3D: **CONCLUÍDA LOCALMENTE E COMMITADA** em `03f163b`. Produção e aparelho físico não foram validados.
+- Sprint 41H: **IMPLEMENTADA E VALIDADA LOCALMENTE NO NÚCLEO/TUTOR**; demais fluxos de IA e serviços reais permanecem pendentes.
+- Sprint 41H.1: **VALIDADA LOCALMENTE**; as três regressões do AI Core foram resolvidas sem alterar o fallback.
 - Sprint 41 geral: **NÃO CONCLUÍDA**.
 
-## Testes executados em 6–7/11/2026
+## Testes executados em 6–8/11/2026
 
 | Verificação | Resultado |
 | --- | --- |
@@ -83,6 +96,11 @@ O código possui modo em memória quando PostgreSQL não está configurado. Migr
 | Cloud sync em navegador | 4 aprovados: sessão, restore, conflito, arquivo, exclusão e OPFS escopado. |
 | Cache Storage em Chromium | 1 aprovado: escopo privado, conteúdo público, APIs autenticadas excluídas e falha de limpeza segura. |
 | Mobile simulado 390 × 844 | 1 aprovado: conta, tema, navegação, Biblioteca, sync, reload e isolamento A → B → A. |
+| Sprint 41H/41H.1 — lógica/mock | 55 aprovados, 0 falhos: fallback, quota, providers e regressões de sessão/isolamento, incluindo offline. |
+| Sprint 41H — Tutor em Chromium | 3 aprovados, 0 falhos: consentimento desktop, cancelamento mobile e quota insuficiente. |
+| Regressão Tutor existente | 5 aprovados, 0 falhos. |
+| Regressão AI Core existente | 3 aprovados, 0 falhos: persistência, health do Ollama e dashboard. |
+| Isolamento desktop/mobile | 2 aprovados, 0 falhos: A → B → A, múltiplas abas, API cruzada e viewport móvel. |
 
 Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produção ou IA real.
 
@@ -90,16 +108,17 @@ Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produ�
 
 1. Manter o gate PostgreSQL: loopback, banco descartável comprovado, ambiente não produtivo e `STUDYAI_ALLOW_LOCAL_DB_TESTS=1`.
 2. Repetir a regressão em aparelho móvel físico e manter a observação de que namespaces locais não são fronteira contra scripts da mesma origem.
-3. Revisar e, mediante autorização, criar commit isolado da 41G.3D sem misturar upload direto.
+3. Revisar e, mediante autorização, criar checkpoint local isolado das Sprints 41H/41H.1 sem misturar upload direto.
 4. Investigar e estabilizar as intermitências do runner cloud sem mascará-las com retries.
 5. Manter o upload direto fora de publicação até revisão e testes; ele continua experimental e não rastreado em parte.
-6. Finalizar fallback de IA com consentimento, limites e transparência do modelo usado.
-7. Integrar Semana de Prova às atividades reais e ao progresso sem duplicação.
-8. Validar Academy, IA, PostgreSQL e S3 em homologação autorizada.
+6. Estender o contrato consentido aos demais fluxos de IA somente após validar o Tutor com provedores reais; hoje eles permanecem deliberadamente sem fallback.
+7. Tornar a idempotência de fallback durável entre instâncias serverless antes de depender dela para garantia financeira global.
+8. Integrar Semana de Prova às atividades reais e ao progresso sem duplicação.
+9. Validar Academy, IA, PostgreSQL e S3 em homologação autorizada.
 
 ## Próximo trabalho recomendado
 
-Revisar o diff da **41G.3D** e, somente mediante autorização, criar um commit local isolado sem misturar upload direto. Depois estabilizar o harness cloud e retomar as pendências funcionais da Sprint 41 — fallback consentido, Semana de Prova e homologação de Academy/IA — antes de iniciar a Sprint 42.
+Revisar o diff das **41H/41H.1** e, somente mediante autorização posterior, criar um checkpoint local isolado sem misturar upload direto. Depois validar o Tutor com contas/provedores de teste autorizados, decidir a estratégia durável de idempotência e retomar Semana de Prova e homologação de Academy/IA antes da Sprint 42.
 
 ## Comandos e documentação
 

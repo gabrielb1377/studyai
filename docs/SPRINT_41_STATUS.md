@@ -1,6 +1,25 @@
-# Sprint 41 — estado real em 7/11/2026
+# Sprint 41 — estado real em 8/11/2026
 
-**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. A 41G.3D foi concluída localmente e continua não commitada; ainda faltam as pendências funcionais maiores da Sprint 41 e homologação autorizada.
+**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. A 41G.3D foi commitada em `03f163b`; as 41H/41H.1 estão validadas localmente, mas ainda não foram commitadas nem homologadas com provedores reais.
+
+## Sprint 41H.1 — regressões resolvidas
+
+- Persistência: a sessão offline não possuía proprietário explícito; preferências eram colocadas em quarentena no reload e não podiam ser restauradas legitimamente.
+- Health do Ollama: o mock e o contrato estavam corretos; o painel técnico não era renderizado porque o modo avançado não encontrava identidade offline ativa.
+- Dashboard: o timeout era do teste aguardando um controle avançado ausente, não timeout real de provider ou timer do dashboard.
+- Correção: identidade local `offline-session`, separada das contas; preferências offline são restauradas somente nesse contexto. Dados legados sem proprietário continuam sem atribuição automática.
+- Evidência: AI Core 3/3; lógica/mock 55/55; Tutor/fallback 8/8; isolamento desktop/mobile 2/2; typecheck, lint e build aprovados.
+
+## Sprint 41H — estado local
+
+- O provedor primário continua sendo a única chamada inicial.
+- Falhas recuperáveis podem oferecer alternativas disponíveis, com provedor, modelo e aviso de consumo; nenhuma alternativa é chamada antes do consentimento.
+- O consentimento autoriza exatamente um provedor/modelo. Cancelar mantém prompt e conversa; falha da alternativa não inicia uma terceira tentativa.
+- Quota é verificada para a tentativa autorizada. Duplicatas são coalescidas por conta/requisição em memória por cinco minutos.
+- Streaming parcial é preservado e não pode gerar fallback.
+- O modelo efetivo e o marcador `fallback autorizado` aparecem na resposta do Tutor.
+- Escopo concluído localmente: gerenciador central e Tutor. Demais fluxos continuam sem fallback automático e sem interface de consentimento.
+- Limite: a idempotência em memória não atravessa instâncias serverless; serviços reais não foram usados.
 
 ## Fechamento 41G.3D-FINAL
 
@@ -14,9 +33,9 @@
 ## Evidência Git
 
 - Branch: `v1.1-development`.
-- HEAD: `5eb5637`.
+- HEAD: `03f163b`.
 - Referência remota conhecida: `origin/v1.1-development` em `331bc15`, sem `fetch` nesta auditoria.
-- Alterações experimentais de upload direto e 41G.3D permanecem fora de commit.
+- Alterações experimentais de upload direto e a 41H permanecem fora de commit.
 
 ## Reconstrução das etapas
 
@@ -32,7 +51,9 @@
 | Sprint 41G.3A | VALIDADA LOCALMENTE | `3c1dbe1`. A 41G.3D corrigiu a importação de `SessionOperation` e o mock de `StorageManager`; typecheck e casos focados passaram. |
 | Sprint 41G.3B | CONCLUÍDA LOCALMENTE | `971bee5`. Limpeza antes de persistir, quarentena de dados sem dono e `clearOwner`; casos focados passaram. |
 | Sprint 41G.3C | CONCLUÍDA LOCALMENTE | `5eb5637`. Escopo por usuário para provas, preferências, workspace, portabilidade e cache; casos focados e fluxos de navegador passaram. |
-| Sprint 41G.3D | CONCLUÍDA LOCALMENTE, NÃO COMMITADA | Corrigiu preferências de dispositivo, transição entre abas, áudio escopado e resposta atrasada. PostgreSQL descartável 6/6, Cache Storage, desktop e mobile simulado passaram. Não houve homologação de produção ou aparelho físico. |
+| Sprint 41G.3D | CONCLUÍDA LOCALMENTE, COMMITADA | Commit `03f163b`. PostgreSQL descartável 6/6, Cache Storage, desktop e mobile simulado passaram. Não houve homologação de produção ou aparelho físico. |
+| Sprint 41H | IMPLEMENTADA LOCALMENTE, NÃO COMMITADA | Núcleo/Tutor com consentimento, quota por tentativa, timeout e transparência. 54/54 lógicos e 3/3 novos casos de navegador passaram; serviços reais não foram usados. |
+| Sprint 41H.1 | VALIDADA LOCALMENTE, NÃO COMMITADA | Identidade offline explícita recupera preferências sem cruzá-las com contas. AI Core 3/3 e isolamento desktop/mobile 2/2. O fallback 41H permaneceu verde. |
 
 ## Funcionalidades atuais
 
@@ -55,9 +76,9 @@
 
 ### Pendências críticas
 
-1. Revisar e autorizar um commit isolado da 41G.3D, preservando os experimentos de upload direto.
+1. Revisar a 41H e manter os experimentos de upload direto fora do diff da sprint.
 2. Estabilizar as intermitências do runner de cadastro/sync/conflitos e repetir em aparelho móvel físico quando disponível.
-3. Finalizar fallback de IA consentido, limitado e transparente.
+3. Validar o fallback do Tutor com provedores/contas de teste autorizados, decidir idempotência durável e só então avaliar extensão aos demais fluxos.
 4. Integrar Semana de Prova a estudos, materiais, flashcards, quizzes, simulados e resultados sem duplicação.
 5. Validar Academy e IA com serviços reais somente em homologação autorizada.
 6. Repetir mobile/desktop; scripts da mesma origem continuam fora da fronteira oferecida por namespaces locais.
@@ -79,6 +100,11 @@
 | Navegador local | Cloud sync, conflito, restore, arquivo e OPFS | 4 aprovados, 0 falhos. |
 | Navegador local | Cache Storage | 1 aprovado, 0 falhos. |
 | Navegador local | Mobile simulado 390 × 844 | 1 aprovado, 0 falhos. |
+| Sprint 41H/41H.1 | lógica/mock, quota, provider e isolamento | 55 aprovados, 0 falhos. |
+| Sprint 41H | Tutor em Chromium desktop/mobile | 3 aprovados, 0 falhos. |
+| Regressão existente | Tutor | 5 aprovados, 0 falhos. |
+| Regressão existente | AI Core | 3 aprovados, 0 falhos. |
+| Regressão de isolamento | desktop e mobile | 2 aprovados, 0 falhos. |
 
 Os casos de Storage foram executados no runner de navegador isolado e passaram. Nenhum teste acessou IA paga ou produção.
 

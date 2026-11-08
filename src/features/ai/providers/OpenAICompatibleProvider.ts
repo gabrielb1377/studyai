@@ -19,6 +19,21 @@ type ChatStreamResponse = {
   error?: { message?: string };
 };
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
+function withRequestTimeout(signal: AbortSignal | undefined, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+function providerConnectionError(error: unknown, id: Extract<AIProviderId, "openrouter" | "groq">, name: string) {
+  if (error instanceof AIError) return error;
+  if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError")) {
+    return new AIError(`${name} excedeu o tempo limite da requisição.`, "TIMEOUT", 504, id);
+  }
+  return new AIError(`Não foi possível conectar ao ${name}.`, "PROVIDER_ERROR", 502, id);
+}
+
 function boundedMessages(history: readonly AIMessage[], message: string, contextWindow: number, requestedOutputTokens?: number) {
   const outputReserve = Math.min(
     requestedOutputTokens ?? 2_048,
@@ -72,22 +87,23 @@ export function createOpenAICompatibleProvider({
         return { provider: id, available: false, latencyMs: 0, models: [], endpoint, error: error instanceof Error ? error.message : `${name} indisponível.` };
       }
     },
-    async generate({ history, message, model, signal, maxOutputTokens, apiKey: apiKeyOverride }): Promise<AIResponse> {
+    async generate({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): Promise<AIResponse> {
       const key = (apiKeyOverride?.trim() || apiKey()?.trim());
       if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
-      const models = await listModels(key, signal);
-      const selectedModel = model?.trim() || models[0]?.name;
-      if (!selectedModel) throw new AIError(`Nenhum modelo disponível no ${name}.`, "PROVIDER_UNAVAILABLE", 503, id);
-      const modelInfo = models.find((item) => item.name === selectedModel);
-      if (!modelInfo) throw new AIError(`O modelo selecionado não está disponível no ${name}. Selecione outro modelo.`, "PROVIDER_UNAVAILABLE", 503, id);
-      const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384, maxOutputTokens);
       try {
+        const requestSignal = withRequestTimeout(signal, timeoutMs);
+        const models = await listModels(key, requestSignal);
+        const selectedModel = model?.trim() || models[0]?.name;
+        if (!selectedModel) throw new AIError(`Nenhum modelo disponível no ${name}.`, "PROVIDER_UNAVAILABLE", 503, id);
+        const modelInfo = models.find((item) => item.name === selectedModel);
+        if (!modelInfo) throw new AIError(`O modelo selecionado não está disponível no ${name}. Selecione outro modelo.`, "PROVIDER_UNAVAILABLE", 503, id);
+        const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384, maxOutputTokens);
         const response = await fetch(`${endpoint}/chat/completions`, {
           method: "POST",
           headers: headers(key),
           body: JSON.stringify({ model: selectedModel, messages: bounded.messages, max_tokens: bounded.maxTokens }),
           cache: "no-store",
-          signal,
+          signal: requestSignal,
         });
         const data = await response.json().catch(() => null) as ChatResponse | null;
         if (!response.ok) throw new AIError(data?.error?.message ?? `${name} não conseguiu responder.`, "PROVIDER_ERROR", response.status, id);
@@ -104,66 +120,70 @@ export function createOpenAICompatibleProvider({
           },
         };
       } catch (error) {
-        if (error instanceof AIError) throw error;
-        throw new AIError(`Não foi possível conectar ao ${name}.`, "PROVIDER_ERROR", 502, id);
+        throw providerConnectionError(error, id, name);
       }
     },
-    async *stream({ history, message, model, signal, maxOutputTokens, apiKey: apiKeyOverride }): AsyncGenerator<AIStreamEvent> {
+    async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): AsyncGenerator<AIStreamEvent> {
       const key = (apiKeyOverride?.trim() || apiKey()?.trim());
       if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
-      const models = await listModels(key, signal);
-      const selectedModel = model?.trim() || models[0]?.name;
-      if (!selectedModel) throw new AIError(`Nenhum modelo disponível no ${name}.`, "PROVIDER_UNAVAILABLE", 503, id);
-      const modelInfo = models.find((item) => item.name === selectedModel);
-      if (!modelInfo) throw new AIError(`O modelo selecionado não está disponível no ${name}. Selecione outro modelo.`, "PROVIDER_UNAVAILABLE", 503, id);
-      const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384, maxOutputTokens);
-      const response = await fetch(`${endpoint}/chat/completions`, {
-        method: "POST",
-        headers: headers(key),
-        body: JSON.stringify({ model: selectedModel, messages: bounded.messages, max_tokens: bounded.maxTokens, stream: true, stream_options: { include_usage: true } }),
-        cache: "no-store",
-        signal,
-      });
-      if (!response.ok || !response.body) {
-        const data = await response.json().catch(() => null) as ChatResponse | null;
-        throw new AIError(data?.error?.message ?? `${name} não conseguiu iniciar o streaming.`, "PROVIDER_ERROR", response.status || 502, id);
-      }
+      try {
+        const requestSignal = withRequestTimeout(signal, timeoutMs);
+        const models = await listModels(key, requestSignal);
+        const selectedModel = model?.trim() || models[0]?.name;
+        if (!selectedModel) throw new AIError(`Nenhum modelo disponível no ${name}.`, "PROVIDER_UNAVAILABLE", 503, id);
+        const modelInfo = models.find((item) => item.name === selectedModel);
+        if (!modelInfo) throw new AIError(`O modelo selecionado não está disponível no ${name}. Selecione outro modelo.`, "PROVIDER_UNAVAILABLE", 503, id);
+        const bounded = boundedMessages(history, message, modelInfo?.contextWindow ?? 16_384, maxOutputTokens);
+        const response = await fetch(`${endpoint}/chat/completions`, {
+          method: "POST",
+          headers: headers(key),
+          body: JSON.stringify({ model: selectedModel, messages: bounded.messages, max_tokens: bounded.maxTokens, stream: true, stream_options: { include_usage: true } }),
+          cache: "no-store",
+          signal: requestSignal,
+        });
+        if (!response.ok || !response.body) {
+          const data = await response.json().catch(() => null) as ChatResponse | null;
+          throw new AIError(data?.error?.message ?? `${name} não conseguiu iniciar o streaming.`, "PROVIDER_ERROR", response.status || 502, id);
+        }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let text = "";
-      let usage: AIResponse["usage"];
-      let responseModel = selectedModel;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          const payload = line.slice(5).trim();
-          if (!payload || payload === "[DONE]") continue;
-          const data = JSON.parse(payload) as ChatStreamResponse;
-          if (data.error?.message) throw new AIError(data.error.message, "PROVIDER_ERROR", 502, id);
-          responseModel = data.model ?? responseModel;
-          const delta = data.choices?.[0]?.delta?.content ?? "";
-          if (delta) {
-            text += delta;
-            yield { type: "delta", text: delta };
-          }
-          if (data.usage) {
-            usage = {
-              inputTokens: data.usage.prompt_tokens,
-              outputTokens: data.usage.completion_tokens,
-              totalTokens: data.usage.total_tokens,
-            };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let text = "";
+        let usage: AIResponse["usage"];
+        let responseModel = selectedModel;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+            const data = JSON.parse(payload) as ChatStreamResponse;
+            if (data.error?.message) throw new AIError(data.error.message, "PROVIDER_ERROR", 502, id);
+            responseModel = data.model ?? responseModel;
+            const delta = data.choices?.[0]?.delta?.content ?? "";
+            if (delta) {
+              text += delta;
+              yield { type: "delta", text: delta };
+            }
+            if (data.usage) {
+              usage = {
+                inputTokens: data.usage.prompt_tokens,
+                outputTokens: data.usage.completion_tokens,
+                totalTokens: data.usage.total_tokens,
+              };
+            }
           }
         }
+        if (!text.trim()) throw new AIError(`${name} retornou uma resposta vazia.`, "INVALID_RESPONSE", 502, id);
+        yield { type: "done", response: { provider: id, model: responseModel, text: text.trim(), usage } };
+      } catch (error) {
+        throw providerConnectionError(error, id, name);
       }
-      if (!text.trim()) throw new AIError(`${name} retornou uma resposta vazia.`, "INVALID_RESPONSE", 502, id);
-      yield { type: "done", response: { provider: id, model: responseModel, text: text.trim(), usage } };
     },
   };
 }

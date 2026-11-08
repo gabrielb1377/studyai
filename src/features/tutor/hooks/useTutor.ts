@@ -8,6 +8,20 @@ import { TutorStorage } from "../services/TutorStorage";
 import { useTutorContext } from "./useTutorContext";
 import { LearningService } from "@/features/learning/LearningService";
 import { isBroadTeacherAction, type TeacherRequest } from "@/features/teacher/types";
+import { AIClientError } from "@/features/ai/AIClient";
+import type { AIFallbackOffer, AIProviderId } from "@/features/ai/AIProvider";
+import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
+import type { TutorStudyContext } from "@/types/tutor-context";
+
+type PendingFallback = {
+  offer: AIFallbackOffer;
+  conversationId: string;
+  history: TutorConversation["messages"];
+  message: string;
+  context?: TutorStudyContext | null;
+  chunks: readonly RetrievedChunk[];
+  teaching?: TeacherRequest;
+};
 
 export function useTutor(instanceId?: string) {
   const context = useTutorContext();
@@ -15,6 +29,7 @@ export function useTutor(instanceId?: string) {
   const [activeConversationId, setActiveConversationId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFallback, setPendingFallback] = useState<PendingFallback | null>(null);
 
   const updateConversations = (
     updater: (current: TutorConversation[]) => TutorConversation[],
@@ -41,6 +56,7 @@ export function useTutor(instanceId?: string) {
   );
 
   const createConversation = () => {
+    setPendingFallback(null);
     const conversation = TutorService.createConversation();
     updateConversations((current) => [conversation, ...current]);
     setActiveConversationId(conversation.id);
@@ -57,6 +73,7 @@ export function useTutor(instanceId?: string) {
   };
 
   const deleteConversation = (conversationId: string) => {
+    if (pendingFallback?.conversationId === conversationId) setPendingFallback(null);
     updateConversations((current) => {
       const nextConversations = TutorService.deleteConversation(current, conversationId);
       if (conversationId === activeConversationId) {
@@ -74,7 +91,9 @@ export function useTutor(instanceId?: string) {
     const conversation = activeConversation ?? TutorService.createConversation();
     const userMessage = TutorService.createMessage("user", nextContent);
     const assistantMessage = TutorService.createMessage("assistant", "");
+    const requestId = crypto.randomUUID();
     setError(null);
+    setPendingFallback(null);
     setIsLoading(true);
 
     if (!activeConversation) setActiveConversationId(conversation.id);
@@ -85,6 +104,8 @@ export function useTutor(instanceId?: string) {
     ));
 
     let streamedText = "";
+    let requestContext: TutorStudyContext | null | undefined = context;
+    let requestChunks: readonly RetrievedChunk[] = [];
     try {
       const retrieval = options?.teaching && context?.studyId && isBroadTeacherAction(options.teaching.action)
         ? await RetrievalPipeline.forStudy(context.studyId)
@@ -103,6 +124,8 @@ export function useTutor(instanceId?: string) {
             },
           }
         : context;
+      requestContext = contextualized;
+      requestChunks = retrieval.chunks;
       const response = await TutorService.requestReply(
         conversation.messages,
         nextContent,
@@ -119,6 +142,7 @@ export function useTutor(instanceId?: string) {
             ));
           },
           teaching: options?.teaching,
+          requestId,
         },
       );
       updateConversations((current) =>
@@ -135,7 +159,64 @@ export function useTutor(instanceId?: string) {
       } else {
         updateConversations((current) => TutorService.replaceMessage(current, conversation.id, assistantMessage.id, { content: streamedText }));
       }
-      setError(requestError instanceof Error ? requestError.message : "Erro inesperado no Tutor IA.");
+      if (!streamedText && requestError instanceof AIClientError && requestError.code === "FALLBACK_CONSENT_REQUIRED" && requestError.fallback) {
+        setPendingFallback({
+          offer: requestError.fallback,
+          conversationId: conversation.id,
+          history: conversation.messages,
+          message: nextContent,
+          context: requestContext,
+          chunks: requestChunks,
+          teaching: options?.teaching,
+        });
+        setError(null);
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "Erro inesperado no Tutor IA.");
+      }
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const acceptFallback = async (provider: AIProviderId) => {
+    if (!pendingFallback || isLoading) return false;
+    const pending = pendingFallback;
+    const alternative = pending.offer.alternatives.find((item) => item.provider === provider);
+    if (!alternative) return false;
+    const assistantMessage = TutorService.createMessage("assistant", "");
+    setPendingFallback(null);
+    setError(null);
+    setIsLoading(true);
+    updateConversations((current) => TutorService.addMessage(current, pending.conversationId, assistantMessage));
+    try {
+      const response = await TutorService.requestReply(
+        pending.history,
+        pending.message,
+        pending.context,
+        pending.chunks,
+        {
+          requestId: pending.offer.requestId,
+          provider: pending.offer.primaryProvider,
+          model: pending.offer.primaryModel,
+          fallbackConsent: {
+            requestId: pending.offer.requestId,
+            originalProvider: pending.offer.primaryProvider,
+            provider: alternative.provider,
+            model: alternative.model,
+          },
+          teaching: pending.teaching,
+        },
+      );
+      updateConversations((current) => TutorService.replaceMessage(current, pending.conversationId, assistantMessage.id, {
+        content: response.text,
+        metadata: response.metadata,
+      }));
+      if (pending.context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: pending.context.studyId });
+      return true;
+    } catch (requestError) {
+      updateConversations((current) => TutorService.removeMessage(current, pending.conversationId, assistantMessage.id));
+      setError(requestError instanceof Error ? requestError.message : "A alternativa autorizada não conseguiu responder.");
       return false;
     } finally {
       setIsLoading(false);
@@ -148,6 +229,7 @@ export function useTutor(instanceId?: string) {
     conversations,
     context,
     error,
+    pendingFallback: pendingFallback?.offer ?? null,
     isLoading,
     clearError: () => setError(null),
     setError,
@@ -155,9 +237,12 @@ export function useTutor(instanceId?: string) {
     renameConversation,
     deleteConversation,
     selectConversation: (conversationId: string) => {
+      setPendingFallback(null);
       setActiveConversationId(conversationId);
       void TutorStorage.saveActive(conversationId, instanceId);
     },
     sendMessage,
+    acceptFallback,
+    declineFallback: () => setPendingFallback(null),
   };
 }

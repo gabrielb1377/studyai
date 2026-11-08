@@ -8,6 +8,7 @@ import {
   isAIModelPreferences,
   isAIProviderId,
   isAISelectionMode,
+  type AIFallbackConsent,
   type AIModelPreferences,
   type AIProviderId,
   type AISelectionMode,
@@ -36,12 +37,27 @@ type TutorRequest = {
   provider?: AIProviderId;
   stream?: boolean;
   teaching?: TeacherRequest;
+  requestId: string;
+  fallbackConsent?: AIFallbackConsent;
 };
+
+function isFallbackConsent(value: unknown, requestId: string) : value is AIFallbackConsent {
+  if (value === undefined) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const consent = value as Partial<AIFallbackConsent>;
+  return consent.requestId === requestId &&
+    isAIProviderId(consent.originalProvider) &&
+    isAIProviderId(consent.provider) &&
+    consent.provider !== consent.originalProvider &&
+    typeof consent.model === "string" && consent.model.trim().length > 0;
+}
 
 function isTutorRequest(value: unknown): value is TutorRequest {
   if (typeof value !== "object" || value === null) return false;
   const request = value as Partial<TutorRequest>;
   return typeof request.message === "string" && request.message.trim().length > 0 &&
+    typeof request.requestId === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(request.requestId) &&
+    isFallbackConsent(request.fallbackConsent, request.requestId) &&
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     isAIModelPreferences(request.models) &&
     (request.mode === undefined || isAISelectionMode(request.mode)) &&
@@ -85,7 +101,7 @@ export async function POST(request: Request) {
         const stream = new ReadableStream<Uint8Array>({
           async start(controller) {
             try {
-              for await (const event of AIService.stream(aiRequest)) {
+              for await (const event of AIService.stream({ ...aiRequest, fallbackPolicy: "consent" })) {
                 const payload = event.type === "done"
                   ? {
                       ...event,
@@ -120,7 +136,7 @@ export async function POST(request: Request) {
           },
         });
       }
-      const response = await AIService.generate(aiRequest);
+      const response = await AIService.generate({ ...aiRequest, fallbackPolicy: "consent" });
       const outputTokens = response.usage?.outputTokens ?? TokenCounter.estimate(response.text);
       return NextResponse.json({
         ...response,

@@ -2,6 +2,7 @@ import type { TutorConversation, TutorMessage } from "@/types/tutor";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { AIClient } from "@/features/ai/AIClient";
+import type { AIFallbackConsent, AIProviderId } from "@/features/ai/AIProvider";
 import type { TeacherRequest } from "@/features/teacher/types";
 import { createTutorId, getMessageText } from "../utils/message-utils";
 
@@ -11,7 +12,7 @@ type TutorApiResponse = {
   text?: string;
   error?: string;
   usage?: TutorMessage["metadata"];
-  execution?: { cached?: boolean };
+  execution?: { cached?: boolean; fallbackUsed?: boolean };
 };
 
 export class TutorRequestError extends Error {
@@ -97,7 +98,15 @@ export const TutorService = {
     message: string,
     context?: TutorStudyContext | null,
     chunks: readonly RetrievedChunk[] = [],
-    options?: { onDelta?: (text: string) => void; signal?: AbortSignal; teaching?: TeacherRequest },
+    options?: {
+      onDelta?: (text: string) => void;
+      signal?: AbortSignal;
+      teaching?: TeacherRequest;
+      requestId?: string;
+      fallbackConsent?: AIFallbackConsent;
+      provider?: AIProviderId;
+      model?: string;
+    },
   ): Promise<{ model: string; text: string; provider?: string; metadata?: TutorMessage["metadata"] }> {
     const payload = {
       history: history.map((historyMessage) => ({
@@ -108,6 +117,10 @@ export const TutorService = {
       context: context ?? undefined,
       chunks: chunks.length > 0 ? chunks : undefined,
       teaching: options?.teaching,
+      requestId: options?.requestId ?? crypto.randomUUID(),
+      fallbackConsent: options?.fallbackConsent,
+      provider: options?.provider,
+      model: options?.model,
     };
     const data = options?.onDelta
       ? await AIClient.stream<TutorApiResponse>("/api/tutor", payload, {
@@ -130,6 +143,7 @@ export const TutorService = {
         provider: data.provider,
         model: data.model,
         cached: data.execution?.cached,
+        fallbackUsed: data.execution?.fallbackUsed,
       },
     };
   },

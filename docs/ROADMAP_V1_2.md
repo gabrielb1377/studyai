@@ -1,92 +1,141 @@
-# StudyAI — roadmap V1.2
+# StudyAI — roadmap reconciliado V1.2
 
-Planejamento, não promessa de implementação. A Sprint 41 estabiliza a base V1.1 antes da evolução para V1.2. Validar escopo e prioridades no início de cada sprint; não considerar funcionalidades planejadas como entregues. Módulos citados são pontos de partida, sujeitos a auditoria.
+Atualizado em **6 de novembro de 2026**. O planejamento original de 30/10 foi preservado e confrontado com o código. Funcionalidade existente não é sinônimo de validação em produção.
 
-## Sprint 41 — Estabilização e correções
+## Visão geral
 
-- **Prioridade:** P0 para bugs de simulado, Academy, segurança de fallback e isolamento; P1 para integração de prova; P2 para ajuda.
-- **Objetivos e funcionalidades:** concluir as correções descritas em [SPRINT_41_STATUS.md](SPRINT_41_STATUS.md), incluindo proteção de gabarito, geração real de três modalidades, troca segura e opcional de modelo, sincronização entre contas/dispositivos, associação de atividades aos planos e ajuda acessível.
-- **Dependências:** código e testes existentes, contrato de autenticação, políticas de custo e consentimento; validação real apenas em ambiente autorizado.
-- **Módulos:** `src/features/quiz`, `src/features/workspace`, `src/features/academy`, `src/features/ai`, `src/features/sync`, `src/features/exam`, `src/features/help`, `src/server/ai`.
-- **Conclusão:** fluxos críticos funcionais, sem exposição indevida ou perda de dados; diferenças entre testes simulados e validação real documentadas; nenhum bug crítico aberto declarado como resolvido sem evidência.
-- **Testes:** typecheck, lint, build isolado, Playwright desktop/mobile e teclado; API com mocks para falhas/limites de IA; persistência, conflitos, troca de usuários e regressão de autenticação.
-- **Riscos:** cobrança por troca inesperada de provedor; contaminação de preferências entre contas; gabarito disponível no cliente; geração real pode falhar por provedor ou configuração.
+| Sprint | Objetivo | Estado em 6/11/2026 |
+| --- | --- | --- |
+| 41 | Estabilização, correções, sincronização e fallback básico | PARCIALMENTE IMPLEMENTADA |
+| 42 | Segurança, autorização, rate limiting e quotas | PLANEJADA; parte da base já existe |
+| 43 | IA por tarefa e fallback avançado | PLANEJADA; fallback entre providers está suspenso |
+| 43B | Leitura de prints e extração de exercícios | PROPOSTA; não implementada |
+| 44A | Tutor IA com contexto completo de matérias | PLANEJADA; recuperação local já existe |
+| 44B | Revisão inteligente e Caderno de Erros | PLANEJADA; revisão básica já existe |
+| 45 | Semana de Prova 2.0 e simulados adaptativos | PLANEJADA; Semana de Prova básica já existe |
+| 46 | Dashboard, busca universal e melhorias mobile | PLANEJADA; componentes básicos já existem |
+| 47 | Microinterações, desempenho e validação final | PLANEJADA |
+
+## Sprint 41 — Estabilização, correções, sincronização e fallback básico
+
+- **Objetivos:** estabilizar Academy, quiz/simulado, sessão, sincronização, armazenamento local, ajuda e fallback antes da V1.2.
+- **Entregue:** contrato Academy/quota; navegação Semana de Prova; persistência do simulado; abertura de ferramentas; contenção de fallback não consentido; ajuda categorizada; geração de sessão; Modo Prova protegido; escopos locais por conta.
+- **Subdivisões:** 41 inicial e 41G.1B/2B/2C/3A/3B/3C estão validadas localmente; 41F continua parcial; 41G.3D está verde localmente, não commitada e aguarda repetição PostgreSQL descartável. Não há evidência documental de 41H ou 41I.
+- **Dependências:** autenticação, CSRF, PostgreSQL para prova protegida, política de dados legados e ambiente de navegador com duas contas sintéticas.
+- **Prioridade:** P0 para isolamento, typecheck e migração; P1 para fallback e Semana de Prova; P2 para polimento.
+- **Módulos:** `src/features/account`, `sync`, `storage`, `quiz`, `exam`, `academy`, `ai`, `help`, rotas de conta/sync/arquivo/prova.
+- **Conclusão:** todos os checks estáticos verdes; isolamento negativo A → B → A demonstrado no navegador e API; nenhuma perda silenciosa; decisão explícita sobre fallback; escopo restante movido formalmente.
+- **Testes:** typecheck, lint, build, VM/unitários, Playwright desktop/mobile, duas contas, múltiplas abas, API cross-user, PostgreSQL descartável e falhas/timeout de IA com mocks.
+- **Riscos:** namespace local confundido com autorização; dados legados atribuídos à conta errada; resposta atrasada aplicada após logout; regressão do modo prática; falso positivo de testes mockados.
 
 ## Sprint 42 — Segurança, autorização, rate limiting e quotas
 
-- **Prioridade:** P0 para isolamento, autorização e proteção de segredos; P1 para observabilidade e limites operacionais.
-- **Objetivos e funcionalidades:** auditar sessão, CSRF, autorização por recurso, chaves BYOK, isolamento de conta e registros; revisar rate limits e quotas para serviços compartilhados, incluindo concorrência e falhas de dependências.
-- **Dependências:** estabilização da Sprint 41; inventário de rotas e decisão explícita sobre limites, modos de falha e migração de dados.
-- **Módulos:** `src/server/auth`, `src/server/security`, `src/server/ai`, `src/app/api`, `src/features/account`, `src/features/sync`.
-- **Conclusão:** política documentada e aplicada às rotas pertinentes, sem segredos em respostas/logs; acesso entre usuários negado e contagem consistente sob concorrência.
-- **Testes:** autorização entre duas contas, CSRF, sessão, BYOK, limites, concorrência, indisponibilidade de PostgreSQL e regressão dos fluxos existentes, com dados sintéticos.
-- **Riscos:** bloquear usuários legítimos, mudança de limites ou rotação incorreta de chaves; nunca enfraquecer TLS/autenticação para passar testes.
+- **Objetivos:** revisar todas as rotas e recursos por ownership, consolidar CSRF, sessões, BYOK, quotas e rate limits concorrentes.
+- **O que já existe:** cookies seguros em produção, CSRF, `requireUser`, `requireSessionOwner` em sync/arquivos/prova, criptografia de chaves, rate limit em login/registro/recuperação/API keys e quota compartilhada.
+- **Escopo restante:** matriz completa de autorização das 53 rotas atuais; persistência distribuída de limites; concorrência; revogação; logs redigidos; regras de colaboração e compartilhamento; políticas de erro.
+- **Dependências:** encerramento da 41G, inventário de recursos e decisão de hospedagem.
+- **Prioridade:** P0 para cross-user, segredos e quotas; P1 para observabilidade.
+- **Módulos:** `src/server/auth`, `security`, `ai`, `collaboration`, `src/app/api`, `src/app/auth`.
+- **Conclusão:** acesso cruzado negado em todos os recursos privados; mutações protegidas; limites consistentes sob concorrência; nenhum segredo em resposta/log.
+- **Testes:** duas contas, CSRF, replay, sessão expirada, IDOR, quotas concorrentes, BYOK, indisponibilidade do banco e fuzz de IDs/payloads.
+- **Riscos:** bloquear usuário legítimo, rate limit somente em memória na Vercel, rotação indevida de chaves e diferenças entre mocks e PostgreSQL.
 
-## Sprint 43 — IA por tarefa e fallback econômico
+## Sprint 43 — IA por tarefa e fallback avançado
 
-- **Prioridade:** P0 para consentimento, custo e isolamento; P1 para políticas por tarefa e transparência.
-- **Objetivos e funcionalidades:** selecionar modelos compatíveis por tarefa; refinar o fallback seguro da Sprint 41, políticas de custo/ordem configuráveis e exibição de modelo realmente utilizado, sem novas tentativas após resposta parcial.
-- **Dependências:** política de fallback e autorização da Sprint 41; quotas e limites da Sprint 42; capacidades e preços confirmados no momento da implementação.
-- **Módulos:** `src/features/ai`, `src/features/settings`, `src/server/ai`, rotas de Tutor, Academy, flashcards, quiz e resumos.
-- **Conclusão:** cada tarefa respeita a seleção e a lista autorizada; falhas não recuperáveis não são repetidas; mudança de provedor pago exige consentimento; dados e chaves permanecem isolados.
-- **Testes:** cenários de indisponibilidade, 429, timeout, 401/403, validação, streaming interrompido, limites de tentativas, orçamento e isolamento, sempre com provedores simulados.
-- **Riscos:** catálogos, custos e capacidades dos modelos mudam; respostas incompletas ou repetição de chamadas podem gerar cobrança e conteúdo inválido.
+- **Objetivos:** escolher modelos por tarefa, custo e capacidade; permitir fallback curto e explícito; mostrar provider/modelo efetivo.
+- **O que já existe:** `ProviderManager`, seleção manual, BYOK, health, cache, quotas, normalização de erros. A lista de candidatos está restrita ao provider escolhido para impedir troca silenciosa.
+- **Escopo restante:** lista autorizada por usuário/tarefa, consentimento para outro provider, orçamento, limite de tentativas, sem repetição após resposta parcial e telemetria de modelo efetivo.
+- **Dependências:** políticas e quotas da Sprint 42.
+- **Prioridade:** P0 para consentimento/custo; P1 para roteamento por tarefa.
+- **Módulos:** `src/features/ai`, settings, `src/server/ai`, Tutor, Academy, quiz, flashcards, resumos e Lab.
+- **Conclusão:** toda chamada respeita seleção e orçamento; troca paga é consentida; autenticação/validação não é repetida; UI informa modelo real.
+- **Testes:** 401/403/429/5xx, timeout, stream parcial, cache, BYOK, shared key, orçamento e isolamento, usando providers simulados.
+- **Riscos:** preços/catálogos mudam, cobrança duplicada, fallback com resultado incompatível e exposição de chaves.
+
+## Sprint 43B — Leitura de imagens e extração de exercícios
+
+**Estado: PROPOSTA DE ROADMAP. Não está implementada e não deve ser iniciada antes das Sprints 41–43.**
+
+- **Objetivos:** importar capturas de tela, listas e simulados, especialmente materiais acadêmicos da Estácio, e extrair questões estruturadas com revisão humana.
+- **Funcionalidades:** PNG, JPG, WEBP e PDF com imagens; OCR local ou modelo multimodal autorizado; enunciados, alternativas, fórmulas, tabelas e código; matéria/unidade/tema com confirmação; trechos ilegíveis revisáveis; deduplicação; Biblioteca; limites de páginas/tamanho/custo.
+- **Regras:** preservar enunciados e alternativas; não inventar gabarito oficial; identificar conteúdo inferido; isolar arquivos por usuário; manter origem e página.
+- **Integrações futuras:** Tutor, Quiz, Simulados, Flashcards e Caderno de Erros.
+- **Dependências:** segurança/quota da Sprint 42, roteamento da 43, pipeline de OCR/importação e modelo de proveniência.
+- **Prioridade:** P1; isolamento, fidelidade e custo são P0.
+- **Módulos prováveis:** `src/features/import`, `ocr`, `extraction`, `library`, `ai`, novos tipos/validação de questões.
+- **Conclusão:** amostras reais são extraídas com proveniência e revisão; trechos incertos não viram fatos; duplicatas são detectadas; nenhum gabarito é inventado.
+- **Testes:** imagens reais sintéticas/licenciadas, baixa resolução, rotação, tabelas, fórmulas, código, duplicatas, limites, offline e isolamento, sem serviço pago obrigatório.
+- **Riscos:** OCR incorreto, direitos autorais, custo multimodal, fórmulas corrompidas, injeção em imagem e associação à disciplina errada.
 
 ## Sprint 44A — Tutor IA com contexto completo de matérias
 
-- **Prioridade:** P1, depois de segurança e política de IA; P0 para privacidade e fidelidade ao material.
-- **Objetivos e funcionalidades:** melhorar recuperação e seleção de contexto de matérias e temas, com rastreabilidade de fontes e limites explícitos para materiais ausentes ou grandes.
-- **Dependências:** Sprint 43, indexação/extratação existente e decisão sobre escopo e retenção do contexto.
-- **Módulos:** `src/features/tutor`, `src/features/retrieval`, `src/features/ai`, `src/features/study`.
-- **Conclusão:** Tutor utiliza contexto pertinente autorizado, identifica ausência de fonte e mantém associações corretas sem misturar usuários ou matérias.
-- **Testes:** múltiplos materiais e matérias, limites de contexto, citação, arquivo ausente, conteúdo malicioso no material, isolamento e streaming.
-- **Riscos:** alucinação, injeção em documentos, custo elevado e exposição de material fora do escopo.
+- **Objetivos:** recuperar contexto autorizado de vários materiais e matérias, com proveniência e limites explícitos.
+- **O que já existe:** chunks, busca lexical/vetorial local, grafo de conhecimento, `RetrievalPipeline`, Tutor/Professor e histórico.
+- **Integração 43B:** usar questões extraídas para explicação simples/profunda, resolução passo a passo, exercícios interativos, simulados semelhantes, resumos, flashcards e conceitos cobrados.
+- **Regra de transparência:** diferenciar texto extraído do material, conhecimento complementar e resposta inferida.
+- **Dependências:** 43/43B, indexação e política de retenção/contexto.
+- **Prioridade:** P1; privacidade e fidelidade são P0.
+- **Módulos:** `src/features/tutor`, `retrieval`, `semantic`, `study`, `ai`.
+- **Conclusão:** contexto certo, origem rastreável, ausência de fonte indicada e nenhum cruzamento entre contas/matérias.
+- **Testes:** múltiplos materiais, limites de contexto, arquivo ausente, conteúdo malicioso, fontes, streaming e isolamento.
+- **Riscos:** alucinação, prompt injection em documentos, contexto excessivo e custo.
 
 ## Sprint 44B — Revisão inteligente e Caderno de Erros
 
-- **Prioridade:** P1 para revisão; P0 para preservação de dados e rastreabilidade dos resultados.
-- **Objetivos e funcionalidades:** organizar revisão a partir de progresso, flashcards e erros reais, com caderno de erros e ações de estudo; evitar duplicar registros existentes.
-- **Dependências:** Sprint 44A, resultados confiáveis de simulado, sincronização e modelo de dados revisado.
-- **Módulos:** `src/features/learning`, `src/features/flashcards`, `src/features/quiz`, `src/features/study`, `src/features/sync`.
-- **Conclusão:** registro deriva de atividades reais e identifica estudo/origem; alterações persistem e sincronizam sem duplicação; o usuário controla sua revisão.
-- **Testes:** respostas certas/erradas, reexecução, dados antigos, sincronização, conflitos, exclusões e acessibilidade.
-- **Riscos:** recomendações falsas, duplicatas, perda de histórico ou associação a matéria incorreta.
+- **Objetivos:** transformar erros e progresso reais em revisão planejada, com deduplicação e controle do usuário.
+- **O que já existe:** Learning Engine, flashcards, quizzes, progresso, revisão básica e resultados do Modo Prova protegido.
+- **Integração 43B:** registrar dificuldades observadas nas questões importadas/respondidas, preservando origem, histórico, privacidade e deduplicação.
+- **Dependências:** 44A, resultados confiáveis, sincronização e modelo de eventos.
+- **Prioridade:** P1; integridade do histórico é P0.
+- **Módulos:** `src/features/learning`, `flashcards`, `quiz`, `study`, `sync` e novos registros de erro.
+- **Conclusão:** somente atividades reais geram erros; cada item tem origem; reexecução não duplica; sincronização preserva edições/exclusões.
+- **Testes:** certo/errado, reexecução, dados antigos, conflitos, exclusões, questão importada e acessibilidade.
+- **Riscos:** recomendação falsa, duplicata, perda de histórico e matéria incorreta.
 
 ## Sprint 45 — Semana de Prova 2.0 e Simulados Adaptativos
 
-- **Prioridade:** P1; segurança do gabarito e consistência da pontuação são P0.
-- **Objetivos e funcionalidades:** evoluir planos ligados a matérias, materiais, atividades e progresso; simulados adaptativos baseados em desempenho real e parâmetros explícitos.
-- **Dependências:** integração da Sprint 41, política de IA da Sprint 43 e dados de revisão da Sprint 44B.
-- **Módulos:** `src/features/exam`, `src/features/quiz`, `src/features/learning`, `src/types/exam.ts`, sincronização e rotas associadas.
-- **Conclusão:** plano abre a atividade correta, registra conclusão apenas com vínculo válido e mantém resultados íntegros; adaptação é explicável e não vaza gabarito.
-- **Testes:** plano completo, vínculos removidos, pontuação, múltiplos dispositivos, atualização, privacidade de respostas e acessibilidade mobile.
-- **Riscos:** contagem duplicada, adaptação com dados insuficientes, sincronização conflituosa e associação incorreta.
+- **Objetivos:** evoluir a tela básica para planos ligados a matérias, materiais e atividades; gerar simulados adaptativos explicáveis.
+- **O que já existe:** rota/menu `/provas`, CRUD local, prioridades, plano diário e progresso manual; Modo Prova protegido separado.
+- **Escopo restante:** IDs estáveis de estudo/material/atividade, conclusão sem duplicação, resultados, sincronização, adaptação por desempenho e retomada.
+- **Dependências:** 41 concluída, política de IA 43 e dados 44B.
+- **Prioridade:** P1; integridade de resultado e gabarito são P0.
+- **Módulos:** `src/features/exam`, `quiz`, `learning`, `types/exam.ts`, sync e APIs de tentativa.
+- **Conclusão:** plano abre a atividade correta, resultado atualiza uma vez, adaptação é explicável e gabarito não vaza.
+- **Testes:** vínculos removidos, pontuação, múltiplos dispositivos, offline, privacidade e mobile.
+- **Riscos:** progresso duplicado, associação incorreta e adaptação com poucos dados.
 
-## Sprint 46 — Dashboard, busca universal e mobile
+## Sprint 46 — Dashboard, busca universal e melhorias mobile
 
-- **Prioridade:** P1 para continuidade entre telas e usabilidade; P2 para refinamentos visuais.
-- **Objetivos e funcionalidades:** consolidar informações reais no dashboard, pesquisa universal coerente com permissões e navegação responsiva para celular.
-- **Dependências:** dados consolidados das Sprints 44–45; design system e critérios de acessibilidade.
-- **Módulos:** `src/features/dashboard`, `src/components/layout`, `src/features/library`, `src/features/help`, páginas Next.js.
-- **Conclusão:** ações levam ao conteúdo correto, pesquisa respeita usuário e estados vazios, navegação funciona em desktop e celular sem overflow.
-- **Testes:** viewport pequeno/grande, teclado e toque, busca com acentos, dados vazios/grandes, isolamento e fluxos de navegação.
-- **Riscos:** indicadores desatualizados, resultados não autorizados e degradação de desempenho em dispositivos modestos.
+- **Objetivos:** consolidar dados reais no dashboard, busca autorizada e navegação mobile coerente.
+- **O que já existe:** dashboard, busca local/global, sidebar, PWA e layouts responsivos.
+- **Dependências:** dados consolidados das Sprints 44–45 e design system.
+- **Prioridade:** P1 para navegação/continuidade; P2 visual.
+- **Módulos:** `src/features/dashboard`, `search`, `library`, `help`, `src/components/layout` e páginas.
+- **Conclusão:** ações abrem o recurso correto, busca respeita a conta e mobile não apresenta overflow/bloqueio.
+- **Testes:** teclado, toque, leitores de tela, viewport, acentos, conjuntos grandes/vazios, isolamento e desempenho.
+- **Riscos:** indicadores desatualizados, resultado não autorizado e regressão em dispositivos modestos.
 
-## Sprint 47 — Microinterações, testes finais e preparação de lançamento
+Referências visuais preservadas para pesquisa futura, sem instalação nesta auditoria:
 
-- **Prioridade:** P0 para regressão e segurança; P1 para desempenho/acessibilidade; P2 para microinterações.
-- **Objetivos e funcionalidades:** polir feedback e estados de carregamento/erro, respeitar movimento reduzido e preparar checklist de lançamento, observabilidade e reversão.
-- **Dependências:** funcionalidades críticas concluídas nas sprints anteriores; ambiente de homologação e autorização para qualquer teste externo ou publicação.
-- **Módulos:** componentes compartilhados, `src/features`, `tests`, documentação de deploy/monitoramento.
-- **Conclusão:** regressão e segurança aprovadas, riscos e rollback revisados, operação e critérios de aceite registrados; implantação depende de autorização separada.
-- **Testes:** suíte relevante e E2E, responsividade, leitores de tela/teclado, movimento reduzido, desempenho, recuperação, backup/restore sintéticos e smoke test autorizado.
-- **Riscos:** animações prejudicarem acessibilidade, diferenças entre mock e produção, regressões ou dependências externas indisponíveis.
+- [Unslop](https://github.com/heydamir/unslop)
+- UI UX Pro Max
+- [Appllama Skills](https://github.com/Appllama/appllama-skills)
+- [SwiftUI Microinteractions](https://github.com/iAmVishal16/swiftui-microinteractions)
 
-## Referências visuais e de pesquisa
+## Sprint 47 — Microinterações, desempenho e validação final
 
-- [Unslop](https://github.com/heydamir/unslop).
-- UI UX Pro Max — referência indicada; verificar fonte e licenciamento antes de uso.
-- [Appllama Skills](https://github.com/Appllama/appllama-skills).
-- [SwiftUI Microinteractions](https://github.com/iAmVishal16/swiftui-microinteractions).
+- **Objetivos:** estados de carregamento/erro, movimento reduzido, desempenho, observabilidade, rollback e gate de lançamento.
+- **Dependências:** funcionalidades críticas concluídas e homologação autorizada.
+- **Prioridade:** P0 para regressão/segurança; P1 para desempenho/acessibilidade; P2 para microinterações.
+- **Módulos:** componentes compartilhados, features, testes e documentação operacional.
+- **Conclusão:** suíte e segurança aprovadas, acessibilidade revisada, riscos aceitos e procedimento de rollback testado.
+- **Testes:** E2E completo, segurança, desktop/mobile, teclado/leitor de tela, movimento reduzido, backup/restore e smoke test autorizado.
+- **Riscos:** polimento introduzir regressão, diferença mock/produção e dependências externas indisponíveis.
 
-São referências para pesquisa futura; nenhuma ferramenta foi instalada neste checkpoint. Avaliar pertinência ao stack web, acessibilidade e licença antes de adotar qualquer recurso.
+## Ordem recomendada
+
+1. Repetir o gate PostgreSQL descartável e revisar/commitá-lo isoladamente quando autorizado.
+2. Executar Sprint 42.
+3. Executar Sprint 43.
+4. Planejar e validar a proposta 43B.
+5. Prosseguir para 44A, 44B, 45, 46 e 47 na ordem de dependências acima.

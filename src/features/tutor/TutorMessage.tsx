@@ -61,6 +61,7 @@ export function TutorMessage({ message, onResponseAction }: { message: TutorMess
             {message.metadata.inputTokens !== undefined ? ` · Enviados ${message.metadata.inputTokens}` : ""}
             {message.metadata.outputTokens !== undefined ? ` · Recebidos ${message.metadata.outputTokens}` : ""}
             {message.metadata.cached ? " · cache" : ""}
+            {message.metadata.fallbackUsed ? " · fallback autorizado" : ""}
           </p>
         )}
         {!isUser && message.content && <div className="mt-3 flex flex-wrap items-center gap-1 border-t pt-2 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
