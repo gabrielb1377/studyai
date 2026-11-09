@@ -19,12 +19,14 @@ const progressEvents = [
 export function useExamProgress(exam: Exam | undefined, studies: readonly StudyRecord[], sessionOwner?: string) {
   const [snapshot, setSnapshot] = useState<ExamProgressSnapshot>();
   const [isLoading, setIsLoading] = useState(Boolean(exam));
+  const [error, setError] = useState<string>();
 
   useEffect(() => {
     let active = true;
     let requestVersion = 0;
     const session = SessionOperationManager.current();
     setSnapshot(undefined);
+    setError(undefined);
     setIsLoading(Boolean(exam));
     if (!exam || !sessionOwner || session.suspended || session.userId !== sessionOwner) {
       setIsLoading(false);
@@ -33,18 +35,29 @@ export function useExamProgress(exam: Exam | undefined, studies: readonly StudyR
 
     const refresh = async () => {
       const version = ++requestVersion;
-      const [profile, flashcards, quizStore] = await Promise.all([
-        LearningStorage.load(),
-        FlashcardService.load(),
-        QuizService.load(),
-      ]);
-      const current = SessionOperationManager.current();
-      if (
-        !active || version !== requestVersion || current.suspended ||
-        current.userId !== session.userId || current.generation !== session.generation
-      ) return;
-      setSnapshot(ExamProgressService.build({ exam, studies, profile, flashcards, quizzes: quizStore.results }));
-      setIsLoading(false);
+      setError(undefined);
+      try {
+        const [profile, flashcards, quizStore] = await Promise.all([
+          LearningStorage.load(),
+          FlashcardService.load(),
+          QuizService.load(),
+        ]);
+        const current = SessionOperationManager.current();
+        if (
+          !active || version !== requestVersion || current.suspended ||
+          current.userId !== session.userId || current.generation !== session.generation
+        ) return;
+        setSnapshot(ExamProgressService.build({ exam, studies, profile, flashcards, quizzes: quizStore.results }));
+        setIsLoading(false);
+      } catch {
+        const current = SessionOperationManager.current();
+        if (
+          !active || version !== requestVersion || current.suspended ||
+          current.userId !== session.userId || current.generation !== session.generation
+        ) return;
+        setError("Os registros de progresso não puderam ser carregados agora. Nenhum dado foi alterado.");
+        setIsLoading(false);
+      }
     };
     const handleRefresh = () => { void refresh(); };
     void refresh();
@@ -56,5 +69,5 @@ export function useExamProgress(exam: Exam | undefined, studies: readonly StudyR
     };
   }, [exam, sessionOwner, studies]);
 
-  return { snapshot, isLoading };
+  return { snapshot, isLoading, error };
 }

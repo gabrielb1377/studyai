@@ -1,6 +1,26 @@
 # Handoff atual — StudyAI V1.1
 
-Atualizado em **8 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
+Atualizado em **9 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
+
+## Sprint 41I.E — interface e continuidade da Semana de Prova
+
+A Sprint 41I.E está **IMPLEMENTADA E VALIDADA LOCALMENTE; CHECKPOINT EM ANDAMENTO, AINDA NÃO CONFIRMADO; SEM HOMOLOGAÇÃO EM PRODUÇÃO** sobre a branch `v1.1-development`, HEAD base `45ac9da`. A experiência de `/provas` agora cobre criação e edição de prova, assuntos e prioridades, seleção/desvinculação de estudo, associação e remoção de materiais, plano diário, progresso real e retomada após reload.
+
+Problemas comprovados e correções:
+
+- datas `YYYY-MM-DD` eram interpretadas como UTC e podiam aparecer no dia anterior; parsing, formatação e contagem agora usam o dia civil local;
+- não existia edição dos metadados e assuntos da prova; o formulário existente foi reutilizado para edição sem perder estudo ou materiais vinculados;
+- Tutor, Flashcards, Quiz e Modo Prova perdiam a origem; os links agora carregam apenas `origem=provas` e o `examId`, e o retorno fixo seleciona novamente a prova autorizada da sessão;
+- `studyId` inválido já não autorizava acesso, mas produzia uma mensagem genérica; agora há estado explícito e retorno seguro, sem renderizar o Workspace solicitado;
+- falha de carregamento do progresso podia manter loading indefinido; o hook encerra o loading com mensagem redigida após validar usuário e geração;
+- limpeza autorizada de material removido era silenciosa; a interface informa a remoção e preservação dos demais dados;
+- labels, botões por ícone, remoção de assunto e linhas clicáveis de material receberam nomes/semântica de teclado; os controles de assunto empilham no mobile e o primeiro campo recebe foco ao abrir o formulário.
+
+A navegação não aceita URL de retorno arbitrária: `/estudo` só monta retorno quando a origem é exatamente `provas`, sempre para `/provas?prova=<id>`. A página de destino resolve o ID somente contra o armazenamento já escopado para a identidade atual; um ID de outra conta cai na primeira prova autorizada ou no estado vazio. O Modo Prova, gabarito, fallback consentido, quotas e schemas não foram alterados.
+
+Evidência distinta: 41I.E **4/4**; 41I.B/B.1 **10/10**; 41I.C/D em navegador e fluxo legado **10/10**; Study Engine, Learning, Tutor/fallback, Modo Prova, isolamento, cloud sync e Cache/Service Worker **67/67**; regressão lógica 41I.D **16/16**. Total: **107 aprovados, 0 falhos, 0 ignorados**. A repetição isolada 41I.E 4/4 não foi contada novamente. Typecheck, lint, build e `git diff --check` passaram; lint manteve 67 avisos preexistentes e o build gerou 48 páginas. Nenhum serviço externo, chamada paga, migração ou credencial real foi usado.
+
+Responsividade foi validada em Chromium com viewport 390 × 844 e sem overflow horizontal. Foco inicial, labels e navegação por teclado foram cobertos; não houve aparelho físico, leitor de tela real ou auditoria visual automatizada de contraste.
 
 ## Sprint 41I.D — progresso real da Semana de Prova
 
@@ -68,8 +88,8 @@ Resultado final sem duplicar casos: **90 testes distintos aprovados** — 69 ló
 
 - Projeto: `D:\studyai`.
 - Branch: `v1.1-development`.
-- Checkpoint anterior: `fb8c619`, com as Sprints 41I.B/B.1/C. Este documento acompanha o checkpoint local da 41I.D criado em seguida.
-- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **29 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
+- HEAD base: `45ac9da`, checkpoint local das Sprints 41I.B/B.1/C/D. A 41I.E está validada localmente; seu checkpoint só será confirmado após a verificação do commit efetivo.
+- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **30 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
 - Nenhum arquivo está staged. Nenhum commit foi criado nas Sprints 41H/41H.1.
 
 Alterações rastreadas preservadas:
@@ -158,7 +178,7 @@ Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produ�
 
 ## Próximo trabalho recomendado
 
-Preservar o checkpoint local isolado da **41I.D** sem misturar o upload direto. A 41I.E deve ser planejada como tarefa separada. A homologação de Academy/IA, PostgreSQL e S3 continua dependente de ambiente e autorização próprios.
+Revisar o diff da **41I.E** e, somente mediante autorização posterior, criar o checkpoint final local da Sprint 41I sem misturar upload direto. Não iniciar a Sprint 42 automaticamente. A homologação de Academy/IA, PostgreSQL e S3 continua dependente de ambiente e autorização próprios.
 
 ## Comandos e documentação
 

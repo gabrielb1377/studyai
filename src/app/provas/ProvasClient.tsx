@@ -5,7 +5,7 @@ import { SessionOperationManager } from "@/features/account/SessionOperationMana
 import { ExamWorkspace } from "@/features/exam/ExamWorkspace";
 import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
 
-export function ProvasClient() {
+export function ProvasClient({ requestedExamId }: { requestedExamId?: string }) {
   const auth = useAuth();
   const { records: studies, isLoading, error } = useStudyEngine();
 
@@ -26,7 +26,7 @@ export function ProvasClient() {
           Os estudos não puderam ser carregados agora. Seus vínculos existentes foram preservados.
         </p>
       ) : null}
-      <ExamWorkspace studies={studies} sessionOwner={sessionOwner} />
+      <ExamWorkspace studies={studies} sessionOwner={sessionOwner} requestedExamId={requestedExamId} />
     </div>
   );
 }

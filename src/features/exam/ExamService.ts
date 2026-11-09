@@ -3,6 +3,29 @@ import { SessionOperationManager } from "@/features/account/SessionOperationMana
 
 const STORAGE_KEY_PREFIX = "studyai:exams:";
 const UPDATE_EVENT = "studyai:exams-updated";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function parseExamDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(year, monthIndex, day);
+  return date.getFullYear() === year && date.getMonth() === monthIndex && date.getDate() === day ? date : null;
+}
+
+export function daysUntilExam(value: string, now = new Date()): number | null {
+  const examDate = parseExamDate(value);
+  if (!examDate) return null;
+  const examDay = Date.UTC(examDate.getFullYear(), examDate.getMonth(), examDate.getDate());
+  const currentDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((examDay - currentDay) / DAY_MS);
+}
+
+export function formatExamDate(value: string): string {
+  return parseExamDate(value)?.toLocaleDateString("pt-BR") ?? "Data inválida";
+}
 
 function storageKey(userId: string) {
   return `${STORAGE_KEY_PREFIX}${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -108,11 +131,9 @@ export const ExamService = {
     };
   },
 
-  generatePlan(exam: Exam): ExamPlanItem[] {
-    const now = new Date();
-    const examDate = new Date(exam.examDate);
-    const diffDays = Math.ceil((examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    const totalDays = Math.max(1, diffDays);
+  generatePlan(exam: Exam, now = new Date()): ExamPlanItem[] {
+    const diffDays = daysUntilExam(exam.examDate, now);
+    const totalDays = Math.max(1, diffDays ?? 1);
 
     const uncompleted = exam.subjects.filter((subject) => !subject.completed);
     if (uncompleted.length === 0) {

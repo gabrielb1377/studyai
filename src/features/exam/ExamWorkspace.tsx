@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Activity, Bot, BrainCircuit, Calendar, CheckCircle2, ClipboardCheck, Clock, FileText, Plus, ShieldCheck, Target, Trash2 } from "lucide-react";
+import { Activity, Bot, BrainCircuit, Calendar, CheckCircle2, ClipboardCheck, Clock, FileText, Pencil, Plus, ShieldCheck, Target, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ExamService } from "./ExamService";
+import { daysUntilExam, ExamService, formatExamDate } from "./ExamService";
 import type { Exam, ExamSubject, ExamPriority } from "@/types/exam";
 import type { StudyRecord } from "@/types/study-engine";
 import type { Material } from "@/types/material";
@@ -35,10 +35,12 @@ const progressStateLabels = {
   insufficient_data: "Sem dados suficientes",
 } as const;
 
-export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly StudyRecord[]; sessionOwner?: string }) {
+export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { studies: readonly StudyRecord[]; sessionOwner?: string; requestedExamId?: string }) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
+  const [materialNotice, setMaterialNotice] = useState<string>();
 
   const [title, setTitle] = useState("");
   const [discipline, setDiscipline] = useState("");
@@ -53,8 +55,14 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
   useEffect(() => {
     const loaded = ExamService.load();
     setExams(loaded);
-    setSelectedExamId((current) => loaded.some((exam) => exam.id === current) ? current : loaded[0]?.id ?? null);
-  }, [sessionOwner]);
+    setSelectedExamId((current) => {
+      if (requestedExamId && loaded.some((exam) => exam.id === requestedExamId)) return requestedExamId;
+      return loaded.some((exam) => exam.id === current) ? current : loaded[0]?.id ?? null;
+    });
+    setIsCreating(false);
+    setEditingExamId(null);
+    setMaterialNotice(undefined);
+  }, [requestedExamId, sessionOwner]);
 
   useEffect(() => {
     if (!sessionOwner) return;
@@ -65,12 +73,15 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
       userId: sessionOwner,
       generation: session.generation,
     });
-    if (cleaned) setExams(cleaned);
+    if (cleaned) {
+      setExams(cleaned);
+      setMaterialNotice("Materiais removidos da Biblioteca foram retirados dos vínculos desta prova. Os demais dados foram preservados.");
+    }
   }, [allMaterials, materialsError, materialsLoading, sessionOwner]);
 
   const selectedExam = exams.find((exam) => exam.id === selectedExamId) ?? exams[0];
   const linkedStudy = resolveExamStudy(selectedExam, studies);
-  const { snapshot: examProgress, isLoading: progressLoading } = useExamProgress(selectedExam, studies, sessionOwner);
+  const { snapshot: examProgress, isLoading: progressLoading, error: progressError } = useExamProgress(selectedExam, studies, sessionOwner);
   const materialsById = useMemo(
     () => new Map(allMaterials.map((material) => [material.id, material])),
     [allMaterials],
@@ -96,9 +107,54 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
     return [...studyMaterials, ...otherMaterials];
   }, [allMaterials, materialsError, materialsLoading, selectedExam]);
 
+  const resetExamForm = () => {
+    setIsCreating(false);
+    setEditingExamId(null);
+    setTitle("");
+    setDiscipline("");
+    setExamDate("");
+    setDailyMinutes(60);
+    setSubjectInput("");
+    setSubjectPriority("medium");
+    setSubjects([]);
+  };
+
+  const openCreateExam = () => {
+    resetExamForm();
+    setIsCreating(true);
+  };
+
+  const openEditExam = (exam: Exam) => {
+    setEditingExamId(exam.id);
+    setTitle(exam.title);
+    setDiscipline(exam.discipline);
+    setExamDate(exam.examDate);
+    setDailyMinutes(exam.dailyMinutes);
+    setSubjectInput("");
+    setSubjectPriority("medium");
+    setSubjects(exam.subjects);
+    setIsCreating(true);
+  };
+
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !discipline.trim() || !examDate || subjects.length === 0) return;
+    if (editingExamId) {
+      const next = exams.map((exam) => exam.id === editingExamId ? {
+        ...exam,
+        title: title.trim(),
+        discipline: discipline.trim(),
+        examDate,
+        dailyMinutes: Number(dailyMinutes) || 60,
+        subjects,
+        updatedAt: new Date().toISOString(),
+      } : exam);
+      ExamService.save(next);
+      setExams(next);
+      setSelectedExamId(editingExamId);
+      resetExamForm();
+      return;
+    }
     const newExam = ExamService.create({
       title: title.trim(),
       discipline: discipline.trim(),
@@ -112,11 +168,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
     ExamService.save(next);
     setExams(next);
     setSelectedExamId(newExam.id);
-    setIsCreating(false);
-    setTitle("");
-    setDiscipline("");
-    setExamDate("");
-    setSubjects([]);
+    resetExamForm();
   };
 
   const addMaterialToExam = (materialId: string) => {
@@ -128,6 +180,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
     });
     ExamService.save(nextExams);
     setExams(nextExams);
+    setMaterialNotice(undefined);
   };
 
   const removeMaterialFromExam = (materialId: string) => {
@@ -139,12 +192,13 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
     });
     ExamService.save(nextExams);
     setExams(nextExams);
+    setMaterialNotice(undefined);
   };
 
-  const linkStudyToExam = (studyId: string) => {
+  const linkStudyToExam = (studyId?: string) => {
     const exam = exams.find((e) => e.id === selectedExamId);
     if (!exam || exam.studyId === studyId) return;
-    const study = studies.find((s) => s.studyId === studyId);
+    const study = studyId ? studies.find((s) => s.studyId === studyId) : undefined;
     const nextExams = exams.map((e) => {
       if (e.id !== selectedExamId) return e;
       const materialIds = study ? Array.from(new Set([...e.materialIds, ...study.materialIds])) : e.materialIds;
@@ -156,7 +210,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
 
   const addSubject = () => {
     if (!subjectInput.trim()) return;
-    setSubjects([...subjects, { id: `subj-${Date.now()}`, name: subjectInput.trim(), priority: subjectPriority, completed: false }]);
+    setSubjects((current) => [...current, { id: `subj-${Date.now()}`, name: subjectInput.trim(), priority: subjectPriority, completed: false }]);
     setSubjectInput("");
   };
 
@@ -181,11 +235,12 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
     if (selectedExamId === id) {
       setSelectedExamId(next[0]?.id ?? null);
     }
+    if (editingExamId === id) resetExamForm();
   };
 
   const plan = selectedExam ? ExamService.generatePlan(selectedExam) : [];
 
-  const daysLeft = selectedExam ? Math.ceil((new Date(selectedExam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
+  const daysLeft = selectedExam ? daysUntilExam(selectedExam.examDate) ?? 0 : 0;
   const completedCount = selectedExam?.subjects.filter((s) => s.completed).length ?? 0;
   const totalCount = selectedExam?.subjects.length ?? 0;
   const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -197,37 +252,38 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
           <h1 className="text-2xl font-bold tracking-tight">Modo Semana de Prova</h1>
           <p className="text-sm text-muted-foreground">Organize seus estudos, priorize assuntos e acompanhe sua contagem regressiva.</p>
         </div>
-        <Button type="button" onClick={() => setIsCreating(true)}><Plus className="size-4 mr-2" />Nova Prova</Button>
+        <Button type="button" onClick={openCreateExam}><Plus className="size-4 mr-2" />Nova Prova</Button>
       </div>
 
       {isCreating && (
         <Card className="p-6 border-primary/30 bg-card shadow-sm space-y-4">
-          <h2 className="font-semibold text-lg">Configurar Nova Prova ou Avaliação</h2>
+          <h2 className="font-semibold text-lg">{editingExamId ? "Editar Prova ou Avaliação" : "Configurar Nova Prova ou Avaliação"}</h2>
           <form onSubmit={handleSaveExam} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase">Disciplina / Matéria</label>
-                <Input placeholder="Ex: Cálculo II, Direito Constitucional" value={discipline} onChange={(e) => setDiscipline(e.target.value)} required className="mt-1" />
+                <label htmlFor="exam-discipline" className="text-xs font-semibold text-muted-foreground uppercase">Disciplina / Matéria</label>
+                <Input id="exam-discipline" autoFocus placeholder="Ex: Cálculo II, Direito Constitucional" value={discipline} onChange={(e) => setDiscipline(e.target.value)} required className="mt-1" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase">Nome da Prova</label>
-                <Input placeholder="Ex: P2, Exame Final, Teste 1" value={title} onChange={(e) => setTitle(e.target.value)} required className="mt-1" />
+                <label htmlFor="exam-title" className="text-xs font-semibold text-muted-foreground uppercase">Nome da Prova</label>
+                <Input id="exam-title" placeholder="Ex: P2, Exame Final, Teste 1" value={title} onChange={(e) => setTitle(e.target.value)} required className="mt-1" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase">Data da Prova</label>
-                <Input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} required className="mt-1" />
+                <label htmlFor="exam-date" className="text-xs font-semibold text-muted-foreground uppercase">Data da Prova</label>
+                <Input id="exam-date" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} required className="mt-1" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-muted-foreground uppercase">Meta Diária (minutos)</label>
-                <Input type="number" min={15} max={360} value={dailyMinutes} onChange={(e) => setDailyMinutes(Number(e.target.value))} required className="mt-1" />
+                <label htmlFor="exam-daily-minutes" className="text-xs font-semibold text-muted-foreground uppercase">Meta Diária (minutos)</label>
+                <Input id="exam-daily-minutes" type="number" min={15} max={360} value={dailyMinutes} onChange={(e) => setDailyMinutes(Number(e.target.value))} required className="mt-1" />
               </div>
             </div>
 
             <div className="space-y-2 border-t pt-4">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">Assuntos / Conteúdos da Prova</label>
-              <div className="flex gap-2">
-                <Input placeholder="Nome do assunto (ex: Derivadas parciais)" value={subjectInput} onChange={(e) => setSubjectInput(e.target.value)} />
-                <select className="rounded-md border bg-background px-3 py-2 text-sm" value={subjectPriority} onChange={(e) => setSubjectPriority(e.target.value as ExamPriority)}>
+              <label htmlFor="exam-subject" className="text-xs font-semibold text-muted-foreground uppercase">Assuntos / Conteúdos da Prova</label>
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                <Input id="exam-subject" placeholder="Nome do assunto (ex: Derivadas parciais)" value={subjectInput} onChange={(e) => setSubjectInput(e.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSubject(); } }} />
+                <label htmlFor="exam-subject-priority" className="sr-only">Prioridade do assunto</label>
+                <select id="exam-subject-priority" className="w-full rounded-md border bg-background px-3 py-2 text-sm" value={subjectPriority} onChange={(e) => setSubjectPriority(e.target.value as ExamPriority)}>
                   <option value="high">Alta Prioridade</option>
                   <option value="medium">Média Prioridade</option>
                   <option value="low">Baixa Prioridade</option>
@@ -239,7 +295,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                   {subjects.map((s) => (
                     <Badge key={s.id} variant="outline" className="gap-2 py-1.5 px-3">
                       <span>{s.name} ({s.priority})</span>
-                      <button type="button" onClick={() => removeSubject(s.id)} className="text-muted-foreground hover:text-destructive">×</button>
+                      <button type="button" aria-label={`Remover assunto ${s.name}`} onClick={() => removeSubject(s.id)} className="rounded text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">×</button>
                     </Badge>
                   ))}
                 </div>
@@ -247,8 +303,8 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
             </div>
 
             <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setIsCreating(false)}>Cancelar</Button>
-              <Button type="submit" disabled={!title || !discipline || !examDate || subjects.length === 0}>Salvar Prova</Button>
+              <Button type="button" variant="ghost" onClick={resetExamForm}>Cancelar</Button>
+              <Button type="submit" disabled={!title.trim() || !discipline.trim() || !examDate || subjects.length === 0}>{editingExamId ? "Salvar alterações" : "Salvar Prova"}</Button>
             </div>
           </form>
         </Card>
@@ -259,7 +315,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
           <Calendar className="size-10 text-primary mx-auto" />
           <h3 className="font-semibold text-lg">Nenhuma prova cadastrada</h3>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">Cadastre sua data de prova para gerar automaticamente o plano de revisão ideal até o dia do exame.</p>
-          <Button onClick={() => setIsCreating(true)}><Plus className="size-4 mr-2" />Cadastrar primeira prova</Button>
+          <Button onClick={openCreateExam}><Plus className="size-4 mr-2" />Cadastrar primeira prova</Button>
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
@@ -267,7 +323,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">Suas Provas</p>
             {exams.map((exam) => {
               const active = exam.id === selectedExam?.id;
-              const dLeft = Math.ceil((new Date(exam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              const dLeft = daysUntilExam(exam.examDate) ?? 0;
               return (
                 <button
                   key={exam.id}
@@ -295,11 +351,12 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                     <Badge variant="outline" className="mb-2">{selectedExam.discipline}</Badge>
                     <h2 className="text-xl font-bold">{selectedExam.title}</h2>
                     <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
-                      <Calendar className="size-4" /> Data: {new Date(selectedExam.examDate).toLocaleDateString("pt-BR")} ({daysLeft < 0 ? "Prova já ocorreu" : daysLeft === 0 ? "É hoje!" : `Faltam ${daysLeft} dias`})
+                      <Calendar className="size-4" /> Data: {formatExamDate(selectedExam.examDate)} ({daysLeft < 0 ? "Prova já ocorreu" : daysLeft === 0 ? "É hoje!" : `Faltam ${daysLeft} dias`})
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="destructive" size="sm" onClick={() => deleteExam(selectedExam.id)}><Trash2 className="size-4" /></Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => openEditExam(selectedExam)}><Pencil className="mr-1.5 size-4" />Editar prova</Button>
+                    <Button type="button" aria-label={`Excluir prova ${selectedExam.title}`} variant="destructive" size="icon-sm" onClick={() => deleteExam(selectedExam.id)}><Trash2 className="size-4" /></Button>
                   </div>
                 </div>
 
@@ -321,7 +378,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                     </div>
                     {linkedStudy ? (
                       <Button asChild size="sm" className="mt-2 w-full">
-                        <Link href={examLearningHref(linkedStudy.studyId, "exam")}><ShieldCheck className="mr-1.5 size-3.5" />Abrir Modo Prova</Link>
+                        <Link href={examLearningHref(linkedStudy.studyId, "exam", selectedExam.id)}><ShieldCheck className="mr-1.5 size-3.5" />Abrir Modo Prova</Link>
                       </Button>
                     ) : (
                       <Button type="button" size="sm" className="mt-2 w-full" disabled>Vincule um estudo</Button>
@@ -351,7 +408,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                         <p className="mt-1 flex-1 text-xs leading-5 text-muted-foreground">{action.description}</p>
                         {linkedStudy ? (
                           <Button asChild variant="outline" size="sm" className="mt-3 w-full">
-                            <Link href={examLearningHref(linkedStudy.studyId, action.id)}>Abrir</Link>
+                            <Link href={examLearningHref(linkedStudy.studyId, action.id, selectedExam.id)}>Abrir</Link>
                           </Button>
                         ) : (
                           <Button type="button" variant="outline" size="sm" className="mt-3 w-full" disabled>Indisponível</Button>
@@ -375,6 +432,8 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
 
                 {progressLoading ? (
                   <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Carregando registros autorizados…</p>
+                ) : progressError ? (
+                  <p role="status" className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">{progressError}</p>
                 ) : !examProgress || examProgress.state === "insufficient_data" ? (
                   <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                     Sem dados suficientes. Vincule um estudo ou material organizado desta conta para consolidar o progresso.
@@ -470,6 +529,10 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                   <Badge variant="outline">{linkedMaterials.length}</Badge>
                 </div>
 
+                {materialNotice ? (
+                  <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-muted-foreground">{materialNotice}</p>
+                ) : null}
+
                 {materialsLoading ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Carregando materiais vinculados...</p>
                 ) : materialsError ? (
@@ -485,37 +548,38 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                 {linkedMaterials.length > 0 && !materialsLoading && !materialsError ? (
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {linkedMaterials.map((m) => (
-                          <div key={m.id} className="flex items-center justify-between p-3 rounded-xl border bg-card/40">
-                            <div className="flex items-center gap-3 flex-1">
-                              <FileText className="size-4 text-muted-foreground" />
-                              <div>
-                                <p className="text-sm font-medium truncate">{m.name}</p>
-                                <p className="text-xs text-muted-foreground truncate">
-                                  {m.subject ?? m.topic ?? "Sem assunto definido"} · {m.fileType.toUpperCase()}
-                                </p>
-                              </div>
-                            </div>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => removeMaterialFromExam(m.id)}>
-                              Remover
-                            </Button>
+                      <div key={m.id} className="flex items-center justify-between rounded-xl border bg-card/40 p-3">
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <FileText className="size-4 shrink-0 text-muted-foreground" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{m.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {m.subject ?? m.topic ?? "Sem assunto definido"} · {m.fileType.toUpperCase()}
+                            </p>
                           </div>
-                        ))}
+                        </div>
+                        <Button type="button" aria-label={`Remover material ${m.name}`} variant="ghost" size="sm" onClick={() => removeMaterialFromExam(m.id)}>
+                          Remover
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
 
                 <div className="space-y-2">
                   {selectedExam && (
                     <>
-                      <label className="text-xs font-semibold text-muted-foreground uppercase">Vincular Estudo</label>
+                      <label htmlFor="exam-linked-study" className="text-xs font-semibold text-muted-foreground uppercase">Vincular Estudo</label>
                       <select
+                        id="exam-linked-study"
                         className="rounded-md border bg-background px-3 py-2 text-sm mt-1 w-full"
                         value={selectedExam.studyId ?? ""}
                         onChange={(e) => {
                           const id = e.target.value;
-                          if (id) linkStudyToExam(id);
+                          linkStudyToExam(id || undefined);
                         }}
                       >
-                        <option value="">Selecionar estudo…</option>
+                        <option value="">Nenhum estudo vinculado</option>
                         {selectedExam.studyId && !studies.some((study) => study.studyId === selectedExam.studyId) ? (
                           <option value={selectedExam.studyId}>Estudo indisponível (vínculo preservado)</option>
                         ) : null}
@@ -527,7 +591,7 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                       </select>
                     </>
                   )}
-                  <label className="text-xs font-semibold text-muted-foreground uppercase">Adicionar Material da Biblioteca</label>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Adicionar Material da Biblioteca</p>
                   {!materialsLoading && !materialsError && availableMaterials.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-3">
                       Nenhum material disponível para vincular. Importe ou organize materiais na Biblioteca primeiro.
@@ -536,12 +600,14 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                   {availableMaterials.length > 0 && !materialsLoading && !materialsError ? (
                     <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
                       {availableMaterials.map((m) => (
-                        <div
+                        <button
                           key={m.id}
-                          className="flex items-center justify-between p-3 rounded-xl border bg-card/40 hover:bg-accent/30 transition-colors cursor-pointer group"
+                          type="button"
+                          aria-label={`Adicionar material ${m.name}`}
+                          className="flex w-full items-center justify-between rounded-xl border bg-card/40 p-3 text-left transition-colors hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={() => addMaterialToExam(m.id)}
                         >
-                          <div className="flex items-center gap-3 flex-1">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             <FileText className="size-4 text-muted-foreground" />
                             <div>
                               <p className="text-sm font-medium truncate">{m.name}</p>
@@ -551,8 +617,8 @@ export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly Stu
                               </p>
                             </div>
                           </div>
-                          <span className="text-xs text-primary">Adicionar</span>
-                        </div>
+                          <span className="ml-3 shrink-0 text-xs text-primary">Adicionar</span>
+                        </button>
                       ))}
                     </div>
                   ) : null}

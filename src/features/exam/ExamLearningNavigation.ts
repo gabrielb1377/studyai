@@ -12,9 +12,14 @@ export function resolveExamStudy(exam: Pick<Exam, "studyId"> | undefined, studie
   return studies.find((study) => study.studyId === exam.studyId);
 }
 
-export function examLearningHref(studyId: string, action: ExamLearningAction) {
+export function examReturnHref(examId?: string) {
+  return examId ? `/provas?prova=${encodeURIComponent(examId)}` : "/provas";
+}
+
+export function examLearningHref(studyId: string, action: ExamLearningAction, examId?: string) {
   const encodedStudyId = encodeURIComponent(studyId);
   const tab = action === "tutor" ? "ia" : action === "exam" ? "quiz" : action;
   const mode = action === "exam" ? "&modo=exam" : "";
-  return `/estudo?tema=${encodedStudyId}&aba=${tab}${mode}`;
+  const origin = examId ? `&origem=provas&prova=${encodeURIComponent(examId)}` : "";
+  return `/estudo?tema=${encodedStudyId}&aba=${tab}${mode}${origin}`;
 }

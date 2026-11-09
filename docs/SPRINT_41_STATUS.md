@@ -1,6 +1,19 @@
-# Sprint 41 — estado real em 8/11/2026
+# Sprint 41 — estado real em 9/11/2026
 
-**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. A 41I.D está validada e registrada em checkpoint local criado após `fb8c619`, sem homologação externa.
+**Status geral: ABERTA.** A Sprint 41 permanece em andamento. A Sprint 41I.A–E está concluída em implementação e validação local; 41I.E será marcada como commitada somente após confirmação do commit. Homologação externa pendente.
+
+## Sprint 41I.E — interface e regressões validadas localmente; checkpoint em andamento
+
+- Criação e edição usam o mesmo formulário; editar preserva `id`, estudo, materiais e timestamps de criação.
+- Datas civis deixaram de passar por parsing UTC, evitando a exibição do dia anterior.
+- Ações contextuais levam `examId` apenas para retorno fixo à Semana de Prova; o estudo continua autorizado pelo catálogo escopado da sessão, nunca pela URL.
+- O retorno seleciona a prova somente se ela existe na conta atual. Estudo inválido mostra erro explícito e não abre ferramentas.
+- Progresso possui loading e erro redigido; resultados atrasados continuam bloqueados por usuário e geração.
+- Materiais removidos, falha da Biblioteca e vínculos indisponíveis possuem mensagens explícitas sem apagamento silencioso.
+- Labels, foco inicial, botões por ícone, remoções e inclusão de material foram ajustados para teclado. Viewport Chromium 390 × 844 passou sem overflow; não houve dispositivo físico ou leitor de tela real.
+- Modo Prova, gabarito, schemas, IA, fallback e quotas não foram alterados.
+
+Evidência sem dupla contagem: 41I.E 4/4; 41I.B/B.1 10/10; 41I.C/D em navegador + legado 10/10; matriz ampla 67/67; lógica 41I.D 16/16. Total 107 aprovados, 0 falhos e 0 ignorados. Typecheck, lint, build e diff check aprovados; lint com 67 avisos preexistentes; build com 48 páginas. Sem intermitências nesta execução e sem serviços externos.
 
 ## Sprint 41I.D — progresso real validado localmente
 
@@ -70,8 +83,8 @@ Evidência final: 10/10 testes 41I.B.1; typecheck aprovado; lint 0 erros/67 avis
 ## Evidência Git
 
 - Branch: `v1.1-development`.
-- Checkpoint anterior: `fb8c619`; este documento acompanha o checkpoint local da 41I.D criado em seguida.
-- Referência remota conhecida: `origin/v1.1-development` em `331bc15`; branch local 29 commits à frente, sem `fetch` nesta auditoria.
+- HEAD: `45ac9da`; a 41I.E permanece no working tree, sem commit.
+- Referência remota conhecida: `origin/v1.1-development` em `331bc15`; branch local 30 commits à frente, sem `fetch` nesta auditoria.
 - Alterações experimentais de upload direto permanecem fora de commit e preservadas.
 
 ## Reconstrução das etapas

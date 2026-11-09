@@ -94,17 +94,18 @@ test("TutorContextService seleciona o estudo solicitado sem reutilizar o mais re
 
 test("Semana de Prova abre Tutor, Flashcards, Quiz e Simulado com contexto no desktop", async ({ page }) => {
   const studyId = await createRealStudy(page);
+  const examId = "exam-41ic";
   await seedLinkedExam(page, studyId);
   await page.goto("/provas");
 
   await expect(page.getByRole("heading", { name: "Atividades desta prova" })).toBeVisible();
-  await expect(page.locator(`a[href="${examLearningHref(studyId, "tutor")}"]`)).toHaveCount(1);
-  await expect(page.locator(`a[href="${examLearningHref(studyId, "flashcards")}"]`)).toHaveCount(1);
-  await expect(page.locator(`a[href="${examLearningHref(studyId, "quiz")}"]`)).toHaveCount(1);
-  await expect(page.locator(`a[href="${examLearningHref(studyId, "exam")}"]`)).toHaveCount(2);
+  await expect(page.locator(`a[href="${examLearningHref(studyId, "tutor", examId)}"]`)).toHaveCount(1);
+  await expect(page.locator(`a[href="${examLearningHref(studyId, "flashcards", examId)}"]`)).toHaveCount(1);
+  await expect(page.locator(`a[href="${examLearningHref(studyId, "quiz", examId)}"]`)).toHaveCount(1);
+  await expect(page.locator(`a[href="${examLearningHref(studyId, "exam", examId)}"]`)).toHaveCount(2);
 
-  await page.locator(`a[href="${examLearningHref(studyId, "tutor")}"]`).click();
-  await expect(page).toHaveURL(new RegExp(`tema=${studyId}.*aba=ia`));
+  await page.locator(`a[href="${examLearningHref(studyId, "tutor", examId)}"]`).click();
+  await expect(page).toHaveURL(new RegExp(`tema=${studyId}.*aba=ia.*origem=provas.*prova=${examId}`));
   await expect(page.getByText("Utilizando contexto do tema atual")).toBeVisible();
 
   await page.goto(examLearningHref(studyId, "flashcards"));
@@ -128,7 +129,7 @@ test("ações permanecem funcionais no viewport mobile e após reload", async ({
   await page.reload();
 
   await expect(page.getByRole("heading", { name: "Atividades desta prova" })).toBeVisible();
-  await expect(page.locator(`a[href="${examLearningHref(studyId, "exam")}"]`).last()).toBeVisible();
+  await expect(page.locator(`a[href="${examLearningHref(studyId, "exam", "exam-41ic")}"]`).last()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

@@ -27,7 +27,7 @@ function toStudyMaterialType(fileType: string): StudyMaterialType {
   return "document";
 }
 
-export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, requestedQuizMode, resetWorkspace = false }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; requestedQuizMode?: "exam"; resetWorkspace?: boolean }) {
+export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, requestedQuizMode, resetWorkspace = false, returnHref }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; requestedQuizMode?: "exam"; resetWorkspace?: boolean; returnHref?: string }) {
   const { records, isLoading, recordAccess, setProgress, setStatus } = useStudyEngine();
   const { materials } = useMaterials();
   const { records: extractedContents } = useExtraction();
@@ -87,14 +87,17 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   }
 
   if (!record) {
+    const invalidRequestedStudy = Boolean(requestedStudyId);
     return (
       <Card className="items-center gap-4 p-10 text-center shadow-none">
         <BookOpen className="size-9 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-xl font-semibold">Nenhum estudo disponível</h1>
+        <h1 className="text-xl font-semibold">{invalidRequestedStudy ? "Estudo indisponível" : "Nenhum estudo disponível"}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          Importe e organize um material para criar automaticamente um estudo.
+          {invalidRequestedStudy
+            ? "O estudo solicitado não está disponível nesta conta. O endereço informado não concede acesso a estudos de outra sessão."
+            : "Importe e organize um material para criar automaticamente um estudo."}
         </p>
-        <Button asChild><Link href="/importar">Importar material</Link></Button>
+        <Button asChild><Link href={returnHref ?? (invalidRequestedStudy ? "/estudo" : "/importar")}>{returnHref ? "Voltar à Semana de Prova" : invalidRequestedStudy ? "Ver estudos disponíveis" : "Importar material"}</Link></Button>
       </Card>
     );
   }
@@ -105,7 +108,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   const activeMaterial = studyMaterials.find((material) => material.id === activeMaterialId);
   return (
     <>
-      <StudyHeader study={record} fileName={activeMaterial?.name} />
+      <StudyHeader study={record} fileName={activeMaterial?.name} returnHref={returnHref} />
       <div className="grid items-start gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <StudyNavigationSidebar studies={records} materials={materials} activeStudyId={record.studyId} activeMaterialId={activeMaterialId} />
         <main className="min-w-0">
