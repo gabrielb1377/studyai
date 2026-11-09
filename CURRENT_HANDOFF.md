@@ -1,10 +1,18 @@
 # Handoff atual — StudyAI V1.1
 
+## Estado definitivo da Sprint 41
+
+**Encerrada localmente com ressalvas; não homologada em produção.** 41G e 41H foram implementadas e validadas localmente; 41I.A–E concluídas localmente, com checkpoint final `652ac65`. Na 41J.1, instrumentação concluída e 3 testes focados aprovados; na 41J.2, 1 teste existente de persistência aprovado. Total 41J: **4 testes focados aprovados**, sem dupla contagem. Os 107 testes da 41I são evidência histórica e não foram repetidos. Matriz Playwright completa e homologação externa pendentes. Suporte avançado a múltiplas contas despriorizado para uso pessoal atual. Sprint 42 não iniciada.
+
 Atualizado em **9 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
+
+## Sprint 41J.1 — diagnóstico do runner
+
+A ausência prolongada de saída do Playwright foi explicada por warm-up serial de 22 rotas (48,7–54,8 s observados) combinado à condensação da saída pelo `rtk`; usando `rtk proxy`, os marcos apareceram. `tests/global-setup.ts` agora loga timestamp, duração, rota, status e erro/timeout sem dados sensíveis. Três testes focados da 41J.1 e o fluxo sintético offline→online→backup/restore da 41J.2 passaram. Typecheck, lint (0 erros/67 avisos), build e diff-check passaram. Recomenda-se encerramento local da Sprint 41 com ressalvas; produção continua sem homologação. Ver [SPRINT_41J_1_DIAGNOSTIC.md](docs/SPRINT_41J_1_DIAGNOSTIC.md).
 
 ## Sprint 41I.E — interface e continuidade da Semana de Prova
 
-A Sprint 41I.E está **IMPLEMENTADA E VALIDADA LOCALMENTE; CHECKPOINT EM ANDAMENTO, AINDA NÃO CONFIRMADO; SEM HOMOLOGAÇÃO EM PRODUÇÃO** sobre a branch `v1.1-development`, HEAD base `45ac9da`. A experiência de `/provas` agora cobre criação e edição de prova, assuntos e prioridades, seleção/desvinculação de estudo, associação e remoção de materiais, plano diário, progresso real e retomada após reload.
+A Sprint 41I.E está **IMPLEMENTADA, VALIDADA E COMMITADA** no checkpoint `652ac65`, sem homologação em produção. A experiência de `/provas` cobre criação e edição de prova, assuntos e prioridades, seleção/desvinculação de estudo, associação e remoção de materiais, plano diário, progresso real e retomada após reload.
 
 Problemas comprovados e correções:
 

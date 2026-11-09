@@ -1,8 +1,19 @@
 # Sprint 41 — estado real em 9/11/2026
 
-**Status geral: ABERTA.** A Sprint 41 permanece em andamento. A Sprint 41I.A–E está concluída em implementação e validação local; 41I.E será marcada como commitada somente após confirmação do commit. Homologação externa pendente.
+**Status geral: ENCERRADA EM DESENVOLVIMENTO E VALIDAÇÃO LOCAL, COM RESSALVAS.** Não representa homologação em produção. Homologação externa e matriz Playwright completa permanecem pendentes. Suporte avançado a múltiplas contas foi despriorizado para o uso pessoal atual; as proteções implementadas continuam cobertas apenas pelas evidências locais registradas.
 
-## Sprint 41I.E — interface e regressões validadas localmente; checkpoint em andamento
+## Sprint 41J.1/41J.2 — runner instrumentado e persistência mínima aprovada
+
+Estado atual definitivo: **Sprint 41 encerrada localmente com ressalvas**, sem homologação externa. 41G e 41H implementadas/validadas localmente; 41I.A–E concluídas localmente, checkpoint `652ac65`. A 41J soma 4 testes focados aprovados (3 da 41J.1 e 1 teste existente da 41J.2), sem duplicação. Os 107 testes da 41I são históricos, não repetidos. Matriz Playwright completa pendente; múltiplas contas avançadas despriorizadas para uso pessoal; Sprint 42 não iniciada.
+
+- Diagnóstico: o `globalSetup` aquece 22 rotas em série, levando 48,7–54,8 s nas execuções observadas. O wrapper `rtk` condensava a saída detalhada; `rtk proxy` a tornou visível. Não foi reproduzido deadlock.
+- Correção: logs por rota com timestamps, tempo monotônico, status e erro/timeout em `tests/global-setup.ts`, sem conteúdo sensível.
+- Testes focados da 41J: 4/4 distintos — 3 da 41J.1 (preferências offline, troca A→B→A, conflito cloud) e 1 teste existente da 41J.2 (fila offline, retorno online, backup/restore, sync e verificação no IndexedDB). Sem duplicação.
+- Typecheck, lint (0 erros, 67 avisos), build de 48 páginas e diff-check aprovados nesta subetapa.
+- Recomenda-se encerrar localmente a Sprint 41 com ressalvas, sem homologação de produção. Não foi repetida matriz ampla nem testado todo o espaço de conflitos/restores.
+- Evidência detalhada: `docs/SPRINT_41J_1_DIAGNOSTIC.md`.
+
+## Sprint 41I.E — interface e regressões validadas localmente; commitada
 
 - Criação e edição usam o mesmo formulário; editar preserva `id`, estudo, materiais e timestamps de criação.
 - Datas civis deixaram de passar por parsing UTC, evitando a exibição do dia anterior.
@@ -83,7 +94,7 @@ Evidência final: 10/10 testes 41I.B.1; typecheck aprovado; lint 0 erros/67 avis
 ## Evidência Git
 
 - Branch: `v1.1-development`.
-- HEAD: `45ac9da`; a 41I.E permanece no working tree, sem commit.
+- HEAD de encerramento: `652ac656d65607bf6b3a905c25563b0d58b3e045`; 41I.A–E concluídas localmente e 41I.E registrada em checkpoint.
 - Referência remota conhecida: `origin/v1.1-development` em `331bc15`; branch local 30 commits à frente, sem `fetch` nesta auditoria.
 - Alterações experimentais de upload direto permanecem fora de commit e preservadas.
 
@@ -93,7 +104,7 @@ Evidência final: 10/10 testes 41I.B.1; typecheck aprovado; lint 0 erros/67 avis
 | --- | --- | --- |
 | Sprint 41 inicial | CONCLUÍDA LOCALMENTE | `0215035` corrige contrato Academy/quota; `f6bcb58` inclui Semana de Prova na navegação; `19cb815` preserva estado do simulado e libera abertura de ferramentas. Fluxos externos não foram validados. |
 | Sprint 41F | PARCIALMENTE IMPLEMENTADA | `165d351` melhora Ajuda; `b57167b` suspende troca não consentida de provider. Não existe fallback econômico completo com consentimento, limite e modelo efetivo uniforme. |
-| Sprint 41G / contenção inicial | PARCIALMENTE IMPLEMENTADA | `fd8e50a`, `fd6dd97`, `a5ed672`, `75c1a02`, `6304b53` e `c821830` contêm migração indevida, limpam cache e documentam que o modo local não protege gabarito. |
+| Sprint 41G / contenção inicial | IMPLEMENTADA E VALIDADA LOCALMENTE | Isolamento de sessão/armazenamento e Modo Prova protegido documentados nas etapas 41G.1B–3D; evidência local, não homologação externa. |
 | Sprint 41G.1B | CONCLUÍDA LOCALMENTE | `9553c72`, `861bd0b`, `1d08d83`. Geração de sessão, aborto e `x-studyai-session-user`; 6/6 testes específicos passaram novamente. Não demonstra fronteira de segurança na mesma origem. |
 | Sprint 41G.2A | NÃO IDENTIFICADA COMO ENTREGA SEPARADA | A auditoria e preparação foram absorvidas pelas etapas de contenção e 41G.2B; não há commit ou documento que sustente uma conclusão independente. |
 | Sprint 41G.2B | CONCLUÍDA LOCALMENTE | `e156dd1`, `9678bed`, `5e65e58`. Tentativa protegida, gabarito no servidor, correção transacional e UI. Teste de navegador protegido passou nesta auditoria com mocks. |
@@ -102,8 +113,8 @@ Evidência final: 10/10 testes 41I.B.1; typecheck aprovado; lint 0 erros/67 avis
 | Sprint 41G.3B | CONCLUÍDA LOCALMENTE | `971bee5`. Limpeza antes de persistir, quarentena de dados sem dono e `clearOwner`; casos focados passaram. |
 | Sprint 41G.3C | CONCLUÍDA LOCALMENTE | `5eb5637`. Escopo por usuário para provas, preferências, workspace, portabilidade e cache; casos focados e fluxos de navegador passaram. |
 | Sprint 41G.3D | CONCLUÍDA LOCALMENTE, COMMITADA | Commit `03f163b`. PostgreSQL descartável 6/6, Cache Storage, desktop e mobile simulado passaram. Não houve homologação de produção ou aparelho físico. |
-| Sprint 41H | IMPLEMENTADA LOCALMENTE, NÃO COMMITADA | Núcleo/Tutor com consentimento, quota por tentativa, timeout e transparência. 54/54 lógicos e 3/3 novos casos de navegador passaram; serviços reais não foram usados. |
-| Sprint 41H.1 | VALIDADA LOCALMENTE, NÃO COMMITADA | Identidade offline explícita recupera preferências sem cruzá-las com contas. AI Core 3/3 e isolamento desktop/mobile 2/2. O fallback 41H permaneceu verde. |
+| Sprint 41H | IMPLEMENTADA E VALIDADA LOCALMENTE | Núcleo/Tutor com consentimento, quota por tentativa, timeout e transparência. Testes mockados e de navegador registrados; serviços reais não foram usados. |
+| Sprint 41H.1 | IMPLEMENTADA E VALIDADA LOCALMENTE | Identidade offline explícita recupera preferências sem cruzá-las com contas. AI Core e isolamento passaram nos testes registrados; fallback 41H permaneceu verde. |
 
 ## Funcionalidades atuais
 

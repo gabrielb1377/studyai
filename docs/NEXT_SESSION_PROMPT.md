@@ -3,6 +3,23 @@
 ```text
 Continue o StudyAI em D:\studyai, branch v1.1-development.
 
+Estado Sprint 41: encerrada localmente com ressalvas, sem homologação externa.
+41G/41H implementadas e validadas localmente; 41I.A–E concluídas localmente,
+checkpoint `652ac65`. 41J.1: instrumentação concluída, 3 testes focados
+aprovados. 41J.2: 1 teste existente de persistência aprovado. Total 41J: 4
+testes focados, sem duplicação. Os 107 testes da 41I são históricos. Matriz
+Playwright completa pendente; suporte avançado a múltiplas contas despriorizado
+para uso pessoal. Sprint 42 não iniciada.
+
+Sprint 41J.1: runner Playwright instrumentado. O `globalSetup` aqueceu 22 rotas
+em 48,7–54,8 s; `rtk` condensou a saída e `rtk proxy` exibiu os logs. Três
+testes focados passaram: offline-session, A→B→A e conflito cloud. Typecheck,
+lint (0 erros/67 avisos), build (48 páginas) e diff-check passaram. Em 41J.2,
+1/1 cenário sintético de offline→online→backup/restore e confirmação no IndexedDB
+passou. Recomenda-se encerramento local da Sprint 41 com ressalvas; a matriz
+ampla não foi repetida e a homologação externa permanece pendente.
+Leia `docs/SPRINT_41J_1_DIAGNOSTIC.md` para comandos e evidências completas.
+
 Antes de programar, leia AGENTS.md/RTK.md, CURRENT_HANDOFF.md,
 docs/SPRINT_41_STATUS.md, docs/SPRINT_41G_SECURITY_AUDIT.md e
 docs/ROADMAP_V1_2.md. Confirme git status --short, git status -sb e
