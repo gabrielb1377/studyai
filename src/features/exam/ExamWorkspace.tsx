@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Calendar, CheckCircle2, Clock, Plus, Trash2, Sparkles } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Bot, BrainCircuit, Calendar, CheckCircle2, ClipboardCheck, Clock, FileText, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,8 +10,24 @@ import { Input } from "@/components/ui/input";
 import { ExamService } from "./ExamService";
 import type { Exam, ExamSubject, ExamPriority } from "@/types/exam";
 import type { StudyRecord } from "@/types/study-engine";
+import type { Material } from "@/types/material";
+import { useMaterials } from "@/hooks/useMaterials";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { examLearningHref, resolveExamStudy, type ExamLearningAction } from "./ExamLearningNavigation";
 
-export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRecord[] }) {
+const learningActions: Array<{
+  id: ExamLearningAction;
+  title: string;
+  description: string;
+  icon: typeof Bot;
+}> = [
+  { id: "tutor", title: "Estudar com Tutor", description: "Conversar usando o contexto autorizado deste estudo.", icon: Bot },
+  { id: "flashcards", title: "Revisar Flashcards", description: "Retomar cartões e agendamento deste estudo.", icon: BrainCircuit },
+  { id: "quiz", title: "Praticar Quiz", description: "Usar questões e resultados já vinculados ao estudo.", icon: ClipboardCheck },
+  { id: "exam", title: "Abrir Simulado", description: "Entrar no Modo Prova com gabarito protegido no servidor.", icon: ShieldCheck },
+];
+
+export function ExamWorkspace({ studies, sessionOwner }: { studies: readonly StudyRecord[]; sessionOwner?: string }) {
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -24,13 +40,52 @@ export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRe
   const [subjectPriority, setSubjectPriority] = useState<ExamPriority>("medium");
   const [subjects, setSubjects] = useState<ExamSubject[]>([]);
 
+  const { materials: allMaterials, isLoading: materialsLoading, error: materialsError } = useMaterials();
+
   useEffect(() => {
     const loaded = ExamService.load();
     setExams(loaded);
-    if (loaded.length > 0 && !selectedExamId) {
-      setSelectedExamId(loaded[0].id);
+    setSelectedExamId((current) => loaded.some((exam) => exam.id === current) ? current : loaded[0]?.id ?? null);
+  }, [sessionOwner]);
+
+  useEffect(() => {
+    if (!sessionOwner) return;
+    const session = SessionOperationManager.current();
+    const cleaned = ExamService.pruneOrphanMaterials({
+      materialIds: allMaterials.map((material) => material.id),
+      isComplete: !materialsLoading && !materialsError,
+      userId: sessionOwner,
+      generation: session.generation,
+    });
+    if (cleaned) setExams(cleaned);
+  }, [allMaterials, materialsError, materialsLoading, sessionOwner]);
+
+  const selectedExam = exams.find((exam) => exam.id === selectedExamId) ?? exams[0];
+  const linkedStudy = resolveExamStudy(selectedExam, studies);
+  const materialsById = useMemo(
+    () => new Map(allMaterials.map((material) => [material.id, material])),
+    [allMaterials],
+  );
+  const linkedMaterials = useMemo(
+    () => selectedExam
+      ? selectedExam.materialIds.flatMap((id) => {
+        const material = materialsById.get(id);
+        return material ? [material] : [];
+      })
+      : [],
+    [materialsById, selectedExam],
+  );
+  const availableMaterials = useMemo(() => {
+    if (!selectedExam || materialsLoading || materialsError) return [];
+    const linked = new Set(selectedExam.materialIds);
+    const studyMaterials: Material[] = [];
+    const otherMaterials: Material[] = [];
+    for (const material of allMaterials) {
+      if (linked.has(material.id)) continue;
+      (material.studyId === selectedExam.studyId ? studyMaterials : otherMaterials).push(material);
     }
-  }, [selectedExamId]);
+    return [...studyMaterials, ...otherMaterials];
+  }, [allMaterials, materialsError, materialsLoading, selectedExam]);
 
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +97,7 @@ export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRe
       dailyMinutes: Number(dailyMinutes) || 60,
       subjects,
       materialIds: [],
+      studyId: undefined,
     });
     const next = [newExam, ...exams];
     ExamService.save(next);
@@ -52,6 +108,41 @@ export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRe
     setDiscipline("");
     setExamDate("");
     setSubjects([]);
+  };
+
+  const addMaterialToExam = (materialId: string) => {
+    const exam = exams.find((e) => e.id === selectedExamId);
+    if (!exam || exam.materialIds.includes(materialId)) return;
+    const nextExams = exams.map((e) => {
+      if (e.id !== selectedExamId) return e;
+      return { ...e, materialIds: [...e.materialIds, materialId], updatedAt: new Date().toISOString() };
+    });
+    ExamService.save(nextExams);
+    setExams(nextExams);
+  };
+
+  const removeMaterialFromExam = (materialId: string) => {
+    const exam = exams.find((e) => e.id === selectedExamId);
+    if (!exam || !exam.materialIds.includes(materialId)) return;
+    const nextExams = exams.map((e) => {
+      if (e.id !== selectedExamId) return e;
+      return { ...e, materialIds: e.materialIds.filter((id) => id !== materialId), updatedAt: new Date().toISOString() };
+    });
+    ExamService.save(nextExams);
+    setExams(nextExams);
+  };
+
+  const linkStudyToExam = (studyId: string) => {
+    const exam = exams.find((e) => e.id === selectedExamId);
+    if (!exam || exam.studyId === studyId) return;
+    const study = studies.find((s) => s.studyId === studyId);
+    const nextExams = exams.map((e) => {
+      if (e.id !== selectedExamId) return e;
+      const materialIds = study ? Array.from(new Set([...e.materialIds, ...study.materialIds])) : e.materialIds;
+      return { ...e, studyId, materialIds, updatedAt: new Date().toISOString() };
+    });
+    ExamService.save(nextExams);
+    setExams(nextExams);
   };
 
   const addSubject = () => {
@@ -83,7 +174,6 @@ export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRe
     }
   };
 
-  const selectedExam = exams.find((e) => e.id === selectedExamId) ?? exams[0];
   const plan = selectedExam ? ExamService.generatePlan(selectedExam) : [];
 
   const daysLeft = selectedExam ? Math.ceil((new Date(selectedExam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
@@ -218,10 +308,48 @@ export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRe
                   <div className="p-3 rounded-lg border bg-card/50 flex flex-col justify-between">
                     <div>
                       <p className="text-xs text-muted-foreground uppercase font-semibold">Ação rápida</p>
-                      <p className="text-sm font-medium mt-1">Pratique simulados</p>
+                      <p className="text-sm font-medium mt-1">Simulado protegido</p>
                     </div>
-                    <Button asChild size="sm" className="mt-2 w-full"><Link href="/estudo"><Sparkles className="size-3.5 mr-1.5" />Continuar Estudando</Link></Button>
+                    {linkedStudy ? (
+                      <Button asChild size="sm" className="mt-2 w-full">
+                        <Link href={examLearningHref(linkedStudy.studyId, "exam")}><ShieldCheck className="mr-1.5 size-3.5" />Abrir Modo Prova</Link>
+                      </Button>
+                    ) : (
+                      <Button type="button" size="sm" className="mt-2 w-full" disabled>Vincule um estudo</Button>
+                    )}
                   </div>
+                </div>
+              </Card>
+
+              <Card className="p-6 shadow-none" aria-labelledby="exam-learning-actions-title">
+                <div>
+                  <h3 id="exam-learning-actions-title" className="text-base font-semibold">Atividades desta prova</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {linkedStudy
+                      ? `As atividades usarão somente o estudo “${linkedStudy.title}”.`
+                      : selectedExam.studyId
+                        ? "O estudo vinculado não está disponível nesta conta. O vínculo foi preservado."
+                        : "Vincule um estudo para abrir atividades com o contexto correto."}
+                  </p>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {learningActions.map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <div key={action.id} className="flex flex-col rounded-xl border bg-card/40 p-4">
+                        <Icon className="size-5 text-primary" aria-hidden="true" />
+                        <p className="mt-3 text-sm font-semibold">{action.title}</p>
+                        <p className="mt-1 flex-1 text-xs leading-5 text-muted-foreground">{action.description}</p>
+                        {linkedStudy ? (
+                          <Button asChild variant="outline" size="sm" className="mt-3 w-full">
+                            <Link href={examLearningHref(linkedStudy.studyId, action.id)}>Abrir</Link>
+                          </Button>
+                        ) : (
+                          <Button type="button" variant="outline" size="sm" className="mt-3 w-full" disabled>Indisponível</Button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </Card>
 
@@ -258,6 +386,103 @@ export function ExamWorkspace({ studies: _studies }: { studies: readonly StudyRe
                   </div>
                 </Card>
               </div>
+
+              <Card className="p-6 space-y-4 shadow-none">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-base flex items-center gap-2">
+                    <FileText className="size-5 text-primary" /> Materiais Vinculados
+                  </h3>
+                  <Badge variant="outline">{linkedMaterials.length}</Badge>
+                </div>
+
+                {materialsLoading ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">Carregando materiais vinculados...</p>
+                ) : materialsError ? (
+                  <p role="status" className="text-sm text-muted-foreground text-center py-4">
+                    A Biblioteca está temporariamente indisponível. Os vínculos existentes foram preservados.
+                  </p>
+                ) : linkedMaterials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Nenhum material vinculado. Selecione materiais da biblioteca abaixo para associar a esta prova.
+                  </p>
+                ) : null}
+
+                {linkedMaterials.length > 0 && !materialsLoading && !materialsError ? (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {linkedMaterials.map((m) => (
+                          <div key={m.id} className="flex items-center justify-between p-3 rounded-xl border bg-card/40">
+                            <div className="flex items-center gap-3 flex-1">
+                              <FileText className="size-4 text-muted-foreground" />
+                              <div>
+                                <p className="text-sm font-medium truncate">{m.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {m.subject ?? m.topic ?? "Sem assunto definido"} · {m.fileType.toUpperCase()}
+                                </p>
+                              </div>
+                            </div>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeMaterialFromExam(m.id)}>
+                              Remover
+                            </Button>
+                          </div>
+                        ))}
+                  </div>
+                ) : null}
+
+                <div className="space-y-2">
+                  {selectedExam && (
+                    <>
+                      <label className="text-xs font-semibold text-muted-foreground uppercase">Vincular Estudo</label>
+                      <select
+                        className="rounded-md border bg-background px-3 py-2 text-sm mt-1 w-full"
+                        value={selectedExam.studyId ?? ""}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          if (id) linkStudyToExam(id);
+                        }}
+                      >
+                        <option value="">Selecionar estudo…</option>
+                        {selectedExam.studyId && !studies.some((study) => study.studyId === selectedExam.studyId) ? (
+                          <option value={selectedExam.studyId}>Estudo indisponível (vínculo preservado)</option>
+                        ) : null}
+                        {studies.map((s) => (
+                          <option key={s.studyId} value={s.studyId}>
+                            {s.title} ({s.subject})
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Adicionar Material da Biblioteca</label>
+                  {!materialsLoading && !materialsError && availableMaterials.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-3">
+                      Nenhum material disponível para vincular. Importe ou organize materiais na Biblioteca primeiro.
+                    </p>
+                  ) : null}
+                  {availableMaterials.length > 0 && !materialsLoading && !materialsError ? (
+                    <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                      {availableMaterials.map((m) => (
+                        <div
+                          key={m.id}
+                          className="flex items-center justify-between p-3 rounded-xl border bg-card/40 hover:bg-accent/30 transition-colors cursor-pointer group"
+                          onClick={() => addMaterialToExam(m.id)}
+                        >
+                          <div className="flex items-center gap-3 flex-1">
+                            <FileText className="size-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm font-medium truncate">{m.name}</p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {m.subject ?? m.topic ?? "Sem assunto definido"} · {m.fileType.toUpperCase()}
+                                {m.studyId ? " · vinculado a estudo" : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-xs text-primary">Adicionar</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
             </div>
           )}
         </div>

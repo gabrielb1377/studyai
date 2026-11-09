@@ -12,6 +12,8 @@ import { AIClientError } from "@/features/ai/AIClient";
 import type { AIFallbackOffer, AIProviderId } from "@/features/ai/AIProvider";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import type { TutorStudyContext } from "@/types/tutor-context";
+import { useAuth } from "@/features/account/AuthProvider";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 type PendingFallback = {
   offer: AIFallbackOffer;
@@ -23,8 +25,9 @@ type PendingFallback = {
   teaching?: TeacherRequest;
 };
 
-export function useTutor(instanceId?: string) {
-  const context = useTutorContext();
+export function useTutor(instanceId?: string, studyId?: string) {
+  const auth = useAuth();
+  const context = useTutorContext(studyId);
   const [conversations, setConversations] = useState<TutorConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -42,13 +45,23 @@ export function useTutor(instanceId?: string) {
   };
 
   useEffect(() => {
+    let active = true;
+    const session = SessionOperationManager.current();
+    setConversations([]);
+    setActiveConversationId("");
+    setPendingFallback(null);
+    setError(null);
+    setIsLoading(false);
+    if (auth.isLoading || session.suspended || !session.userId) return () => { active = false; };
     void Promise.all([TutorStorage.load(), TutorStorage.loadActive(instanceId)]).then(([storedConversations, storedActive]) => {
-      if (storedConversations?.length) {
+      const current = SessionOperationManager.current();
+      if (active && current.userId === session.userId && current.generation === session.generation && storedConversations?.length) {
         setConversations(storedConversations);
         setActiveConversationId(storedConversations.some((item) => item.id === storedActive) ? storedActive! : storedConversations[0].id);
       }
     });
-  }, [instanceId]);
+    return () => { active = false; };
+  }, [auth.isLoading, auth.session?.user.id, instanceId]);
 
   const activeConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeConversationId) ?? conversations[0],
@@ -87,6 +100,13 @@ export function useTutor(instanceId?: string) {
   const sendMessage = async (content: string, options?: { teaching?: TeacherRequest }) => {
     const nextContent = content.trim();
     if (!nextContent || isLoading) return false;
+    let sessionOperation: ReturnType<typeof SessionOperationManager.start>;
+    try {
+      sessionOperation = SessionOperationManager.start();
+    } catch {
+      setError("Sua sessão mudou. Abra o estudo novamente para continuar.");
+      return false;
+    }
 
     const conversation = activeConversation ?? TutorService.createConversation();
     const userMessage = TutorService.createMessage("user", nextContent);
@@ -110,6 +130,7 @@ export function useTutor(instanceId?: string) {
       const retrieval = options?.teaching && context?.studyId && isBroadTeacherAction(options.teaching.action)
         ? await RetrievalPipeline.forStudy(context.studyId)
         : await RetrievalPipeline.forQuestion(options?.teaching?.selection?.text ?? nextContent, context?.studyId);
+      sessionOperation.assertCurrent();
       const contextualized = context && retrieval.knowledge?.hasContext
         ? {
             ...context,
@@ -133,6 +154,11 @@ export function useTutor(instanceId?: string) {
         retrieval.chunks,
         {
           onDelta: (delta) => {
+            try {
+              sessionOperation.assertCurrent();
+            } catch {
+              return;
+            }
             streamedText += delta;
             setConversations((current) => TutorService.replaceMessage(
               current,
@@ -145,6 +171,7 @@ export function useTutor(instanceId?: string) {
           requestId,
         },
       );
+      sessionOperation.assertCurrent();
       updateConversations((current) =>
         TutorService.replaceMessage(current, conversation.id, assistantMessage.id, {
           content: response.text,
@@ -154,6 +181,7 @@ export function useTutor(instanceId?: string) {
       if (context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: context.studyId });
       return true;
     } catch (requestError) {
+      if (sessionOperation.signal.aborted) return false;
       if (!streamedText) {
         updateConversations((current) => TutorService.removeMessage(current, conversation.id, assistantMessage.id));
       } else {
@@ -175,12 +203,23 @@ export function useTutor(instanceId?: string) {
       }
       return false;
     } finally {
-      setIsLoading(false);
+      const current = SessionOperationManager.current();
+      if (current.userId === sessionOperation.userId && current.generation === sessionOperation.generation) {
+        setIsLoading(false);
+      }
+      sessionOperation.release();
     }
   };
 
   const acceptFallback = async (provider: AIProviderId) => {
     if (!pendingFallback || isLoading) return false;
+    let sessionOperation: ReturnType<typeof SessionOperationManager.start>;
+    try {
+      sessionOperation = SessionOperationManager.start();
+    } catch {
+      setError("Sua sessão mudou. Solicite uma nova resposta para continuar.");
+      return false;
+    }
     const pending = pendingFallback;
     const alternative = pending.offer.alternatives.find((item) => item.provider === provider);
     if (!alternative) return false;
@@ -208,6 +247,7 @@ export function useTutor(instanceId?: string) {
           teaching: pending.teaching,
         },
       );
+      sessionOperation.assertCurrent();
       updateConversations((current) => TutorService.replaceMessage(current, pending.conversationId, assistantMessage.id, {
         content: response.text,
         metadata: response.metadata,
@@ -215,11 +255,16 @@ export function useTutor(instanceId?: string) {
       if (pending.context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: pending.context.studyId });
       return true;
     } catch (requestError) {
+      if (sessionOperation.signal.aborted) return false;
       updateConversations((current) => TutorService.removeMessage(current, pending.conversationId, assistantMessage.id));
       setError(requestError instanceof Error ? requestError.message : "A alternativa autorizada não conseguiu responder.");
       return false;
     } finally {
-      setIsLoading(false);
+      const current = SessionOperationManager.current();
+      if (current.userId === sessionOperation.userId && current.generation === sessionOperation.generation) {
+        setIsLoading(false);
+      }
+      sessionOperation.release();
     }
   };
 

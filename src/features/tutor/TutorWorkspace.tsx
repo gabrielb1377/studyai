@@ -28,7 +28,7 @@ import { useTeacher } from "@/features/teacher/hooks/useTeacher";
 import type { TeacherAction } from "@/features/teacher/types";
 import type { TeacherAudioLessonPreferences, RateOption } from "@/features/teacher/types";
 
-export function TutorWorkspace({ compact = false, instanceId }: { compact?: boolean; instanceId?: string } = {}) {
+export function TutorWorkspace({ compact = false, instanceId, studyId }: { compact?: boolean; instanceId?: string; studyId?: string } = {}) {
   const {
     activeConversation,
     activeConversationId,
@@ -46,7 +46,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     sendMessage,
     acceptFallback,
     declineFallback,
-  } = useTutor(instanceId);
+  } = useTutor(instanceId, studyId);
   const { summaries, saveSummary, deleteSummary } = useSummaries();
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");

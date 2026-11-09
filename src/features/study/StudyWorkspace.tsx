@@ -27,7 +27,7 @@ function toStudyMaterialType(fileType: string): StudyMaterialType {
   return "document";
 }
 
-export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, resetWorkspace = false }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; resetWorkspace?: boolean }) {
+export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, requestedQuizMode, resetWorkspace = false }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; requestedQuizMode?: "exam"; resetWorkspace?: boolean }) {
   const { records, isLoading, recordAccess, setProgress, setStatus } = useStudyEngine();
   const { materials } = useMaterials();
   const { records: extractedContents } = useExtraction();
@@ -66,10 +66,16 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   useEffect(() => {
     if (!studyId) return;
     const stored = WorkspacePersistence.load(studyId);
-    const next = { ...stored, materialId: requestedMaterialId ?? stored.materialId };
+    const next = {
+      ...stored,
+      materialId: requestedMaterialId ?? stored.materialId,
+      quiz: requestedTab === "quiz" && requestedQuizMode
+        ? { ...stored.quiz, mode: requestedQuizMode }
+        : stored.quiz,
+    };
     setWorkspace(next);
     WorkspacePersistence.save(studyId, next);
-  }, [requestedMaterialId, requestedTab, studyId]);
+  }, [requestedMaterialId, requestedQuizMode, requestedTab, studyId]);
 
   const updateWorkspace = (changes: Partial<StudyWorkspaceState>) => {
     if (!studyId) return;

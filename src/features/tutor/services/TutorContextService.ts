@@ -11,9 +11,11 @@ import { StudyPriorityEngine } from "@/features/learning/StudyPriorityEngine";
 import { MentorStorage } from "@/features/mentor/services/MentorStorage";
 
 export const TutorContextService = {
-  async loadCurrent(): Promise<TutorStudyContext | null> {
-    const study = (await StudyEngine.load())
-      .sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
+  async loadCurrent(requestedStudyId?: string): Promise<TutorStudyContext | null> {
+    const studies = await StudyEngine.load();
+    const study = requestedStudyId
+      ? studies.find((item) => item.studyId === requestedStudyId)
+      : studies.sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
     if (!study) return null;
     const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile, mentor] = await Promise.all([
       SummaryStorage.load(),

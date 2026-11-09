@@ -11,7 +11,7 @@ function storageKey(userId: string) {
 function currentUserId(): string | null {
   if (typeof window === "undefined") return null;
   const session = SessionOperationManager.current();
-  return session.userId ?? null;
+  return session.suspended ? null : session.userId ?? null;
 }
 
 function isExamList(value: unknown): value is Exam[] {
@@ -20,9 +20,21 @@ function isExamList(value: unknown): value is Exam[] {
     typeof item.id === "string" && typeof item.title === "string" &&
     typeof item.discipline === "string" && typeof item.examDate === "string" &&
     Array.isArray(item.subjects) && Array.isArray(item.materialIds) &&
+    item.materialIds.every((id: unknown) => typeof id === "string") &&
     typeof item.dailyMinutes === "number",
   );
 }
+
+function normalizeExam(exam: Exam): Exam {
+  return { ...exam, materialIds: Array.from(new Set(exam.materialIds)) };
+}
+
+export type ExamMaterialCatalog = {
+  readonly materialIds: readonly string[];
+  readonly isComplete: boolean;
+  readonly userId: string;
+  readonly generation: number;
+};
 
 export const ExamService = {
   load(): Exam[] {
@@ -33,9 +45,46 @@ export const ExamService = {
       const raw = localStorage.getItem(storageKey(userId));
       if (!raw) return [];
       const parsed: unknown = JSON.parse(raw);
-      return isExamList(parsed) ? parsed : [];
+      return isExamList(parsed) ? parsed.map(normalizeExam) : [];
     } catch {
       return [];
+    }
+  },
+
+  /**
+   * Remove referências órfãs somente quando o catálogo foi carregado por
+   * completo e ainda pertence à mesma geração de sessão.
+   */
+  pruneOrphanMaterials(catalog: ExamMaterialCatalog): Exam[] | null {
+    if (typeof window === "undefined" || !catalog.isComplete) return null;
+    const session = SessionOperationManager.current();
+    if (
+      session.suspended ||
+      !session.userId ||
+      session.userId !== catalog.userId ||
+      session.generation !== catalog.generation
+    ) return null;
+
+    const valid = new Set(catalog.materialIds);
+    try {
+      const raw = localStorage.getItem(storageKey(session.userId));
+      if (!raw) return null;
+      const parsed: unknown = JSON.parse(raw);
+      if (!isExamList(parsed)) return null;
+      const cleaned = parsed.map((exam) => {
+        const materialIds = Array.from(new Set(exam.materialIds.filter((id) => valid.has(id))));
+        const changed = materialIds.length !== exam.materialIds.length ||
+          materialIds.some((id, index) => id !== exam.materialIds[index]);
+        return changed ? { ...exam, materialIds, updatedAt: new Date().toISOString() } : exam;
+      });
+      const changed = cleaned.some((exam, index) => exam !== parsed[index]);
+      if (!changed) return null;
+      localStorage.setItem(storageKey(session.userId), JSON.stringify(cleaned));
+      window.dispatchEvent(new Event(UPDATE_EVENT));
+      return cleaned;
+    } catch {
+      // Falhas de leitura nunca autorizam remover vínculos existentes.
+      return null;
     }
   },
 
@@ -43,13 +92,16 @@ export const ExamService = {
     if (typeof window === "undefined") return;
     const userId = currentUserId();
     if (!userId) return;
-    localStorage.setItem(storageKey(userId), JSON.stringify(exams));
+    const serialized = JSON.stringify(exams.map(normalizeExam));
+    if (localStorage.getItem(storageKey(userId)) === serialized) return;
+    localStorage.setItem(storageKey(userId), serialized);
     window.dispatchEvent(new Event(UPDATE_EVENT));
   },
 
   create(data: Omit<Exam, "id" | "createdAt" | "updatedAt">, now = new Date().toISOString()): Exam {
     return {
       ...data,
+      materialIds: Array.from(new Set(data.materialIds)),
       id: `exam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: now,
       updatedAt: now,
@@ -62,19 +114,18 @@ export const ExamService = {
     const diffDays = Math.ceil((examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     const totalDays = Math.max(1, diffDays);
 
-    const uncompleted = exam.subjects.filter((s) => !s.completed);
+    const uncompleted = exam.subjects.filter((subject) => !subject.completed);
     if (uncompleted.length === 0) {
-      return exam.subjects.map((s, idx) => ({
-        dayIndex: idx + 1,
-        dateStr: new Date(now.getTime() + idx * 86400000).toLocaleDateString("pt-BR"),
-        subjectName: s.name,
-        priority: s.priority,
+      return exam.subjects.map((subject, index) => ({
+        dayIndex: index + 1,
+        dateStr: new Date(now.getTime() + index * 86400000).toLocaleDateString("pt-BR"),
+        subjectName: subject.name,
+        priority: subject.priority,
         estimatedMinutes: exam.dailyMinutes,
-        completed: s.completed,
+        completed: subject.completed,
       }));
     }
 
-    // Sort uncompleted by priority (high first, then medium, then low)
     const priorityWeight = { high: 3, medium: 2, low: 1 };
     const sorted = [...uncompleted].sort((a, b) => priorityWeight[b.priority] - priorityWeight[a.priority]);
 

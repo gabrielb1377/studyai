@@ -33,7 +33,7 @@ export const WorkspacePanelContent = memo(function WorkspacePanelContent({ panel
   onStatusChange: (status: StudyStatus) => void;
 }) {
   if (panel.type === "material") return <MaterialTab studyId={study.studyId} materials={materials} selectedMaterialId={panel.resourceId ?? materials[0]?.id} onMaterialChange={onMaterialChange} compact />;
-  if (panel.type === "tutor") return <div className="space-y-5"><TutorWorkspace compact instanceId={panel.id} /><SummaryList studyId={study.studyId} /></div>;
+  if (panel.type === "tutor") return <div className="space-y-5"><TutorWorkspace compact instanceId={panel.id} studyId={study.studyId} /><SummaryList studyId={study.studyId} /></div>;
   if (panel.type === "mentor") return <MentorWorkspace study={study} />;
   if (panel.type === "summaries") return <SummaryList studyId={study.studyId} />;
   if (panel.type === "flashcards") return <FlashcardWorkspace study={study} />;

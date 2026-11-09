@@ -1,6 +1,30 @@
 # Sprint 41 — estado real em 8/11/2026
 
-**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. A 41G.3D foi commitada em `03f163b`; as 41H/41H.1 estão validadas localmente, mas ainda não foram commitadas nem homologadas com provedores reais.
+**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. O HEAD atual é `363c968`; a 41I.B.1 está validada localmente, sem commit próprio e sem homologação externa.
+
+## Sprint 41I.C — integrações validadas localmente
+
+- A Semana de Prova oferece ações reais para Tutor, Flashcards, Quiz e Simulado, sempre usando o `studyId` do estudo vinculado.
+- O vínculo persistido na prova não é tratado como autorização. A ação só é criada quando o estudo pertence ao catálogo já escopado para a sessão; estudo removido/inacessível mantém o vínculo, mas deixa as quatro ações indisponíveis.
+- Tutor reutiliza `TutorContextService` com seleção explícita do estudo. Contexto e conversas em memória são limpos na troca de conta e resultados atrasados são descartados por identidade e geração de sessão.
+- Flashcards e Quiz reutilizam `FlashcardService`, `QuizService`, agendamento, resultados e `LearningService`; nada é gerado automaticamente ao navegar.
+- Simulado abre o `QuizWorkspace` em Modo Prova e reutiliza tentativa, retomada e correção existentes. O gabarito continua ausente do payload inicial e só aparece após entrega corrigida no servidor.
+- Não houve schema, endpoint de correção paralelo ou persistência nova. O `examId` ainda não é gravado na tentativa protegida; esse vínculo é uma limitação documentada, não antecipada sem autorização.
+- Evidência: 41I.C 6/6; 41I.B.1 10/10; matriz selecionada 41G/41H/Study Engine/Modo Prova/41I.C 54/54; isolamento A → B → A desktop/mobile 2/2; intermitências repetidas separadamente: cloud sync 4/4 e Cache Storage 1/1. Total distinto desta validação: 71 aprovados, 0 falhos e 0 ignorados; a repetição final 41I.C + Tutor 9/9 não foi contada novamente. Typecheck, lint e build aprovados; lint com 0 erros/67 avisos preexistentes; build com 48 páginas. Serviços externos e IA paga não foram usados.
+
+## Sprint 41I.B.1 — estabilização validada localmente
+
+- Corrigida a limpeza prematura de `materialIds`: lista vazia durante carregamento ou erro da Biblioteca não é mais tratada como catálogo completo.
+- A limpeza de órfãos exige catálogo completo, usuário e geração de sessão ainda válidos; respostas atrasadas A → B são descartadas.
+- Sessão suspensa não lê nem grava provas; `offline-session` possui armazenamento próprio e não acessa a conta autenticada.
+- IDs duplicados são normalizados e saves idênticos não repetem gravação/evento em `localStorage`.
+- Estudos excluídos ou temporariamente inacessíveis preservam `studyId` e são apresentados como indisponíveis, sem perda silenciosa.
+- Cargas de materiais/estudos invalidam resultados antigos; troca de escopo limpa memória. Atualizações concorrentes do Study Engine foram serializadas para impedir overwrite de progresso.
+- O teste antigo de Study Engine usava o rótulo obsoleto `Criar quiz`; foi atualizado para o rótulo exato atual `Gerar primeiro simulado`, mantendo as assertions de payload e resultado.
+- `errno -4094`: registro comprovado em Node 24.18.0, `binding.readdir`/`scandir` de `D:\studyai\node_modules\.bin`, intermitente e não reproduzido agora. ACLs, volume, TEMP e processos concorrentes foram verificados sem desativar segurança.
+- Arquivo de teste 41I.B tinha 18 bytes NUL finais; o `esbuild` rejeitava `Unexpected "\x00"`. Foi regravado sem NUL.
+
+Evidência final: 10/10 testes 41I.B.1; typecheck aprovado; lint 0 erros/67 avisos; build aprovado (48 páginas); diff check limpo. Matriz de regressão: 70 aprovados, 2 falhos intermitentes e 6 ignorados pelo gate PostgreSQL; os 2 falhos passaram na repetição focada. A instabilidade de conflito cloud/Service Worker continua risco do harness e não foi ocultada com timeout maior ou assertion mais fraca.
 
 ## Sprint 41H.1 — regressões resolvidas
 
@@ -79,7 +103,7 @@
 1. Revisar a 41H e manter os experimentos de upload direto fora do diff da sprint.
 2. Estabilizar as intermitências do runner de cadastro/sync/conflitos e repetir em aparelho móvel físico quando disponível.
 3. Validar o fallback do Tutor com provedores/contas de teste autorizados, decidir idempotência durável e só então avaliar extensão aos demais fluxos.
-4. Integrar Semana de Prova a estudos, materiais, flashcards, quizzes, simulados e resultados sem duplicação.
+4. Homologar em ambiente autorizado as integrações da Semana de Prova e decidir, em etapa futura, se tentativas protegidas precisam persistir também o `examId`.
 5. Validar Academy e IA com serviços reais somente em homologação autorizada.
 6. Repetir mobile/desktop; scripts da mesma origem continuam fora da fronteira oferecida por namespaces locais.
 

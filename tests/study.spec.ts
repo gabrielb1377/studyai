@@ -59,7 +59,7 @@ test("flashcards e quiz recebem chunks reais do estudo", async ({ page }) => {
 
   await page.getByRole("tab", { name: "Quiz" }).click();
   const quiz = page.getByRole("region", { name: "Quiz" });
-  await quiz.getByRole("button", { name: "Criar quiz" }).click();
+  await quiz.getByRole("button", { name: "Gerar primeiro simulado", exact: true }).click();
   await expect(quiz.getByText("Questão 1", { exact: true })).toBeVisible();
   expect(quizRequests[0]?.chunks?.[0]?.text).toContain("Vetores armazenam elementos");
 });
