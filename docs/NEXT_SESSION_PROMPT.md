@@ -9,36 +9,44 @@ docs/ROADMAP_V1_2.md. Confirme git status --short, git status -sb e
 git log -15 --oneline --decorate. Não faça fetch, reset, clean, stash,
 checkout --, rebase, push, merge, deploy ou commit sem autorização.
 
-Fotografia de 8/11/2026: HEAD 363c968. As alterações das Sprints 41I.B/B.1 e
-41I.C permanecem não commitadas. Preserve integralmente os experimentos de
-upload direto S3: package.json/lock, CloudFileService, CloudDatabase,
-ObjectStorage, src/app/api/files/[id]/direct/route.ts,
-tests/direct-upload.spec.ts, tests/deploy-security.spec.ts e
-scripts/generate-vercel-secret.ps1. Não misture esses arquivos em eventual
-checkpoint.
+Fotografia de 8/11/2026: HEAD fb8c619. O checkpoint contém as etapas
+41I.B/B.1/C. A 41I.D está implementada, validada e registrada em checkpoint
+local criado em seguida. Preserve integralmente os experimentos de upload direto S3:
+package.json/lock, CloudFileService, CloudDatabase, ObjectStorage,
+src/app/api/files/[id]/direct/route.ts, tests/direct-upload.spec.ts,
+tests/deploy-security.spec.ts e scripts/generate-vercel-secret.ps1. Preserve
+também docs/PROJECT_AUDIT_2026-11-05.md e não misture esses arquivos em um
+eventual checkpoint.
 
-Estado 41I.C: a Semana de Prova abre Tutor, Flashcards, Quiz e Simulado pelo
-studyId real. ExamLearningNavigation só habilita ações quando o estudo existe
-no catálogo escopado da sessão. TutorContextService aceita o studyId solicitado;
-useTutorContext/useTutor invalidam estado e respostas antigas na troca de conta.
-Flashcards e Quiz reutilizam serviços, progresso e resultados existentes. O
-Simulado abre o QuizWorkspace em modo=exam e continua usando a tentativa e a
-correção protegidas no servidor, sem gabarito no payload inicial. Não houve
-schema ou endpoint paralelo. Limite: a tentativa não persiste examId.
+Estado 41I.D: ExamProgressService consolida somente registros reais e
+autorizados. StudyEngine é a fonte de progresso; LearningStorage fornece
+atividades/tempo; QuizService é a fonte canônica de tentativas, acertos e
+erros; FlashcardService fornece cartões distintos revisados. A associação usa
+Exam.studyId ou Exam.materialIds → StudyRecord.materialIds, exige data igual ou
+posterior a Exam.createdAt e deduplica por ID estável. O evento quiz do Learning
+Service não é contado novamente. Abrir/recarregar a página não grava progresso.
 
-Resultados: nova suíte 41I.C 6/6; regressão 41I.B.1 10/10; matriz selecionada
-41G/41H/Study Engine/Modo Prova/41I.C 54/54; isolamento A → B → A desktop/mobile
-2/2; cloud sync isolado 4/4; Cache Storage isolado 1/1. Total distinto: 71/71;
-repetição final 41I.C + Tutor 9/9. Typecheck aprovado; lint 0 erros e 67 avisos
-preexistentes; build aprovado com 48 páginas. Não foram usados
-providers reais, IA paga, PostgreSQL/S3 externos ou credenciais de produção.
+O hook useExamProgress valida usuário, geração e sessão suspensa antes de
+aplicar resultados e reage aos eventos existentes. A interface diferencia
+progresso, atividades, revisões, desempenho e estados vazios. ExamAttemptServer
+ainda não persiste examId/studyId; resultados do Modo Prova protegido ficam
+fora do resumo, sem correspondência inferida e sem mudança de schema.
 
-Próximo passo recomendado para a 41I.D: primeiro revisar e separar os diffs de
-41I.B/B.1 e 41I.C dos experimentos S3. Depois, somente com escopo explícito,
-tratar a próxima integração prevista no roadmap e avaliar se o vínculo examId
-da tentativa precisa de mudança de schema. Não iniciar automaticamente nem
-criar commit sem autorização.
+Na validação, uma regressão anterior foi corrigida no QuizWorkspace: o modo
+Prática voltou a apresentar evolução, ponto forte/fraco e recomendação do
+KnowledgeEngine. O Modo Prova protegido não foi alterado.
 
-Não execute migrations, chamadas pagas ou alterações em .env, Railway, Vercel,
-Supabase ou outros serviços. Não exponha credenciais.
+Resultados distintos: 41I.D 18/18; 41I.B/B.1 10/10; regressões selecionadas
+41I.C/Study Engine/Learning/isolamento/Modo Prova 47/47 após autocorreção.
+Total final 75 aprovados, 0 falhos e 0 ignorados. Typecheck, lint, build e
+git diff --check aprovados; lint com 67 avisos preexistentes; build com 48
+páginas. Não foram usados providers reais, IA paga, PostgreSQL/S3 externos,
+migrações ou credenciais de produção.
+
+Próximo passo recomendado: confirmar o checkpoint 41I.D no Git e preservá-lo
+isolado dos experimentos S3. Depois planejar a 41I.E como tarefa separada. Não
+iniciar a 41I.E automaticamente e não criar novos commits sem autorização.
+
+Não execute chamadas pagas nem alterações em .env, Railway, Vercel, Supabase
+ou outros serviços. Não exponha credenciais.
 ```

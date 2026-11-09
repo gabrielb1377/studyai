@@ -2,9 +2,29 @@
 
 Atualizado em **8 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
 
+## Sprint 41I.D — progresso real da Semana de Prova
+
+A Sprint 41I.D está **IMPLEMENTADA, VALIDADA E REGISTRADA EM CHECKPOINT LOCAL, SEM HOMOLOGAÇÃO EM PRODUÇÃO** sobre a branch `v1.1-development`, a partir do HEAD base `fb8c619`. A Semana de Prova ganhou uma visão somente de leitura que separa progresso do conteúdo, quantidade de atividades, revisões de flashcards e desempenho. Abrir ou recarregar a página não cria eventos nem altera o progresso do estudo.
+
+Fontes e identificadores usados:
+
+- `StudyEngine`: `studyId`, `progress` e `status`; fonte canônica de conclusão do conteúdo.
+- `LearningStorage`: atividades com `id`, `studyId` e `occurredAt`; fonte de tempo e revisões registradas.
+- `QuizService`: resultados com `id`, `studyId` e `completedAt`; fonte canônica de tentativas, acertos e erros. Eventos `quiz` equivalentes do Learning Service não são contados novamente.
+- `FlashcardService`: `id`, `studyId` e `lastReviewedAt`; usado para cartões distintos revisados, sem inventar um identificador de revisão inexistente.
+- `ExamAttemptServer`: mantém tentativa e usuário, mas não persiste `examId` ou `studyId`. Por isso resultados do Modo Prova protegido não são atribuídos a uma prova específica nesta etapa.
+
+A associação exige `Exam.studyId` autorizado ou a cadeia explícita `Exam.materialIds` → `StudyRecord.materialIds`. Atividades e resultados anteriores a `Exam.createdAt` são excluídos. IDs estáveis são deduplicados, enquanto tentativas legítimas com IDs diferentes permanecem separadas. Estudo removido, data inválida ou ausência de vínculo confiável produz estado explicativo, sem correspondência inferida.
+
+O carregamento assíncrono verifica usuário, geração e suspensão da sessão antes de aplicar resultados e invalida cargas antigas no cleanup. A interface reage aos eventos existentes de Learning, Quiz, Flashcards e armazenamento. O modo `offline-session` usa o mesmo cálculo, sem privilégios especiais ou leitura de outro escopo.
+
+Durante as regressões foi confirmada uma falha anterior no modo Prática: a integração do Modo Prova protegido havia removido da tela de resultado os insights já calculados pelo `KnowledgeEngine`. A apresentação de evolução, ponto forte/fraco e recomendação foi restaurada somente no modo Prática; tentativa protegida, payload sem gabarito e correção no servidor não foram alterados.
+
+Evidência distinta desta etapa: testes 41I.D **18/18** (16 lógica + 2 Chromium desktop/mobile), 41I.B/B.1 **10/10** e regressões selecionadas 41I.C/Study Engine/Learning/isolamento/Modo Prova **47/47** após a autocorreção. Na primeira rodada de regressão houve **46 aprovados e 1 falho**; o caso falho passou no teste focado e a suíte Learning + Modo Prova passou **25/25**. Total distinto final: **75 aprovados, 0 falhos, 0 ignorados**. Typecheck, lint, build e `git diff --check` passaram; o lint manteve 67 avisos preexistentes. Nenhum serviço externo, IA paga, migração ou credencial real foi usado.
+
 ## Sprint 41I.C — Semana de Prova e atividades de aprendizagem
 
-A Sprint 41I.C está **IMPLEMENTADA E VALIDADA LOCALMENTE, NÃO COMMITADA E NÃO HOMOLOGADA EM PRODUÇÃO** sobre a branch `v1.1-development`, HEAD base `363c968`. A Semana de Prova agora oferece ações funcionais para Tutor, Flashcards, Quiz e Simulado usando o `studyId` do vínculo real. O identificador persistido na prova não autoriza acesso sozinho: as ações só são habilitadas quando o estudo também existe no catálogo já escopado para a sessão atual. Vínculos removidos ou temporariamente inacessíveis são preservados e apresentados como indisponíveis.
+A Sprint 41I.C está **IMPLEMENTADA, VALIDADA LOCALMENTE E REGISTRADA NO CHECKPOINT `fb8c619`, SEM HOMOLOGAÇÃO EM PRODUÇÃO**. A Semana de Prova agora oferece ações funcionais para Tutor, Flashcards, Quiz e Simulado usando o `studyId` do vínculo real. O identificador persistido na prova não autoriza acesso sozinho: as ações só são habilitadas quando o estudo também existe no catálogo já escopado para a sessão atual. Vínculos removidos ou temporariamente inacessíveis são preservados e apresentados como indisponíveis.
 
 As rotas contextuais reutilizam o Workspace existente (`/estudo?tema=...&aba=...`). O Tutor passou a solicitar explicitamente o estudo ao `TutorContextService`, que o resolve contra `StudyEngine`; respostas assíncronas antigas e conversas em memória são invalidadas quando usuário ou geração de sessão mudam. Flashcards e Quiz continuam usando os serviços existentes, filtrados por `studyId`, sem geração automática. O link de Simulado abre o painel de Quiz diretamente em `modo=exam`, reutilizando `SecureExamClient` e os endpoints protegidos; o payload inicial continua sem `correctAnswer` ou explicações.
 
@@ -14,7 +34,7 @@ Evidência: suíte nova 41I.C **6/6**; regressão 41I.B.1 **10/10**; matriz Play
 
 ## Sprint 41I.B.1 — integração de estudos e materiais
 
-A Sprint 41I.B.1 está **VALIDADA LOCALMENTE, NÃO COMMITADA E NÃO HOMOLOGADA EM PRODUÇÃO** sobre a branch `v1.1-development`, HEAD `363c968`. A integração da Semana de Prova carrega estudos e materiais reais, preserva vínculos durante carregamento incompleto ou falha da Biblioteca e remove referências órfãs somente depois de um catálogo completo, pertencente ao mesmo usuário e à mesma geração de sessão.
+A Sprint 41I.B.1 está **VALIDADA LOCALMENTE E REGISTRADA NO CHECKPOINT `fb8c619`, SEM HOMOLOGAÇÃO EM PRODUÇÃO**. A integração da Semana de Prova carrega estudos e materiais reais, preserva vínculos durante carregamento incompleto ou falha da Biblioteca e remove referências órfãs somente depois de um catálogo completo, pertencente ao mesmo usuário e à mesma geração de sessão.
 
 `ExamService` bloqueia leitura/gravação enquanto a sessão está suspensa, reconhece `offline-session`, normaliza IDs repetidos e evita `localStorage.setItem` redundante. `ExamWorkspace` mantém estudos inacessíveis em estado explícito, sem apagar o `studyId`. `useMaterials` e `useStudyEngine` invalidam resultados atrasados e limpam dados em memória na troca de escopo; atualizações concorrentes do Study Engine são serializadas para não perder progresso. `ProvasClient` não executa uma segunda carga redundante.
 
@@ -48,8 +68,8 @@ Resultado final sem duplicar casos: **90 testes distintos aprovados** — 69 ló
 
 - Projeto: `D:\studyai`.
 - Branch: `v1.1-development`.
-- HEAD: `363c968` — checkpoint local anterior às alterações não commitadas das Sprints 41I.B/B.1 e 41I.C.
-- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **27 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
+- Checkpoint anterior: `fb8c619`, com as Sprints 41I.B/B.1/C. Este documento acompanha o checkpoint local da 41I.D criado em seguida.
+- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **29 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
 - Nenhum arquivo está staged. Nenhum commit foi criado nas Sprints 41H/41H.1.
 
 Alterações rastreadas preservadas:
@@ -133,12 +153,12 @@ Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produ�
 5. Manter o upload direto fora de publicação até revisão e testes; ele continua experimental e não rastreado em parte.
 6. Estender o contrato consentido aos demais fluxos de IA somente após validar o Tutor com provedores reais; hoje eles permanecem deliberadamente sem fallback.
 7. Tornar a idempotência de fallback durável entre instâncias serverless antes de depender dela para garantia financeira global.
-8. Integrar Semana de Prova às atividades reais e ao progresso sem duplicação.
+8. Decidir em etapa autorizada se tentativas protegidas precisam persistir `examId`/`studyId`; hoje elas não podem entrar no resumo de uma prova específica com segurança.
 9. Validar Academy, IA, PostgreSQL e S3 em homologação autorizada.
 
 ## Próximo trabalho recomendado
 
-Revisar o diff das **41H/41H.1** e, somente mediante autorização posterior, criar um checkpoint local isolado sem misturar upload direto. Depois validar o Tutor com contas/provedores de teste autorizados, decidir a estratégia durável de idempotência e retomar Semana de Prova e homologação de Academy/IA antes da Sprint 42.
+Preservar o checkpoint local isolado da **41I.D** sem misturar o upload direto. A 41I.E deve ser planejada como tarefa separada. A homologação de Academy/IA, PostgreSQL e S3 continua dependente de ambiente e autorização próprios.
 
 ## Comandos e documentação
 

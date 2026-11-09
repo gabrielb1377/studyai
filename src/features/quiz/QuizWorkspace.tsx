@@ -12,6 +12,7 @@ import { SecureExamPanel } from "./SecureExamPanel";
 import { useQuiz } from "./useQuiz";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
 import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
+import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
 
 
 export function QuizWorkspace({ study }: { study: StudyRecord }) {
@@ -65,6 +66,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
   };
 
   const latestResult = results[0];
+  const insight = KnowledgeEngine.quizInsight(results);
 
   return (
     <section aria-labelledby="quiz-workspace-title" className="space-y-4 rounded-xl border bg-card p-4 sm:p-6">
@@ -130,7 +132,7 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
         <Card className="items-center gap-5 p-6 sm:p-8 text-center shadow-none">
           <CheckCircle2 className="size-10 text-primary" />
           <div>
-            <h3 className="text-xl font-bold">Simulado Finalizado</h3>
+            <h3 className="text-xl font-bold">Quiz concluído</h3>
             <p className="text-sm text-muted-foreground mt-1">Correção e explicações detalhadas das questões.</p>
           </div>
           {latestResult && (
@@ -140,6 +142,27 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
               <div className="p-3 rounded-lg border bg-card/50"><strong>{latestResult.score}%</strong><br /><span className="text-xs text-muted-foreground">Nota</span></div>
             </div>
           )}
+
+          <div className="grid w-full gap-3 text-left sm:grid-cols-2">
+            <div className="rounded-lg border p-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Evolução</p>
+              <p className="mt-1 text-sm">{insight.comparison}</p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Ponto forte</p>
+              <p className="mt-1 text-sm">{insight.strengths[0]}</p>
+            </div>
+            {insight.weaknesses.length > 0 ? (
+              <div className="rounded-lg border p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Ponto fraco</p>
+                <p className="mt-1 text-sm">{insight.weaknesses[0]}</p>
+              </div>
+            ) : null}
+            <div className="rounded-lg border p-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Recomendação</p>
+              <p className="mt-1 text-sm">{insight.recommendation}</p>
+            </div>
+          </div>
 
           <div className="w-full space-y-3 text-left">
             <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Revisão Questão a Questão</h4>

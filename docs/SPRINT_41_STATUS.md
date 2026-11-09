@@ -1,6 +1,19 @@
 # Sprint 41 — estado real em 8/11/2026
 
-**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. O HEAD atual é `363c968`; a 41I.B.1 está validada localmente, sem commit próprio e sem homologação externa.
+**Status geral: PARCIALMENTE IMPLEMENTADA.** A Sprint 41 não está encerrada. A 41I.D está validada e registrada em checkpoint local criado após `fb8c619`, sem homologação externa.
+
+## Sprint 41I.D — progresso real validado localmente
+
+- A Semana de Prova consolida dados persistidos sem criar um sistema paralelo: conteúdo vem do Study Engine; atividades/tempo do Learning Storage; tentativas, acertos e erros do Quiz Service; revisões e cartões distintos de Learning + Flashcard Service.
+- Associação segura somente por `Exam.studyId` autorizado ou `Exam.materialIds` → `StudyRecord.materialIds`. `studyId` nunca é tratado como `examId`.
+- Registros anteriores a `Exam.createdAt` são excluídos. IDs estáveis deduplicam reprocessamento/reload; tentativas legítimas com IDs distintos continuam separadas. O evento `quiz` do Learning Service não duplica o resultado canônico do Quiz Service.
+- Progresso do conteúdo, atividades e desempenho são métricas separadas. Nota não altera progresso; abrir a Semana de Prova não grava atividade.
+- Estados apresentados: não iniciado, em andamento, concluído e sem dados suficientes. Estudo removido, data inválida e vínculo ausente ficam explícitos.
+- O hook de leitura valida usuário, geração e suspensão da sessão antes de aplicar resultados assíncronos e invalida cargas antigas. `offline-session` continua escopada e não recebe privilégios extras.
+- Tentativas protegidas não persistem `examId`/`studyId`; portanto seus resultados não entram na consolidação desta sprint. Nenhuma correspondência foi inventada e nenhum schema foi alterado.
+- Regressão corrigida durante a validação: o modo Prática voltou a mostrar evolução, ponto forte/fraco e recomendação produzidos pelo `KnowledgeEngine`. O Modo Prova protegido permaneceu separado e sem gabarito no payload inicial.
+
+Evidência: 41I.D 18/18; 41I.B/B.1 10/10; regressões selecionadas 47/47 após correção. A rodada inicial das regressões registrou 46 aprovados/1 falho; o caso foi reproduzido, corrigido e passou focado, seguido de Learning + Modo Prova 25/25. Total distinto final: 75 aprovados, 0 falhos e 0 ignorados. Typecheck aprovado; lint aprovado com 67 avisos preexistentes; build aprovado com 48 páginas; `git diff --check` aprovado. Sem produção, serviços pagos, migrações ou credenciais reais.
 
 ## Sprint 41I.C — integrações validadas localmente
 
@@ -57,9 +70,9 @@ Evidência final: 10/10 testes 41I.B.1; typecheck aprovado; lint 0 erros/67 avis
 ## Evidência Git
 
 - Branch: `v1.1-development`.
-- HEAD: `03f163b`.
-- Referência remota conhecida: `origin/v1.1-development` em `331bc15`, sem `fetch` nesta auditoria.
-- Alterações experimentais de upload direto e a 41H permanecem fora de commit.
+- Checkpoint anterior: `fb8c619`; este documento acompanha o checkpoint local da 41I.D criado em seguida.
+- Referência remota conhecida: `origin/v1.1-development` em `331bc15`; branch local 29 commits à frente, sem `fetch` nesta auditoria.
+- Alterações experimentais de upload direto permanecem fora de commit e preservadas.
 
 ## Reconstrução das etapas
 
