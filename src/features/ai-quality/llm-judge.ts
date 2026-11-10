@@ -3,6 +3,7 @@
  */
 
 import type { EvaluationCase, EvaluationResult, LLMJudgeConfig, QualityCriterion } from "./types";
+import { AIClient } from "@/features/ai/AIClient";
 
 const JUDGE_PROMPT_TEMPLATE = `Você é um avaliador especialista de respostas educacionais.
 Avalie a resposta do aluno com base no CRITÉRIO abaixo.
@@ -58,7 +59,6 @@ interface JudgeApiRequest {
   prompt: string;
   provider: string;
   model: string;
-  apiKey?: string;
   maxTokens: number;
 }
 
@@ -79,23 +79,16 @@ export async function runLLMJudge(
   for (const criterion of criteria) {
     const prompt = buildPrompt(case_, actualAnswer, criterion);
     try {
-      const response = await fetch("/api/ai-quality/judge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await AIClient.request<JudgeApiResponse>(
+        "/api/ai-quality/judge",
+        {
           prompt,
           provider: config.provider,
           model: config.model,
-          apiKey: config.apiKey,
           maxTokens: config.maxTokens,
-        } satisfies JudgeApiRequest),
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json() as JudgeApiResponse;
+        } satisfies JudgeApiRequest,
+        "Não foi possível executar o LLM Judge.",
+      );
       const parsed = parseJudgeResponse(data.text);
 
       if (parsed) {

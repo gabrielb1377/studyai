@@ -1,5 +1,17 @@
 # Handoff atual — StudyAI V1.1
 
+## Estado atual — Sprint 42 (9 de novembro de 2026)
+
+A Sprint 42 foi implementada localmente sobre o HEAD `40f3518`, sem commit e sem homologação externa. O trabalho corrigiu falhas comprovadas de segurança e contabilização: o LLM Judge não aceita mais chave enviada pelo navegador e exige sessão/CSRF/quota; a assistência do Academy Studio deixou de possuir caminho visitante fora da quota; todas as mutações que passam por `withAIQuota` exigem CSRF; status e inspeção de providers exigem sessão; a quota local de desenvolvimento agora é realmente contabilizada e a ausência de PostgreSQL em produção falha fechada; cabeçalhos e mensagens de limite refletem os contadores reais e distinguem bloqueio diário de bloqueio por minuto. O Tutor informa se os tokens exibidos foram registrados pelo provider ou estimados localmente, sem estimar custo financeiro.
+
+Na Sprint 42.1, o overflow mobile do Academy Studio foi localizado no item de grid/flex que continha o `Select`: `min-width:auto`, wrapper `w-full`, conteúdo flexível, botão e gaps elevavam o tamanho mínimo para 437 px em um viewport de 360 px. `min-w-0` no item e `basis-full` no seletor abaixo de `sm` corrigiram a causa sem esconder overflow globalmente e sem alterar o desktop. O teste mobile passou duas vezes, a suíte Academy Studio passou 12/12 e a suíte específica da Sprint 42 passou 4/4.
+
+Validação: `tests/sprint42-security-quota.spec.ts` **4/4**; Academy Studio **12/12**; teste mobile repetido **2/2**. A rodada relacionada anterior à correção teve 57 aprovados e a única falha mobile agora corrigida. Todos os 17 testes de Modo Prova, os 4 de cloud sync, os 10 de quota e os 12 do fallback central permanecem como evidência anterior da Sprint 42 e não foram repetidos na 42.1. Typecheck e build passaram; lint passou com 0 erros e 50 avisos preexistentes; `git diff --check` passou. A matriz Playwright completa não foi executada.
+
+Persistência, backup/restore, fila offline, conflito, exclusão sincronizada e isolamento foram cobertos pelos quatro testes focados de `cloud-sync.spec.ts`, todos aprovados com backend mockado/local. O Modo Prova continuou sem gabarito no payload inicial, com ownership e correção no servidor; não houve alteração de schema nem persistência de `examId`/`studyId`. Providers reais, PostgreSQL/S3 externos, Vercel e custos reais não foram acessados.
+
+Estado Git desta fotografia: branch `v1.1-development`, HEAD base `40f351846a600d570a35c6edd8005c00d0ad1874`; nenhuma alteração da Sprint 42 foi commitada. Os experimentos S3, `package.json`, `package-lock.json`, gerador de segredos e auditoria experimental permanecem fora do escopo e preservados. Consulte `docs/SPRINT_42_STATUS.md` para a lista de arquivos e evidências. A Sprint 42 está pronta para checkpoint local seletivo; Sprint 43 não foi iniciada.
+
 ## Estado definitivo da Sprint 41
 
 **Encerrada localmente com ressalvas; não homologada em produção.** 41G e 41H foram implementadas e validadas localmente; 41I.A–E concluídas localmente, com checkpoint final `652ac65`. Na 41J.1, instrumentação concluída e 3 testes focados aprovados; na 41J.2, 1 teste existente de persistência aprovado. Total 41J: **4 testes focados aprovados**, sem dupla contagem. Os 107 testes da 41I são evidência histórica e não foram repetidos. Matriz Playwright completa e homologação externa pendentes. Suporte avançado a múltiplas contas despriorizado para uso pessoal atual. Sprint 42 não iniciada.

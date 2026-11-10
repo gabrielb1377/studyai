@@ -1,16 +1,13 @@
 "use server";
 
 import { NextResponse } from "next/server";
-import { QuotaService } from "./QuotaService";
-import { requireUser } from "@/server/auth/http";
+import { QuotaService, type QuotaStatus } from "./QuotaService";
+import { requireCsrf, requireUser } from "@/server/auth/http";
 import { aiProviderIds, type AIFallbackConsent, type AIProviderId } from "@/features/ai/AIProvider";
 import { ApiKeyService } from "./ApiKeyService";
-import { AIService } from "@/features/ai/AIService";
-import { normalizeAIError } from "@/features/ai/AIErrors";
 import { AIError } from "@/features/ai/AIErrors";
-import type { AIManagerRequest } from "@/features/ai/AIProvider";
 import type { TutorStudyContext } from "@/types/tutor-context";
-import { needsSharedQuota, providersToCheckFor } from "./quota-policy";
+import { needsSharedQuota, providersToCheckFor, quotaExceededMessage, quotaRateLimitHeaders } from "./quota-policy";
 
 export interface QuotaAwareAIRequest {
   history: Array<{ role: "user" | "assistant"; content: string }>;
@@ -50,11 +47,33 @@ function consumeSharedQuota(userId: string, body: { requestId?: string; fallback
   return promise;
 }
 
+function attachQuotaHeaders(response: Response, status: QuotaStatus) {
+  for (const [name, value] of Object.entries(quotaRateLimitHeaders(status.quota))) {
+    response.headers.set(name, value);
+  }
+  return response;
+}
+
+function quotaExceededResponse(status: QuotaStatus) {
+  const headers = quotaRateLimitHeaders(status.quota);
+  if (status.retryAfter !== undefined) headers["Retry-After"] = String(status.retryAfter);
+  return NextResponse.json(
+    {
+      code: "QUOTA_EXCEEDED",
+      error: quotaExceededMessage(status),
+      blockedBy: status.blockedBy,
+      quota: status.quota,
+    },
+    { status: 429, headers },
+  );
+}
+
 export async function withQuotaEnforcement(
   request: Request,
   handler: (request: Request, userApiKeys: Partial<Record<AIProviderId, string>>, quotaInfo: Awaited<ReturnType<typeof QuotaService.getQuotaInfo>>) => Promise<NextResponse>
 ): Promise<NextResponse> {
   try {
+    requireCsrf(request);
     const user = requireUser(request);
     const userId = user.sub;
 
@@ -77,7 +96,7 @@ export async function withQuotaEnforcement(
     const quotaInfo = await (await import("./QuotaService")).QuotaService.getQuotaInfo(userId);
 
     // Determine which providers might be used based on the request
-    const body = await request.json().catch(() => null);
+    const body = await request.clone().json().catch(() => null);
     const bodyObj = body as { mode?: string; provider?: string; fallbackConsent?: AIFallbackConsent } | null;
     
     // Determine which providers might be used (same rule as ProviderManager)
@@ -96,46 +115,11 @@ export async function withQuotaEnforcement(
     });
 
     if (!quotaCheck.allowed) {
-      const dayEnd = new Date();
-      dayEnd.setHours(24, 0, 0, 0);
-      const minuteEnd = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
-      return NextResponse.json(
-        {
-          code: "QUOTA_EXCEEDED",
-          error: "Cota diária de IA compartilhada esgotada. Configure sua própria chave de API (BYOK) em Configurações → IA para continuar sem limites.",
-          quota: {
-            daily: { limit: 500, remaining: 0, resetAt: dayEnd.toISOString() },
-            minute: { limit: 20, remaining: 0, resetAt: minuteEnd.toISOString() },
-          },
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": "60",
-            "X-RateLimit-Limit": "500",
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": Math.ceil(Date.now() / 1000 + 86400).toString(),
-          },
-        }
-      );
+      return quotaExceededResponse(quotaCheck);
     }
 
-    // Add quota headers to response
-    const dayEnd = new Date();
-    dayEnd.setHours(24, 0, 0, 0);
-    const minuteEnd = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
-    const response: NextResponse = await (handler as (request: Request, userApiKeys: Partial<Record<AIProviderId, string>>, quotaInfo: Awaited<ReturnType<typeof QuotaService.getQuotaInfo>>) => Promise<NextResponse>)(
-      request,
-      {} as Partial<Record<AIProviderId, string>>,
-      { daily: { used: 0, limit: 500, remaining: 499, resetAt: dayEnd.toISOString() }, minute: { used: 1, limit: 20, remaining: 19, resetAt: minuteEnd.toISOString() }, sharedKeysUsed: true }
-    );
-
-    // Add quota headers
-    response.headers.set("X-RateLimit-Limit", "500");
-    response.headers.set("X-RateLimit-Remaining", "499");
-    response.headers.set("X-RateLimit-Reset", Math.ceil(Date.now() / 1000 + 86400).toString());
-
-    return response;
+    const response = await handler(request, userApiKeys, quotaCheck.quota);
+    return attachQuotaHeaders(response, quotaCheck) as NextResponse;
   } catch (error) {
     if (error instanceof Response) {
       // Convert plain Response to NextResponse
@@ -171,8 +155,6 @@ export async function createQuotaAwareAIRequest(
   userId: string,
   userApiKeys: Partial<Record<string, string>>
 ) {
-  const { RetrievalPipeline } = await import("@/features/ai/RetrievalPipeline");
-
   const studyContext = body.context as { studyId?: string } | undefined;
   let chunks = body.chunks as unknown[] | undefined;
 
@@ -214,6 +196,7 @@ export async function withAIQuota(
     // Lê um clone: o corpo original continua disponível para handlers que
     // validam o payload novamente (ex.: diagrams, lab, audio-lesson). Um
     // Request só pode ser consumido uma vez.
+    requireCsrf(request);
     const originalBody = await request.clone().json().catch(() => null);
     const body = prepared && originalBody && typeof originalBody === "object"
       ? { ...originalBody, ...prepared, chunks: undefined, context: undefined }
@@ -252,37 +235,15 @@ export async function withAIQuota(
     const quotaCheck = await consumeSharedQuota(userId, bodyObj);
 
     if (!quotaCheck.allowed) {
-      const dayEnd = new Date();
-      dayEnd.setHours(24, 0, 0, 0);
-      const minuteEnd = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
-      return NextResponse.json(
-        {
-          code: "QUOTA_EXCEEDED",
-          error: "Cota diária de IA compartilhada esgotada. Configure sua própria chave de API (BYOK) em Configurações → IA para continuar sem limites.",
-          quota: {
-            daily: { limit: 500, remaining: 0, resetAt: dayEnd.toISOString() },
-            minute: { limit: 20, remaining: 0, resetAt: minuteEnd.toISOString() },
-          },
-        },
-        { status: 429 }
-      );
+      return quotaExceededResponse(quotaCheck);
     }
 
-    // Add quota headers to response
-    const dayEnd = new Date();
-    dayEnd.setHours(24, 0, 0, 0);
-    const minuteEnd = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
-    const quotaInfo: Awaited<ReturnType<typeof QuotaService.getQuotaInfo>> = { daily: { used: 0, limit: 500, remaining: 499, resetAt: dayEnd.toISOString() }, minute: { used: 1, limit: 20, remaining: 19, resetAt: minuteEnd.toISOString() }, sharedKeysUsed: true };
     const aiRequest = await createQuotaAwareAIRequest(request, body, userId, userApiKeys);
     const response = await (handler as unknown as (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>)(
       request,
       aiRequest
     );
-    response.headers.set("X-RateLimit-Limit", "500");
-    response.headers.set("X-RateLimit-Remaining", "499");
-    response.headers.set("X-RateLimit-Reset", Math.ceil(Date.now() / 1000 + 86400).toString());
-
-    return response;
+    return attachQuotaHeaders(response, quotaCheck);
   } catch (error) {
     if (error instanceof Response) return error as NextResponse | Response;
     const { normalizeAIError } = await import("@/features/ai/AIErrors");

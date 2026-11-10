@@ -1,4 +1,5 @@
 import type { AIProviderId } from "@/features/ai/AIProvider";
+import type { QuotaInfo, QuotaStatus } from "./QuotaService";
 
 /**
  * Regras puras de decisão de quota compartilhada.
@@ -37,4 +38,21 @@ export function needsSharedQuota(
   return providers
     .filter((provider) => !KEYLESS_PROVIDERS.includes(provider))
     .some((provider) => !userApiKeys[provider as AIProviderId]);
+}
+
+export function quotaRateLimitHeaders(quota: QuotaInfo): Record<string, string> {
+  return {
+    "X-RateLimit-Limit": String(quota.daily.limit),
+    "X-RateLimit-Remaining": String(quota.daily.remaining),
+    "X-RateLimit-Reset": String(Math.ceil(Date.parse(quota.daily.resetAt) / 1_000)),
+    "X-StudyAI-Minute-Limit": String(quota.minute.limit),
+    "X-StudyAI-Minute-Remaining": String(quota.minute.remaining),
+    "X-StudyAI-Minute-Reset": String(Math.ceil(Date.parse(quota.minute.resetAt) / 1_000)),
+  };
+}
+
+export function quotaExceededMessage(status: Pick<QuotaStatus, "blockedBy">): string {
+  return status.blockedBy === "minute"
+    ? "Limite de IA compartilhada por minuto atingido. Aguarde o tempo indicado antes de tentar novamente."
+    : "Cota diária de IA compartilhada esgotada. Configure sua própria chave de API (BYOK) em Configurações → IA para continuar.";
 }

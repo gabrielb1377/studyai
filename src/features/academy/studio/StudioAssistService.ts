@@ -1,7 +1,7 @@
 import "server-only";
 
 import { AIService } from "@/features/ai/AIService";
-import type { AIProviderId } from "@/features/ai/AIProvider";
+import type { AIManagerRequest, AIProviderId } from "@/features/ai/AIProvider";
 import { TokenCounter } from "@/features/ai/TokenCounter";
 
 /**
@@ -46,7 +46,7 @@ const instructions: Record<StudioAssistAction, string> = {
 };
 
 export const StudioAssistService = {
-  async assist(request: StudioAssistRequest): Promise<StudioAssistResponse> {
+  prompt(request: StudioAssistRequest) {
     const text = TokenCounter.truncate(request.text ?? "", 3_000);
     const instruction = [
       instructions[request.action],
@@ -55,12 +55,17 @@ export const StudioAssistService = {
       request.context ? `Contexto do documento: ${TokenCounter.truncate(request.context, 800)}` : "",
     ].filter(Boolean).join("\n");
 
+    return `${instruction}\n\n---\n${text}`;
+  },
+
+  async assist(request: StudioAssistRequest, authorizedRequest?: AIManagerRequest): Promise<StudioAssistResponse> {
     const response = await AIService.generate({
+      ...authorizedRequest,
       history: [],
-      message: `${instruction}\n\n---\n${text}`,
-      mode: "automatic",
+      message: this.prompt(request),
+      mode: authorizedRequest?.mode ?? "manual",
       stream: false,
-      apiKeys: request.apiKeys,
+      apiKeys: authorizedRequest?.apiKeys ?? request.apiKeys,
     });
 
     return {

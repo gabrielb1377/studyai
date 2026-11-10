@@ -240,21 +240,23 @@ export function StudioPage() {
                         {study.contents.map((content) => {
                           const type = pendingType[content.id] ?? "document";
                           return (
-                            <li key={content.id} className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/40 p-3">
+                            <li key={content.id} className="flex min-w-0 flex-wrap items-center gap-2 rounded-xl border bg-card/40 p-3">
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium">{content.title}</p>
                                 <p className="truncate text-xs text-muted-foreground">{content.objective}</p>
                               </div>
-                              <Select
-                                value={type}
-                                onValueChange={(value) => setPendingType((current) => ({ ...current, [content.id]: value as StudioDocumentType }))}
-                                options={[
-                                  { value: "document", label: "Documento" },
-                                  { value: "presentation", label: "Apresentação" },
-                                ]}
-                                aria-label={`Tipo de edição para ${content.title}`}
-                                className="h-8 w-40 text-xs"
-                              />
+                              <div className="basis-full sm:w-40 sm:basis-auto">
+                                <Select
+                                  value={type}
+                                  onValueChange={(value) => setPendingType((current) => ({ ...current, [content.id]: value as StudioDocumentType }))}
+                                  options={[
+                                    { value: "document", label: "Documento" },
+                                    { value: "presentation", label: "Apresentação" },
+                                  ]}
+                                  aria-label={`Tipo de edição para ${content.title}`}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
                               <Button type="button" size="sm" onClick={() => open(study.id, content.id, type)}>
                                 <Sparkles className="size-3.5 me-1" aria-hidden="true" /> Abrir no Studio
                               </Button>

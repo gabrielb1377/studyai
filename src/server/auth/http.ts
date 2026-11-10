@@ -34,7 +34,23 @@ export function requireCsrf(request: Request) {
 }
 
 export function readCookie(request: Request, name: keyof typeof authCookies) { return cookie(request, authCookies[name]); }
-export async function jsonBody<T>(request: Request) { try { return await request.json() as T; } catch { throw new Response(JSON.stringify({ error: "JSON_INVALID" }), { status: 400, headers: { "content-type": "application/json" } }); } }
+export async function jsonBody<T>(request: Request, maxBytes?: number) {
+  try {
+    if (maxBytes === undefined) return await request.json() as T;
+    const declared = Number(request.headers.get("content-length") ?? 0);
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Response(JSON.stringify({ error: "PAYLOAD_TOO_LARGE" }), { status: 413, headers: { "content-type": "application/json" } });
+    }
+    const raw = await request.text();
+    if (new TextEncoder().encode(raw).byteLength > maxBytes) {
+      throw new Response(JSON.stringify({ error: "PAYLOAD_TOO_LARGE" }), { status: 413, headers: { "content-type": "application/json" } });
+    }
+    return JSON.parse(raw) as T;
+  } catch (error) {
+    if (error instanceof Response) throw error;
+    throw new Response(JSON.stringify({ error: "JSON_INVALID" }), { status: 400, headers: { "content-type": "application/json" } });
+  }
+}
 
 export function publicOrigin(request: Request) {
   const configured = process.env.APP_URL?.trim();

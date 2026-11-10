@@ -54,12 +54,11 @@ export function TutorMessage({ message, onResponseAction }: { message: TutorMess
         {!isUser && message.metadata && (
           <p className="mt-3 border-t border-current/10 pt-2 text-[10px] opacity-60">
             {message.metadata.provider ?? "IA"}{message.metadata.model ? ` · ${message.metadata.model}` : ""}
-            {message.metadata.inputTokens !== undefined ? ` · Prompt ${message.metadata.inputTokens}` : ""}
-            {message.metadata.outputTokens !== undefined ? ` · Resposta ${message.metadata.outputTokens}` : ""}
-            {message.metadata.contextTokens !== undefined ? ` · Contexto ${message.metadata.contextTokens}` : ""}
-            {message.metadata.chunkTokens !== undefined ? ` · Chunks ${message.metadata.chunkTokens}` : ""}
+            {message.metadata.estimated ? " · uso estimado" : " · uso registrado"}
             {message.metadata.inputTokens !== undefined ? ` · Enviados ${message.metadata.inputTokens}` : ""}
             {message.metadata.outputTokens !== undefined ? ` · Recebidos ${message.metadata.outputTokens}` : ""}
+            {message.metadata.contextTokens !== undefined ? ` · Contexto ${message.metadata.contextTokens}` : ""}
+            {message.metadata.chunkTokens !== undefined ? ` · Chunks ${message.metadata.chunkTokens}` : ""}
             {message.metadata.cached ? " · cache" : ""}
             {message.metadata.fallbackUsed ? " · fallback autorizado" : ""}
           </p>

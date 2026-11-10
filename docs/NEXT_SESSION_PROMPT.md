@@ -1,5 +1,19 @@
 # Prompt reutilizável — próxima sessão
 
+> **Estado atual (9/11/2026):** a seção abaixo substitui as fotografias históricas conflitantes dentro do prompt antigo. Sprint 41 está encerrada localmente com ressalvas. Sprint 42 e a correção 42.1 foram implementadas e validadas localmente sobre `40f3518`, ainda sem commit e sem homologação externa. Leia `docs/SPRINT_42_STATUS.md` antes de continuar.
+
+```text
+Continue o StudyAI em D:\studyai, branch v1.1-development. Confirme o Git antes de agir e preserve integralmente os experimentos S3, package.json, package-lock.json, o gerador de segredos e docs/PROJECT_AUDIT_2026-11-05.md.
+
+Sprint 42: as correções essenciais de segurança e quota estão implementadas e validadas localmente, mas ainda não commitadas. LLM Judge, Academy Studio e todas as mutações com withAIQuota exigem sessão/CSRF/quota; o navegador não envia mais apiKey ao Judge; status de providers é privado; contadores/cabeçalhos de quota refletem valores reais; produção falha fechada sem armazenamento de quota; o Tutor distingue uso registrado de uso estimado. Não houve custo estimado inventado, chamada paga, migration ou acesso externo.
+
+Sprint 42.1 corrigiu o overflow horizontal do Academy Studio: o item de grid/flex tinha tamanho mínimo de 437 px devido a min-width:auto e ao Select w-full. A correção usa min-w-0 no item e basis-full no seletor somente no mobile. Evidência nova: teste mobile repetido 2/2, Academy Studio 12/12 e suíte Sprint 42 4/4. Typecheck e build passaram; lint tem 0 erros e 50 avisos preexistentes; diff-check passou. A matriz Playwright completa não foi executada. Cloud sync/backup/restore/conflito/exclusão 4/4 e Modo Prova 17/17 são evidência anterior da Sprint 42, não repetida na 42.1.
+
+Próximo trabalho: revisar o diff e criar, somente com autorização, um checkpoint local seletivo da Sprint 42/42.1, mantendo experimentos S3 e arquivos não relacionados fora do staging. Não iniciar Sprint 43 automaticamente. Não fazer commit, push, merge, rebase, deploy, migration ou alteração de .env sem autorização explícita.
+```
+
+## Histórico anterior
+
 ```text
 Continue o StudyAI em D:\studyai, branch v1.1-development.
 

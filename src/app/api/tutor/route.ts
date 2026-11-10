@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
-import { ApiKeyService } from "@/server/ai/ApiKeyService";
-import { requireUser } from "@/server/auth/http";
-import { aiProviderIds } from "@/features/ai/AIProvider";
+import { jsonBody } from "@/server/auth/http";
 import { normalizeAIError } from "@/features/ai/AIErrors";
 import {
   isAIModelPreferences,
@@ -22,7 +20,7 @@ import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-valida
 import { TokenCounter } from "@/features/ai/TokenCounter";
 import type { TeacherRequest } from "@/features/teacher/types";
 import { isTeacherRequest } from "@/features/teacher/teacher-validation";
-import { withAIQuota, createQuotaAwareAIRequest } from "@/server/ai/QuotaMiddleware";
+import { withAIQuota } from "@/server/ai/QuotaMiddleware";
 
 export const runtime = "nodejs";
 
@@ -78,7 +76,11 @@ function isTutorRequest(value: unknown): value is TutorRequest {
 
 export async function POST(request: Request) {
   // Clone para validar sem consumir o corpo que `withAIQuota` lerá em seguida.
-  const body: unknown = await request.clone().json().catch(() => null);
+  const parsed = await jsonBody<unknown>(request.clone(), 256 * 1024).catch((error: unknown) => error);
+  if (parsed instanceof Response) {
+    return new NextResponse(parsed.body, { status: parsed.status, headers: parsed.headers });
+  }
+  const body: unknown = parsed;
   if (!isTutorRequest(body)) {
     return NextResponse.json(
       { code: "INVALID_REQUEST", error: "Mensagem ou histórico inválido." },
@@ -109,6 +111,7 @@ export async function POST(request: Request) {
                         ...event.response,
                         usage: {
                           ...event.response.usage,
+                          estimated: event.response.usage?.inputTokens === undefined || event.response.usage?.outputTokens === undefined,
                           inputTokens: event.response.usage?.inputTokens ?? prompt.metrics.promptTokens,
                           outputTokens: event.response.usage?.outputTokens ?? TokenCounter.estimate(event.response.text),
                           totalTokens: event.response.usage?.totalTokens ?? prompt.metrics.promptTokens + TokenCounter.estimate(event.response.text),
@@ -142,6 +145,7 @@ export async function POST(request: Request) {
         ...response,
         usage: {
           ...response.usage,
+          estimated: response.usage?.inputTokens === undefined || response.usage?.outputTokens === undefined,
           inputTokens: response.usage?.inputTokens ?? prompt.metrics.promptTokens,
           outputTokens,
           totalTokens: response.usage?.totalTokens ?? prompt.metrics.promptTokens + outputTokens,

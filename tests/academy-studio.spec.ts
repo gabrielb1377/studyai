@@ -72,6 +72,25 @@ function previewRegion(page: Page) {
   return page.locator('section[aria-label="Pré-visualização"]');
 }
 
+async function horizontalOverflowElements(page: Page) {
+  return page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
+    return Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          element: `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ""}${typeof element.className === "string" && element.className ? `.${element.className.split(/\s+/).slice(0, 4).join(".")}` : ""}`,
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          text: element.innerText?.trim().replace(/\s+/g, " ").slice(0, 100) ?? "",
+        };
+      })
+      .filter((item) => item.width > 0 && (item.left < 0 || item.right > viewportWidth + 1))
+      .slice(0, 20);
+  });
+}
+
 test("o Studio sanitiza HTML e Markdown antes de renderizar o conteúdo", () => {
   const html = markdownToSafeHtml("Texto **seguro**\n\n<script>alert('xss')</script>\n\n<img src=x onerror=\"alert(1)\">");
   expect(html).toContain("seguro");
@@ -314,5 +333,5 @@ test("o Studio permanece utilizável no celular", async ({ page }) => {
 
   await page.goto("/academy/studio");
   await expect(page.getByRole("heading", { name: "Editor visual de materiais" })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(await horizontalOverflowElements(page)).toEqual([]);
 });

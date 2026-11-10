@@ -40,6 +40,17 @@ function configuredPayload(payload: Record<string, unknown>) {
   };
 }
 
+function csrfToken() {
+  if (typeof document === "undefined") return "";
+  return document.cookie
+    .split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith("studyai_csrf="))
+    ?.split("=")
+    .slice(1)
+    .join("=") ?? "";
+}
+
 function clientError(data: AIErrorResponse | null, fallbackMessage: string, status?: number, retryAfter?: number) {
   return new AIClientError(
     data?.error ?? fallbackMessage,
@@ -73,7 +84,7 @@ export const AIClient = {
     try {
       response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken() },
         body: JSON.stringify(configuredPayload(payload)),
         signal: options.signal,
       });
@@ -113,7 +124,7 @@ export const AIClient = {
     try {
       response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken() },
         body: JSON.stringify(configuredPayload({ ...payload, stream: true })),
         signal: options.signal,
       });
