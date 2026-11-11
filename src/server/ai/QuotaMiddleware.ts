@@ -3,14 +3,21 @@
 import { NextResponse } from "next/server";
 import { QuotaService, type QuotaStatus } from "./QuotaService";
 import { requireCsrf, requireUser } from "@/server/auth/http";
-import { aiProviderIds, type AIFallbackConsent, type AIProviderId } from "@/features/ai/AIProvider";
+import {
+  aiProviderIds,
+  type AIFallbackConsent,
+  type AIProviderId,
+  type AIRoutingDecision,
+  type AITaskDescription,
+} from "@/features/ai/AIProvider";
 import { ApiKeyService } from "./ApiKeyService";
 import { AIError } from "@/features/ai/AIErrors";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import { needsSharedQuota, providersToCheckFor, quotaExceededMessage, quotaRateLimitHeaders } from "./quota-policy";
+import { AIRoutingService } from "./AIRoutingService";
 
 export interface QuotaAwareAIRequest {
-  history: Array<{ role: "user" | "assistant"; content: string }>;
+  history: readonly { role: "user" | "assistant"; content: string }[];
   message: string;
   model?: string;
   models?: Record<string, string>;
@@ -22,6 +29,9 @@ export interface QuotaAwareAIRequest {
   requestOwner?: string;
   fallbackPolicy?: "consent";
   fallbackConsent?: AIFallbackConsent;
+  task?: AITaskDescription;
+  routingPolicy?: "smart";
+  routingDecision?: AIRoutingDecision;
 }
 
 const quotaRuntime = globalThis as typeof globalThis & {
@@ -153,7 +163,8 @@ export async function createQuotaAwareAIRequest(
     fallbackConsent?: AIFallbackConsent;
   },
   userId: string,
-  userApiKeys: Partial<Record<string, string>>
+  userApiKeys: Partial<Record<string, string>>,
+  routing?: { task?: AITaskDescription; routingPolicy?: "smart"; promptPrepared?: boolean },
 ) {
   const studyContext = body.context as { studyId?: string } | undefined;
   let chunks = body.chunks as unknown[] | undefined;
@@ -163,13 +174,15 @@ export async function createQuotaAwareAIRequest(
     chunks = retrieved.chunks;
   }
 
-  const prompt = (await import("@/features/ai/PromptBuilder")).PromptBuilder.contextual({
-    question: body.message,
-    history: body.history,
-    studyContext: studyContext as TutorStudyContext | null | undefined,
-    chunks: (chunks ?? []) as unknown as readonly import("@/features/retrieval/RetrievalTypes").RetrievedChunk[],
-    teaching: body.teaching as import("@/features/teacher/types").TeacherRequest | undefined,
-  });
+  const prompt = routing?.promptPrepared
+    ? { history: body.history, message: body.message }
+    : (await import("@/features/ai/PromptBuilder")).PromptBuilder.contextual({
+        question: body.message,
+        history: body.history,
+        studyContext: studyContext as TutorStudyContext | null | undefined,
+        chunks: (chunks ?? []) as unknown as readonly import("@/features/retrieval/RetrievalTypes").RetrievedChunk[],
+        teaching: body.teaching as import("@/features/teacher/types").TeacherRequest | undefined,
+      });
 
   return {
     history: prompt.history,
@@ -184,13 +197,20 @@ export async function createQuotaAwareAIRequest(
     requestOwner: userId,
     fallbackPolicy: body.fallbackPolicy,
     fallbackConsent: body.fallbackConsent,
+    task: routing?.task,
+    routingPolicy: routing?.routingPolicy,
   };
 }
 
 export async function withAIQuota(
   request: Request,
   handler: (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>,
-  prepared?: { history: QuotaAwareAIRequest["history"]; message: string }
+  prepared?: {
+    history: QuotaAwareAIRequest["history"];
+    message: string;
+    task?: AITaskDescription;
+    routingPolicy?: "smart";
+  }
 ): Promise<NextResponse | Response> {
   try {
     // Lê um clone: o corpo original continua disponível para handlers que
@@ -221,13 +241,28 @@ export async function withAIQuota(
       }
     }
 
-    // Determine which providers might be used based on the request
-    // Determine which providers might be used (same rule as ProviderManager)
-    const providersToCheck = providersToCheckFor(bodyObj.mode, bodyObj.provider, bodyObj.fallbackConsent?.provider);
+    const baseAIRequest = await createQuotaAwareAIRequest(request, body, userId, userApiKeys, {
+      task: prepared?.task,
+      routingPolicy: prepared?.routingPolicy,
+      promptPrepared: Boolean(prepared),
+    });
+    let routingQuota: Awaited<ReturnType<typeof QuotaService.getQuotaInfo>> | undefined;
+    if (baseAIRequest.routingPolicy === "smart" && baseAIRequest.mode === "automatic" && !baseAIRequest.fallbackConsent) {
+      try {
+        routingQuota = await QuotaService.getQuotaInfo(userId);
+      } catch {
+        // Quota desconhecida nunca é tratada como ilimitada pelo roteador.
+      }
+    }
+    const aiRequest = await AIRoutingService.resolve(baseAIRequest, routingQuota);
+    const providersToCheck = providersToCheckFor(
+      aiRequest.mode,
+      aiRequest.provider,
+      aiRequest.fallbackConsent?.provider,
+    );
 
     if (!needsSharedQuota(providersToCheck, userApiKeys)) {
       // User has BYOK for all providers that might be used - bypass quota
-      const aiRequest = await createQuotaAwareAIRequest(request, body, userId, userApiKeys);
       return handler(request, aiRequest) as Promise<NextResponse | Response>;
     }
 
@@ -238,7 +273,6 @@ export async function withAIQuota(
       return quotaExceededResponse(quotaCheck);
     }
 
-    const aiRequest = await createQuotaAwareAIRequest(request, body, userId, userApiKeys);
     const response = await (handler as unknown as (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>)(
       request,
       aiRequest

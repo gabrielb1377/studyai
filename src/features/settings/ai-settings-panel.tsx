@@ -148,7 +148,7 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
                 size="sm"
                 variant={mode === item ? "secondary" : "ghost"}
                 aria-pressed={mode === item}
-                disabled={!isReady || item === "automatic"}
+                disabled={!isReady}
                 onClick={() => {
                   setMode(item);
                   AISettings.saveMode(item);
@@ -160,8 +160,8 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
           </div>
           <p className="text-xs text-muted-foreground">
             {mode === "automatic"
-              ? "A troca automática entre provedores está temporariamente indisponível. O provedor escolhido será usado."
-              : "Somente o provedor escolhido será utilizado. A troca automática está temporariamente indisponível."}
+              ? "O Tutor escolhe um modelo compatível e disponível, priorizando execução local ou sua chave. Falhas ainda exigem consentimento para trocar de provider."
+              : "Somente o provider e o modelo escolhidos serão utilizados; nenhuma troca ocorre sem seu consentimento."}
           </p>
         </fieldset>
 

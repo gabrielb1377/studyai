@@ -17,6 +17,7 @@ function keyFor(request: AIManagerRequest, provider: string, model?: string) {
     credentialFingerprint: credential
       ? createHash("sha256").update(credential).digest("hex")
       : undefined,
+    requestOwner: request.requestOwner,
     history: request.history,
     message: request.message,
   })).digest("hex");

@@ -12,7 +12,15 @@ type TutorApiResponse = {
   text?: string;
   error?: string;
   usage?: TutorMessage["metadata"];
-  execution?: { cached?: boolean; fallbackUsed?: boolean };
+  execution?: {
+    cached?: boolean;
+    fallbackUsed?: boolean;
+    routing?: {
+      selection?: "manual" | "automatic";
+      reason?: string;
+      maxOutputTokens?: number;
+    };
+  };
 };
 
 export class TutorRequestError extends Error {
@@ -144,6 +152,9 @@ export const TutorService = {
         model: data.model,
         cached: data.execution?.cached,
         fallbackUsed: data.execution?.fallbackUsed,
+        routingSelection: data.execution?.routing?.selection,
+        routingReason: data.execution?.routing?.reason,
+        maxOutputTokens: data.execution?.routing?.maxOutputTokens,
       },
     };
   },

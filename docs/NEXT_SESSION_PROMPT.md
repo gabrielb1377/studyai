@@ -1,15 +1,17 @@
 # Prompt reutilizável — próxima sessão
 
-> **Estado atual (9/11/2026):** a seção abaixo substitui as fotografias históricas conflitantes dentro do prompt antigo. Sprint 41 está encerrada localmente com ressalvas. Sprint 42 e a correção 42.1 foram implementadas e validadas localmente sobre `40f3518`, ainda sem commit e sem homologação externa. Leia `docs/SPRINT_42_STATUS.md` antes de continuar.
+> **Estado atual (10/11/2026):** a seção abaixo substitui as fotografias históricas conflitantes dentro do prompt antigo. Sprint 42/42.1 está commitada em `de698e4`. Sprint 43 está implementada e validada localmente, ainda sem commit e sem homologação externa. Leia `docs/SPRINT_43_STATUS.md` antes de continuar.
 
 ```text
 Continue o StudyAI em D:\studyai, branch v1.1-development. Confirme o Git antes de agir e preserve integralmente os experimentos S3, package.json, package-lock.json, o gerador de segredos e docs/PROJECT_AUDIT_2026-11-05.md.
 
-Sprint 42: as correções essenciais de segurança e quota estão implementadas e validadas localmente, mas ainda não commitadas. LLM Judge, Academy Studio e todas as mutações com withAIQuota exigem sessão/CSRF/quota; o navegador não envia mais apiKey ao Judge; status de providers é privado; contadores/cabeçalhos de quota refletem valores reais; produção falha fechada sem armazenamento de quota; o Tutor distingue uso registrado de uso estimado. Não houve custo estimado inventado, chamada paga, migration ou acesso externo.
+Sprint 43: AIRouter e AIRoutingService classificam tarefas do Tutor por regras determinísticas, estimam tokens e selecionam modelos disponíveis por capacidade, contexto, credencial e quota conhecida. Manual preserva provider/modelo; automático precisa ser ativado pelo usuário. Quota desconhecida não é ilimitada. O Tutor mostra provider/modelo efetivos, origem manual/automática, motivo, limite de saída e eventual redução de contexto. Cache com modelo explícito inclui proprietário e fingerprint da credencial.
 
-Sprint 42.1 corrigiu o overflow horizontal do Academy Studio: o item de grid/flex tinha tamanho mínimo de 437 px devido a min-width:auto e ao Select w-full. A correção usa min-w-0 no item e basis-full no seletor somente no mobile. Evidência nova: teste mobile repetido 2/2, Academy Studio 12/12 e suíte Sprint 42 4/4. Typecheck e build passaram; lint tem 0 erros e 50 avisos preexistentes; diff-check passou. A matriz Playwright completa não foi executada. Cloud sync/backup/restore/conflito/exclusão 4/4 e Modo Prova 17/17 são evidência anterior da Sprint 42, não repetida na 42.1.
+Fallback não mudou de contrato: falha de provider não chama alternativa sem consentimento; a alternativa autorizada passa novamente pela quota; não existe terceira tentativa e resposta parcial não é reenviada. A integração automática está limitada ao Tutor. Demais consumidores continuam com o comportamento anterior. Preço exato, RAG completo, OCR e multimodal não foram implementados.
 
-Próximo trabalho: revisar o diff e criar, somente com autorização, um checkpoint local seletivo da Sprint 42/42.1, mantendo experimentos S3 e arquivos não relacionados fora do staging. Não iniciar Sprint 43 automaticamente. Não fazer commit, push, merge, rebase, deploy, migration ou alteração de .env sem autorização explícita.
+Evidência atual: matriz consolidada Sprint 43/AI Core/providers/fallback/quotas/Tutor 58/58; Sprint 43 específica 13/13. Typecheck, lint (0 erros/50 avisos preexistentes) e build (48 páginas) passaram. Nenhum provider real, chamada paga, PostgreSQL/S3 externo, migration ou produção foi usado.
+
+Próximo trabalho: revisar o diff e, somente com autorização, criar checkpoint local seletivo da Sprint 43, mantendo experimentos S3 e arquivos não relacionados fora do staging. Não iniciar Sprint 43B automaticamente. Não fazer commit, push, merge, rebase, deploy, migration ou alteração de .env sem autorização explícita.
 ```
 
 ## Histórico anterior
@@ -23,7 +25,7 @@ checkpoint `652ac65`. 41J.1: instrumentação concluída, 3 testes focados
 aprovados. 41J.2: 1 teste existente de persistência aprovado. Total 41J: 4
 testes focados, sem duplicação. Os 107 testes da 41I são históricos. Matriz
 Playwright completa pendente; suporte avançado a múltiplas contas despriorizado
-para uso pessoal. Sprint 42 não iniciada.
+para uso pessoal. Naquela fotografia, a Sprint 42 ainda não havia sido iniciada.
 
 Sprint 41J.1: runner Playwright instrumentado. O `globalSetup` aqueceu 22 rotas
 em 48,7–54,8 s; `rtk` condensou a saída e `rtk proxy` exibiu os logs. Três

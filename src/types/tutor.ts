@@ -35,5 +35,9 @@ export type TutorMessage = {
     contextTokens?: number;
     historyTokens?: number;
     chunkTokens?: number;
+    routingSelection?: "manual" | "automatic";
+    routingReason?: string;
+    maxOutputTokens?: number;
+    contextLimited?: boolean;
   };
 };

@@ -133,7 +133,7 @@ export const ProviderManager = {
       const provider = ProviderRegistry.get(providerId);
       const selectedModel = authorized.model;
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
-      const cached = selectedModel ? null : AIResponseCache.get(cacheKey);
+      const cached = AIResponseCache.get(cacheKey);
       if (cached) {
         return {
           ...cached,
@@ -142,6 +142,7 @@ export const ProviderManager = {
             fallbackUsed: authorized.fallback,
             latencyMs: 0,
             cached: true,
+            routing: request.routingDecision,
           },
         };
       }
@@ -167,6 +168,7 @@ export const ProviderManager = {
             attemptedProviders,
             fallbackUsed: authorized.fallback,
             latencyMs: measured.latencyMs,
+            routing: request.routingDecision,
           },
         };
         AIResponseCache.set(cacheKey, response);
@@ -213,7 +215,7 @@ export const ProviderManager = {
       const fallback = false;
       const selectedModel = request.model ?? request.models?.[providerId];
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
-      const cached = selectedModel ? null : AIResponseCache.get(cacheKey);
+      const cached = AIResponseCache.get(cacheKey);
       if (cached) {
         for (const line of cached.text.match(/.{1,80}(?:\s|$)/g) ?? [cached.text]) {
           yield { type: "delta", text: line };
@@ -222,7 +224,7 @@ export const ProviderManager = {
           type: "done",
           response: {
             ...cached,
-            execution: { attemptedProviders, fallbackUsed: fallback, latencyMs: 0, cached: true },
+            execution: { attemptedProviders, fallbackUsed: fallback, latencyMs: 0, cached: true, routing: request.routingDecision },
           },
         };
         return;
@@ -241,7 +243,7 @@ export const ProviderManager = {
             const latencyMs = Math.round(performance.now() - startedAt);
             const response: AIResponse = {
               ...event.response,
-              execution: { attemptedProviders, fallbackUsed: fallback, latencyMs },
+              execution: { attemptedProviders, fallbackUsed: fallback, latencyMs, routing: request.routingDecision },
             };
             AIResponseCache.set(cacheKey, response);
             const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
@@ -256,7 +258,7 @@ export const ProviderManager = {
             yield { type: "delta", text: line };
           }
           const latencyMs = Math.round(performance.now() - startedAt);
-          const completed = { ...response, execution: { attemptedProviders, fallbackUsed: fallback, latencyMs } };
+          const completed = { ...response, execution: { attemptedProviders, fallbackUsed: fallback, latencyMs, routing: request.routingDecision } };
           AIResponseCache.set(cacheKey, completed);
           const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
           addLog({ provider: providerId, model: response.model, latencyMs, success: true, fallback, tokens });

@@ -21,6 +21,7 @@ import { TokenCounter } from "@/features/ai/TokenCounter";
 import type { TeacherRequest } from "@/features/teacher/types";
 import { isTeacherRequest } from "@/features/teacher/teacher-validation";
 import { withAIQuota } from "@/server/ai/QuotaMiddleware";
+import { AIRouter } from "@/features/ai/AIRouter";
 
 export const runtime = "nodejs";
 
@@ -95,6 +96,12 @@ export async function POST(request: Request) {
     chunks: body.chunks,
     teaching: body.teaching,
   });
+  const task = AIRouter.describeTutorTask({
+    message: body.message,
+    history: body.history,
+    promptTokens: prompt.metrics.promptTokens,
+    contextTokens: prompt.metrics.contextTokens,
+  });
 
   return withAIQuota(request, async (request, aiRequest) => {
     try {
@@ -118,6 +125,7 @@ export async function POST(request: Request) {
                           contextTokens: prompt.metrics.contextTokens,
                           historyTokens: prompt.metrics.compressedHistoryTokens,
                           chunkTokens: prompt.metrics.chunkTokens,
+                          contextLimited: prompt.metrics.removedMessages > 0 || prompt.metrics.removedChunks > 0,
                         },
                       },
                     }
@@ -152,11 +160,17 @@ export async function POST(request: Request) {
           contextTokens: prompt.metrics.contextTokens,
           historyTokens: prompt.metrics.compressedHistoryTokens,
           chunkTokens: prompt.metrics.chunkTokens,
+          contextLimited: prompt.metrics.removedMessages > 0 || prompt.metrics.removedChunks > 0,
         },
       });
     } catch (error) {
       const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
       return NextResponse.json(normalized.body, { status: normalized.status });
     }
+  }, {
+    history: prompt.history,
+    message: prompt.message,
+    task,
+    routingPolicy: "smart",
   });
 }

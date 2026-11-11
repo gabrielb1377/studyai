@@ -1,20 +1,20 @@
 # Handoff atual — StudyAI V1.1
 
-## Estado atual — Sprint 42 (9 de novembro de 2026)
+## Estado atual — Sprint 43 (10 de novembro de 2026)
 
-A Sprint 42 foi implementada localmente sobre o HEAD `40f3518`, sem commit e sem homologação externa. O trabalho corrigiu falhas comprovadas de segurança e contabilização: o LLM Judge não aceita mais chave enviada pelo navegador e exige sessão/CSRF/quota; a assistência do Academy Studio deixou de possuir caminho visitante fora da quota; todas as mutações que passam por `withAIQuota` exigem CSRF; status e inspeção de providers exigem sessão; a quota local de desenvolvimento agora é realmente contabilizada e a ausência de PostgreSQL em produção falha fechada; cabeçalhos e mensagens de limite refletem os contadores reais e distinguem bloqueio diário de bloqueio por minuto. O Tutor informa se os tokens exibidos foram registrados pelo provider ou estimados localmente, sem estimar custo financeiro.
+A Sprint 42/42.1 está registrada no checkpoint local `de698e4`. Sobre esse HEAD, a Sprint 43 implementou o **AI Smart Routing** no fluxo do Tutor, ainda sem commit e sem homologação externa. O roteador recebe uma tarefa tipada, usa classificação determinística sem segunda chamada de IA, estima tokens, aplica limite de saída por categoria e filtra candidatos por disponibilidade conhecida, capacidade, janela de contexto e quota. O desempate é estável; sem preço confiável, a eficiência considera apenas impacto verificável da credencial: execução local, BYOK e quota compartilhada, nessa ordem.
 
-Na Sprint 42.1, o overflow mobile do Academy Studio foi localizado no item de grid/flex que continha o `Select`: `min-width:auto`, wrapper `w-full`, conteúdo flexível, botão e gaps elevavam o tamanho mínimo para 437 px em um viewport de 360 px. `min-w-0` no item e `basis-full` no seletor abaixo de `sm` corrigiram a causa sem esconder overflow globalmente e sem alterar o desktop. O teste mobile passou duas vezes, a suíte Academy Studio passou 12/12 e a suíte específica da Sprint 42 passou 4/4.
+O modo manual continua preservando provider e modelo escolhidos. O modo automático agora pode ser habilitado explicitamente em Configurações e está integrado somente ao Tutor. Quota compartilhada desconhecida nunca é tratada como ilimitada. Se nenhum candidato for elegível, o fluxo falha de forma explicável; não troca provider para esconder o erro. Falha após a escolha inicial continua usando o mecanismo da 41H: oferta de alternativa, consentimento explícito, nova verificação de quota, uma única alternativa e nenhuma terceira tentativa. Resposta parcial não é reenviada.
 
-Validação: `tests/sprint42-security-quota.spec.ts` **4/4**; Academy Studio **12/12**; teste mobile repetido **2/2**. A rodada relacionada anterior à correção teve 57 aprovados e a única falha mobile agora corrigida. Todos os 17 testes de Modo Prova, os 4 de cloud sync, os 10 de quota e os 12 do fallback central permanecem como evidência anterior da Sprint 42 e não foram repetidos na 42.1. Typecheck e build passaram; lint passou com 0 erros e 50 avisos preexistentes; `git diff --check` passou. A matriz Playwright completa não foi executada.
+O Tutor mostra provider/modelo efetivos, escolha manual ou automática, motivo, limite de saída e tokens registrados ou estimados. Quando a compressão existente remove histórico ou chunks, a resposta informa que o contexto foi reduzido aos trechos mais relevantes. Respostas idênticas voltaram a aproveitar cache também com modelo explícito; a chave inclui proprietário, provider, modelo e fingerprint da credencial para não cruzar contas.
 
-Persistência, backup/restore, fila offline, conflito, exclusão sincronizada e isolamento foram cobertos pelos quatro testes focados de `cloud-sync.spec.ts`, todos aprovados com backend mockado/local. O Modo Prova continuou sem gabarito no payload inicial, com ownership e correção no servidor; não houve alteração de schema nem persistência de `examId`/`studyId`. Providers reais, PostgreSQL/S3 externos, Vercel e custos reais não foram acessados.
+Validação atual: matriz consolidada de Sprint 43 + AI Core + providers + fallback + quotas + Tutor **58/58**, sem falhos ou ignorados; os testes específicos da Sprint 43 representam **13/13** desse total. `npm run typecheck` passou; `npm run lint` passou com 0 erros e 50 avisos preexistentes; `npm run build` passou e gerou 48 páginas. `git diff --check` será repetido no fechamento. Não houve chamada paga, provider real, PostgreSQL/S3 externo, migration, alteração de `.env` ou produção.
 
-Estado Git desta fotografia: branch `v1.1-development`, HEAD base `40f351846a600d570a35c6edd8005c00d0ad1874`; nenhuma alteração da Sprint 42 foi commitada. Os experimentos S3, `package.json`, `package-lock.json`, gerador de segredos e auditoria experimental permanecem fora do escopo e preservados. Consulte `docs/SPRINT_42_STATUS.md` para a lista de arquivos e evidências. A Sprint 42 está pronta para checkpoint local seletivo; Sprint 43 não foi iniciada.
+Estado Git desta fotografia: branch `v1.1-development`, HEAD base `de698e46d0b42d5e3cf1e67d92e5d61e055e6abc`, branch local 33 commits à frente da referência remota conhecida. As alterações da Sprint 43 estão no working tree e não foram commitadas. Os experimentos S3, `package.json`, `package-lock.json`, gerador de segredos e auditoria experimental permanecem preservados e fora do escopo. Consulte `docs/SPRINT_43_STATUS.md` para arquitetura, arquivos, evidências e limitações.
 
-## Estado definitivo da Sprint 41
+## Estado definitivo da Sprint 41 — registro histórico
 
-**Encerrada localmente com ressalvas; não homologada em produção.** 41G e 41H foram implementadas e validadas localmente; 41I.A–E concluídas localmente, com checkpoint final `652ac65`. Na 41J.1, instrumentação concluída e 3 testes focados aprovados; na 41J.2, 1 teste existente de persistência aprovado. Total 41J: **4 testes focados aprovados**, sem dupla contagem. Os 107 testes da 41I são evidência histórica e não foram repetidos. Matriz Playwright completa e homologação externa pendentes. Suporte avançado a múltiplas contas despriorizado para uso pessoal atual. Sprint 42 não iniciada.
+**Encerrada localmente com ressalvas; não homologada em produção.** 41G e 41H foram implementadas e validadas localmente; 41I.A–E concluídas localmente, com checkpoint final `652ac65`. Na 41J.1, instrumentação concluída e 3 testes focados aprovados; na 41J.2, 1 teste existente de persistência aprovado. Total 41J: **4 testes focados aprovados**, sem dupla contagem. Os 107 testes da 41I são evidência histórica e não foram repetidos. Matriz Playwright completa e homologação externa pendentes. Suporte avançado a múltiplas contas despriorizado para uso pessoal atual. Naquela fotografia, a Sprint 42 ainda não havia sido iniciada.
 
 Atualizado em **9 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
 
@@ -108,17 +108,16 @@ Resultado final sem duplicar casos: **90 testes distintos aprovados** — 69 ló
 
 - Projeto: `D:\studyai`.
 - Branch: `v1.1-development`.
-- HEAD base: `45ac9da`, checkpoint local das Sprints 41I.B/B.1/C/D. A 41I.E está validada localmente; seu checkpoint só será confirmado após a verificação do commit efetivo.
-- Referência remota conhecida localmente: `origin/v1.1-development` em `331bc15`; a branch local aparece **30 commits à frente**. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
-- Nenhum arquivo está staged. Nenhum commit foi criado nas Sprints 41H/41H.1.
+- HEAD base: `de698e46d0b42d5e3cf1e67d92e5d61e055e6abc`, checkpoint local das Sprints 42/42.1.
+- A branch local aparece **33 commits à frente** de `origin/v1.1-development`. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
+- Nenhum arquivo está staged. Nenhum commit foi criado na Sprint 43.
 
 Alterações rastreadas preservadas:
 
 - `package.json` e `package-lock.json` — dependência do presigner S3.
 - `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts` e `src/server/storage/ObjectStorage.ts` — upload direto experimental.
-- Núcleo de IA, quota, rota e interface do Tutor — implementação não commitada da Sprint 41H.
-- `tests/ai-provider-sprint40.spec.ts`, `tests/quota-policy.spec.ts` e os novos testes `sprint41h-*` — cobertura mockada e de navegador da Sprint 41H.
-- `src/features/account/AuthProvider.tsx`, `src/features/account/SessionLocalData.ts`, `tests/helpers/experience.ts` e `tests/sprint41g3d-session-isolation.spec.ts` — correção e regressão da identidade offline na 41H.1.
+- Núcleo de IA, quota, rota, configurações e interface do Tutor — implementação não commitada da Sprint 43, detalhada em `docs/SPRINT_43_STATUS.md`.
+- `tests/ai-core.spec.ts` — regressão atualizada para o modo automático agora autorizado.
 
 Arquivos não rastreados preservados:
 
@@ -126,7 +125,8 @@ Arquivos não rastreados preservados:
 - `src/app/api/files/[id]/direct/route.ts`.
 - `tests/deploy-security.spec.ts`.
 - `tests/direct-upload.spec.ts`.
-- `tests/sprint41h-ai-fallback.spec.ts` e `tests/sprint41h-tutor-consent.spec.ts` pertencem à 41H e ainda não foram commitados.
+- `docs/PROJECT_AUDIT_2026-11-05.md`.
+- `src/features/ai/AIRouter.ts`, `src/server/ai/AIRoutingService.ts`, `tests/sprint43-ai-routing.spec.ts` e `docs/SPRINT_43_STATUS.md` pertencem à Sprint 43.
 
 ## Arquitetura confirmada
 
@@ -186,19 +186,16 @@ Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produ�
 
 ## Riscos e bloqueios
 
-1. Manter o gate PostgreSQL: loopback, banco descartável comprovado, ambiente não produtivo e `STUDYAI_ALLOW_LOCAL_DB_TESTS=1`.
-2. Repetir a regressão em aparelho móvel físico e manter a observação de que namespaces locais não são fronteira contra scripts da mesma origem.
-3. Revisar e, mediante autorização, criar checkpoint local isolado das Sprints 41H/41H.1 sem misturar upload direto.
-4. Investigar e estabilizar as intermitências do runner cloud sem mascará-las com retries.
-5. Manter o upload direto fora de publicação até revisão e testes; ele continua experimental e não rastreado em parte.
-6. Estender o contrato consentido aos demais fluxos de IA somente após validar o Tutor com provedores reais; hoje eles permanecem deliberadamente sem fallback.
-7. Tornar a idempotência de fallback durável entre instâncias serverless antes de depender dela para garantia financeira global.
-8. Decidir em etapa autorizada se tentativas protegidas precisam persistir `examId`/`studyId`; hoje elas não podem entrar no resumo de uma prova específica com segurança.
-9. Validar Academy, IA, PostgreSQL e S3 em homologação autorizada.
+1. Homologar disponibilidade, catálogos de modelos e comportamento do roteamento com providers reais somente em etapa autorizada; os testes atuais usam mocks.
+2. Preços exatos não são comparados porque não há catálogo confiável e estável no projeto. Nenhuma economia percentual é prometida.
+3. Academy, Quiz, Flashcards, resumos, Lab, diagramas e áudio ainda usam o comportamento anterior; a migração gradual ficou para trabalho posterior.
+4. Fallback e deduplicação autorizada continuam com idempotência em memória por instância; garantia global em serverless exige armazenamento compartilhado.
+5. Multimodal permanece sem candidato elegível no transporte atual. OCR/RAG completo e Sprint 43B não foram antecipados.
+6. Manter o upload direto S3 fora de publicação até revisão própria; ele continua experimental e não faz parte da Sprint 43.
 
 ## Próximo trabalho recomendado
 
-Revisar o diff da **41I.E** e, somente mediante autorização posterior, criar o checkpoint final local da Sprint 41I sem misturar upload direto. Não iniciar a Sprint 42 automaticamente. A homologação de Academy/IA, PostgreSQL e S3 continua dependente de ambiente e autorização próprios.
+Revisar seletivamente o diff da **Sprint 43** e, somente mediante autorização posterior, criar um checkpoint local sem misturar os experimentos S3. Não iniciar a Sprint 43B automaticamente. A homologação de IA real continua dependente de autorização e ambiente próprios.
 
 ## Comandos e documentação
 
@@ -217,4 +214,5 @@ Não executar `npm run db:migrate` sem banco não produtivo identificado e autor
 - `docs/SPRINT_41_STATUS.md` — status e evidências da Sprint 41.
 - `docs/SPRINT_41G_SECURITY_AUDIT.md` — riscos de isolamento e Modo Prova.
 - `docs/ROADMAP_V1_2.md` — roadmap reconciliado.
+- `docs/SPRINT_43_STATUS.md` — arquitetura, testes e limitações do Smart Routing.
 - `docs/NEXT_SESSION_PROMPT.md` — prompt de continuidade.

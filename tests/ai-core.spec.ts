@@ -93,12 +93,14 @@ test("Provider Manager mostra health e envia o modelo Ollama salvo pelo AI Core"
     .toMatchObject({ version: 3, mode: "manual", provider: "ollama", models: { ollama: "qwen3:8b" } });
 });
 
-test("troca automática fica indisponível sem consentimento e Dashboard mantém estatísticas", async ({ page }) => {
+test("seleção automática pode ser ativada e Dashboard mantém estatísticas", async ({ page }) => {
   await enableAdvancedMode(page);
   await mockManager(page);
   await page.goto("/configuracoes");
   await page.getByRole("button", { name: "IA", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Automático" })).toBeDisabled();
+  await page.getByRole("button", { name: "Automático" }).click();
+  await expect(page.getByRole("button", { name: "Automático" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText(/O Tutor escolhe um modelo compatível/)).toBeVisible();
   await expect(page.getByText(/Provider atual:/)).toContainText("gemini");
   await expect(page.getByLabel("Provider de IA")).toBeEnabled();
 
@@ -109,5 +111,5 @@ test("troca automática fica indisponível sem consentimento e Dashboard mantém
   await expect(diagnostics).toContainText("1.234");
 
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("studyai:ai-settings") ?? "null")))
-    .toMatchObject({ version: 3, mode: "manual" });
+    .toMatchObject({ version: 3, mode: "automatic" });
 });

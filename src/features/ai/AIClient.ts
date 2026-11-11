@@ -31,11 +31,13 @@ export class AIClientError extends Error {
 function configuredPayload(payload: Record<string, unknown>) {
   const settings = AISettings.load();
   const provider = typeof payload.provider === "string" ? payload.provider : settings.provider;
+  const mode = payload.mode ?? settings.mode;
+  const explicitModel = typeof payload.model === "string" ? payload.model : undefined;
   return {
     ...payload,
-    mode: payload.mode ?? settings.mode,
+    mode,
     provider,
-    model: payload.model ?? settings.models[provider as keyof typeof settings.models],
+    model: explicitModel ?? (mode === "manual" ? settings.models[provider as keyof typeof settings.models] : undefined),
     models: payload.models ?? settings.models,
   };
 }

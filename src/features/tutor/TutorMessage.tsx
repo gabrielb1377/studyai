@@ -59,6 +59,10 @@ export function TutorMessage({ message, onResponseAction }: { message: TutorMess
             {message.metadata.outputTokens !== undefined ? ` · Recebidos ${message.metadata.outputTokens}` : ""}
             {message.metadata.contextTokens !== undefined ? ` · Contexto ${message.metadata.contextTokens}` : ""}
             {message.metadata.chunkTokens !== undefined ? ` · Chunks ${message.metadata.chunkTokens}` : ""}
+            {message.metadata.routingSelection ? ` · escolha ${message.metadata.routingSelection === "automatic" ? "automática" : "manual"}` : ""}
+            {message.metadata.routingReason ? ` · ${message.metadata.routingReason}` : ""}
+            {message.metadata.maxOutputTokens !== undefined ? ` · Limite de saída ${message.metadata.maxOutputTokens}` : ""}
+            {message.metadata.contextLimited ? " · contexto reduzido aos trechos mais relevantes" : ""}
             {message.metadata.cached ? " · cache" : ""}
             {message.metadata.fallbackUsed ? " · fallback autorizado" : ""}
           </p>
