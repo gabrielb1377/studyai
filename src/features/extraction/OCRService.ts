@@ -76,6 +76,7 @@ async function recognizeSource(
   cancelled = false;
   let worker: Awaited<ReturnType<typeof getWorker>> | undefined;
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
 
   try {
     worker = await getWorker(options.onProgress);
@@ -86,7 +87,12 @@ async function recognizeSource(
         reject(new Error("O reconhecimento excedeu o tempo limite de 3 minutos nesta página."));
       }, OCR_LIMITS.pageTimeoutMs);
     });
-    const result = await Promise.race([recognition, timeoutPromise]);
+    const cancellation = new Promise<never>((_, reject) => {
+      onAbort = () => reject(abortError());
+      options.signal?.addEventListener("abort", onAbort, { once: true });
+      if (options.signal?.aborted) onAbort();
+    });
+    const result = await Promise.race([recognition, timeoutPromise, cancellation]);
     if (options.signal?.aborted || cancelled) throw abortError();
     return {
       text: normalizeText(result.data.text),
@@ -101,6 +107,7 @@ async function recognizeSource(
     throw new Error(safeMessage(error));
   } finally {
     if (timeout) clearTimeout(timeout);
+    if (onAbort) options.signal?.removeEventListener("abort", onAbort);
     currentProgress = undefined;
     cancelled = false;
   }

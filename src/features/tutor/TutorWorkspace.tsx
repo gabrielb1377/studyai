@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Bot, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,8 @@ import { SummaryService } from "@/features/summaries/services/SummaryService";
 import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
 import { useTutor } from "./hooks/useTutor";
 import { TutorService } from "./services/TutorService";
+import { takeReviewedTutorDraft } from "./services/ReviewedTutorDraft";
+import { useAuth } from "@/features/account/AuthProvider";
 import { TutorComposer } from "./TutorComposer";
 import { TutorConversation } from "./TutorConversation";
 import { TutorSidebar } from "./TutorSidebar";
@@ -29,6 +31,7 @@ import type { TeacherAction } from "@/features/teacher/types";
 import type { TeacherAudioLessonPreferences, RateOption } from "@/features/teacher/types";
 
 export function TutorWorkspace({ compact = false, instanceId, studyId }: { compact?: boolean; instanceId?: string; studyId?: string } = {}) {
+  const auth = useAuth();
   const {
     activeConversation,
     activeConversationId,
@@ -57,6 +60,19 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const teacher = useTeacher();
   const setTeacherMode = teacher.setMode;
+  const draftSession = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (auth.isLoading) {
+      draftSession.current = null;
+      setDraft("");
+      return;
+    }
+    const owner = auth.session?.user.id ?? "offline-session";
+    if (draftSession.current === owner) return;
+    draftSession.current = owner;
+    setDraft(compact ? "" : takeReviewedTutorDraft() ?? "");
+  }, [compact, auth.isLoading, auth.session?.user.id]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("modo") === "professor") setTeacherMode("teacher");
@@ -64,7 +80,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
 
   const startNewConversation = () => {
     createConversation();
-    setDraft("");
+    if (activeConversation) setDraft("");
   };
 
   const openRename = (conversation: TutorConversationType) => {

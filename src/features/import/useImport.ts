@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
 import { OCRService } from "@/features/extraction/OCRService";
+import { OCR_LIMITS } from "@/features/ocr/limits";
 import type { OcrMode } from "@/features/extraction/ExtractionTypes";
 import { OrganizationService } from "@/features/organization/OrganizationService";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
@@ -19,6 +20,14 @@ import {
 
 type AddFilesResult = { unsupported: string[]; duplicates: string[] };
 type DuplicateAction = "replace" | "ignore" | "copy";
+const imageExtensions = new Set(["png", "jpg", "jpeg", "webp"]);
+
+function withinImportLimits(file: File) {
+  const extension = getFileExtension(file.name);
+  if (imageExtensions.has(extension)) return file.size <= OCR_LIMITS.maxImageBytes;
+  if (extension === "pdf") return file.size <= OCR_LIMITS.maxDocumentBytes;
+  return true;
+}
 
 export function useImport() {
   const [files, setFiles] = useState<ImportFile[]>([]);
@@ -36,7 +45,9 @@ export function useImport() {
 
   async function addFiles(incoming: File[]): Promise<AddFilesResult> {
     const unsupported = incoming.filter((file) => !isSupportedFile(file));
-    const supported = incoming.filter(isSupportedFile);
+    const recognized = incoming.filter(isSupportedFile);
+    const oversized = recognized.filter((file) => !withinImportLimits(file));
+    const supported = recognized.filter(withinImportLimits);
     const queuedIds = new Set(files.map(({ file }) => getFileIdentity(file)));
     const queuedHashes = new Set(files.flatMap((item) => item.contentHash
       ? [`${item.extension}:${item.contentHash}`]
@@ -105,6 +116,9 @@ export function useImport() {
     if (unique.length > 0) setPhase("idle");
 
     const messages = [];
+    if (oversized.length) {
+      messages.push(`Arquivos acima do limite (PDF: 150 MB, imagem: 40 MB): ${oversized.map((file) => file.name).join(", ")}`);
+    }
     if (unsupported.length) {
       messages.push(
         `${unsupported.length} ${unsupported.length === 1 ? "arquivo não compatível foi ignorado" : "arquivos não compatíveis foram ignorados"}`,

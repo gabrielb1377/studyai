@@ -2,6 +2,7 @@ import { NotesService } from "@/features/notes/NotesService";
 import { StudyEngine } from "@/features/study/services/StudyEngine";
 import { SummaryStorage } from "@/features/summaries/services/SummaryStorage";
 import { ContentStorage } from "@/features/extraction/ContentStorage";
+import { contentNeedsTutorReview } from "@/features/ocr/exercise-review";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import { FlashcardService } from "@/features/flashcards/FlashcardService";
 import { QuizService } from "@/features/quiz/QuizService";
@@ -33,8 +34,11 @@ export const TutorContextService = {
       .filter((note) => note.studyId === study.studyId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(({ title, content }) => ({ title, content }));
-    const extracted = storedContents.records
-      .filter((record) => record.studyId === study.studyId && record.status === "extracted")
+    const studyContents = storedContents.records.filter((record) =>
+      record.studyId === study.studyId || study.materialIds.includes(record.fileId));
+    const pendingReview = studyContents.some(contentNeedsTutorReview);
+    const extracted = studyContents
+      .filter((record) => record.status === "extracted" && !contentNeedsTutorReview(record))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
     const knowledge = KnowledgeEngine.calculate(study, profile, flashcards, quizzes.results);
@@ -49,9 +53,9 @@ export const TutorContextService = {
 
     return {
       studyId: study.studyId,
-      title: study.title,
-      subject: study.subject,
-      topic: study.title,
+      title: pendingReview ? "Estudo com extração pendente de revisão" : study.title,
+      subject: pendingReview ? "Não confirmada" : study.subject,
+      topic: pendingReview ? "Não confirmado" : study.title,
       status: study.status,
       progress: study.progress,
       learning: {
@@ -78,7 +82,7 @@ export const TutorContextService = {
             chapterCount: extracted.metadata.chapters?.length ?? 0,
             chapters: (extracted.metadata.chapters ?? []).map(({ title, marker, page, slide }) => ({ title, marker, page, slide })),
           }
-        : study.initialSummary
+        : !pendingReview && study.initialSummary
           ? {
               title: study.detectedTitle,
               subject: study.detectedSubject,

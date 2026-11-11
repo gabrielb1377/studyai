@@ -1,5 +1,9 @@
 # Handoff atual — StudyAI V1.1
 
+## Sprint 43B — OCR e revisão de exercícios
+
+Trabalho local sobre `d3e575d`. A Biblioteca reutiliza a revisão por página, com prévia determinística das questões, indicação de símbolos a conferir e rascunho confirmado para o Tutor. Consulte [o status da Sprint 43B](docs/SPRINT_43B_STATUS.md) para validação e limites. A Sprint 44A ainda não foi iniciada.
+
 ## Estado atual — Sprint 43 (10 de novembro de 2026)
 
 A Sprint 42/42.1 está registrada no checkpoint local `de698e4`. Sobre esse HEAD, a Sprint 43 implementou o **AI Smart Routing** no fluxo do Tutor, ainda sem commit e sem homologação externa. O roteador recebe uma tarefa tipada, usa classificação determinística sem segunda chamada de IA, estima tokens, aplica limite de saída por categoria e filtra candidatos por disponibilidade conhecida, capacidade, janela de contexto e quota. O desempate é estável; sem preço confiável, a eficiência considera apenas impacto verificável da credencial: execução local, BYOK e quota compartilhada, nessa ordem.

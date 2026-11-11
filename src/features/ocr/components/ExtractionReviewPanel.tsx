@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { prepareReviewedTutorDraft } from "@/features/tutor/services/ReviewedTutorDraft";
+import { detectExercises, uncertainExtractionLines } from "../exercise-review";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -139,8 +142,9 @@ function TableEditor({ table, disabled, onSave }: {
 }
 
 export function ExtractionReviewPanel({ materialId }: { materialId?: string }) {
+  const router = useRouter();
   const { materials } = useMaterials();
-  const material = materials.find((item) => item.id === materialId) ?? materials[0];
+  const material = materialId ? materials.find((item) => item.id === materialId) : materials[0];
   const { record, isLoading, error, setRecord } = useExtractionRecord(material?.fileId);
   const pages = useMemo(() => record?.pages ?? [], [record]);
   const [selected, setSelected] = useState<number | undefined>(undefined);
@@ -163,7 +167,7 @@ export function ExtractionReviewPanel({ materialId }: { materialId?: string }) {
 
   useEffect(() => {
     setDraft(page?.text ?? "");
-  }, [page?.page, page?.text]);
+  }, [material?.id, page?.page, page?.text]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -321,6 +325,20 @@ export function ExtractionReviewPanel({ materialId }: { materialId?: string }) {
   const warnings = pipeline?.warnings ?? [];
   const pendingPages = pages.filter((item) => item.status !== "ready" || item.needsOcr).map((item) => item.page);
   const draftDirty = draft !== page.text;
+  const exercises = detectExercises(draft, page.page);
+  const uncertainLines = uncertainExtractionLines(draft);
+  const tutorDraft = `Explique o exercício passo a passo, identifique os conceitos e sinalize ambiguidades sem completar dados ausentes.\n\nFonte revisada: ${material.name}, página ${page.page}.\n\n${draft.trim()}`;
+  const draftTooLong = tutorDraft.length > 12_000;
+
+  function openTutorDraft() {
+    if (!draft.trim() || draftTooLong) return;
+    try {
+      prepareReviewedTutorDraft(tutorDraft);
+      router.push("/tutor");
+    } catch {
+      setFailure("A sessão mudou. Abra novamente o material para continuar.");
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -497,6 +515,24 @@ export function ExtractionReviewPanel({ materialId }: { materialId?: string }) {
               <summary className="cursor-pointer text-xs font-medium">Ver extração original da máquina</summary>
               <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{page.originalText || "Sem texto extraído."}</pre>
             </details>
+            <section aria-label="Exercícios na página" className="space-y-2 rounded-lg border p-3 text-sm">
+              {uncertainLines.length > 0 ? <p className="text-amber-700 dark:text-amber-300">
+                Confira as fórmulas ou símbolos no original. Linhas para revisar: {uncertainLines.slice(0, 12).join(", ")}{uncertainLines.length > 12 ? "…" : ""}.
+              </p> : null}
+              {exercises.length === 0 ? <p>Estrutura de exercício não confirmada. Revise o texto acima.</p> :
+                exercises.map((exercise) => (
+                  <details key={exercise.firstLine}>
+                    <summary className="cursor-pointer">Questão {exercise.number} · página {exercise.page} · linhas {exercise.firstLine}–{exercise.lastLine}</summary>
+                    <p className="whitespace-pre-wrap break-words">{exercise.statement}</p>
+                    <ul>{exercise.alternatives.map((option) => <li key={option.label} className="whitespace-pre-wrap break-words">{option.label}) {option.text}</li>)}</ul>
+                  </details>
+                ))}
+              <p className="text-xs text-muted-foreground">Confira o texto com o original. O Tutor abre com um rascunho editável e só recebe o texto ao clicar em Enviar.</p>
+              {draftTooLong ? <p>Reduza o rascunho a um trecho de até 12.000 caracteres para usar no Tutor.</p> : null}
+              <Button type="button" variant="outline" disabled={busy !== null || !draft.trim() || draftTooLong} onClick={openTutorDraft}>
+                Confirmar texto e abrir Tutor
+              </Button>
+            </section>
           </section>
         </div>
       </Card>

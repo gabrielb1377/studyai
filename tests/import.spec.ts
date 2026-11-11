@@ -16,11 +16,11 @@ async function createOoxmlFixture(path: string, text: string) {
   return archive.generateAsync({ type: "nodebuffer" });
 }
 
-function createScannedPdf(image: Buffer, width: number, height: number) {
+function createScannedPdf(image: Buffer, width: number, height: number, mixed = false) {
   const content = Buffer.from(`q ${width} 0 0 ${height} 0 0 cm /Im0 Do Q`);
   const objects = [
     Buffer.from("<< /Type /Catalog /Pages 2 0 R >>"),
-    Buffer.from("<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+    Buffer.from(mixed ? "<< /Type /Pages /Kids [6 0 R 3 0 R] /Count 2 >>" : "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
     Buffer.from(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] ` +
       "/Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>",
@@ -39,6 +39,14 @@ function createScannedPdf(image: Buffer, width: number, height: number) {
       Buffer.from("\nendstream"),
     ]),
   ];
+  if (mixed) {
+    const native = "BT /F1 18 Tf 20 100 Td (Texto selecionavel de algoritmos e estruturas de dados.) Tj ET";
+    objects.push(
+      Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /Font << /F1 7 0 R >> >> /Contents 8 0 R >>`),
+      Buffer.from("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"),
+      Buffer.from(`<< /Length ${native.length} >>\nstream\n${native}\nendstream`),
+    );
+  }
   const parts = [Buffer.from("%PDF-1.4\n")];
   const offsets = [0];
   for (const [index, object] of objects.entries()) {
@@ -197,7 +205,8 @@ test("reimporta arquivo ausente localmente sem duplicar o material restaurado", 
 
   await page.evaluate(async (id) => {
     const root = await navigator.storage.getDirectory();
-    const directory = await root.getDirectoryHandle("studyai-materials");
+    const base = await root.getDirectoryHandle("studyai-materials");
+    const directory = await base.getDirectoryHandle("user-offline-session");
     await directory.removeEntry(id);
   }, original!.id);
   await page.goto("/importar");
@@ -211,7 +220,8 @@ test("reimporta arquivo ausente localmente sem duplicar o material restaurado", 
   expect(restoredMaterials.find((material) => material.name === name)?.id).toBe(original!.id);
   const recoveredContent = await page.evaluate(async (id) => {
     const root = await navigator.storage.getDirectory();
-    const directory = await root.getDirectoryHandle("studyai-materials");
+    const base = await root.getDirectoryHandle("studyai-materials");
+    const directory = await base.getDirectoryHandle("user-offline-session");
     return (await (await directory.getFileHandle(id)).getFile()).text();
   }, original!.id);
   expect(recoveredContent).toBe(content);
@@ -264,7 +274,7 @@ test("aceita imagens e formatos adicionais de áudio", async ({ page }) => {
   await expect(page.locator('p[role="alert"]')).toHaveCount(0);
 });
 
-test("executa OCR local em uma imagem e indexa o texto reconhecido", async ({ page }) => {
+test("executa OCR local em PNG, JPEG, PDF escaneado e somente na página digitalizada de PDF misto", async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 700, height: 180 });
   await page.setContent(
@@ -277,13 +287,15 @@ test("executa OCR local em uma imagem e indexa o texto reconhecido", async ({ pa
   await page.goto("/importar");
   await page.getByLabel("Selecionar arquivos do dispositivo").setInputFiles([
     { name: "quadro.png", mimeType: "image/png", buffer: image },
+    { name: "foto.jpg", mimeType: "image/jpeg", buffer: scannedImage },
     { name: "digitalizado.pdf", mimeType: "application/pdf", buffer: scannedPdf },
+    { name: "misto.pdf", mimeType: "application/pdf", buffer: createScannedPdf(scannedImage, 700, 180, true) },
   ]);
 
   await page.getByRole("button", { name: "Importar", exact: true }).click();
   await expect(
     page.getByText(/^(Extraído|Erro)$/),
-  ).toHaveCount(2, { timeout: 150_000 });
+  ).toHaveCount(4, { timeout: 150_000 });
 
   const extractionErrors = (await readIndexedDBStore<Array<{ status: string; error?: string }>[number]>(page, "contents"))
     .filter((record) => record.status === "error").map((record) => record.error);
@@ -300,7 +312,7 @@ test("executa OCR local em uma imagem e indexa o texto reconhecido", async ({ pa
     (record: { fileType: string }) => record.fileType === "png",
   )!;
   const pdfRecord = result.extraction.find(
-    (record: { fileType: string }) => record.fileType === "pdf",
+    (record) => record.metadata.name === "digitalizado.pdf",
   )!;
   expect(imageRecord).toMatchObject({
     fileType: "png",
@@ -314,16 +326,23 @@ test("executa OCR local em uma imagem e indexa o texto reconhecido", async ({ pa
     metadata: { ocrPerformed: true, pageCount: 1 },
   });
   expect(pdfRecord.extractedText.toUpperCase()).toContain("ALGORITMOS");
-  expect(result.chunks).toHaveLength(2);
-  expect(result.embeddings).toHaveLength(2);
+  const mixed = result.extraction.find((record) => record.metadata.name === "misto.pdf");
+  expect(mixed?.pages?.map(({ page, method }) => ({ page, method }))).toEqual([
+    { page: 1, method: "native" }, { page: 2, method: "ocr" },
+  ]);
+  expect(mixed?.pages?.[0].text).toContain("Texto selecionavel");
+  expect(mixed?.pages?.[1].text.toUpperCase()).toContain("ALGORITMOS");
+  expect(result.extraction.find((record) => record.metadata.name === "foto.jpg")?.extractedText.toUpperCase()).toContain("ALGORITMOS");
+  expect(result.chunks.length).toBeGreaterThanOrEqual(4);
+  expect(result.embeddings).toHaveLength(result.chunks.length);
   const generatedStudies = await readIndexedDBStore<Array<{ analysisStatus?: string; wordCount?: number }>[number]>(page, "studies");
-  expect(generatedStudies).toHaveLength(2);
+  expect(generatedStudies).toHaveLength(4);
   expect(generatedStudies.every((study) => study.analysisStatus === "analyzed" && (study.wordCount ?? 0) > 0)).toBe(true);
 
   await page.goto("/");
   await page.getByRole("button", { name: "Detalhes da ingestão" }).click();
   const diagnostics = page.getByRole("dialog", { name: "Detalhes da ingestão" });
-  await expect(diagnostics.getByText("OCR", { exact: true }).locator("..")).toContainText("2");
+  await expect(diagnostics.getByText("OCR", { exact: true }).locator("..")).toContainText("4");
   await expect(diagnostics.getByText("Tempo total de processamento").locator("..")).not.toContainText("0 ms");
 });
 

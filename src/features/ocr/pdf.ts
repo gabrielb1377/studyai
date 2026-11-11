@@ -56,8 +56,9 @@ async function imageCoverage(page: PDFPageProxy) {
     let area = 0;
     let found = false;
 
+    const names = new Map(Object.entries(ops).map(([name, code]) => [code, name]));
     for (const [index, operation] of operatorList.fnArray.entries()) {
-      const name = Object.keys(ops).find((key) => ops[key] === operation);
+      const name = names.get(operation);
       if (!name) continue;
       if (name === "save") stack.push([...current]);
       else if (name === "restore") current = stack.pop() ?? [1, 0, 0, 1, 0, 0];
@@ -76,7 +77,16 @@ async function imageCoverage(page: PDFPageProxy) {
 }
 
 async function getDocument(file: File) {
-  return pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const loading = pdfjs.getDocument({ data: await file.arrayBuffer() });
+  try {
+    return await loading.promise;
+  } catch (error) {
+    await loading.destroy().catch(() => undefined);
+    if (error instanceof Error && error.name === "PasswordException") {
+      throw new Error("PDF protegido por senha. Importe uma cópia desbloqueada que você tenha autorização para usar.");
+    }
+    throw error;
+  }
 }
 
 export async function inspectPdf(
@@ -111,6 +121,7 @@ export async function inspectPdf(
         width: Math.round(viewport.width),
         height: Math.round(viewport.height),
       });
+      page.cleanup();
     }
     return { numPages: documentProxy.numPages, pages, title: info?.Title?.trim() || undefined };
   } finally {
