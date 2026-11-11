@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { StudyWorkspace } from "@/features/study/StudyWorkspace";
 import { examReturnHref } from "@/features/exam/ExamLearningNavigation";
 
@@ -11,5 +12,8 @@ export default async function StudyPage({
 }) {
   const { tema, arquivo, aba, layout, novo, modo, origem, prova } = await searchParams;
   const returnHref = origem === "provas" && prova ? examReturnHref(prova) : undefined;
-  return <StudyWorkspace requestedStudyId={tema} requestedMaterialId={arquivo} requestedTab={aba} requestedLayoutId={layout} requestedQuizMode={modo === "exam" ? "exam" : undefined} resetWorkspace={novo === "1"} returnHref={returnHref} />;
+  return <>
+    <Link className="mb-4 inline-block rounded-lg border px-3 py-2 text-sm font-medium" href="/estudo/revisao">Revisão por disciplina</Link>
+    <StudyWorkspace requestedStudyId={tema} requestedMaterialId={arquivo} requestedTab={aba} requestedLayoutId={layout} requestedQuizMode={modo === "exam" ? "exam" : undefined} resetWorkspace={novo === "1"} returnHref={returnHref} />
+  </>;
 }

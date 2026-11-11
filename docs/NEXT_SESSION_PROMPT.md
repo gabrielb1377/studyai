@@ -1,5 +1,7 @@
 # Prompt reutilizável — próxima sessão
 
+> **Atualização 44B:** consulte `docs/SPRINT_44B_STATUS.md` para retomar o ciclo de revisão por disciplina. Confirme o Git e preserve os experimentos S3. Semana de Prova 2.0 e simulados adaptativos pertencem à Sprint 45.
+
 > **Atualização 44A:** confira o estado real do Git e leia `docs/SPRINT_44A_STATUS.md` para retomar o fluxo de disciplina completa. Preserve os experimentos S3 e mantenha a revisão espaçada e os simulados adaptativos no escopo de suas sprints.
 
 > **Atualização 43B:** a Sprint 43 foi registrada em `d3e575d`. Leia `docs/SPRINT_43B_STATUS.md` para conferir a implementação local, as validações e os pontos pendentes antes de considerar um checkpoint. Preserve os experimentos S3. A Sprint 44A requer pedido separado.

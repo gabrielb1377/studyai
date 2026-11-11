@@ -116,7 +116,8 @@ test("Tutor recebe perfil adaptativo antes de responder", async ({ page }) => {
   await page.getByRole("button", { name: "Nova conversa" }).first().click();
   await page.getByLabel("Mensagem para o Tutor IA").fill("Explique novamente");
   await page.getByRole("button", { name: "Enviar" }).click();
-  await expect(page.getByText("Explicação adaptada.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversa com o Tutor IA" })
+    .getByText("Explicação adaptada.", { exact: true })).toBeVisible();
   expect(adaptiveContext?.learning?.classification).toBe("difficult");
   expect(adaptiveContext?.learning?.priority).toBe("Alta");
 });

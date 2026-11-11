@@ -1,8 +1,9 @@
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import type { DisciplineSelection } from "./DisciplineContext";
 
-let pending: { text: string; clear: () => void } | undefined;
+let pending: { text: string; selection?: DisciplineSelection; clear: () => void } | undefined;
 
-export function prepareReviewedTutorDraft(text: string) {
+export function prepareReviewedTutorDraft(text: string, selection?: DisciplineSelection) {
   pending?.clear();
   const operation = SessionOperationManager.start();
   const clear = () => {
@@ -13,11 +14,11 @@ export function prepareReviewedTutorDraft(text: string) {
   };
   const expiry = window.setTimeout(clear, 60_000);
   operation.signal.addEventListener("abort", clear, { once: true });
-  pending = { text, clear };
+  pending = { text, selection, clear };
 }
 
 export function takeReviewedTutorDraft() {
-  const text = pending?.text;
+  const draft = pending;
   pending?.clear();
-  return text;
+  return draft;
 }

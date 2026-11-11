@@ -1,5 +1,9 @@
 # Handoff atual — StudyAI V1.1
 
+## Sprint 44B — Revisão por disciplina
+
+Abra **Estudo → Revisão por disciplina**. O fluxo reúne materiais e resultados por tema, permite autoavaliação e agenda a próxima revisão local. O Tutor recebe um rascunho contextual pronto para editar. [Modelo, validação e limites](docs/SPRINT_44B_STATUS.md).
+
 ## Sprint 44A — Estudar matéria completa
 
 A Biblioteca abre a seleção de materiais no Tutor. A conversa guarda a disciplina, a seleção confirmada e as fontes recuperadas. Consulte [status, validação e limites](docs/SPRINT_44A_STATUS.md).

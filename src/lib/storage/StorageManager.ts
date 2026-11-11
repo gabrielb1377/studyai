@@ -119,6 +119,21 @@ export const StorageManager = {
     }
   },
 
+  async updateMetadata<T extends { key: string }>(key: string, update: (current: T | undefined) => T) {
+    assertGeneration(await readyForOperation());
+    try {
+      const value = await IndexedDB.transaction(["metadata"], "readwrite", async (storage) => {
+        const next = update(await storage.get<T>("metadata", key));
+        await storage.put("metadata", next);
+        return next;
+      });
+      emit("metadata", key);
+      return value;
+    } catch (error) {
+      throw normalizeError(error);
+    }
+  },
+
   async put<T>(store: StorageStoreName, value: T, options: { notify?: boolean } = {}) {
     assertGeneration(await readyForOperation());
     try {

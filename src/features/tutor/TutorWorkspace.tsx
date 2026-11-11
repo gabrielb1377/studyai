@@ -70,11 +70,14 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
       setDraft("");
       return;
     }
+    if (!ready || compact || studyId) return;
     const owner = auth.session?.user.id ?? "offline-session";
     if (draftSession.current === owner) return;
     draftSession.current = owner;
-    setDraft(compact ? "" : takeReviewedTutorDraft() ?? "");
-  }, [compact, auth.isLoading, auth.session?.user.id]);
+    const prepared = takeReviewedTutorDraft();
+    if (prepared?.selection) createConversation(prepared.selection);
+    setDraft(prepared?.text ?? "");
+  }, [compact, auth.isLoading, auth.session?.user.id, ready, studyId, createConversation]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("modo") === "professor") setTeacherMode("teacher");
