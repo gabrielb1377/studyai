@@ -1,5 +1,9 @@
 # Handoff atual — StudyAI V1.1
 
+## Sprint 44A — Estudar matéria completa
+
+A Biblioteca abre a seleção de materiais no Tutor. A conversa guarda a disciplina, a seleção confirmada e as fontes recuperadas. Consulte [status, validação e limites](docs/SPRINT_44A_STATUS.md).
+
 ## Sprint 43B — OCR e revisão de exercícios
 
 Trabalho local sobre `d3e575d`. A Biblioteca reutiliza a revisão por página, com prévia determinística das questões, indicação de símbolos a conferir e rascunho confirmado para o Tutor. Consulte [o status da Sprint 43B](docs/SPRINT_43B_STATUS.md) para validação e limites. A Sprint 44A ainda não foi iniciada.

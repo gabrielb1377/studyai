@@ -89,7 +89,8 @@ test("revisão edita o texto, conserva a extração original e só envia após a
   await expect(composer).toHaveValue(/Quanto é 1 \+ 1\?/);
   expect(calls).toEqual([]);
   await page.getByRole("button", { name: "Enviar", exact: true }).click();
-  await expect(page.getByText("Resposta do teste.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversa com o Tutor IA" })
+    .getByText("Resposta do teste.", { exact: true })).toBeVisible();
   expect(calls).toHaveLength(1);
   expect(calls[0]).toContain("Fonte revisada: questao.pdf, página 1.");
 });

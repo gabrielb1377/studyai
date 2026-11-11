@@ -1,4 +1,5 @@
 export type TutorConversation = {
+  discipline?: import("@/features/tutor/services/DisciplineContext").DisciplineSelection;
   id: string;
   title: string;
   messages: TutorMessage[];
@@ -17,6 +18,7 @@ export type TutorTable = {
 };
 
 export type TutorMessage = {
+  sources?: Array<{ id: string; name: string; page?: number; excerpt: string }>;
   id: string;
   role: "assistant" | "user";
   content: string;

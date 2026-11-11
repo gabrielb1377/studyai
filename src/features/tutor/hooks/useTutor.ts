@@ -14,6 +14,16 @@ import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import { useAuth } from "@/features/account/AuthProvider";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { ContentStorage } from "@/features/extraction/ContentStorage";
+import { MaterialService } from "@/services/material-service";
+import { disciplineMaterials, retrieveDiscipline, type DisciplineSelection } from "../services/DisciplineContext";
+import { StudyEngine } from "@/features/study/services/StudyEngine";
+
+function sourceReferences(chunks: readonly RetrievedChunk[]) {
+  return chunks.map(({ id, metadata, text }) => ({
+    id, name: metadata.sourceName, page: metadata.pageStart, excerpt: text,
+  }));
+}
 
 type PendingFallback = {
   offer: AIFallbackOffer;
@@ -28,7 +38,14 @@ type PendingFallback = {
 export function useTutor(instanceId?: string, studyId?: string) {
   const auth = useAuth();
   const context = useTutorContext(studyId);
-  const [conversations, setConversations] = useState<TutorConversation[]>([]);
+  const [stored, setConversations] = useState<TutorConversation[]>([]);
+  const [loadedGeneration, setLoadedGeneration] = useState<number>();
+  const session = SessionOperationManager.current();
+  const ready = !auth.isLoading && !session.suspended && loadedGeneration === session.generation;
+  const conversations = useMemo(
+    () => ready ? stored.filter((item) => !studyId || !item.discipline) : [],
+    [ready, stored, studyId],
+  );
   const [activeConversationId, setActiveConversationId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +65,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
     let active = true;
     const session = SessionOperationManager.current();
     setConversations([]);
+    setLoadedGeneration(undefined);
     setActiveConversationId("");
     setPendingFallback(null);
     setError(null);
@@ -55,9 +73,11 @@ export function useTutor(instanceId?: string, studyId?: string) {
     if (auth.isLoading || session.suspended || !session.userId) return () => { active = false; };
     void Promise.all([TutorStorage.load(), TutorStorage.loadActive(instanceId)]).then(([storedConversations, storedActive]) => {
       const current = SessionOperationManager.current();
-      if (active && current.userId === session.userId && current.generation === session.generation && storedConversations?.length) {
-        setConversations(storedConversations);
-        setActiveConversationId(storedConversations.some((item) => item.id === storedActive) ? storedActive! : storedConversations[0].id);
+      if (active && current.userId === session.userId && current.generation === session.generation) {
+        const items = storedConversations ?? [];
+        setConversations(items);
+        setActiveConversationId(items.some((item) => item.id === storedActive) ? storedActive! : items[0]?.id ?? "");
+        setLoadedGeneration(session.generation);
       }
     });
     return () => { active = false; };
@@ -68,9 +88,11 @@ export function useTutor(instanceId?: string, studyId?: string) {
     [activeConversationId, conversations],
   );
 
-  const createConversation = () => {
+  const createConversation = (discipline?: DisciplineSelection) => {
+    if (!ready) return;
     setPendingFallback(null);
-    const conversation = TutorService.createConversation();
+    const conversation = TutorService.createConversation(discipline?.subject);
+    if (discipline) conversation.discipline = discipline;
     updateConversations((current) => [conversation, ...current]);
     setActiveConversationId(conversation.id);
     void TutorStorage.saveActive(conversation.id, instanceId);
@@ -99,7 +121,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
 
   const sendMessage = async (content: string, options?: { teaching?: TeacherRequest }) => {
     const nextContent = content.trim();
-    if (!nextContent || isLoading) return false;
+    if (!nextContent || isLoading || !ready) return false;
     let sessionOperation: ReturnType<typeof SessionOperationManager.start>;
     try {
       sessionOperation = SessionOperationManager.start();
@@ -117,6 +139,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
     setIsLoading(true);
 
     if (!activeConversation) setActiveConversationId(conversation.id);
+    if (!activeConversation) void TutorStorage.saveActive(conversation.id, instanceId);
     updateConversations((current) => TutorService.addMessage(
       TutorService.addMessage(activeConversation ? current : [conversation, ...current], conversation.id, userMessage),
       conversation.id,
@@ -127,9 +150,27 @@ export function useTutor(instanceId?: string, studyId?: string) {
     let requestContext: TutorStudyContext | null | undefined = context;
     let requestChunks: readonly RetrievedChunk[] = [];
     try {
-      const retrieval = options?.teaching && context?.studyId && isBroadTeacherAction(options.teaching.action)
+      const discipline = conversation.discipline;
+      const query = options?.teaching?.selection?.text ?? nextContent;
+      let retrieval;
+      if (discipline) {
+        const [materials, extracted, studies] = await Promise.all([MaterialService.load(), ContentStorage.load(), StudyEngine.load()]);
+        sessionOperation.assertCurrent();
+        retrieval = { chunks: retrieveDiscipline(query, discipline, materials, extracted.records), knowledge: undefined };
+        const studyIds = new Set(disciplineMaterials(materials, discipline).map((material) => material.studyId));
+        const relatedStudies = studies.filter((study) => studyIds.has(study.studyId));
+        const progress = relatedStudies.length
+          ? Math.round(relatedStudies.reduce((total, study) => total + study.progress, 0) / relatedStudies.length)
+          : 0;
+        requestContext = {
+          studyId: conversation.id, title: discipline.subject, subject: discipline.subject,
+          topic: query.slice(0, 200), status: progress === 100 ? "completed" : progress ? "in_progress" : "not_started", progress, notes: [],
+        };
+      } else {
+        retrieval = options?.teaching && context?.studyId && isBroadTeacherAction(options.teaching.action)
         ? await RetrievalPipeline.forStudy(context.studyId)
-        : await RetrievalPipeline.forQuestion(options?.teaching?.selection?.text ?? nextContent, context?.studyId);
+        : await RetrievalPipeline.forQuestion(query, context?.studyId);
+      }
       sessionOperation.assertCurrent();
       const contextualized = context && retrieval.knowledge?.hasContext
         ? {
@@ -144,7 +185,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
               relationshipCount: retrieval.knowledge.relationCount,
             },
           }
-        : context;
+        : requestContext;
       requestContext = contextualized;
       requestChunks = retrieval.chunks;
       const response = await TutorService.requestReply(
@@ -176,9 +217,10 @@ export function useTutor(instanceId?: string, studyId?: string) {
         TutorService.replaceMessage(current, conversation.id, assistantMessage.id, {
           content: response.text,
           metadata: response.metadata,
+          sources: discipline ? sourceReferences(requestChunks) : undefined,
         }),
       );
-      if (context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: context.studyId });
+      if (!discipline && context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: context.studyId });
       return true;
     } catch (requestError) {
       if (sessionOperation.signal.aborted) return false;
@@ -222,18 +264,31 @@ export function useTutor(instanceId?: string, studyId?: string) {
     }
     const pending = pendingFallback;
     const alternative = pending.offer.alternatives.find((item) => item.provider === provider);
-    if (!alternative) return false;
+    if (!alternative) {
+      sessionOperation.release();
+      return false;
+    }
+    const discipline = conversations.find((item) => item.id === pending.conversationId)?.discipline;
     const assistantMessage = TutorService.createMessage("assistant", "");
     setPendingFallback(null);
     setError(null);
     setIsLoading(true);
     updateConversations((current) => TutorService.addMessage(current, pending.conversationId, assistantMessage));
     try {
+      const chunks = pending.chunks;
+      if (discipline) {
+        const [materials, extracted] = await Promise.all([MaterialService.load(), ContentStorage.load()]);
+        sessionOperation.assertCurrent();
+        const currentChunks = retrieveDiscipline(pending.teaching?.selection?.text ?? pending.message, discipline, materials, extracted.records);
+        if (JSON.stringify(currentChunks) !== JSON.stringify(chunks)) {
+          throw new Error("Os materiais mudaram. Envie a pergunta novamente para atualizar as fontes.");
+        }
+      }
       const response = await TutorService.requestReply(
         pending.history,
         pending.message,
         pending.context,
-        pending.chunks,
+        chunks,
         {
           requestId: pending.offer.requestId,
           provider: pending.offer.primaryProvider,
@@ -251,8 +306,9 @@ export function useTutor(instanceId?: string, studyId?: string) {
       updateConversations((current) => TutorService.replaceMessage(current, pending.conversationId, assistantMessage.id, {
         content: response.text,
         metadata: response.metadata,
+        sources: discipline ? sourceReferences(chunks) : undefined,
       }));
-      if (pending.context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: pending.context.studyId });
+      if (!discipline && pending.context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: pending.context.studyId });
       return true;
     } catch (requestError) {
       if (sessionOperation.signal.aborted) return false;
@@ -272,10 +328,11 @@ export function useTutor(instanceId?: string, studyId?: string) {
     activeConversation,
     activeConversationId,
     conversations,
-    context,
+    context: activeConversation?.discipline ? null : context,
     error,
     pendingFallback: pendingFallback?.offer ?? null,
     isLoading,
+    ready,
     clearError: () => setError(null),
     setError,
     createConversation,

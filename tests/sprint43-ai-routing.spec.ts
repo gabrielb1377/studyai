@@ -221,7 +221,8 @@ test("Tutor envia modo automático sem fixar modelo e mostra a decisão retornad
   await page.getByLabel("Mensagem para o Tutor IA").fill("Olá, pode me ajudar?");
   await page.getByRole("button", { name: "Enviar" }).click();
 
-  await expect(page.getByText("Resposta roteada com segurança.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversa com o Tutor IA" })
+    .getByText("Resposta roteada com segurança.", { exact: true })).toBeVisible();
   await expect(page.getByText(/ollama · qwen-local.*escolha automática.*Limite de saída 700/)).toBeVisible();
   expect(requestBody).toMatchObject({ mode: "automatic", provider: "gemini" });
   expect(requestBody).not.toHaveProperty("model");

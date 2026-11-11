@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { FolderInput, Grid2X2, List, Rows3, Search, Star, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,6 +121,7 @@ export function LibraryBrowser() {
 
   return (
     <div className="space-y-6">
+      <Link className="inline-block rounded-lg border px-3 py-2 text-sm font-medium hover:bg-muted" href="/tutor#materia-completa">Estudar matéria completa</Link>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <div role="search" aria-label="Pesquisa de materiais" className="relative w-full max-w-xl">
         <Search

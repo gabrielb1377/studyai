@@ -24,6 +24,7 @@ import { takeReviewedTutorDraft } from "./services/ReviewedTutorDraft";
 import { useAuth } from "@/features/account/AuthProvider";
 import { TutorComposer } from "./TutorComposer";
 import { TutorConversation } from "./TutorConversation";
+import { DisciplinePanel } from "./DisciplinePanel";
 import { TutorSidebar } from "./TutorSidebar";
 import { TeacherControls } from "@/features/teacher/components/TeacherControls";
 import { useTeacher } from "@/features/teacher/hooks/useTeacher";
@@ -40,6 +41,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
     error,
     pendingFallback,
     isLoading,
+    ready,
     clearError,
     setError,
     createConversation,
@@ -195,6 +197,13 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
   };
 
   return (
+    <>
+    {!compact && !studyId && ready && <div id="materia-completa">
+      <DisciplinePanel key={activeConversation?.id ?? "new"} selection={activeConversation?.discipline} disabled={isLoading} onConfirm={(selection) => {
+        createConversation(selection);
+        setDraft("");
+      }} />
+    </div>}
     <div className={compact ? "grid min-h-[34rem] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden 2xl:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-rows-1" : "grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1"}>
       <TutorSidebar
         compact={compact}
@@ -374,5 +383,6 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }

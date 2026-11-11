@@ -276,6 +276,11 @@ test("aceita imagens e formatos adicionais de áudio", async ({ page }) => {
 
 test("executa OCR local em PNG, JPEG, PDF escaneado e somente na página digitalizada de PDF misto", async ({ page }) => {
   test.setTimeout(180_000);
+  const worker = await page.request.get("/api/ocr/assets/worker");
+  expect(worker.ok()).toBe(true);
+  expect(worker.headers()["content-security-policy"]).toBe("default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'");
+  const app = await page.request.get("/importar");
+  expect(app.headers()["content-security-policy"]).not.toContain("wasm-unsafe-eval");
   await page.setViewportSize({ width: 700, height: 180 });
   await page.setContent(
     '<style>body{margin:0}</style><main style="display:flex;align-items:center;width:700px;height:180px;' +

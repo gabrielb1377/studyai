@@ -39,6 +39,7 @@ async function createOCRWorker() {
     langPath: "/api/ocr/languages",
     logger: ({ progress }) => currentProgress?.(progress),
     workerPath: "/api/ocr/assets/worker",
+    workerBlobURL: false,
   });
 }
 

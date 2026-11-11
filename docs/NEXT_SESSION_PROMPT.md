@@ -1,5 +1,7 @@
 # Prompt reutilizável — próxima sessão
 
+> **Atualização 44A:** confira o estado real do Git e leia `docs/SPRINT_44A_STATUS.md` para retomar o fluxo de disciplina completa. Preserve os experimentos S3 e mantenha a revisão espaçada e os simulados adaptativos no escopo de suas sprints.
+
 > **Atualização 43B:** a Sprint 43 foi registrada em `d3e575d`. Leia `docs/SPRINT_43B_STATUS.md` para conferir a implementação local, as validações e os pontos pendentes antes de considerar um checkpoint. Preserve os experimentos S3. A Sprint 44A requer pedido separado.
 
 > **Estado atual (10/11/2026):** a seção abaixo substitui as fotografias históricas conflitantes dentro do prompt antigo. Sprint 42/42.1 está commitada em `de698e4`. Sprint 43 está implementada e validada localmente, ainda sem commit e sem homologação externa. Leia `docs/SPRINT_43_STATUS.md` antes de continuar.

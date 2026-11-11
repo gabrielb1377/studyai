@@ -21,7 +21,18 @@ export function TutorConversation({ messages, isLoading, assistantLabel = "Tutor
           </div>
         </div>
       )}
-      {messages.map((message) => <TutorMessage key={message.id} message={message} onResponseAction={onResponseAction} />)}
+      {messages.map((message) => <div key={message.id} className="min-w-0">
+        <TutorMessage message={message} onResponseAction={onResponseAction} />
+        {message.sources && (message.sources.length > 0
+          ? <details className="mt-2 break-words text-sm">
+            <summary className="cursor-pointer">Fontes recuperadas ({message.sources.length})</summary>
+            <ul className="space-y-2 pt-2">{message.sources.map((source) => <li key={source.id}>
+              <strong>{source.name}{source.page ? ` · p. ${source.page}` : ""}</strong>
+              <blockquote>{source.excerpt}</blockquote>
+            </li>)}</ul>
+          </details>
+          : <p className="mt-2 text-sm text-muted-foreground">Nenhum trecho relevante encontrado nos materiais selecionados.</p>)}
+      </div>)}
       {isLoading && (
         <div className="flex items-center gap-2 rounded-xl bg-secondary/50 px-4 py-3 text-sm text-muted-foreground" role="status" aria-live="polite">
           <span className="size-2 animate-pulse rounded-full bg-primary" />
