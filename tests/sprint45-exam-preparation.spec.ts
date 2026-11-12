@@ -142,4 +142,14 @@ test("duas avaliações do mesmo estudo mantêm tentativas e materiais separados
   await page.getByRole("button", { name: /Primeira avaliação/ }).click();
   await expect(simulation.getByText(/Gabarito conferido: 1 acertos e 0 erros/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+
+  await page.goto("/");
+  const progress = page.getByRole("region", { name: "Meu progresso" });
+  await expect(progress.getByRole("heading", { name: "Algoritmos" })).toBeVisible();
+  await expect(progress.getByRole("link", { name: "Estruturas de dados" })).toHaveAttribute("href", /\/estudo\?tema=/);
+  await expect(progress.getByText("Gabarito conferido: 1 acertos, 0 erros")).toBeVisible();
+  await expect(progress.getByText("Sem correção objetiva disponível.")).toBeVisible();
+  const local = progress.getByRole("heading", { name: "Simulados locais" }).locator("../..");
+  await expect(local.getByRole("link", { name: "Primeira avaliação" })).toHaveAttribute("href", /\/provas\?prova=/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 });

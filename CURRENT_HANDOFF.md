@@ -1,5 +1,9 @@
 # Handoff atual — StudyAI V1.1
 
+## Sprint 46A — Dashboard e progresso
+
+O painel Meu progresso reúne estudos por disciplina, revisões agendadas, próximas avaliações e simulados locais. A correção com gabarito conferido aparece separada da autoavaliação. O Modo Prova protegido continua fora do resumo por avaliação. A busca universal e as demais melhorias mobile seguem no roadmap.
+
 ## Sprint 45 — Preparação para provas
 
 A Sprint 45 está encerrada no escopo do MVP pessoal, com simulados locais e histórico por avaliação. A persistência de avaliações e o vínculo protegido ficam adiados até antes de expansão multiusuário ou ativação desse vínculo. O status da Sprint 45 guarda a proposta de schema e a validação.

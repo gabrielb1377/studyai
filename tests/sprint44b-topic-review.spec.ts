@@ -41,6 +41,10 @@ test("revisa um material real, retoma em 360 px e abre o Tutor sem enviar", asyn
   await page.getByRole("button", { name: "Revisei sem corrigir" }).click();
   await expect(page.getByText("Revisão registrada.")).toBeVisible();
   expect(await readIndexedDBStore(page, "studies")).toEqual(before);
+  await page.goto("/");
+  const progress = page.getByRole("region", { name: "Meu progresso" });
+  await progress.getByRole("link", { name: "Estruturas de dados" }).and(page.locator('a[href^="/estudo/revisao?disciplina="]')).click();
+  await expect(page).toHaveURL(/\/estudo\/revisao\?disciplina=/);
   await page.reload();
   await expect(page.getByText(/Revisões: 1.*0 acertos, 0 erros.*Dificuldade declarada/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);

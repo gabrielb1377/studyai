@@ -5,7 +5,7 @@ import type { Material } from "@/types/material";
 
 export type DisciplineSelection = { key: string; subject: string; materialIds: string[] };
 
-export function disciplineKey(material: Material) {
+export function disciplineKey(material: Pick<Material, "course" | "semester" | "subject">) {
   const subject = material.subject?.trim();
   if (!subject || /^(materiais importados|disciplina desconhecida)$/i.test(subject)) return "";
   return JSON.stringify([material.course?.trim() ?? "", material.semester?.trim() ?? "", subject]);

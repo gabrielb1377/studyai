@@ -106,6 +106,7 @@ test("Semana de Prova consolida registros reais e mantém contagem após reload"
 test("estado vazio permanece explicativo e sem overflow no viewport mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/provas");
+  await expect(page.getByRole("button", { name: "Nova Prova" })).toBeVisible();
   const createdAt = new Date().toISOString();
   await page.evaluate((value) => localStorage.setItem("studyai:exams:offline-session", JSON.stringify([value])), linkedExam("study-removido", createdAt));
   await page.reload();

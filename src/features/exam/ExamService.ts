@@ -2,7 +2,7 @@ import type { Exam, ExamPlanItem, MaterialExamAttempt, MaterialExamQuestion } fr
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 const STORAGE_KEY_PREFIX = "studyai:exams:";
-const UPDATE_EVENT = "studyai:exams-updated";
+export const EXAM_UPDATED_EVENT = "studyai:exams-updated";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function parseExamDate(value: string): Date | null {
@@ -103,7 +103,7 @@ export const ExamService = {
       const changed = cleaned.some((exam, index) => exam !== parsed[index]);
       if (!changed) return null;
       localStorage.setItem(storageKey(session.userId), JSON.stringify(cleaned));
-      window.dispatchEvent(new Event(UPDATE_EVENT));
+      window.dispatchEvent(new Event(EXAM_UPDATED_EVENT));
       return cleaned;
     } catch {
       // Falhas de leitura nunca autorizam remover vínculos existentes.
@@ -118,7 +118,7 @@ export const ExamService = {
     const serialized = JSON.stringify(exams.map(normalizeExam));
     if (localStorage.getItem(storageKey(userId)) === serialized) return;
     localStorage.setItem(storageKey(userId), serialized);
-    window.dispatchEvent(new Event(UPDATE_EVENT));
+    window.dispatchEvent(new Event(EXAM_UPDATED_EVENT));
   },
 
   create(data: Omit<Exam, "id" | "createdAt" | "updatedAt">, now = new Date().toISOString()): Exam {
