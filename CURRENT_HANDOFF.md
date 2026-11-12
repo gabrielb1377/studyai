@@ -1,5 +1,17 @@
 # Handoff atual — StudyAI V1.1
 
+## Sprint 45 — Preparação para provas
+
+A Sprint 45 está encerrada no escopo do MVP pessoal, com simulados locais e histórico por avaliação. A persistência de avaliações e o vínculo protegido ficam adiados até antes de expansão multiusuário ou ativação desse vínculo. O status da Sprint 45 guarda a proposta de schema e a validação.
+
+Na 45.3, a regressão de catálogo para PDF misto passou e a tela passou a orientar a reextração manual de materiais antigos. O checkpoint depende de decisão sobre a associação protegida. A proposta mínima está no status da Sprint 45.
+
+A continuação 45.2 acrescenta conferência manual de gabaritos dos materiais e invalidação por alteração da questão. A associação protegida a uma avaliação continua pendente.
+
+A continuação 45.1 acrescenta simulados locais dos materiais e histórico por avaliação. O histórico de estudos aparece com rótulo próprio. Consulte os critérios pendentes no status da sprint.
+
+A Semana de Prova já reúne vínculos da Biblioteca, agenda por data, prática de questões extraídas e atalhos para Tutor e revisão por disciplina. A Sprint 45 ainda tem critérios de aceite pendentes. Consulte [estado e limitações](docs/SPRINT_45_STATUS.md).
+
 ## Sprint 44B — Revisão por disciplina
 
 Abra **Estudo → Revisão por disciplina**. O fluxo reúne materiais e resultados por tema, permite autoavaliação e agenda a próxima revisão local. O Tutor recebe um rascunho contextual pronto para editar. [Modelo, validação e limites](docs/SPRINT_44B_STATUS.md).

@@ -1,5 +1,13 @@
 # Prompt reutilizável — próxima sessão
 
+> **Encerramento 45:** a Semana de Prova está pronta para checkpoint seletivo no escopo do MVP pessoal. Consulte `docs/SPRINT_45_STATUS.md`. Adie o vínculo protegido e a migração até antes da expansão multiusuário ou da ativação do vínculo. Preserve os experimentos S3.
+
+> **Atualização 45.2:** consulte o status da Sprint 45 para a política de gabarito conferido e os critérios pendentes de associação protegida e teste entre contas.
+
+> **Atualização 45.1:** retome pelo status da Sprint 45. Diferencie tentativas locais de materiais, histórico de estudo e tentativas protegidas no servidor.
+
+> **Atualização 45:** consulte `docs/SPRINT_45_STATUS.md` e confirme o Git antes de continuar a preparação contextual e o vínculo dos resultados com cada avaliação. Preserve os experimentos S3.
+
 > **Atualização 44B:** consulte `docs/SPRINT_44B_STATUS.md` para retomar o ciclo de revisão por disciplina. Confirme o Git e preserve os experimentos S3. Semana de Prova 2.0 e simulados adaptativos pertencem à Sprint 45.
 
 > **Atualização 44A:** confira o estado real do Git e leia `docs/SPRINT_44A_STATUS.md` para retomar o fluxo de disciplina completa. Preserve os experimentos S3 e mantenha a revisão espaçada e os simulados adaptativos no escopo de suas sprints.

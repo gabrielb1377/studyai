@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Activity, Bot, BrainCircuit, Calendar, CheckCircle2, ClipboardCheck, Clock, FileText, Pencil, Plus, ShieldCheck, Target, Trash2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,16 @@ import { useMaterials } from "@/hooks/useMaterials";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import { examLearningHref, resolveExamStudy, type ExamLearningAction } from "./ExamLearningNavigation";
 import { useExamProgress } from "./useExamProgress";
+import { disciplineKey, materialKind } from "@/features/tutor/services/DisciplineContext";
+import { prepareReviewedTutorDraft } from "@/features/tutor/services/ReviewedTutorDraft";
+import { ExamMaterialPractice, type PracticeAssessment } from "./ExamMaterialPractice";
+import { ExamMaterialSimulation } from "./ExamMaterialSimulation";
+import { examQuestionCatalog } from "./ExamQuestionCatalog";
+import { ContentStorage, EXTRACTION_UPDATE_EVENT } from "@/features/extraction/ContentStorage";
+import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
+import { TopicReviewStorage } from "@/features/learning/TopicReviewStorage";
+import { reviewPeriod, type TopicReview } from "@/features/learning/TopicReview";
+import type { MaterialExamAttempt } from "@/types/exam";
 
 const learningActions: Array<{
   id: ExamLearningAction;
@@ -36,21 +47,53 @@ const progressStateLabels = {
 } as const;
 
 export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { studies: readonly StudyRecord[]; sessionOwner?: string; requestedExamId?: string }) {
+  const router = useRouter();
   const [exams, setExams] = useState<Exam[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [materialNotice, setMaterialNotice] = useState<string>();
+  const [practiceMaterial, setPracticeMaterial] = useState<{ examId: string; materialId: string }>();
+  const [extracted, setExtracted] = useState<ExtractedContent[]>([]);
+  const [reviews, setReviews] = useState<TopicReview[]>([]);
+  const [catalogError, setCatalogError] = useState(false);
+
+  useEffect(() => {
+    let revision = 0;
+    const reload = () => {
+      const request = ++revision;
+      void ContentStorage.load().then(({ records }) => {
+        if (request === revision) { setExtracted(records); setCatalogError(false); }
+      }).catch(() => {
+        if (request === revision) { setExtracted([]); setCatalogError(true); }
+      });
+      void TopicReviewStorage.load().then((records) => {
+        if (request === revision) setReviews(records);
+      }).catch(() => {
+        if (request === revision) setReviews([]);
+      });
+    };
+    reload();
+    window.addEventListener(EXTRACTION_UPDATE_EVENT, reload);
+    return () => { revision++; window.removeEventListener(EXTRACTION_UPDATE_EVENT, reload); };
+  }, []);
 
   const [title, setTitle] = useState("");
   const [discipline, setDiscipline] = useState("");
   const [examDate, setExamDate] = useState("");
+  const [examTime, setExamTime] = useState("");
+  const [selectedDisciplineKey, setSelectedDisciplineKey] = useState("");
   const [dailyMinutes, setDailyMinutes] = useState(60);
   const [subjectInput, setSubjectInput] = useState("");
   const [subjectPriority, setSubjectPriority] = useState<ExamPriority>("medium");
   const [subjects, setSubjects] = useState<ExamSubject[]>([]);
 
   const { materials: allMaterials, isLoading: materialsLoading, error: materialsError } = useMaterials();
+  const disciplines = new Map<string, Material>();
+  for (const material of allMaterials) {
+    const key = disciplineKey(material);
+    if (key) disciplines.set(key, material);
+  }
 
   useEffect(() => {
     const loaded = ExamService.load();
@@ -80,8 +123,6 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
   }, [allMaterials, materialsError, materialsLoading, sessionOwner]);
 
   const selectedExam = exams.find((exam) => exam.id === selectedExamId) ?? exams[0];
-  const linkedStudy = resolveExamStudy(selectedExam, studies);
-  const { snapshot: examProgress, isLoading: progressLoading, error: progressError } = useExamProgress(selectedExam, studies, sessionOwner);
   const materialsById = useMemo(
     () => new Map(allMaterials.map((material) => [material.id, material])),
     [allMaterials],
@@ -90,11 +131,24 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     () => selectedExam
       ? selectedExam.materialIds.flatMap((id) => {
         const material = materialsById.get(id);
-        return material ? [material] : [];
+        return material && (!selectedExam.disciplineKey || disciplineKey(material) === selectedExam.disciplineKey) ? [material] : [];
       })
       : [],
     [materialsById, selectedExam],
   );
+  const scopedExam = useMemo(() => {
+    if (!selectedExam?.disciplineKey) return selectedExam;
+    return {
+      ...selectedExam,
+      materialIds: linkedMaterials.map(({ id }) => id),
+      studyId: linkedMaterials.some(({ studyId }) => studyId === selectedExam.studyId) ? selectedExam.studyId : undefined,
+    };
+  }, [selectedExam, linkedMaterials]);
+  const eligibleStudies = selectedExam?.disciplineKey
+    ? studies.filter((study) => study.materialIds.length > 0 && study.materialIds.every((id) => linkedMaterials.some((material) => material.id === id)))
+    : studies;
+  const linkedStudy = resolveExamStudy(scopedExam, eligibleStudies);
+  const { snapshot: examProgress, isLoading: progressLoading, error: progressError } = useExamProgress(scopedExam, studies, sessionOwner);
   const availableMaterials = useMemo(() => {
     if (!selectedExam || materialsLoading || materialsError) return [];
     const linked = new Set(selectedExam.materialIds);
@@ -102,6 +156,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     const otherMaterials: Material[] = [];
     for (const material of allMaterials) {
       if (linked.has(material.id)) continue;
+      if (selectedExam.disciplineKey && disciplineKey(material) !== selectedExam.disciplineKey) continue;
       (material.studyId === selectedExam.studyId ? studyMaterials : otherMaterials).push(material);
     }
     return [...studyMaterials, ...otherMaterials];
@@ -113,6 +168,8 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     setTitle("");
     setDiscipline("");
     setExamDate("");
+    setExamTime("");
+    setSelectedDisciplineKey("");
     setDailyMinutes(60);
     setSubjectInput("");
     setSubjectPriority("medium");
@@ -129,6 +186,8 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     setTitle(exam.title);
     setDiscipline(exam.discipline);
     setExamDate(exam.examDate);
+    setExamTime(exam.examTime ?? "");
+    setSelectedDisciplineKey(exam.disciplineKey ?? "");
     setDailyMinutes(exam.dailyMinutes);
     setSubjectInput("");
     setSubjectPriority("medium");
@@ -145,6 +204,10 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
         title: title.trim(),
         discipline: discipline.trim(),
         examDate,
+        examTime: examTime || undefined,
+        disciplineKey: selectedDisciplineKey || undefined,
+        materialIds: selectedDisciplineKey !== (exam.disciplineKey ?? "") ? [] : exam.materialIds,
+        studyId: selectedDisciplineKey !== (exam.disciplineKey ?? "") ? undefined : exam.studyId,
         dailyMinutes: Number(dailyMinutes) || 60,
         subjects,
         updatedAt: new Date().toISOString(),
@@ -159,6 +222,8 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       title: title.trim(),
       discipline: discipline.trim(),
       examDate,
+      examTime: examTime || undefined,
+      disciplineKey: selectedDisciplineKey || undefined,
       dailyMinutes: Number(dailyMinutes) || 60,
       subjects,
       materialIds: [],
@@ -174,6 +239,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
   const addMaterialToExam = (materialId: string) => {
     const exam = exams.find((e) => e.id === selectedExamId);
     if (!exam || exam.materialIds.includes(materialId)) return;
+    if (!availableMaterials.some(({ id }) => id === materialId)) return;
     const nextExams = exams.map((e) => {
       if (e.id !== selectedExamId) return e;
       return { ...e, materialIds: [...e.materialIds, materialId], updatedAt: new Date().toISOString() };
@@ -201,7 +267,11 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     const study = studyId ? studies.find((s) => s.studyId === studyId) : undefined;
     const nextExams = exams.map((e) => {
       if (e.id !== selectedExamId) return e;
-      const materialIds = study ? Array.from(new Set([...e.materialIds, ...study.materialIds])) : e.materialIds;
+      const allowedIds = study?.materialIds.filter((id) => !e.disciplineKey || (
+        materialsById.has(id) && disciplineKey(materialsById.get(id)!) === e.disciplineKey
+      ));
+      if (e.disciplineKey && study && !allowedIds?.length) return e;
+      const materialIds = allowedIds ? Array.from(new Set([...e.materialIds, ...allowedIds])) : e.materialIds;
       return { ...e, studyId, materialIds, updatedAt: new Date().toISOString() };
     });
     ExamService.save(nextExams);
@@ -238,7 +308,69 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     if (editingExamId === id) resetExamForm();
   };
 
-  const plan = selectedExam ? ExamService.generatePlan(selectedExam) : [];
+  const linkedStudyIds = new Set(linkedMaterials.map(({ studyId }) => studyId));
+  const preparationKey = selectedExam?.disciplineKey;
+  const catalog = preparationKey && !materialsLoading && !materialsError
+    ? examQuestionCatalog(linkedMaterials, extracted, preparationKey) : [];
+  const preparationActivities: ExamSubject[] = [];
+  if (preparationKey) {
+    for (const review of reviews) {
+      if (review.discipline !== preparationKey || !linkedStudyIds.has(review.studyId)) continue;
+      if (review.difficulty !== "hard" && reviewPeriod(review.nextReviewAt, new Date()) !== "late") continue;
+      preparationActivities.push({ id: `review:${review.studyId}`, name: `Revisar: ${review.topic}`, priority: "high", completed: false });
+    }
+    if (catalog.length || linkedMaterials.some((material) => materialKind(material) === "Exercícios")) {
+      preparationActivities.push({ id: "practice", name: "Praticar exercícios dos materiais", priority: "medium", completed: false });
+    }
+    if (catalog.length || linkedMaterials.some((material) => materialKind(material) === "Simulado")) {
+      preparationActivities.push({ id: "simulation", name: "Fazer um simulado dos materiais", priority: "low",
+        completed: Boolean(selectedExam?.materialAttempts?.some((item) => item.examId === selectedExam.id && item.disciplineKey === preparationKey && item.completedAt)) });
+    }
+  }
+  const plan = selectedExam ? ExamService.generatePlan({
+    ...selectedExam, subjects: [...selectedExam.subjects, ...preparationActivities],
+  }) : [];
+
+  function saveMaterialAttempt(attempt: MaterialExamAttempt) {
+    const session = SessionOperationManager.current();
+    if (!selectedExam || session.suspended || session.userId !== sessionOwner || attempt.examId !== selectedExam.id) return;
+    const next = ExamService.load().map((exam) => {
+      if (exam.id !== attempt.examId || exam.disciplineKey !== attempt.disciplineKey) return exam;
+      const previous = exam.materialAttempts ?? [];
+      const exists = previous.some((item) => item.id === attempt.id);
+      if (!exists && previous.some((item) => item.disciplineKey === exam.disciplineKey && !item.completedAt)) return exam;
+      return { ...exam, materialAttempts: exists ? previous.map((item) => item.id === attempt.id ? attempt : item) : [attempt, ...previous] };
+    });
+    ExamService.save(next);
+    setExams(next);
+  }
+  const activePractice = practiceMaterial?.examId === selectedExam?.id
+    ? linkedMaterials.find(({ id }) => id === practiceMaterial?.materialId) : undefined;
+
+  function recordPractice(assessment: PracticeAssessment) {
+    const session = SessionOperationManager.current();
+    if (!selectedExam || !activePractice || session.suspended || session.userId !== sessionOwner) return;
+    const next = ExamService.load().map((exam) => {
+      if (exam.id !== selectedExam.id) return exam;
+      const totals = exam.practiceTotals ?? { correct: 0, wrong: 0, reviewed: 0 };
+      return { ...exam, practiceTotals: { ...totals, [assessment]: totals[assessment] + 1 }, updatedAt: new Date().toISOString() };
+    });
+    ExamService.save(next);
+    setExams(next);
+  }
+
+  function moveSubject(index: number, offset: number) {
+    if (!selectedExam) return;
+    const nextSubjects = [...selectedExam.subjects];
+    const target = index + offset;
+    if (target < 0 || target >= nextSubjects.length) return;
+    [nextSubjects[index], nextSubjects[target]] = [nextSubjects[target], nextSubjects[index]];
+    const next = exams.map((exam) => exam.id === selectedExam.id
+      ? { ...exam, subjects: nextSubjects, manualOrder: true, updatedAt: new Date().toISOString() }
+      : exam);
+    ExamService.save(next);
+    setExams(next);
+  }
 
   const daysLeft = selectedExam ? daysUntilExam(selectedExam.examDate) ?? 0 : 0;
   const completedCount = selectedExam?.subjects.filter((s) => s.completed).length ?? 0;
@@ -262,7 +394,19 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="exam-discipline" className="text-xs font-semibold text-muted-foreground uppercase">Disciplina / Matéria</label>
-                <Input id="exam-discipline" autoFocus placeholder="Ex: Cálculo II, Direito Constitucional" value={discipline} onChange={(e) => setDiscipline(e.target.value)} required className="mt-1" />
+                <Input id="exam-discipline" autoFocus placeholder="Ex: Cálculo II, Direito Constitucional" value={discipline} onChange={(e) => { setDiscipline(e.target.value); setSelectedDisciplineKey(""); }} required className="mt-1" />
+                <label className="mt-2 grid gap-1 text-sm">Disciplina da Biblioteca
+                  <select className="w-full min-w-0 rounded border bg-background p-2" value={selectedDisciplineKey} onChange={(event) => {
+                    const key = event.target.value;
+                    setSelectedDisciplineKey(key);
+                    const material = disciplines.get(key);
+                    if (material?.subject) setDiscipline(material.subject);
+                  }}>
+                    <option value="">Sem vínculo com a Biblioteca</option>
+                    {selectedDisciplineKey && !disciplines.has(selectedDisciplineKey) && <option value={selectedDisciplineKey}>Disciplina indisponível</option>}
+                    {[...disciplines].map(([key, material]) => <option key={key} value={key}>{[material.subject, material.course, material.semester].filter(Boolean).join(" · ")}</option>)}
+                  </select>
+                </label>
               </div>
               <div>
                 <label htmlFor="exam-title" className="text-xs font-semibold text-muted-foreground uppercase">Nome da Prova</label>
@@ -271,6 +415,9 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
               <div>
                 <label htmlFor="exam-date" className="text-xs font-semibold text-muted-foreground uppercase">Data da Prova</label>
                 <Input id="exam-date" type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} required className="mt-1" />
+                <label className="mt-2 grid gap-1 text-sm">Horário da prova (opcional)
+                  <Input type="time" value={examTime} onChange={(event) => setExamTime(event.target.value)} />
+                </label>
               </div>
               <div>
                 <label htmlFor="exam-daily-minutes" className="text-xs font-semibold text-muted-foreground uppercase">Meta Diária (minutos)</label>
@@ -351,7 +498,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                     <Badge variant="outline" className="mb-2">{selectedExam.discipline}</Badge>
                     <h2 className="text-xl font-bold">{selectedExam.title}</h2>
                     <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
-                      <Calendar className="size-4" /> Data: {formatExamDate(selectedExam.examDate)} ({daysLeft < 0 ? "Prova já ocorreu" : daysLeft === 0 ? "É hoje!" : `Faltam ${daysLeft} dias`})
+                      <Calendar className="size-4" /> Data: {formatExamDate(selectedExam.examDate)} {selectedExam.examTime && `às ${selectedExam.examTime}`} ({daysLeft < 0 ? "Prova já ocorreu" : daysLeft === 0 ? "É hoje!" : `Faltam ${daysLeft} dias`})
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -381,7 +528,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                         <Link href={examLearningHref(linkedStudy.studyId, "exam", selectedExam.id)}><ShieldCheck className="mr-1.5 size-3.5" />Abrir Modo Prova</Link>
                       </Button>
                     ) : (
-                      <Button type="button" size="sm" className="mt-2 w-full" disabled>Vincule um estudo</Button>
+                    <Button type="button" size="sm" className="mt-2 w-full" disabled>Vincule um estudo</Button>
                     )}
                   </div>
                 </div>
@@ -423,6 +570,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 id="exam-real-progress-title" className="text-base font-semibold">Progresso real vinculado</h3>
+                    <p className="text-sm font-medium">Histórico dos estudos · compartilhado entre avaliações que usam o mesmo estudo</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Conteúdo, atividades e desempenho são exibidos separadamente e nunca alterados apenas por abrir esta página.
                     </p>
@@ -491,15 +639,17 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 <Card className="p-6 space-y-4 shadow-none">
                   <h3 className="font-semibold text-base flex items-center gap-2"><CheckCircle2 className="size-5 text-primary" /> Checklist de Assuntos</h3>
                   <div className="space-y-2">
-                    {selectedExam.subjects.map((sub) => (
-                      <div key={sub.id} className="flex items-center justify-between p-3 rounded-xl border bg-card/40">
-                        <label className="flex items-center gap-3 cursor-pointer flex-1">
+                    {selectedExam.subjects.map((sub, index) => (
+                      <div key={sub.id} className="flex flex-wrap items-center justify-between gap-1 p-3 rounded-xl border bg-card/40">
+                        <label className="flex min-w-0 items-center gap-3 cursor-pointer flex-1">
                           <input type="checkbox" checked={sub.completed} onChange={() => toggleSubject(selectedExam.id, sub.id)} className="size-4 rounded border-primary text-primary focus:ring-primary" />
-                          <span className={`text-sm font-medium ${sub.completed ? "line-through text-muted-foreground" : ""}`}>{sub.name}</span>
+                          <span className={`min-w-0 break-words text-sm font-medium ${sub.completed ? "line-through text-muted-foreground" : ""}`}>{sub.name}</span>
                         </label>
                         <Badge variant={sub.priority === "high" ? "destructive" : sub.priority === "medium" ? "default" : "secondary"}>
                           {sub.priority === "high" ? "Alta" : sub.priority === "medium" ? "Média" : "Baixa"}
                         </Badge>
+                        <button type="button" disabled={index === 0} aria-label={`Subir ${sub.name}`} className="p-2 disabled:opacity-40" onClick={() => moveSubject(index, -1)}>↑</button>
+                        <button type="button" disabled={index === selectedExam.subjects.length - 1} aria-label={`Descer ${sub.name}`} className="p-2 disabled:opacity-40" onClick={() => moveSubject(index, 1)}>↓</button>
                       </div>
                     ))}
                   </div>
@@ -508,8 +658,9 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 <Card className="p-6 space-y-4 shadow-none">
                   <h3 className="font-semibold text-base flex items-center gap-2"><Calendar className="size-5 text-primary" /> Plano Automático de Revisão</h3>
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                    {plan.map((item) => (
-                      <div key={item.dayIndex} className="p-3 rounded-xl border bg-card/40 flex items-center justify-between text-sm">
+                    {!plan.length && <p className="text-sm text-muted-foreground">{daysLeft < 0 ? "A data da prova já passou. Edite a avaliação para gerar um novo plano." : "Adicione assuntos para montar o plano."}</p>}
+                    {plan.map((item, index) => (
+                      <div key={index} className="p-3 rounded-xl border bg-card/40 flex items-center justify-between gap-2 text-sm">
                         <div>
                           <p className="font-semibold">Dia {item.dayIndex} ({item.dateStr})</p>
                           <p className="text-muted-foreground text-xs mt-0.5">Focar em: {item.subjectName}</p>
@@ -528,6 +679,21 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                   </h3>
                   <Badge variant="outline">{linkedMaterials.length}</Badge>
                 </div>
+                {selectedExam.practiceTotals && <p className="text-sm">
+                  Autoavaliação dos materiais: {selectedExam.practiceTotals.correct} acertos, {selectedExam.practiceTotals.wrong} erros, {selectedExam.practiceTotals.reviewed} sem correção.
+                </p>}
+                {selectedExam.disciplineKey && <div className="flex flex-wrap gap-3">
+                  <Link className="underline" href={`/estudo/revisao?disciplina=${encodeURIComponent(selectedExam.disciplineKey)}`}>Revisar meus pontos fracos</Link>
+                  {linkedMaterials.length > 0 && <Button type="button" variant="outline" onClick={() => {
+                    if (SessionOperationManager.current().userId !== sessionOwner) return;
+                    prepareReviewedTutorDraft(`Revise comigo os assuntos desta prova: ${selectedExam.subjects.map(({ name }) => name).join(", ")}.`, {
+                      key: selectedExam.disciplineKey!,
+                      subject: selectedExam.discipline,
+                      materialIds: linkedMaterials.map(({ id }) => id),
+                    });
+                    router.push("/tutor");
+                  }}>Revisar materiais com Tutor</Button>}
+                </div>}
 
                 {materialNotice ? (
                   <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-muted-foreground">{materialNotice}</p>
@@ -548,16 +714,17 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 {linkedMaterials.length > 0 && !materialsLoading && !materialsError ? (
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                     {linkedMaterials.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between rounded-xl border bg-card/40 p-3">
+                      <div key={m.id} className="flex flex-wrap items-center justify-between gap-1 rounded-xl border bg-card/40 p-3">
                         <div className="flex min-w-0 flex-1 items-center gap-3">
                           <FileText className="size-4 shrink-0 text-muted-foreground" />
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{m.name}</p>
+                              {m.studyId ? <Link className="block truncate text-sm font-medium underline" href={`/estudo?tema=${encodeURIComponent(m.studyId)}&arquivo=${encodeURIComponent(m.id)}&aba=material`}>{m.name}</Link> : <p className="truncate text-sm font-medium">{m.name}</p>}
                             <p className="truncate text-xs text-muted-foreground">
-                              {m.subject ?? m.topic ?? "Sem assunto definido"} · {m.fileType.toUpperCase()}
+                              {m.subject ?? m.topic ?? "Sem assunto definido"} · {materialKind(m)}
                             </p>
                           </div>
                         </div>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => setPracticeMaterial({ examId: selectedExam.id, materialId: m.id })}>Praticar</Button>
                         <Button type="button" aria-label={`Remover material ${m.name}`} variant="ghost" size="sm" onClick={() => removeMaterialFromExam(m.id)}>
                           Remover
                         </Button>
@@ -565,6 +732,11 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                     ))}
                   </div>
                 ) : null}
+                {activePractice && <ExamMaterialPractice key={`${selectedExam.id}:${activePractice.id}`} materialId={activePractice.id} onAssess={recordPractice} />}
+                {preparationKey && <div className="border-t pt-4">
+                  {catalogError && <p role="alert">Não foi possível carregar as questões extraídas.</p>}
+                  <ExamMaterialSimulation key={JSON.stringify([selectedExam.id, preparationKey])} exam={selectedExam} catalog={catalog} save={saveMaterialAttempt} />
+                </div>}
 
                 <div className="space-y-2">
                   {selectedExam && (
@@ -583,7 +755,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                         {selectedExam.studyId && !studies.some((study) => study.studyId === selectedExam.studyId) ? (
                           <option value={selectedExam.studyId}>Estudo indisponível (vínculo preservado)</option>
                         ) : null}
-                        {studies.map((s) => (
+                        {eligibleStudies.filter((study) => !selectedExam.disciplineKey || linkedStudyIds.has(study.studyId)).map((s) => (
                           <option key={s.studyId} value={s.studyId}>
                             {s.title} ({s.subject})
                           </option>

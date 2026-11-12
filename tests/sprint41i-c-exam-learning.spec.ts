@@ -7,6 +7,7 @@ import { examLearningHref, resolveExamStudy } from "../src/features/exam/ExamLea
 import type { Exam } from "../src/types/exam";
 import type { StudyRecord } from "../src/types/study-engine";
 import { createRealStudy } from "./helpers/real-study";
+import { contentNeedsTutorReview } from "../src/features/ocr/exercise-review";
 
 function loadTutorContextService(studies: readonly StudyRecord[]) {
   const source = readFileSync(path.join(process.cwd(), "src/features/tutor/services/TutorContextService.ts"), "utf8");
@@ -19,6 +20,7 @@ function loadTutorContextService(studies: readonly StudyRecord[]) {
     "@/features/study/services/StudyEngine": { StudyEngine: { load: async () => [...studies] } },
     "@/features/summaries/services/SummaryStorage": { SummaryStorage: { load: async () => [] } },
     "@/features/extraction/ContentStorage": { ContentStorage: { load: async () => ({ records: [] }) } },
+    "@/features/ocr/exercise-review": { contentNeedsTutorReview },
     "@/features/flashcards/FlashcardService": { FlashcardService: { load: async () => [] } },
     "@/features/quiz/QuizService": { QuizService: { load: async () => ({ questions: [], results: [] }) } },
     "@/features/learning/KnowledgeEngine": { KnowledgeEngine: { calculate: () => ({ knowledge: 0, confidence: 0, mastery: 0, classification: "initial" }) } },
@@ -135,6 +137,7 @@ test("ações permanecem funcionais no viewport mobile e após reload", async ({
 
 test("vínculo inválido é preservado sem produzir navegação autorizada", async ({ page }) => {
   await page.goto("/provas");
+  await expect(page.getByRole("button", { name: "Nova Prova" })).toBeVisible();
   await page.evaluate((linkedExam) => {
     localStorage.setItem("studyai:exams:offline-session", JSON.stringify([linkedExam]));
   }, exam("study-removido"));

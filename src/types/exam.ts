@@ -1,5 +1,28 @@
 export type ExamPriority = "high" | "medium" | "low";
 
+export type MaterialExamQuestion = {
+  id: string;
+  materialId: string;
+  materialName: string;
+  studyId?: string;
+  page?: number;
+  statement: string;
+  alternatives: string[];
+  suggestedChoice?: number;
+};
+
+export type MaterialExamAttempt = {
+  id: string;
+  examId: string;
+  disciplineKey: string;
+  source: "material";
+  startedAt: string;
+  completedAt?: string;
+  questions: MaterialExamQuestion[];
+  answers: Record<string, { choice: number; assessment?: "correct" | "wrong" }>;
+  confirmedKeys?: Record<string, { choice: number; source: "student-document"; confirmedAt: string; revision: string }>;
+};
+
 export type ExamSubject = {
   id: string;
   name: string;
@@ -12,7 +35,12 @@ export type Exam = {
   studyId?: string;
   title: string;
   discipline: string;
+  disciplineKey?: string;
   examDate: string;
+  examTime?: string;
+  manualOrder?: boolean;
+  materialAttempts?: MaterialExamAttempt[];
+  practiceTotals?: { correct: number; wrong: number; reviewed: number };
   subjects: ExamSubject[];
   materialIds: string[];
   dailyMinutes: number;

@@ -45,6 +45,7 @@ test.describe("Isolamento do armazenamento local — Sprint 41G.3B", () => {
     const localStorage = fakeLocalStorage();
     localStorage.setItem("studyai:active-session-owner", "user-a");
     localStorage.setItem("studyai:exams", "plano-de-a");
+    localStorage.setItem("studyai:exams:user-a", JSON.stringify([{ id: "exam-a", materialAttempts: [{ id: "attempt-a", answers: { q: { choice: 0 } } }] }]));
     localStorage.setItem("studyai:ai-settings", "config-de-a");
 
     const { isSyncPreferenceKey } = loadModule("src/features/sync/SyncPreferences.ts", {}) as { isSyncPreferenceKey: (key: string) => boolean };
@@ -68,12 +69,14 @@ test.describe("Isolamento do armazenamento local — Sprint 41G.3B", () => {
     // A suspende e salva seus dados privados
     await SessionLocalData.suspend("user-a");
     expect(localStorage.getItem("studyai:exams")).toBeNull(); // limpo após suspend
+    expect(localStorage.getItem("studyai:exams:user-a")).toBeNull();
     expect(localStorage.getItem("studyai:active-session-owner")).toBeNull();
 
     // B tenta restaurar: não há registro de B, então nada deve ser restaurado
     await SessionLocalData.resume("user-b");
     expect(localStorage.getItem("studyai:active-session-owner")).toBe("user-b");
     expect(localStorage.getItem("studyai:exams")).toBeNull(); // dados de A não restaurados para B
+    expect(localStorage.getItem("studyai:exams:user-a")).toBeNull();
     expect(localStorage.getItem("studyai:ai-settings")).toBeNull();
   });
 

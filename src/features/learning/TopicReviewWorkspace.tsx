@@ -18,14 +18,14 @@ import { TopicReviewStorage } from "./TopicReviewStorage";
 const labels = { new: "Sem revisão registrada", late: "Atrasadas", today: "Hoje", upcoming: "Próximas" };
 const priority = { late: 0, today: 1, new: 2, upcoming: 3 };
 
-export function TopicReviewWorkspace() {
+export function TopicReviewWorkspace({ requestedDiscipline }: { requestedDiscipline?: string }) {
   const auth = useAuth();
   const session = SessionOperationManager.current();
   if (auth.isLoading || session.suspended || !session.userId) return <p role="status">Carregando sessão…</p>;
-  return <ReviewSession key={session.generation} />;
+  return <ReviewSession key={session.generation} requestedDiscipline={requestedDiscipline} />;
 }
 
-function ReviewSession() {
+function ReviewSession({ requestedDiscipline }: { requestedDiscipline?: string }) {
   const router = useRouter();
   const { records: studies, isLoading: studiesLoading } = useStudyEngine();
   const { materials, isLoading: materialsLoading, error: materialsError } = useMaterials();
@@ -65,7 +65,8 @@ function ReviewSession() {
     }
     return map;
   }, [materials, reviews]);
-  const selected = discipline || groups.keys().next().value || "";
+  const preferred = discipline || requestedDiscipline;
+  const selected = preferred && groups.has(preferred) ? preferred : requestedDiscipline && !discipline ? "" : groups.keys().next().value || "";
   const now = new Date();
   const topics = useMemo(() => {
     const byStudy = new Map<string, typeof materials>();
@@ -91,6 +92,8 @@ function ReviewSession() {
   const active = topics.find(({ study }) => study.studyId === activeId);
   const average = topics.length ? Math.round(topics.reduce((sum, { study }) => sum + study.progress, 0) / topics.length) : 0;
   const missing = reviews?.filter((review) => review.discipline === selected && !topics.some(({ study }) => study.studyId === review.studyId)) ?? [];
+  const needsAttention = ({ review, wrong }: (typeof topics)[number]) =>
+    wrong > 0 || (review?.wrong ?? 0) > 0 || review?.difficulty === "hard" || reviewPeriod(review?.nextReviewAt, now) === "late";
 
   async function record(result: ReviewResult) {
     if (!active || locked.current) return;
@@ -137,18 +140,23 @@ function ReviewSession() {
         setActiveId("");
         setNotice("");
       }}>
+        {!selected && <option value="" disabled>Selecione uma disciplina disponível</option>}
         {[...groups].map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select>
     </label>
     <p>Progresso de estudo: {average}% · Temas revisados: {topics.filter(({ review }) => review).length}/{topics.length}</p>
+    {selected && !topics.some(needsAttention) &&
+      <p>Sem erros, dificuldades declaradas ou revisões atrasadas registradas nesta disciplina.</p>}
     {(["late", "today", "upcoming"] as const).map((period) => <p key={period}>
       {labels[period]}: {topics.filter(({ review }) => reviewPeriod(review?.nextReviewAt, now) === period).length}
     </p>)}
-    {[...topics].sort((a, b) => priority[reviewPeriod(a.review?.nextReviewAt, now)] - priority[reviewPeriod(b.review?.nextReviewAt, now)]).map((item) => {
+    {[...topics].sort((a, b) => (requestedDiscipline ? Number(needsAttention(b)) - Number(needsAttention(a)) : 0) ||
+      priority[reviewPeriod(a.review?.nextReviewAt, now)] - priority[reviewPeriod(b.review?.nextReviewAt, now)]).map((item) => {
       const { study, review, correct, wrong } = item;
       return <section key={study.studyId} className="grid min-w-0 gap-2 rounded-xl border p-3 [overflow-wrap:anywhere]">
         <h2 className="font-semibold">{study.title}</h2>
         <p>{labels[reviewPeriod(review?.nextReviewAt, now)]}{review && ` · ${new Date(review.nextReviewAt).toLocaleDateString("pt-BR")}`}</p>
+        {study.progress === 0 && <p>Conteúdo ainda não estudado.</p>}
         <p>{correct + wrong ? `Flashcards e quizzes: ${correct} acertos, ${wrong} erros.` : "Sem histórico suficiente de flashcards ou quizzes."}</p>
         {wrong >= 2 && wrong >= correct && <p>Precisa de atenção: erros repetidos na prática.</p>}
         {review && <p>Revisões: {review.attempts} · Autoavaliação: {review.correct} acertos, {review.wrong} erros{review.difficulty === "hard" && " · Dificuldade declarada"}</p>}

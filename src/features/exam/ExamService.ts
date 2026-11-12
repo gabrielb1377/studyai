@@ -1,4 +1,4 @@
-import type { Exam, ExamPlanItem } from "@/types/exam";
+import type { Exam, ExamPlanItem, MaterialExamAttempt, MaterialExamQuestion } from "@/types/exam";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 const STORAGE_KEY_PREFIX = "studyai:exams:";
@@ -131,39 +131,37 @@ export const ExamService = {
     };
   },
 
+  startMaterialAttempt(exam: Exam, catalog: readonly MaterialExamQuestion[], count: number): MaterialExamAttempt | null {
+    const questions = [...new Map(catalog.filter((question) => exam.materialIds.includes(question.materialId))
+      .map((question) => [question.id, question])).values()];
+    if (!exam.disciplineKey || !Number.isInteger(count) || count < 1 || count > 30 || count > questions.length) return null;
+    return {
+      id: crypto.randomUUID(), examId: exam.id, disciplineKey: exam.disciplineKey,
+      source: "material", startedAt: new Date().toISOString(), questions: questions.slice(0, count), answers: {},
+    };
+  },
+
   generatePlan(exam: Exam, now = new Date()): ExamPlanItem[] {
     const diffDays = daysUntilExam(exam.examDate, now);
-    const totalDays = Math.max(1, diffDays ?? 1);
-
-    const uncompleted = exam.subjects.filter((subject) => !subject.completed);
-    if (uncompleted.length === 0) {
-      return exam.subjects.map((subject, index) => ({
-        dayIndex: index + 1,
-        dateStr: new Date(now.getTime() + index * 86400000).toLocaleDateString("pt-BR"),
-        subjectName: subject.name,
-        priority: subject.priority,
-        estimatedMinutes: exam.dailyMinutes,
-        completed: subject.completed,
-      }));
-    }
-
+    if (diffDays === null || diffDays < 0 || !exam.subjects.length) return [];
     const priorityWeight = { high: 3, medium: 2, low: 1 };
-    const sorted = [...uncompleted].sort((a, b) => priorityWeight[b.priority] - priorityWeight[a.priority]);
-
-    const plan: ExamPlanItem[] = [];
-    for (let day = 0; day < totalDays; day++) {
-      const subject = sorted[day % sorted.length];
-      if (!subject) continue;
-      const date = new Date(now.getTime() + day * 86400000);
-      plan.push({
+    const sorted = [...exam.subjects];
+    if (!exam.manualOrder) sorted.sort((a, b) => priorityWeight[b.priority] - priorityWeight[a.priority]);
+    const slots = Math.min(diffDays + 1, sorted.length);
+    const perDay = Math.ceil(sorted.length / slots);
+    return sorted.map((subject, index) => {
+      const day = Math.floor(index / perDay);
+      const date = new Date(now);
+      date.setDate(date.getDate() + day);
+      const activities = Math.min(perDay, sorted.length - day * perDay);
+      return {
         dayIndex: day + 1,
         dateStr: date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
         subjectName: subject.name,
         priority: subject.priority,
-        estimatedMinutes: exam.dailyMinutes,
-        completed: false,
-      });
-    }
-    return plan;
+        estimatedMinutes: Math.floor(exam.dailyMinutes / activities),
+        completed: subject.completed,
+      };
+    });
   },
 };

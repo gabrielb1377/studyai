@@ -9,7 +9,8 @@ export function ProvasClient({ requestedExamId }: { requestedExamId?: string }) 
   const auth = useAuth();
   const { records: studies, isLoading, error } = useStudyEngine();
 
-  if (auth.isLoading || isLoading) {
+  const session = SessionOperationManager.current();
+  if (auth.isLoading || isLoading || session.suspended) {
     return (
       <div className="flex h-screen items-center justify-center">
         <p className="text-sm text-muted-foreground">Carregando estudos...</p>
@@ -17,7 +18,7 @@ export function ProvasClient({ requestedExamId }: { requestedExamId?: string }) 
     );
   }
 
-  const sessionOwner = auth.session?.user.id ?? SessionOperationManager.current().userId;
+  const sessionOwner = auth.session?.user.id ?? session.userId;
 
   return (
     <div className="space-y-3">
@@ -26,7 +27,7 @@ export function ProvasClient({ requestedExamId }: { requestedExamId?: string }) 
           Os estudos não puderam ser carregados agora. Seus vínculos existentes foram preservados.
         </p>
       ) : null}
-      <ExamWorkspace studies={studies} sessionOwner={sessionOwner} requestedExamId={requestedExamId} />
+      <ExamWorkspace key={session.generation} studies={studies} sessionOwner={sessionOwner} requestedExamId={requestedExamId} />
     </div>
   );
 }

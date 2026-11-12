@@ -1,7 +1,58 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createRealStudy } from "./helpers/real-study";
 
 const password = "StudyAI2026secure";
 const uniqueEmail = (label: string) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`;
+
+async function createPreparation(page: Page, title: string, answer: string) {
+  await createRealStudy(page, "Questão 1. Qual estrutura usa índices?\nA) Vetor\nB) Pilha");
+  await page.goto("/provas");
+  await page.getByRole("button", { name: "Nova Prova", exact: true }).click();
+  await page.getByLabel("Disciplina da Biblioteca").selectOption({ label: "Algoritmos · Ciência da Computação · 1º semestre" });
+  await page.getByLabel("Nome da Prova").fill(title);
+  await page.getByLabel("Data da Prova").fill("2027-12-01");
+  await page.getByLabel("Assuntos / Conteúdos da Prova").fill("Estruturas de dados");
+  await page.getByRole("button", { name: "Adicionar", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar Prova", exact: true }).click();
+  await page.getByRole("button", { name: "Adicionar material fundamentos.txt" }).click();
+  const simulation = page.getByRole("region", { name: "Simulado dos materiais" });
+  await simulation.getByLabel("Quantidade de questões").fill("1");
+  await simulation.getByRole("button", { name: "Iniciar simulado dos materiais" }).click();
+  await simulation.getByRole("radio", { name: answer }).check();
+  await simulation.getByRole("button", { name: "Finalizar simulado dos materiais" }).click();
+  await expect(simulation.getByLabel("Histórico desta avaliação")).toBeVisible();
+}
+
+test("45.4 cria simulados pela interface autenticada e restaura somente a conta A", async ({ page }) => {
+  test.setTimeout(150_000);
+  const emailA = uniqueEmail("preparacao-a");
+  await register(page, emailA);
+  const userA = await currentUserId(page);
+  await createPreparation(page, "Avaliação privada A", "A. Vetor");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "A. Vetor" })).toBeChecked();
+  await page.goto("/conta");
+  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
+
+  await register(page, uniqueEmail("preparacao-b"));
+  expect(await currentUserId(page)).not.toBe(userA);
+  await page.goto("/provas");
+  await expect(page.getByText("Nenhuma prova cadastrada")).toBeVisible();
+  expect(await page.evaluate((owner) => localStorage.getItem(`studyai:exams:${owner}`), userA)).toBeNull();
+  await createPreparation(page, "Avaliação privada B", "B. Pilha");
+  await page.goto("/conta");
+  await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
+
+  await login(page, emailA);
+  expect(await currentUserId(page)).toBe(userA);
+  await page.goto("/provas");
+  await expect(page.getByRole("heading", { name: "Avaliação privada A" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "A. Vetor" })).toBeChecked();
+  await expect(page.getByText("Avaliação privada B")).toHaveCount(0);
+  expect((await accountSnapshot(page)).allValues.some((value) => value.includes("Avaliação privada B"))).toBe(false);
+});
 
 async function register(page: Page, email: string) {
   await page.goto("/conta");
@@ -27,12 +78,13 @@ async function currentUserId(page: Page) {
   return ((await response.json()) as { user: { id: string } }).user.id;
 }
 
-async function writeAccountData(page: Page, marker: string) {
-  await page.evaluate((value) => {
+async function writeAccountData(page: Page, marker: string, owner: string) {
+  await page.evaluate(({ value, userId }) => {
     localStorage.setItem("studyai:workspace:active", JSON.stringify({ marker: value }));
     localStorage.setItem("studyai:ai-settings", JSON.stringify({ marker: value, provider: "local-test" }));
     localStorage.setItem("studyai:exams", JSON.stringify([{ id: value }]));
-  }, marker);
+    localStorage.setItem(`studyai:exams:${userId}`, JSON.stringify([{ id: value, materialAttempts: [{ id: `attempt-${value}`, answers: { q: { choice: 0 } } }] }]));
+  }, { value: marker, userId: owner });
 }
 
 async function accountSnapshot(page: Page) {
@@ -54,7 +106,7 @@ test("navegador real: A → B → A, múltiplas abas, preferências do dispositi
 
   await register(page, emailA);
   const userA = await currentUserId(page);
-  await writeAccountData(page, markerA);
+  await writeAccountData(page, markerA, userA);
   await page.evaluate(() => {
     localStorage.setItem("studyai-theme", "dark");
     localStorage.setItem("studyai:platform-settings", JSON.stringify({ notifications: false }));
@@ -85,7 +137,7 @@ test("navegador real: A → B → A, múltiplas abas, preferências do dispositi
   const crossed = await page.request.get("/sync?since=0", { headers: { "x-studyai-session-user": userA, "x-csrf-token": csrf } });
   expect(crossed.status()).toBe(409);
 
-  await writeAccountData(page, markerB);
+  await writeAccountData(page, markerB, userB);
   await page.getByRole("button", { name: "Sair", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
   await login(page, emailA);
@@ -105,4 +157,6 @@ test("navegador real: A → B → A, múltiplas abas, preferências do dispositi
   const afterReload = await accountSnapshot(page);
   expect(afterReload.workspace).toBe(JSON.stringify({ marker: markerA }));
   expect(afterReload.allValues.some((value) => value.includes(markerB))).toBe(false);
+  expect(await page.evaluate((owner) => JSON.parse(localStorage.getItem(`studyai:exams:${owner}`) ?? "[]"), userA))
+    .toEqual([{ id: markerA, materialAttempts: [{ id: `attempt-${markerA}`, answers: { q: { choice: 0 } } }] }]);
 });
