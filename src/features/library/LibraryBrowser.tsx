@@ -5,10 +5,13 @@ import Link from "next/link";
 import { FolderInput, Grid2X2, List, Rows3, Search, Star, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/features/account/AuthProvider";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { disciplineKey } from "@/features/tutor/services/DisciplineContext";
 import { useMaterials } from "@/hooks/useMaterials";
 import { useExtraction } from "@/features/extraction/useExtraction";
 import type { MaterialFilter } from "@/types/material";
-import { LibraryEmptyState, LibraryLoading, LibraryNoResults } from "./LibraryStates";
+import { LibraryEmptyState, LibraryErrorState, LibraryLoading, LibraryNoResults } from "./LibraryStates";
 import { MaterialCard } from "./MaterialCard";
 import { filterMaterials, materialFilters } from "./material-utils";
 import { OrganizationService, type MaterialDestination } from "@/features/organization/OrganizationService";
@@ -31,7 +34,14 @@ const libraryViews = [
 ] as const;
 
 export function LibraryBrowser() {
-  const { materials, isLoading, refresh } = useMaterials();
+  const auth = useAuth();
+  const session = SessionOperationManager.current();
+  if (auth.isLoading || session.suspended) return <LibraryLoading />;
+  return <LibraryContent key={session.generation} />;
+}
+
+function LibraryContent() {
+  const { materials, isLoading, error, refresh } = useMaterials();
   const { records: extractedContents } = useExtraction();
   const { graphs: knowledgeGraphs } = useKnowledgeGraphs();
   const { records: studies } = useStudyEngine();
@@ -40,6 +50,17 @@ export function LibraryBrowser() {
   const { summaries } = useSummaries();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("all");
+  const [discipline, setDiscipline] = useState("");
+  const disciplines = useMemo(() => {
+    const options = new Map<string, string>();
+    for (const material of materials) {
+      const key = disciplineKey(material);
+      if (key) options.set(key, [material.subject, material.course, material.semester]
+        .map((part) => part?.trim()).filter(Boolean).join(" · "));
+    }
+    return [...options].sort(([, a], [, b]) => a.localeCompare(b, "pt-BR"));
+  }, [materials]);
+  const activeDiscipline = disciplines.some(([key]) => key === discipline) ? discipline : "";
   const searchRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [moveIds, setMoveIds] = useState<string[]>([]);
@@ -50,7 +71,8 @@ export function LibraryBrowser() {
   const [smartFilter, setSmartFilter] = useState<SmartFilter>("none");
   const [destination, setDestination] = useState<MaterialDestination>({ course: "", semester: "", subject: "", topic: "" });
   const results = useMemo(() => {
-    const base = filterMaterials(materials, query, filter);
+    const base = filterMaterials(materials, query, filter)
+      .filter((material) => !activeDiscipline || disciplineKey(material) === activeDiscipline);
     const score = (materialId: string) => studies.find((study) => study.studyId === materials.find((item) => item.id === materialId)?.studyId)?.progress ?? 0;
     if (smartFilter === "most-studied") return [...base].sort((left, right) => score(right.id) - score(left.id)).slice(0, Math.max(1, Math.ceil(base.length / 3)));
     if (smartFilter === "least-studied") return [...base].sort((left, right) => score(left.id) - score(right.id)).slice(0, Math.max(1, Math.ceil(base.length / 3)));
@@ -64,7 +86,7 @@ export function LibraryBrowser() {
     if (smartFilter === "no-quiz") return base.filter((material) => !quizQuestions.some((question) => question.studyId === material.studyId));
     if (smartFilter === "no-flashcards") return base.filter((material) => !flashcards.some((card) => card.studyId === material.studyId));
     return base;
-  }, [extractedContents, filter, flashcards, materials, query, quizQuestions, smartFilter, studies, summaries]);
+  }, [activeDiscipline, extractedContents, filter, flashcards, materials, query, quizQuestions, smartFilter, studies, summaries]);
 
   useEffect(() => {
     const stored = localStorage.getItem("studyai:library-view") as LibraryView | null;
@@ -78,9 +100,14 @@ export function LibraryBrowser() {
 
   if (isLoading) return <LibraryLoading />;
 
+  if (error) return <LibraryErrorState onRetry={() => void refresh({ clear: true })} />;
+
+  const hasFilters = filter !== "all" || Boolean(activeDiscipline) || smartFilter !== "none";
+
   function clearFilters() {
     setQuery("");
     setFilter("all");
+    setDiscipline("");
     setSmartFilter("none");
     searchRef.current?.focus();
   }
@@ -131,7 +158,7 @@ export function LibraryBrowser() {
         <Input
           ref={searchRef}
           aria-label="Pesquisar material"
-          placeholder="Pesquisar material..."
+          placeholder="Título, disciplina, tema ou tag"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           className="h-11 bg-card pl-10 pr-12 shadow-none"
@@ -187,26 +214,57 @@ export function LibraryBrowser() {
             {item.label}
           </Button>
         ))}
-        <label className="ml-auto flex min-h-11 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground">Filtro inteligente<select aria-label="Filtro inteligente" value={smartFilter} onChange={(event) => setSmartFilter(event.target.value as SmartFilter)} className="max-w-44 bg-transparent text-foreground outline-none"><option value="none">Nenhum</option><option value="most-studied">Mais estudados</option><option value="least-studied">Menos estudados</option><option value="never-reviewed">Nunca revisados</option><option value="today">Importados hoje</option><option value="recent">Recentes</option><option value="ocr">Com OCR</option><option value="pending-review">Com revisão pendente</option><option value="transcription">Com transcrição</option><option value="no-summary">Sem resumo</option><option value="no-quiz">Sem quiz</option><option value="no-flashcards">Sem flashcards</option></select></label>
+        {disciplines.length > 0 && (
+          <label className="flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-lg border bg-card px-3 text-sm">
+            Disciplina
+            <select value={activeDiscipline} onChange={(event) => setDiscipline(event.target.value)}
+              className="min-w-0 rounded bg-transparent focus-visible:ring-2 focus-visible:ring-ring">
+              <option value="">Todas</option>
+              {disciplines.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          </label>
+        )}
+        <label className="flex min-h-11 min-w-0 max-w-full items-center gap-2 rounded-lg border bg-card px-3 text-sm">Filtro inteligente<select aria-label="Filtro inteligente" value={smartFilter} onChange={(event) => setSmartFilter(event.target.value as SmartFilter)} className="min-w-0 max-w-44 rounded bg-transparent text-foreground focus-visible:ring-2 focus-visible:ring-ring"><option value="none">Nenhum</option><option value="most-studied">Mais estudados</option><option value="least-studied">Menos estudados</option><option value="never-reviewed">Nunca revisados</option><option value="today">Importados hoje</option><option value="recent">Recentes</option><option value="ocr">Com OCR</option><option value="pending-review">Com revisão pendente</option><option value="transcription">Com transcrição</option><option value="no-summary">Sem resumo</option><option value="no-quiz">Sem quiz</option><option value="no-flashcards">Sem flashcards</option></select></label>
       </div>
+      {hasFilters && (
+        <div role="group" aria-label="Filtros ativos" className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Filtros ativos</span>
+          {filter !== "all" && (
+            <Button variant="secondary" size="sm" onClick={() => { setFilter("all"); searchRef.current?.focus(); }}>
+              Remover {materialFilters.find((item) => item.value === filter)?.label}<X aria-hidden="true" />
+            </Button>
+          )}
+          {activeDiscipline && (
+            <Button variant="secondary" size="sm" className="h-auto min-h-9 max-w-full whitespace-normal text-left [overflow-wrap:anywhere]"
+              onClick={() => { setDiscipline(""); searchRef.current?.focus(); }}>
+              Remover {disciplines.find(([key]) => key === activeDiscipline)?.[1]}<X aria-hidden="true" />
+            </Button>
+          )}
+          {smartFilter !== "none" && (
+            <Button variant="secondary" size="sm" onClick={() => { setSmartFilter("none"); searchRef.current?.focus(); }}>
+              Remover filtro inteligente<X aria-hidden="true" />
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={clearFilters}>Limpar tudo</Button>
+        </div>
+      )}
       <section aria-labelledby="materials-heading" className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-6">
           <h2 id="materials-heading" className="text-sm font-medium">
             <span role="status" aria-live="polite">
               {results.length} {results.length === 1 ? "material" : "materiais"}
-              {query.trim() || filter !== "all" || smartFilter !== "none"
+              {query.trim() || hasFilters
                 ? results.length === 1
                   ? " encontrado"
                   : " encontrados"
                 : " na biblioteca"}
             </span>
           </h2>
-          <span className="text-xs text-muted-foreground">Dados importados neste dispositivo</span>
         </div>
         {materials.length === 0 ? (
           <LibraryEmptyState />
         ) : results.length === 0 ? (
-          <LibraryNoResults onClear={clearFilters} />
+          <LibraryNoResults query={query.trim()} onClear={clearFilters} />
         ) : (
           <div className={cn(
             "content-fade",

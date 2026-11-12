@@ -84,6 +84,9 @@ export function filterMaterials(
         material.subject ?? "",
         material.topic ?? "",
         material.relativePath,
+        ...(material.tags ?? []),
+        material.professor ?? "",
+        material.institution ?? "",
       ].join(" "),
     );
     return matchesFilter && words.every((word) => text.includes(word));
