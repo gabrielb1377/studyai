@@ -135,8 +135,8 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
         >
           {material.name}
         </h3>
-        {(view === "grid" || showDetails) && <dl className={cn("space-y-2.5 text-xs leading-5", view === "grid" ? "mb-5" : "col-span-full mt-4 rounded-xl border bg-secondary/20 p-4 sm:grid sm:grid-cols-2 sm:gap-x-6")}>
-          {details.map((detail) => (
+        <dl className={cn("space-y-2.5 text-xs leading-5", view === "grid" ? "mb-5" : "col-span-full mt-4")}>
+          {details.filter((detail) => detail.label === "Disciplina" || detail.label === "Tema").map((detail) => (
             <div
               key={detail.label}
               className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2"
@@ -145,7 +145,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               <dd className="break-words">{detail.value}</dd>
             </div>
           ))}
-        </dl>}
+        </dl>
         <div className={cn("space-y-2", view === "grid" ? "mb-4 border-t pt-4" : "my-3 sm:my-0")}>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <span>{generatedByAcademy || generatedByLab ? "Pronto" : material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
@@ -159,14 +159,17 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
           </p>
         ) : null}
         {view === "grid" && material.tags?.length ? <p className="mb-4 text-xs text-muted-foreground"><strong className="text-foreground">Tags:</strong> {material.tags.join(", ")}</p> : null}
-        {showDetails && (
-          <div className="col-span-full mb-4 rounded-xl border bg-secondary/25 p-3 text-xs leading-5 text-muted-foreground">
+        <div id={`material-details-${material.id}`} hidden={!showDetails} className="col-span-full mb-4 rounded-xl border bg-secondary/25 p-3 text-xs leading-5 text-muted-foreground">
+            <dl className="space-y-2">
+              {details.filter((detail) => detail.label !== "Disciplina" && detail.label !== "Tema").map((detail) => (
+                <div key={detail.label} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2"><dt>{detail.label}</dt><dd className="break-words">{detail.value}</dd></div>
+              ))}
+            </dl>
             <p><strong className="text-foreground">Caminho:</strong> {material.relativePath}</p>
             <p><strong className="text-foreground">Atualizado:</strong> {formatMaterialDate(material.updatedAt)}</p>
             <p><strong className="text-foreground">Palavras:</strong> {content?.metadata.wordCount ?? 0}</p>
             <p><strong className="text-foreground">Conceitos isolados:</strong> {knowledge?.statistics.isolatedConceptCount ?? 0}</p>
           </div>
-        )}
         {content?.errorDetails ? (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
             <p className="font-medium">{content.errorDetails.reason}</p>
@@ -200,7 +203,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               <Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=revisao`}><ScanText />Revisar</Link>
             </Button>
           ) : null}
-          <Button type="button" size="sm" variant="ghost" onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
+          <Button type="button" size="sm" variant="ghost" aria-expanded={showDetails} aria-controls={`material-details-${material.id}`} onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
           <Button type="button" size="sm" variant="ghost" onClick={onMove}><FolderInput />Mover</Button>
           <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Excluir</Button>
         </div>
