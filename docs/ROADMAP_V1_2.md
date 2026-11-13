@@ -1,5 +1,37 @@
 # StudyAI — roadmap reconciliado V1.2
 
+## Planejamento atual — 12 de novembro de 2026
+
+A Sprint 46 está implementada localmente. Seu fechamento para o MVP pessoal é proposto com ressalvas: 46A em `027e498`, 46B em `d33ae02` e 46C em `d5ade4c`. A 46D registrou 66 testes aprovados inicialmente e uma falha intermitente. Na 46D.1, o teste afetado passou em 10/10 repetições isoladas e a bateria vizinha em 8/8. A falha após reload mobile da Semana de Prova não voltou a ocorrer e sua causa permanece desconhecida. Propõe-se aceitar provisoriamente esse risco no MVP pessoal e monitorá-lo na Sprint 47. Esta proposta aguarda decisão e o defeito não foi declarado corrigido.
+
+A Sprint 47 é a próxima etapa proposta. As Sprints 48–58 são planejamento e não estão aprovadas para implementação imediata. Os detalhes anteriores abaixo são um registro histórico de 6/11, não o estado atual.
+
+| Sprint | Planejamento |
+| --- | --- |
+| 47 — Preparação técnica de release | Segurança e isolamento, desempenho, acessibilidade, estabilidade, revisão de riscos e critérios de prontidão. Sem deploy automático. |
+| 48 — Design System | Identidade visual, cores, tipografia, componentes reutilizáveis, ícones, botões, formulários, cards, estados e microinterações consistentes em desktop e mobile. |
+| 49 — Refinamento das telas | Dashboard, Biblioteca, Tutor, Estudo, Revisões e Provas, reutilizando a lógica existente. |
+| 50 — Experiência premium e mobile | Navegação, usabilidade, responsividade, acessibilidade, feedback visual, microinterações leves e revisão no navegador. |
+| 51 — Estudo Livre 2.0 | Evoluir o criador existente com editor por blocos, templates de aulas, resumos e exercícios, capítulos, pré-visualização, rascunhos, salvamento automático, IA opcional e exportação futura. |
+| 52 — Laboratório 2.0 | Revisar ferramentas existentes e planejar código, matemática, gráficos, simulações, desafios com IA, visualização de dados e práticas guiadas. |
+| 53 — Planejamento inteligente | Plano de estudos, metas e prioridades, integrado à Semana de Prova. |
+| 54 — Aprendizagem personalizada | Mapa de dificuldades, Caderno de Erros e revisões direcionadas. |
+| 55 — Tutor avançado | Referências a materiais, explicações por nível, exercícios graduais e contexto por disciplina. |
+| 56 — Avaliações adaptativas | Simulados adaptativos, revisões inteligentes e indicadores confiáveis. |
+| 57 — Multimodal | Importação de áudio e vídeo e Tutor por voz, avaliando custos, privacidade e infraestrutura. |
+| 58 — Produtividade e offline | Modo foco, metas semanais e recursos offline conforme viabilidade. |
+
+### Pendências e critérios
+
+- A associação segura no servidor entre avaliações e tentativas protegidas depende de persistência de avaliações com propriedade verificável e de decisão sobre schema. Antes de expansão multiusuário ou ativação do vínculo, exigir autorização e testes de propriedade cruzada, recuperação e tentativas legadas. O MVP pessoal usa simulados locais independentes desse vínculo.
+- O suporte avançado a múltiplas contas foi despriorizado para o MVP pessoal. Qualquer expansão depende de validar isolamento real, sincronização e recuperação com contas de teste.
+- A falha de reload da Semana de Prova precisa ser monitorada na 47. Em nova ocorrência, preservar trace, estado e etapas para distinguir dados perdidos de falha no teste.
+- Aparelhos físicos e leitores de tela exigem validação futura. Critério: percorrer navegação, foco e fluxos principais nos dispositivos disponíveis, registrando resultados.
+- Os experimentos S3 permanecem fora dos checkpoints funcionais. Sua integração depende de revisão de segurança e testes com infraestrutura apropriada.
+
+## Registro histórico — fotografia de 6 de novembro de 2026
+
+
 Atualizado em **6 de novembro de 2026**. O planejamento original de 30/10 foi preservado e confrontado com o código. Funcionalidade existente não é sinônimo de validação em produção.
 
 ## Visão geral

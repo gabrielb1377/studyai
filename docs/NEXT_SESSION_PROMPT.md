@@ -1,5 +1,8 @@
 # Prompt reutilizável — próxima sessão
 
+> **Estado atual — 46E:** confirme o Git e consulte [o roadmap atual](ROADMAP_V1_2.md) e [o handoff](../CURRENT_HANDOFF.md). As Sprints 46A–C estão nos commits `027e498`, `d33ae02` e `d5ade4c`. A 46D registrou 66 aprovados e uma falha intermitente após reload mobile. A 46D.1 passou 10/10 repetições isoladas e 8/8 testes vizinhos. A causa permanece desconhecida. A aceitação provisória do risco no MVP pessoal e seu monitoramento na Sprint 47 são propostos e aguardam decisão. Preserve experimentos S3. A Sprint 47 requer solicitação própria; 48–58 são propostas futuras. Os textos abaixo registram fotografias históricas.
+
+
 > **Encerramento 45:** a Semana de Prova está pronta para checkpoint seletivo no escopo do MVP pessoal. Consulte `docs/SPRINT_45_STATUS.md`. Adie o vínculo protegido e a migração até antes da expansão multiusuário ou da ativação do vínculo. Preserve os experimentos S3.
 
 > **Atualização 45.2:** consulte o status da Sprint 45 para a política de gabarito conferido e os critérios pendentes de associação protegida e teste entre contas.

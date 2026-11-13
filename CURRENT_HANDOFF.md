@@ -1,5 +1,12 @@
 # Handoff atual — StudyAI V1.1
 
+## Estado atual — Sprint 46E
+
+46A, 46B e 46C estão registradas em `027e498`, `d33ae02` e `d5ade4c`. Na 46D houve 66 testes aprovados e uma falha após reload mobile da Semana de Prova. Na 46D.1 o cenário passou 10/10 vezes isoladamente e os testes vizinhos passaram 8/8. A causa da falha permanece desconhecida. Propõe-se aceitar provisoriamente o risco para o MVP pessoal e monitorá-lo na Sprint 47, sujeito a decisão. Não há correção comprovada.
+
+A Sprint 47 é proposta para preparação técnica de release. As Sprints 48–58 são propostas futuras. O planejamento atual e as pendências estão em [ROADMAP_V1_2.md](docs/ROADMAP_V1_2.md). Os registros antigos abaixo são históricos quando divergirem deste estado.
+
+
 ## Sprint 46A — Dashboard e progresso
 
 O painel Meu progresso reúne estudos por disciplina, revisões agendadas, próximas avaliações e simulados locais. A correção com gabarito conferido aparece separada da autoavaliação. O Modo Prova protegido continua fora do resumo por avaliação. A busca universal e as demais melhorias mobile seguem no roadmap.
