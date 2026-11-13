@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Feedback } from "@/components/ui/feedback";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { daysUntilExam, ExamService, formatExamDate } from "./ExamService";
@@ -581,7 +582,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 {progressLoading ? (
                   <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Carregando registros autorizados…</p>
                 ) : progressError ? (
-                  <p role="status" className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-muted-foreground">{progressError}</p>
+                  <Feedback variant="warning" role="status" className="mt-5 p-4">{progressError}</Feedback>
                 ) : !examProgress || examProgress.state === "insufficient_data" ? (
                   <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                     Sem dados suficientes. Vincule um estudo ou material organizado desta conta para consolidar o progresso.
@@ -696,7 +697,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 </div>}
 
                 {materialNotice ? (
-                  <p role="status" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-muted-foreground">{materialNotice}</p>
+                  <Feedback variant="warning" role="status">{materialNotice}</Feedback>
                 ) : null}
 
                 {materialsLoading ? (

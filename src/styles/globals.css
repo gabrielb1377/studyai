@@ -7,6 +7,18 @@
 
 :root {
   color-scheme: light;
+  --info-surface: #edf5fc;
+  --info-foreground: #174c75;
+  --info-border: #8bb1cf;
+  --success-surface: #e8f4eb;
+  --success-foreground: #205b3b;
+  --success-border: #88b99a;
+  --warning-surface: #fff5dc;
+  --warning-foreground: #704500;
+  --warning-border: #c7a45c;
+  --error-surface: #fff0ef;
+  --error-foreground: #8f2626;
+  --error-border: #cf9191;
   --background: #f8faf7;
   --foreground: #252b28;
   --card: #ffffff;
@@ -23,7 +35,7 @@
   --accent-foreground: #28583e;
   --destructive: #bc3636;
   --border: #dfe5dd;
-  --input: #d9dfd7;
+  --input: #858f87;
   --ring: #4f896b;
   --radius: 0.875rem;
   --sidebar: #f2f5ef;
@@ -39,6 +51,18 @@
 
 .dark {
   color-scheme: dark;
+  --info-surface: #172d3c;
+  --info-foreground: #b8def8;
+  --info-border: #6d99b9;
+  --success-surface: #1d3425;
+  --success-foreground: #bce4c7;
+  --success-border: #7eae8c;
+  --warning-surface: #3d2e16;
+  --warning-foreground: #f5d89d;
+  --warning-border: #b49a69;
+  --error-surface: #3c2221;
+  --error-foreground: #ffc4bf;
+  --error-border: #bc8581;
   --background: #161b18;
   --foreground: #e7ece7;
   --card: #1d2420;
@@ -55,7 +79,7 @@
   --accent-foreground: #c1dec8;
   --destructive: #fa8b8b;
   --border: #343e36;
-  --input: #455147;
+  --input: #829184;
   --ring: #a0c9a9;
   --sidebar: #1b221d;
   --surface-raised: rgba(29, 36, 32, 0.9);
@@ -65,6 +89,18 @@
 
 .amoled {
   color-scheme: dark;
+  --info-surface: #0a202d;
+  --info-foreground: #bde3ff;
+  --info-border: #739fbd;
+  --success-surface: #0d2414;
+  --success-foreground: #c4eccc;
+  --success-border: #82b590;
+  --warning-surface: #291d0a;
+  --warning-foreground: #ffe0a4;
+  --warning-border: #c2a671;
+  --error-surface: #2b1110;
+  --error-foreground: #ffc9c3;
+  --error-border: #c18b85;
   --background: #000000;
   --foreground: #f1f5f2;
   --card: #090c0a;
@@ -81,7 +117,7 @@
   --accent-foreground: #d3ead9;
   --destructive: #ff9494;
   --border: #252b27;
-  --input: #363d38;
+  --input: #819085;
   --ring: #b4e5c0;
   --sidebar: #050705;
   --surface-raised: rgba(9, 12, 10, 0.96);
@@ -167,6 +203,17 @@
 }
 
 @layer utilities {
+  .type-page-title { @apply text-[1.85rem] font-semibold tracking-[-0.04em] text-balance sm:text-[2.15rem] sm:leading-tight; }
+  .type-section-title { @apply text-xl font-semibold tracking-tight; }
+  .type-subtitle { @apply text-base font-semibold; }
+  .type-body { @apply text-base leading-6; }
+  .type-supporting { @apply text-sm leading-6 text-muted-foreground; }
+
+  .feedback-info { color: var(--info-foreground); background: var(--info-surface); border-color: var(--info-border); }
+  .feedback-success { color: var(--success-foreground); background: var(--success-surface); border-color: var(--success-border); }
+  .feedback-warning { color: var(--warning-foreground); background: var(--warning-surface); border-color: var(--warning-border); }
+  .feedback-error { color: var(--error-foreground); background: var(--error-surface); border-color: var(--error-border); }
+
   .page-enter {
     animation: page-enter var(--motion-normal) var(--ease-out) both;
   }
@@ -322,4 +369,11 @@ html[data-reduced-motion="true"] *::after {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .content-fade, .skeleton-shimmer::after { animation: none; }
+  .surface-hover { transition: none; }
+  .surface-hover:hover { transform: none; }
+  html { scroll-behavior: auto; }
 }
