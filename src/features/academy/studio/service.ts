@@ -4,6 +4,7 @@ import type {
   StudioContentKind,
   StudioCustomization,
   StudioDocumentTemplate,
+  StudioPedagogicalTemplateId,
   StudioExportRecord,
   DocumentStructure,
   DocumentSection,
@@ -12,7 +13,7 @@ import type {
 } from "./types";
 import { StudioStorage } from "./storage";
 import { AcademyStorage } from "../storage/AcademyStorage";
-import { getTemplateById } from "./templates";
+import { getPedagogicalTemplateById, getTemplateById } from "./templates";
 import type { AcademyGeneratedContent, AcademyStudy } from "../types";
 
 function generateId() {
@@ -195,6 +196,58 @@ function createDefaultSlides(content: AcademyGeneratedContent): Slide[] {
   return slides;
 }
 
+function createManualDocumentStructure(
+  study: Pick<AcademyStudy, "title" | "topic" | "subject">,
+  pedagogicalTemplateId: StudioPedagogicalTemplateId,
+): DocumentStructure {
+  const pedagogical = getPedagogicalTemplateById(pedagogicalTemplateId) ?? getPedagogicalTemplateById("structured-lesson")!;
+  const title = study.title || study.topic;
+  const rawSections = pedagogical.buildSections({
+    title,
+    topic: study.topic || title,
+    subject: study.subject || "Estudo Livre",
+  });
+  const sections: DocumentSection[] = rawSections.map((section, index) => ({
+    ...section,
+    id: generateId(),
+    order: index,
+  }));
+  const now = new Date().toISOString();
+
+  return {
+    id: generateId(),
+    title,
+    subtitle: `${pedagogical.name} · ${study.subject}`,
+    description: pedagogical.objective,
+    sections,
+    metadata: {
+      author: "StudyAI Academy",
+      subject: study.subject,
+      keywords: [study.topic, study.subject, ...pedagogical.tags].filter(Boolean),
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+}
+
+function createManualSlides(
+  study: Pick<AcademyStudy, "title" | "topic" | "subject">,
+  pedagogicalTemplateId: StudioPedagogicalTemplateId,
+): Slide[] {
+  const pedagogical = getPedagogicalTemplateById(pedagogicalTemplateId) ?? getPedagogicalTemplateById("structured-lesson")!;
+  const title = study.title || study.topic;
+  const rawSlides = pedagogical.buildSlides({
+    title,
+    topic: study.topic || title,
+    subject: study.subject || "Estudo Livre",
+  });
+  return rawSlides.map((slide, index) => ({
+    ...slide,
+    id: generateId(),
+    order: index,
+  }));
+}
+
 export const StudioService = {
   getDefaultEditorState(): StudioEditorState {
     return {
@@ -226,10 +279,46 @@ export const StudioService = {
     return StudioStorage.create({
       studyId,
       contentId: content.id,
+      sourceMode: "ai",
       type,
       kind,
       title: content.title,
       template: templateId,
+      customization,
+      documentStructure,
+      slides,
+      status: "draft",
+    });
+  },
+
+  async createManualDocument(
+    study: Pick<AcademyStudy, "id" | "title" | "topic" | "subject">,
+    type: StudioDocumentType = "document",
+    pedagogicalTemplateId: StudioPedagogicalTemplateId = "structured-lesson",
+    visualTemplateId?: StudioDocumentTemplate,
+    kind: StudioContentKind = "study-material",
+  ): Promise<StudioDocument> {
+    const pedagogical = getPedagogicalTemplateById(pedagogicalTemplateId);
+    if (!pedagogical) throw new Error("Template pedagógico não encontrado.");
+
+    const resolvedVisualTemplate: StudioDocumentTemplate =
+      visualTemplateId ?? (type === "presentation" ? "academic-presentation" : "academic");
+    const template = getTemplateById(resolvedVisualTemplate);
+    if (!template) throw new Error("Template visual não encontrado.");
+
+    const customization = template.defaultCustomization ?? createDefaultCustomization(resolvedVisualTemplate);
+    const documentStructure = type === "document" ? createManualDocumentStructure(study, pedagogicalTemplateId) : undefined;
+    const slides = type === "presentation" ? createManualSlides(study, pedagogicalTemplateId) : undefined;
+
+    return StudioStorage.create({
+      studyId: study.id,
+      contentId: undefined,
+      sourceMode: "manual",
+      pedagogicalTemplate: pedagogicalTemplateId,
+      type,
+      kind,
+      title: study.title || study.topic,
+      template: resolvedVisualTemplate,
       customization,
       documentStructure,
       slides,
@@ -430,6 +519,60 @@ export const StudioService = {
     document.template = templateId;
     document.customization = template.defaultCustomization ?? createDefaultCustomization(templateId);
     document.updatedAt = new Date().toISOString();
+
+    return this.updateDocument(document);
+  },
+
+  async applyPedagogicalTemplate(
+    documentId: string,
+    pedagogicalTemplateId: StudioPedagogicalTemplateId,
+    context?: { title?: string; topic?: string; subject?: string },
+  ) {
+    const document = await this.getDocument(documentId);
+    if (!document) throw new Error("Documento não encontrado.");
+
+    const pedagogical = getPedagogicalTemplateById(pedagogicalTemplateId);
+    if (!pedagogical) throw new Error("Template pedagógico não encontrado.");
+
+    const study = (!context?.topic || !context?.subject) ? await this.resolveStudy(document) : null;
+    const resolvedContext = {
+      title: context?.title || document.documentStructure?.title || document.title || study?.title || "Estudo Livre",
+      topic: context?.topic || study?.topic || document.title || "Estudo Livre",
+      subject: context?.subject || study?.subject || document.documentStructure?.metadata.subject || "Geral",
+    };
+
+    const now = new Date().toISOString();
+    if (document.type === "presentation") {
+      document.slides = pedagogical.buildSlides(resolvedContext).map((slide, index) => ({
+        ...slide,
+        id: generateId(),
+        order: index,
+      }));
+    } else {
+      const sections: DocumentSection[] = pedagogical.buildSections(resolvedContext).map((section, index) => ({
+        ...section,
+        id: generateId(),
+        order: index,
+      }));
+      const currentStructure = document.documentStructure;
+      document.documentStructure = {
+        id: currentStructure?.id ?? generateId(),
+        title: currentStructure?.title || resolvedContext.title,
+        subtitle: currentStructure?.subtitle || `${pedagogical.name} · ${resolvedContext.subject}`,
+        description: currentStructure?.description || pedagogical.objective,
+        sections,
+        metadata: {
+          author: currentStructure?.metadata.author ?? "StudyAI Academy",
+          subject: currentStructure?.metadata.subject ?? resolvedContext.subject,
+          keywords: currentStructure?.metadata.keywords ?? [resolvedContext.topic, resolvedContext.subject, ...pedagogical.tags],
+          createdAt: currentStructure?.metadata.createdAt ?? now,
+          updatedAt: now,
+        },
+      };
+    }
+
+    document.pedagogicalTemplate = pedagogicalTemplateId;
+    document.updatedAt = now;
 
     return this.updateDocument(document);
   },

@@ -2,6 +2,13 @@ export type StudioDocumentType = "document" | "presentation";
 
 export type StudioContentKind = "study-material" | "learning-path" | "practical-project";
 
+export type StudioPedagogicalTemplateId =
+  | "structured-lesson"
+  | "structured-summary"
+  | "exercise-list"
+  | "textbook-chapter"
+  | "blank-document";
+
 export type StudioDocumentTemplate = 
   | "academic" 
   | "modern" 
@@ -143,6 +150,8 @@ export type StudioDocument = {
   id: string;
   studyId: string;
   contentId?: string;
+  sourceMode?: "ai" | "manual";
+  pedagogicalTemplate?: StudioPedagogicalTemplateId;
   type: StudioDocumentType;
   kind: StudioContentKind;
   title: string;
@@ -208,4 +217,21 @@ export type StudioTemplate = {
   defaultCustomization: StudioCustomization;
   defaultStructure?: Partial<DocumentStructure>;
   defaultSlides?: Partial<Slide>[];
+};
+
+export type StudioPedagogicalTemplateContext = {
+  title: string;
+  topic: string;
+  subject: string;
+};
+
+export type StudioPedagogicalTemplate = {
+  id: StudioPedagogicalTemplateId;
+  name: string;
+  description: string;
+  objective: string;
+  tags: string[];
+  recommendedVisualTemplate: StudioDocumentTemplate;
+  buildSections: (context: StudioPedagogicalTemplateContext) => Omit<DocumentSection, "id" | "order">[];
+  buildSlides: (context: StudioPedagogicalTemplateContext) => Omit<Slide, "id" | "order">[];
 };

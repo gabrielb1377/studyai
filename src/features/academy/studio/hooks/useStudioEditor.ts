@@ -6,6 +6,8 @@ import type {
   StudioEditorState,
   StudioDocumentType,
   StudioDocumentTemplate,
+  StudioPedagogicalTemplate,
+  StudioPedagogicalTemplateId,
   StudioCustomization,
   StudioTemplate,
   StudioExportRecord,
@@ -14,8 +16,8 @@ import type {
   Slide,
 } from "../types";
 import { StudioService } from "../service";
-import { studioTemplates, getTemplateById, getTemplatesByType } from "../templates";
-import type { AcademyGeneratedContent } from "../../types";
+import { studioTemplates, studioPedagogicalTemplates, getTemplateById, getTemplatesByType } from "../templates";
+import type { AcademyGeneratedContent, AcademyStudy } from "../../types";
 
 const AUTOSAVE_DELAY = 1_500;
 const STORAGE_KEY = "studyai:studio-editor-state:v1";
@@ -43,6 +45,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
     return StudioService.getDefaultEditorState();
   });
   const [availableTemplates, setAvailableTemplates] = useState<StudioTemplate[]>([]);
+  const [availablePedagogicalTemplates] = useState<StudioPedagogicalTemplate[]>(studioPedagogicalTemplates);
   const [isSaving, setIsSaving] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -153,6 +156,37 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
         return created;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível criar o documento.");
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+
+    createManual: async (
+      study: Pick<AcademyStudy, "id" | "title" | "topic" | "subject">,
+      type: StudioDocumentType = "document",
+      pedagogicalTemplateId: StudioPedagogicalTemplateId = "structured-lesson",
+      visualTemplateId?: StudioDocumentTemplate,
+    ) => {
+      setIsLoading(true);
+      setLastError(null);
+      try {
+        const created = await StudioService.createManualDocument(study, type, pedagogicalTemplateId, visualTemplateId);
+        setDocument(created);
+        setContent(null);
+        historyRef.current = [];
+        futureRef.current = [];
+        setHistoryVersion((value) => value + 1);
+        setEditorState((state) => ({
+          ...state,
+          activeDocumentId: created.id,
+          activeSectionId: created.documentStructure?.sections[0]?.id,
+          activeSlideId: created.slides?.[0]?.id,
+          unsavedChanges: false,
+        }));
+        return created;
+      } catch (error) {
+        setLastError(error instanceof Error ? error.message : "Não foi possível criar o documento manual.");
         return null;
       } finally {
         setIsLoading(false);
@@ -400,6 +434,28 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       }
     },
 
+    applyPedagogicalTemplate: async (
+      pedagogicalTemplateId: StudioPedagogicalTemplateId,
+      context?: { title?: string; topic?: string; subject?: string },
+    ) => {
+      if (!document) return null;
+      pushHistory(snapshot());
+      try {
+        const updated = await StudioService.applyPedagogicalTemplate(document.id, pedagogicalTemplateId, context);
+        setDocument(updated);
+        setEditorState((state) => ({
+          ...state,
+          activeSectionId: updated.documentStructure?.sections[0]?.id,
+          activeSlideId: updated.slides?.[0]?.id,
+          unsavedChanges: true,
+        }));
+        return updated;
+      } catch (error) {
+        setLastError(error instanceof Error ? error.message : "Não foi possível aplicar o template pedagógico.");
+        return null;
+      }
+    },
+
     registerExport: async (record: StudioExportRecord) => {
       if (!document) return null;
       try {
@@ -454,6 +510,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
     content,
     editorState,
     availableTemplates,
+    availablePedagogicalTemplates,
     isSaving,
     lastError,
     isLoading,

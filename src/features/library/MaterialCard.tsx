@@ -186,8 +186,8 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               {material.academyStudyId && material.academyContentId ? (
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=document`}><LayoutTemplate />Abrir no Studio</Link></Button>
               ) : null}
-              {material.academyStudioDocumentId && material.academyStudyId && material.academyContentId ? (
-                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
+              {material.academyStudioDocumentId && material.academyStudyId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}${material.academyContentId ? `&conteudo=${material.academyContentId}` : `&documento=${material.academyStudioDocumentId}`}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
               ) : null}
               {material.fileType === "png" && material.studyId ? (
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=material&origem=biblioteca`}><Eye />Abrir material</Link></Button>

@@ -35,7 +35,7 @@ import { StudioPreviewPanel } from "./components/StudioPreviewPanel";
 import { StudioPresentationEditor } from "./components/StudioPresentationEditor";
 import { StudioTemplatesPanel } from "./components/StudioTemplatesPanel";
 import type { AcademyGeneratedContent, AcademyStudy } from "../types";
-import type { StudioDocumentTemplate, StudioDocumentType } from "./types";
+import type { StudioDocumentTemplate, StudioDocumentType, StudioPedagogicalTemplateId } from "./types";
 
 const DEFAULT_TEMPLATES: Record<StudioDocumentType, StudioDocumentTemplate> = {
   document: "academic",
@@ -46,18 +46,29 @@ type MobileTab = "editor" | "preview" | "structure";
 
 interface StudioEditorProps {
   study: AcademyStudy;
-  content: AcademyGeneratedContent;
+  content?: AcademyGeneratedContent;
+  documentId?: string;
   docType?: StudioDocumentType;
+  initialPedagogicalTemplate?: StudioPedagogicalTemplateId;
   onClose: () => void;
   onOpenWorkspace?: () => void;
 }
 
-export function StudioEditor({ study, content, docType = "document", onClose, onOpenWorkspace }: StudioEditorProps) {
+export function StudioEditor({
+  study,
+  content,
+  documentId,
+  docType = "document",
+  initialPedagogicalTemplate = "structured-lesson",
+  onClose,
+  onOpenWorkspace,
+}: StudioEditorProps) {
   const editor = useStudioEditor();
   const {
     document,
     editorState,
     availableTemplates,
+    availablePedagogicalTemplates,
     isSaving,
     isLoading,
     lastError,
@@ -65,6 +76,7 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
     canRedo,
     loadDocument,
     createNew,
+    createManual,
     saveDocument,
     addSection,
     updateSection,
@@ -78,6 +90,7 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
     duplicateSlide,
     reorderSlides,
     changeTemplate,
+    applyPedagogicalTemplate,
     updateCustomization,
     registerExport,
     undo,
@@ -94,24 +107,41 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
 
   // As ações do hook mudam de identidade a cada alteração do documento.
   // Mantê-las em uma ref evita recarregar o documento a cada edição.
-  const actionsRef = useRef({ loadDocument, createNew });
-  actionsRef.current = { loadDocument, createNew };
+  const actionsRef = useRef({ loadDocument, createNew, createManual });
+  actionsRef.current = { loadDocument, createNew, createManual };
   const ensuredKey = useRef<string | null>(null);
 
-  // Garante um documento do Studio para o conteúdo, sem criar cópias duplicadas.
+  // Garante um documento do Studio para o conteúdo ou estudo manual, sem criar cópias duplicadas.
   useEffect(() => {
-    const key = `${study.id}::${content.id}::${docType}`;
+    const key = `${study.id}::${documentId ?? content?.id ?? "manual"}::${docType}`;
     if (ensuredKey.current === key) return;
     ensuredKey.current = key;
     void (async () => {
       const existing = await StudioService.listDocuments(study.id);
-      // Um documento e uma apresentação do mesmo conteúdo são artefatos distintos.
-      const match = existing.find((item) => item.contentId === content.id && item.type === docType);
-      if (match) await actionsRef.current.loadDocument(match.id);
-      else await actionsRef.current.createNew(study.id, content, docType, DEFAULT_TEMPLATES[docType], content.kind);
+      if (documentId) {
+        const byId = existing.find((item) => item.id === documentId);
+        if (byId) {
+          await actionsRef.current.loadDocument(byId.id);
+          setReady(true);
+          return;
+        }
+      }
+      if (content) {
+        // Um documento e uma apresentação do mesmo conteúdo são artefatos distintos.
+        const match = existing.find((item) => item.contentId === content.id && item.type === docType);
+        if (match) await actionsRef.current.loadDocument(match.id);
+        else await actionsRef.current.createNew(study.id, content, docType, DEFAULT_TEMPLATES[docType], content.kind);
+      } else {
+        const manualMatch = existing.find((item) => !item.contentId && item.type === docType);
+        if (manualMatch) {
+          await actionsRef.current.loadDocument(manualMatch.id);
+        } else {
+          await actionsRef.current.createManual(study, docType, initialPedagogicalTemplate, DEFAULT_TEMPLATES[docType]);
+        }
+      }
       setReady(true);
     })();
-  }, [study.id, content.id, docType, content]);
+  }, [study, documentId, content, docType, initialPedagogicalTemplate]);
 
   const sections = useMemo(() => document?.documentStructure?.sections ?? [], [document?.documentStructure?.sections]);
   const slides = useMemo(() => document?.slides ?? [], [document?.slides]);
@@ -268,6 +298,15 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
           <StudioTemplatesPanel
             templates={availableTemplates}
             currentTemplate={document.template}
+            pedagogicalTemplates={availablePedagogicalTemplates}
+            currentPedagogicalTemplate={document.pedagogicalTemplate}
+            onSelectPedagogicalTemplate={(pedagogicalId) =>
+              void applyPedagogicalTemplate(pedagogicalId, {
+                title: document.title || study.title,
+                topic: study.topic,
+                subject: study.subject,
+              })
+            }
             docType={docType}
             onSelectTemplate={(templateId) => void changeTemplate(templateId)}
           />
@@ -330,6 +369,15 @@ export function StudioEditor({ study, content, docType = "document", onClose, on
     <StudioDocumentEditor
       structure={document.documentStructure}
       activeSectionId={editorState.activeSectionId}
+      pedagogicalTemplates={availablePedagogicalTemplates}
+      currentPedagogicalTemplate={document.pedagogicalTemplate}
+      onApplyPedagogicalTemplate={(pedagogicalId) =>
+        void applyPedagogicalTemplate(pedagogicalId, {
+          title: document.title || study.title,
+          topic: study.topic,
+          subject: study.subject,
+        })
+      }
       onSectionClick={setActiveSection}
       onAddSection={handleAddSection}
       onUpdateStructure={(updates) => void updateStructure(updates)}

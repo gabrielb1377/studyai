@@ -9,7 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { markdownToSafeHtml } from "../sanitize";
-import type { DocumentSection, DocumentStructure } from "../types";
+import type {
+  DocumentSection,
+  DocumentStructure,
+  StudioPedagogicalTemplate,
+  StudioPedagogicalTemplateId,
+} from "../types";
 
 const SECTION_TYPES: { id: DocumentSection["type"]; label: string; icon: typeof Type }[] = [
   { id: "heading", label: "Título", icon: Heading },
@@ -27,6 +32,9 @@ const SECTION_TYPES: { id: DocumentSection["type"]; label: string; icon: typeof 
 interface StudioDocumentEditorProps {
   structure?: DocumentStructure;
   activeSectionId?: string;
+  pedagogicalTemplates?: StudioPedagogicalTemplate[];
+  currentPedagogicalTemplate?: StudioPedagogicalTemplateId;
+  onApplyPedagogicalTemplate?: (templateId: StudioPedagogicalTemplateId) => void;
   onSectionClick: (id: string) => void;
   onAddSection: () => void;
   onUpdateStructure: (updates: Partial<DocumentStructure>) => void;
@@ -40,6 +48,9 @@ interface StudioDocumentEditorProps {
 export function StudioDocumentEditor({
   structure,
   activeSectionId,
+  pedagogicalTemplates = [],
+  currentPedagogicalTemplate,
+  onApplyPedagogicalTemplate,
   onSectionClick,
   onAddSection,
   onUpdateStructure,
@@ -147,6 +158,23 @@ export function StudioDocumentEditor({
               placeholder="Resumo curto exibido na capa"
             />
           </label>
+          {onApplyPedagogicalTemplate && pedagogicalTemplates.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 p-2.5">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">Template pedagógico</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Escolha a estrutura didática de blocos para este documento.
+                </p>
+              </div>
+              <Select
+                value={currentPedagogicalTemplate ?? "structured-lesson"}
+                onValueChange={(value) => onApplyPedagogicalTemplate(value as StudioPedagogicalTemplateId)}
+                options={pedagogicalTemplates.map((item) => ({ value: item.id, label: item.name }))}
+                aria-label="Template pedagógico"
+                className="h-8 w-full sm:w-56 text-xs"
+              />
+            </div>
+          ) : null}
         </div>
       )}
 

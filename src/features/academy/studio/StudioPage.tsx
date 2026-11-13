@@ -10,6 +10,7 @@ import {
   FolderOpen,
   LayoutTemplate,
   Loader2,
+  Pencil,
   Presentation,
   Sparkles,
 } from "lucide-react";
@@ -22,12 +23,15 @@ import { AcademyService } from "../services/AcademyService";
 import { academyLabels, type AcademyStudy } from "../types";
 import { StudioEditor } from "./StudioEditor";
 import { StudioService } from "./service";
-import type { StudioDocument, StudioDocumentType } from "./types";
+import { isPedagogicalTemplateId, studioPedagogicalTemplates } from "./templates";
+import type { StudioDocument, StudioDocumentType, StudioPedagogicalTemplateId } from "./types";
 
 type Selection = {
   studyId: string;
-  contentId: string;
+  contentId?: string;
+  documentId?: string;
   docType: StudioDocumentType;
+  pedagogicalTemplate?: StudioPedagogicalTemplateId;
 };
 
 export function StudioPage() {
@@ -38,6 +42,8 @@ export function StudioPage() {
   const [error, setError] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pendingType, setPendingType] = useState<Record<string, StudioDocumentType>>({});
+  const [pendingManualType, setPendingManualType] = useState<Record<string, StudioDocumentType>>({});
+  const [pendingPedagogical, setPendingPedagogical] = useState<Record<string, StudioPedagogicalTemplateId>>({});
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -65,10 +71,13 @@ export function StudioPage() {
     if (isLoading || selection) return;
     const params = new URLSearchParams(window.location.search);
     const studyId = params.get("estudo");
-    const contentId = params.get("conteudo");
+    const contentId = params.get("conteudo") || undefined;
+    const documentId = params.get("documento") || undefined;
     const tipo = params.get("tipo") === "presentation" ? "presentation" : "document";
-    if (!studyId || !contentId) return;
-    setSelection({ studyId, contentId, docType: tipo });
+    const estrutura = params.get("estrutura");
+    const pedagogicalTemplate = isPedagogicalTemplateId(estrutura) ? estrutura : undefined;
+    if (!studyId) return;
+    setSelection({ studyId, contentId, documentId, docType: tipo, pedagogicalTemplate });
   }, [isLoading, selection]);
 
   const selectedStudy = useMemo(
@@ -76,13 +85,30 @@ export function StudioPage() {
     [studies, selection],
   );
   const selectedContent = useMemo(
-    () => selectedStudy?.contents.find((content) => content.id === selection?.contentId),
+    () => (selection?.contentId ? selectedStudy?.contents.find((content) => content.id === selection.contentId) : undefined),
     [selectedStudy, selection],
   );
 
-  const open = (studyId: string, contentId: string, docType: StudioDocumentType) => {
-    setSelection({ studyId, contentId, docType });
-    const params = new URLSearchParams({ estudo: studyId, conteudo: contentId, tipo: docType });
+  const open = (
+    studyId: string,
+    docType: StudioDocumentType,
+    options?: {
+      contentId?: string;
+      documentId?: string;
+      pedagogicalTemplate?: StudioPedagogicalTemplateId;
+    },
+  ) => {
+    setSelection({
+      studyId,
+      contentId: options?.contentId,
+      documentId: options?.documentId,
+      docType,
+      pedagogicalTemplate: options?.pedagogicalTemplate,
+    });
+    const params = new URLSearchParams({ estudo: studyId, tipo: docType });
+    if (options?.contentId) params.set("conteudo", options.contentId);
+    if (options?.documentId) params.set("documento", options.documentId);
+    if (options?.pedagogicalTemplate) params.set("estrutura", options.pedagogicalTemplate);
     router.replace(`/academy/studio?${params.toString()}`, { scroll: false });
   };
 
@@ -103,7 +129,7 @@ export function StudioPage() {
         </div>
       );
     }
-    if (!selectedStudy || !selectedContent) {
+    if (!selectedStudy || (selection.contentId && !selectedContent)) {
       return (
         <div className="flex h-[70dvh] flex-col items-center justify-center gap-3 p-8 text-center">
           <FileText className="size-10 text-muted-foreground" aria-hidden="true" />
@@ -121,9 +147,12 @@ export function StudioPage() {
       <StudioEditor
         study={selectedStudy}
         content={selectedContent}
+        documentId={selection.documentId}
         docType={selection.docType}
+        initialPedagogicalTemplate={selection.pedagogicalTemplate}
         onClose={() => {
           setSelection(null);
+          void load();
           router.push("/academy");
         }}
         onOpenWorkspace={() => void openWorkspace(selectedStudy.id)}
@@ -192,9 +221,16 @@ export function StudioPage() {
                           onClick={() => {
                             const study = studies.find((item) => item.id === document.studyId);
                             if (!study) return;
-                            const content = study.contents.find((item) => item.id === document.contentId);
-                            if (!content) return;
-                            open(study.id, content.id, document.type);
+                            if (document.contentId) {
+                              const content = study.contents.find((item) => item.id === document.contentId);
+                              if (!content) return;
+                              open(study.id, document.type, { contentId: content.id, documentId: document.id });
+                              return;
+                            }
+                            open(study.id, document.type, {
+                              documentId: document.id,
+                              pedagogicalTemplate: document.pedagogicalTemplate,
+                            });
                           }}
                         >
                           Reabrir no Studio
@@ -233,9 +269,7 @@ export function StudioPage() {
                       <Badge variant="outline" className="text-[10px]">{academyLabels.contentKinds["study-material"]}</Badge>
                       <span className="text-xs text-muted-foreground">{study.subject} · {study.topic}</span>
                     </header>
-                    {study.contents.length === 0 ? (
-                      <p className="mt-3 text-sm text-muted-foreground">Este estudo ainda não tem conteúdos gerados.</p>
-                    ) : (
+                    {study.contents.length > 0 ? (
                       <ul className="mt-3 grid gap-2">
                         {study.contents.map((content) => {
                           const type = pendingType[content.id] ?? "document";
@@ -257,14 +291,66 @@ export function StudioPage() {
                                   className="h-8 text-xs"
                                 />
                               </div>
-                              <Button type="button" size="sm" onClick={() => open(study.id, content.id, type)}>
+                              <Button type="button" size="sm" onClick={() => open(study.id, type, { contentId: content.id })}>
                                 <Sparkles className="size-3.5 me-1" aria-hidden="true" /> Abrir no Studio
                               </Button>
                             </li>
                           );
                         })}
                       </ul>
-                    )}
+                    ) : null}
+
+                    <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 rounded-xl border border-dashed bg-muted/20 p-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">Edição manual sem IA</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          Escolha um template pedagógico e construa seus blocos diretamente no Studio.
+                        </p>
+                      </div>
+                      <div className="basis-full sm:w-48 sm:basis-auto">
+                        <Select
+                          value={pendingPedagogical[study.id] ?? "structured-lesson"}
+                          onValueChange={(value) =>
+                            setPendingPedagogical((current) => ({
+                              ...current,
+                              [study.id]: value as StudioPedagogicalTemplateId,
+                            }))
+                          }
+                          options={studioPedagogicalTemplates.map((item) => ({ value: item.id, label: item.name }))}
+                          aria-label={`Template pedagógico para ${study.title}`}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div className="basis-full sm:w-36 sm:basis-auto">
+                        <Select
+                          value={pendingManualType[study.id] ?? "document"}
+                          onValueChange={(value) =>
+                            setPendingManualType((current) => ({
+                              ...current,
+                              [study.id]: value as StudioDocumentType,
+                            }))
+                          }
+                          options={[
+                            { value: "document", label: "Documento" },
+                            { value: "presentation", label: "Apresentação" },
+                          ]}
+                          aria-label={`Tipo de edição manual para ${study.title}`}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={study.contents.length === 0 ? "default" : "outline"}
+                        onClick={() =>
+                          open(study.id, pendingManualType[study.id] ?? "document", {
+                            pedagogicalTemplate: pendingPedagogical[study.id] ?? "structured-lesson",
+                          })
+                        }
+                      >
+                        <Pencil className="size-3.5 me-1" aria-hidden="true" /> Editar manualmente no Studio
+                      </Button>
+                    </div>
                   </article>
                 ))}
               </div>
