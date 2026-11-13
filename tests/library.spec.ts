@@ -39,6 +39,7 @@ test("combina disciplina e tipo, permite recuperar a busca por teclado e preserv
 
   const search = page.getByLabel("Pesquisar material");
   await search.fill("algoritmos");
+  await page.getByRole("button", { name: "Filtros", exact: true }).click();
   const discipline = page.getByRole("combobox", { name: "Disciplina", exact: true });
   await discipline.selectOption({ index: 1 });
   await page.getByRole("button", { name: "Documentos", exact: true }).click();

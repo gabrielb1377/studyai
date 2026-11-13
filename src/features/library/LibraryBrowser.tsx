@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { FolderInput, Grid2X2, List, Rows3, Search, Star, Tags, Trash2, X } from "lucide-react";
+import { ChevronDown, FolderInput, Grid2X2, List, Rows3, Search, SlidersHorizontal, Star, Tags, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/features/account/AuthProvider";
@@ -50,6 +50,7 @@ function LibraryContent() {
   const { summaries } = useSummaries();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<MaterialFilter>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [discipline, setDiscipline] = useState("");
   const disciplines = useMemo(() => {
     const options = new Map<string, string>();
@@ -102,7 +103,8 @@ function LibraryContent() {
 
   if (error) return <LibraryErrorState onRetry={() => void refresh({ clear: true })} />;
 
-  const hasFilters = filter !== "all" || Boolean(activeDiscipline) || smartFilter !== "none";
+  const activeFilterCount = Number(filter !== "all") + Number(Boolean(activeDiscipline)) + Number(smartFilter !== "none");
+  const hasFilters = activeFilterCount > 0;
 
   function clearFilters() {
     setQuery("");
@@ -195,10 +197,23 @@ function LibraryContent() {
           <Button size="sm" variant="destructive" onClick={() => setDeleteIds([...selectedIds])}><Trash2 />Excluir</Button>
         </div>
       )}
+      <Button
+        type="button"
+        variant="outline"
+        className="min-h-11 md:hidden"
+        aria-expanded={filtersOpen}
+        aria-controls="library-filters"
+        onClick={() => setFiltersOpen((open) => !open)}
+      >
+        <SlidersHorizontal aria-hidden="true" />
+        Filtros{activeFilterCount > 0 && ` (${activeFilterCount} ativos)`}
+        <ChevronDown aria-hidden="true" className={cn("size-4", filtersOpen && "rotate-180")} />
+      </Button>
       <div
+        id="library-filters"
         role="group"
         aria-label="Filtrar materiais"
-        className="flex flex-wrap gap-2"
+        className={cn("flex-wrap gap-2 md:flex", filtersOpen ? "flex" : "hidden")}
       >
         {materialFilters.map((item) => (
           <Button

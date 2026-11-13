@@ -382,7 +382,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Modo Semana de Prova</h1>
+          <h1 className="type-page-title">Modo Semana de Prova</h1>
           <p className="text-sm text-muted-foreground">Organize seus estudos, priorize assuntos e acompanhe sua contagem regressiva.</p>
         </div>
         <Button type="button" onClick={openCreateExam}><Plus className="size-4 mr-2" />Nova Prova</Button>
@@ -461,9 +461,8 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       {exams.length === 0 && !isCreating ? (
         <Card className="p-12 text-center space-y-3">
           <Calendar className="size-10 text-primary mx-auto" />
-          <h3 className="font-semibold text-lg">Nenhuma prova cadastrada</h3>
+          <h2 className="type-section-title">Nenhuma prova cadastrada</h2>
           <p className="text-sm text-muted-foreground max-w-md mx-auto">Cadastre sua data de prova para gerar automaticamente o plano de revisão ideal até o dia do exame.</p>
-          <Button onClick={openCreateExam}><Plus className="size-4 mr-2" />Cadastrar primeira prova</Button>
         </Card>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">

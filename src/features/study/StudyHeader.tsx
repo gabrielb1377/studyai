@@ -30,7 +30,7 @@ export function StudyHeader({ study, fileName, returnHref }: { study: StudyRecor
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {study.subject}
           </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-[36px]">
+          <h1 className="mt-3 type-page-title">
             {study.title}
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">

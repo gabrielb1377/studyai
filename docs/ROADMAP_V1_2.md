@@ -1,6 +1,11 @@
 # StudyAI — roadmap reconciliado V1.2
 
-## Planejamento atual — 12 de novembro de 2026
+## Atualização — Sprint 49D
+
+As etapas 49A–C foram integradas e validadas localmente na 49D. O desenvolvimento segue a diretriz StudyAI Clean & Functional: menos botões redundantes e poluição visual, mais conteúdo, menos cliques e identidade própria. A próxima etapa planejada é a Sprint 50; 51 permanece Estudo Livre 2.0, 52 Laboratório 2.0 e 53–58 funcionalidades inteligentes. Nenhuma aprovação de publicação decorre desta validação. O risco de reload da Semana de Prova permanece sem causa comprovada e deve ser reavaliado antes do release.
+
+
+## Registro histórico — 12 de novembro de 2026
 
 A Sprint 46 está implementada localmente. Seu fechamento para o MVP pessoal é proposto com ressalvas: 46A em `027e498`, 46B em `d33ae02` e 46C em `d5ade4c`. A 46D registrou 66 testes aprovados inicialmente e uma falha intermitente. Na 46D.1, o teste afetado passou em 10/10 repetições isoladas e a bateria vizinha em 8/8. A falha após reload mobile da Semana de Prova não voltou a ocorrer e sua causa permanece desconhecida. A decisão de produto aceita provisoriamente esse risco exclusivamente para a continuidade do desenvolvimento do MVP pessoal. A causa permanece desconhecida e a falha não está corrigida. Ela deve ser reavaliada antes de qualquer publicação.
 

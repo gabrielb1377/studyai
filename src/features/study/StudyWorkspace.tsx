@@ -89,16 +89,16 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   if (!record) {
     const invalidRequestedStudy = Boolean(requestedStudyId);
     return (
-      <Card className="items-center gap-4 p-10 text-center shadow-none">
+      <section className="flex max-w-xl flex-col items-start gap-4 py-4">
         <BookOpen className="size-9 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-xl font-semibold">{invalidRequestedStudy ? "Estudo indisponível" : "Nenhum estudo disponível"}</h1>
+        <h1 className="type-page-title">{invalidRequestedStudy ? "Estudo indisponível" : "Nenhum estudo disponível"}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
           {invalidRequestedStudy
             ? "O estudo solicitado não está disponível nesta conta. O endereço informado não concede acesso a estudos de outra sessão."
             : "Importe e organize um material para criar automaticamente um estudo."}
         </p>
         <Button asChild><Link href={returnHref ?? (invalidRequestedStudy ? "/estudo" : "/importar")}>{returnHref ? "Voltar à Semana de Prova" : invalidRequestedStudy ? "Ver estudos disponíveis" : "Importar material"}</Link></Button>
-      </Card>
+      </section>
     );
   }
 

@@ -1,6 +1,15 @@
 # Handoff atual — StudyAI V1.1
 
-## Estado atual — Sprint 47A
+## Estado atual — Sprint 49D
+
+As Sprints 49A–C de refinamento visual foram validadas em conjunto na 49D, com checkpoint local desta alteração. Biblioteca tem filtros recolhíveis no mobile; Tutor tem cabeçalho compacto; Dashboard, Estudo e Provas foram simplificados sem mudança deliberada de regras. Diretriz StudyAI Clean & Functional: menos botões redundantes e poluição visual, mais conteúdo, menos cliques e identidade própria.
+
+A bateria integrada registrou 64 aprovações e duas falhas de cadastro em servidor de produção sem banco; os dois cenários de contas sintéticas passaram depois no servidor de desenvolvimento isolado, que registrou desconexões ECONNRESET. Typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Não há homologação externa. A intermitência do reload da Semana de Prova não foi corrigida, segue sem causa comprovada e deve ser reavaliada antes de publicação; sua aceitação provisória vale apenas para continuidade do MVP pessoal.
+
+A próxima etapa planejada é Sprint 50, mediante solicitação. Sprint 51 é Estudo Livre 2.0, Sprint 52 Laboratório 2.0 e 53–58 cobrem funcionalidades inteligentes. A associação protegida entre avaliações e tentativas no servidor permanece adiada. Preserve os experimentos S3.
+
+
+## Registro histórico — Sprint 47A
 
 A avaliação técnica da Sprint 47 foi concluída localmente, sem aprovação para publicação. Foram 47 testes aprovados, sem falhas ou retries; typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Uma amostra local em Chromium carregou seis rotas em 267–505 ms, sem equivalência com produção, e não registrou exceções de página com Service Worker permitido. A Sprint 47 não alterou código.
 

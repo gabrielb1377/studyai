@@ -220,11 +220,8 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
         onDeleteConversation={deleteConversation}
       />
       <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border bg-card/45 p-3 shadow-[var(--shadow-card)] sm:p-4">
-        <div className="mb-4 flex flex-wrap items-center gap-3 px-1">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            {teacher.mode === "teacher" ? <GraduationCap className="size-5" aria-hidden="true" /> : <Bot className="size-5" aria-hidden="true" />}
-          </span>
-          <div className="min-w-0 flex-1">
+        <div className="mb-4 flex min-w-0 flex-col items-start gap-3 px-1 sm:flex-row sm:items-center">
+          <div className="min-w-0 w-full sm:flex-1">
             <h2 className="text-lg font-semibold tracking-tight">
               {activeConversation?.title ?? "Nova conversa"}
             </h2>
@@ -235,7 +232,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
               </p>
             )}
           </div>
-          <div className="flex rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
+          <div role="group" className="flex max-w-full rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
             <Button type="button" size="sm" variant={teacher.mode === "tutor" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "tutor"} onClick={() => teacher.setMode("tutor")}>
               <Bot aria-hidden="true" />Tutor
             </Button>
@@ -348,9 +345,8 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
             <TutorComposer mode={teacher.mode} draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
           </>
         ) : (
-          <div className="rounded-xl border border-dashed p-10 text-center">
+          <div className="px-2 py-8 text-center">
             <p className="text-sm text-muted-foreground">Crie uma conversa para começar.</p>
-            <Button type="button" className="mt-4" onClick={startNewConversation}>Nova conversa</Button>
           </div>
         )}
       </section>

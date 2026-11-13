@@ -33,9 +33,9 @@ export function StudyDashboard() {
 
   return (
     <div className="space-y-7">
-      <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
+      <div className={records.length ? "grid gap-5 xl:grid-cols-[1fr_0.43fr]" : ""}>
         <ContinueStudying records={records} materials={materials} />
-        <ImportMaterial />
+        {records.length > 0 && <ImportMaterial />}
       </div>
       <StudyProgressPanel studies={records} materials={materials} contents={contents}
         loading={studiesLoading || materialsLoading} incomplete={Boolean(studiesError || materialsError)} />
