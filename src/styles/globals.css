@@ -249,7 +249,11 @@ html[data-contrast="high"] :focus-visible {
 
 html[data-density="compact"] .app-main {
   padding-top: 1.25rem;
-  padding-bottom: 1.25rem;
+}
+@media (min-width: 1024px) {
+  html[data-density="compact"] .app-main {
+    padding-bottom: 1.25rem;
+  }
 }
 html[data-density="compact"] [data-slot="card"] {
   gap: 1rem;
