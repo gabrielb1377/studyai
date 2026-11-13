@@ -5,13 +5,11 @@ import type { StudyRecord } from "@/types/study-engine";
 
 export function StudyHeader({ study, fileName, returnHref }: { study: StudyRecord; fileName?: string; returnHref?: string }) {
   const backHref = returnHref ?? "/";
-  const backLabel = returnHref ? "Semana de Prova" : "Dashboard";
+  const backLabel = returnHref === "/biblioteca" ? "Biblioteca" : returnHref ? "Semana de Prova" : "Dashboard";
   return (
     <header className="mb-8 border-b pb-7 sm:mb-10 sm:pb-8">
       <nav aria-label="Breadcrumb" className="mb-5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-        <Link href={backHref} className="shrink-0 transition-colors hover:text-foreground">
-          {backLabel}
-        </Link>
+        <span className="shrink-0">{backLabel}</span>
         <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
         <span className="truncate">{study.subject}</span>
         <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
@@ -40,7 +38,7 @@ export function StudyHeader({ study, fileName, returnHref }: { study: StudyRecor
         <Button asChild variant="outline" className="h-10 shrink-0 self-start sm:self-auto">
           <Link href={backHref}>
             <ArrowLeft className="size-4" />
-            {returnHref ? "Voltar à Semana de Prova" : "Voltar"}
+            {backLabel === "Dashboard" ? "Voltar ao Dashboard" : `Voltar à ${backLabel}`}
           </Link>
         </Button>
       </div>

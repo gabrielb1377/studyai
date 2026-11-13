@@ -97,7 +97,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
             ? "O estudo solicitado não está disponível nesta conta. O endereço informado não concede acesso a estudos de outra sessão."
             : "Importe e organize um material para criar automaticamente um estudo."}
         </p>
-        <Button asChild><Link href={returnHref ?? (invalidRequestedStudy ? "/estudo" : "/importar")}>{returnHref ? "Voltar à Semana de Prova" : invalidRequestedStudy ? "Ver estudos disponíveis" : "Importar material"}</Link></Button>
+        <Button asChild><Link href={returnHref ?? (invalidRequestedStudy ? "/estudo" : "/importar")}>{returnHref === "/biblioteca" ? "Voltar à Biblioteca" : returnHref ? "Voltar à Semana de Prova" : invalidRequestedStudy ? "Ver estudos disponíveis" : "Importar material"}</Link></Button>
       </section>
     );
   }
@@ -110,7 +110,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
     <>
       <StudyHeader study={record} fileName={activeMaterial?.name} returnHref={returnHref} />
       <div className="grid items-start gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <StudyNavigationSidebar studies={records} materials={materials} activeStudyId={record.studyId} activeMaterialId={activeMaterialId} />
+        <StudyNavigationSidebar studies={records} materials={materials} activeStudyId={record.studyId} activeMaterialId={activeMaterialId} returnHref={returnHref} />
         <main className="min-w-0">
           <WorkspaceCanvas
             study={record}

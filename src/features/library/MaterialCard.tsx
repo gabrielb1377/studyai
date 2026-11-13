@@ -190,17 +190,17 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
               ) : null}
               {material.fileType === "png" && material.studyId ? (
-                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=material`}><Eye />Abrir material</Link></Button>
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=material&origem=biblioteca`}><Eye />Abrir material</Link></Button>
               ) : null}
             </>
           ) : <>
-            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia`}><Bot />Tutor</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material&origem=biblioteca`}><Eye />Abrir</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards&origem=biblioteca`}><BookOpen />Estudar</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia&origem=biblioteca`}><Bot />Tutor</Link></Button>
           </>}
           {content ? (
             <Button asChild size="sm" variant="outline">
-              <Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=revisao`}><ScanText />Revisar</Link>
+              <Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=revisao&origem=biblioteca`}><ScanText />Revisar</Link>
             </Button>
           ) : null}
           <Button type="button" size="sm" variant="ghost" aria-expanded={showDetails} aria-controls={`material-details-${material.id}`} onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
