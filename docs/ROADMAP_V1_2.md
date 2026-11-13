@@ -2,13 +2,13 @@
 
 ## Planejamento atual — 12 de novembro de 2026
 
-A Sprint 46 está implementada localmente. Seu fechamento para o MVP pessoal é proposto com ressalvas: 46A em `027e498`, 46B em `d33ae02` e 46C em `d5ade4c`. A 46D registrou 66 testes aprovados inicialmente e uma falha intermitente. Na 46D.1, o teste afetado passou em 10/10 repetições isoladas e a bateria vizinha em 8/8. A falha após reload mobile da Semana de Prova não voltou a ocorrer e sua causa permanece desconhecida. Propõe-se aceitar provisoriamente esse risco no MVP pessoal e monitorá-lo na Sprint 47. Esta proposta aguarda decisão e o defeito não foi declarado corrigido.
+A Sprint 46 está implementada localmente. Seu fechamento para o MVP pessoal é proposto com ressalvas: 46A em `027e498`, 46B em `d33ae02` e 46C em `d5ade4c`. A 46D registrou 66 testes aprovados inicialmente e uma falha intermitente. Na 46D.1, o teste afetado passou em 10/10 repetições isoladas e a bateria vizinha em 8/8. A falha após reload mobile da Semana de Prova não voltou a ocorrer e sua causa permanece desconhecida. A decisão de produto aceita provisoriamente esse risco exclusivamente para a continuidade do desenvolvimento do MVP pessoal. A causa permanece desconhecida e a falha não está corrigida. Ela deve ser reavaliada antes de qualquer publicação.
 
-A Sprint 47 é a próxima etapa proposta. As Sprints 48–58 são planejamento e não estão aprovadas para implementação imediata. Os detalhes anteriores abaixo são um registro histórico de 6/11, não o estado atual.
+A avaliação técnica da Sprint 47 foi concluída localmente, sem aprovação para publicação. Foram 47 testes aprovados, sem falhas ou retries; typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Uma amostra local em Chromium carregou seis rotas em 267–505 ms, sem equivalência com produção, e não registrou exceções de página com Service Worker permitido. Não houve alteração de código na Sprint 47. As Sprints 48–58 permanecem planejadas e não estão aprovadas para implementação imediata. Os detalhes anteriores abaixo são um registro histórico de 6/11, não o estado atual.
 
 | Sprint | Planejamento |
 | --- | --- |
-| 47 — Preparação técnica de release | Segurança e isolamento, desempenho, acessibilidade, estabilidade, revisão de riscos e critérios de prontidão. Sem deploy automático. |
+| 47 — Preparação técnica de release | Avaliação técnica local concluída; publicação e homologação externa permanecem pendentes. |
 | 48 — Design System | Identidade visual, cores, tipografia, componentes reutilizáveis, ícones, botões, formulários, cards, estados e microinterações consistentes em desktop e mobile. |
 | 49 — Refinamento das telas | Dashboard, Biblioteca, Tutor, Estudo, Revisões e Provas, reutilizando a lógica existente. |
 | 50 — Experiência premium e mobile | Navegação, usabilidade, responsividade, acessibilidade, feedback visual, microinterações leves e revisão no navegador. |
@@ -25,7 +25,7 @@ A Sprint 47 é a próxima etapa proposta. As Sprints 48–58 são planejamento e
 
 - A associação segura no servidor entre avaliações e tentativas protegidas depende de persistência de avaliações com propriedade verificável e de decisão sobre schema. Antes de expansão multiusuário ou ativação do vínculo, exigir autorização e testes de propriedade cruzada, recuperação e tentativas legadas. O MVP pessoal usa simulados locais independentes desse vínculo.
 - O suporte avançado a múltiplas contas foi despriorizado para o MVP pessoal. Qualquer expansão depende de validar isolamento real, sincronização e recuperação com contas de teste.
-- A falha de reload da Semana de Prova precisa ser monitorada na 47. Em nova ocorrência, preservar trace, estado e etapas para distinguir dados perdidos de falha no teste.
+- A falha de reload da Semana de Prova permanece pendente antes do release. Preservar regressões existentes e investigar imediatamente nova ocorrência, com trace, estado e etapas. Não ocultar falhas com retries ou esperas arbitrárias.
 - Aparelhos físicos e leitores de tela exigem validação futura. Critério: percorrer navegação, foco e fluxos principais nos dispositivos disponíveis, registrando resultados.
 - Os experimentos S3 permanecem fora dos checkpoints funcionais. Sua integração depende de revisão de segurança e testes com infraestrutura apropriada.
 

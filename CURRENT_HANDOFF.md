@@ -1,6 +1,14 @@
 # Handoff atual — StudyAI V1.1
 
-## Estado atual — Sprint 46E
+## Estado atual — Sprint 47A
+
+A avaliação técnica da Sprint 47 foi concluída localmente, sem aprovação para publicação. Foram 47 testes aprovados, sem falhas ou retries; typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Uma amostra local em Chromium carregou seis rotas em 267–505 ms, sem equivalência com produção, e não registrou exceções de página com Service Worker permitido. A Sprint 47 não alterou código.
+
+Decisão de produto: aceitar provisoriamente o risco residual de reload da Semana de Prova exclusivamente para permitir a continuidade do desenvolvimento do MVP pessoal. A falha permanece sem causa comprovada, não está corrigida e deve ser reavaliada antes de qualquer publicação. Preservar regressões existentes, investigar imediatamente uma nova reprodução e não ocultar falhas com retries ou esperas arbitrárias.
+
+As Sprints 48–58 permanecem planejadas. Consulte [o roadmap](docs/ROADMAP_V1_2.md). Os registros seguintes são históricos.
+
+## Estado histórico — Sprint 46E
 
 46A, 46B e 46C estão registradas em `027e498`, `d33ae02` e `d5ade4c`. Na 46D houve 66 testes aprovados e uma falha após reload mobile da Semana de Prova. Na 46D.1 o cenário passou 10/10 vezes isoladamente e os testes vizinhos passaram 8/8. A causa da falha permanece desconhecida. Propõe-se aceitar provisoriamente o risco para o MVP pessoal e monitorá-lo na Sprint 47, sujeito a decisão. Não há correção comprovada.
 
