@@ -501,7 +501,8 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                       <Calendar className="size-4" /> Data: {formatExamDate(selectedExam.examDate)} {selectedExam.examTime && `às ${selectedExam.examTime}`} ({daysLeft < 0 ? "Prova já ocorreu" : daysLeft === 0 ? "É hoje!" : `Faltam ${daysLeft} dias`})
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button asChild variant="outline" size="sm"><Link href={`/planejamento?prova=${encodeURIComponent(selectedExam.id)}`}>Planejar no cronograma</Link></Button>
                     <Button type="button" variant="outline" size="sm" onClick={() => openEditExam(selectedExam)}><Pencil className="mr-1.5 size-4" />Editar prova</Button>
                     <Button type="button" aria-label={`Excluir prova ${selectedExam.title}`} variant="destructive" size="icon-sm" onClick={() => deleteExam(selectedExam.id)}><Trash2 className="size-4" /></Button>
                   </div>
