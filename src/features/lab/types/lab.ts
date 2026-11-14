@@ -1,8 +1,33 @@
-export const labLanguages = ["javascript", "typescript", "html", "css", "sql", "markdown", "mermaid", "python"] as const;
+export const labLanguages = ["javascript", "typescript", "html", "css", "sql", "markdown", "mermaid", "math", "data", "python"] as const;
 export type LabLanguage = (typeof labLanguages)[number];
 
 export type LabDifficulty = "easy" | "medium" | "hard";
 export type LabProjectStatus = "draft" | "in-progress" | "completed";
+
+export type LabGuidedStep = {
+  id: string;
+  title: string;
+  done?: boolean;
+};
+
+export type LabChartPoint = {
+  label: string;
+  x?: number;
+  y: number;
+};
+
+export type LabChartSpec = {
+  kind: "line" | "bar";
+  title?: string;
+  xLabel?: string;
+  yLabel?: string;
+  points: LabChartPoint[];
+};
+
+export type LabMetricItem = {
+  label: string;
+  value: string;
+};
 
 export type LabExercise = {
   statement: string;
@@ -12,6 +37,7 @@ export type LabExercise = {
   hints: string[];
   solution: string;
   difficulty: LabDifficulty;
+  steps?: LabGuidedStep[];
 };
 
 export type LabExecutionResult = {
@@ -21,6 +47,8 @@ export type LabExecutionResult = {
   durationMs: number;
   columns?: string[];
   rows?: Array<Array<string | number | null>>;
+  chart?: LabChartSpec;
+  metrics?: LabMetricItem[];
   createdAt: string;
 };
 
@@ -106,7 +134,9 @@ export const labLanguageLabels: Record<LabLanguage, string> = {
   html: "HTML",
   css: "CSS",
   sql: "SQL",
-  markdown: "Markdown",
+  markdown: "Markdown + KaTeX",
   mermaid: "Mermaid",
+  math: "Matemática & Simulação",
+  data: "Dados & Gráficos",
   python: "Python",
 };
