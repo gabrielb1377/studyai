@@ -85,6 +85,9 @@ export type LabProject = {
   language: LabLanguage;
   files: Partial<Record<LabLanguage, string>>;
   studyId?: string;
+  sourceMaterialId?: string;
+  sourceMaterialName?: string;
+  generatedByAI?: boolean;
   academyStudyId?: string;
   academyContentId?: string;
   subject?: string;
@@ -108,11 +111,61 @@ export type CreateLabProjectInput = {
   title: string;
   language: LabLanguage;
   studyId?: string;
+  sourceMaterialId?: string;
+  sourceMaterialName?: string;
+  generatedByAI?: boolean;
   subject?: string;
   topic?: string;
   exercise?: Partial<LabExercise>;
   academyStudyId?: string;
   academyContentId?: string;
+};
+
+export const labChallengeModalities = ["code", "math", "data", "sql"] as const;
+export type LabChallengeModality = (typeof labChallengeModalities)[number];
+
+export const labChallengeModalityLabels: Record<LabChallengeModality, string> = {
+  code: "Código (JavaScript)",
+  math: "Matemática & Simulação",
+  data: "Dados & Gráficos",
+  sql: "SQL",
+};
+
+export type LabChallengeContextChunk = {
+  fileId: string;
+  studyId?: string;
+  sourceName: string;
+  text: string;
+};
+
+export type LabChallengeRequest = {
+  studyId?: string;
+  materialId: string;
+  materialFileId?: string;
+  materialName: string;
+  subject?: string;
+  topic?: string;
+  modality: LabChallengeModality;
+  language: LabLanguage;
+  difficulty: LabDifficulty;
+  extractedText: string;
+  chunks: LabChallengeContextChunk[];
+};
+
+export type LabGeneratedChallenge = {
+  title: string;
+  statement: string;
+  modality: LabChallengeModality;
+  language: LabLanguage;
+  difficulty: LabDifficulty;
+  starterCode: string;
+  expectedResult: string;
+  hints: string[];
+  steps: LabGuidedStep[];
+  solution: string;
+  explanation: string;
+  provider: string;
+  model: string;
 };
 
 export type LabReviewRequest = {

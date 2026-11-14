@@ -79,14 +79,14 @@ export const AIClient = {
     endpoint: string,
     payload: Record<string, unknown>,
     fallbackMessage: string,
-    options: { signal?: AbortSignal } = {},
+    options: { signal?: AbortSignal; headers?: Record<string, string> } = {},
   ) {
     const settings = AISettings.load();
     let response: Response;
     try {
       response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken() },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken(), ...options.headers },
         body: JSON.stringify(configuredPayload(payload)),
         signal: options.signal,
       });
@@ -120,13 +120,13 @@ export const AIClient = {
   async stream<T extends { text?: string }>(
     endpoint: string,
     payload: Record<string, unknown>,
-    options: { onDelta: (text: string) => void; signal?: AbortSignal; fallbackMessage: string },
+    options: { onDelta: (text: string) => void; signal?: AbortSignal; fallbackMessage: string; headers?: Record<string, string> },
   ) {
     let response: Response;
     try {
       response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken() },
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken(), ...options.headers },
         body: JSON.stringify(configuredPayload({ ...payload, stream: true })),
         signal: options.signal,
       });

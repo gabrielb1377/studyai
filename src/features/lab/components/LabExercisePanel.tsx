@@ -26,7 +26,16 @@ export function LabExercisePanel({
                 ? "Difícil"
                 : "Médio"}
           </Badge>
+          {project.generatedByAI ? (
+            <Badge variant="secondary">Gerado com IA</Badge>
+          ) : null}
         </div>
+
+        {project.sourceMaterialName ? (
+          <p className="mt-2 truncate text-xs text-muted-foreground" title={project.sourceMaterialName}>
+            Material: {project.sourceMaterialName}
+          </p>
+        ) : null}
 
         <div className="mt-3 text-sm leading-6">
           <MarkdownRenderer content={project.exercise.statement} />

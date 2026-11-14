@@ -12,6 +12,7 @@ import { LabExercisePanel } from "./LabExercisePanel";
 import { LabPreview } from "./LabPreview";
 import { LabTerminal } from "./LabTerminal";
 import { LabCreateDialog } from "./LabCreateDialog";
+import { LabChallengeDialog } from "./LabChallengeDialog";
 import { useLab } from "../hooks/useLab";
 import { LabService } from "../services/LabService";
 import { labLanguageLabels } from "../types";
@@ -60,8 +61,9 @@ export function LabWorkspace({
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
             Crie um exercício seguro para código, SQL, Matemática, visualização de dados, Markdown ou diagramas.
           </p>
-          <div className="mt-5">
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
             <LabCreateDialog studies={lab.studies} defaultStudyId={studyId} onCreate={lab.create} />
+            <LabChallengeDialog studies={lab.studies} defaultStudyId={studyId} onCreate={lab.create} />
           </div>
         </div>
       </div>
@@ -123,10 +125,15 @@ export function LabWorkspace({
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-3">
         <div className="mr-auto min-w-0">
           <h2 className="truncate text-sm font-semibold">{project.title}</h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="truncate text-xs text-muted-foreground">
             {labLanguageLabels[project.language]} · Autosave · sandbox local
+            {project.sourceMaterialName ? ` · Base: ${project.sourceMaterialName}` : ""}
           </p>
         </div>
+
+        {compact ? (
+          <LabChallengeDialog compact studies={lab.studies} defaultStudyId={studyId} onCreate={lab.create} />
+        ) : null}
 
         {!compact && project.studyId ? (
           <Button asChild size="sm" variant="ghost">
@@ -204,8 +211,9 @@ export function LabWorkspace({
           </Badge>
         </div>
 
-        <div className="pb-1">
+        <div className="flex flex-col gap-2 pb-1">
           <LabCreateDialog studies={lab.studies} defaultStudyId={studyId} onCreate={lab.create} />
+          <LabChallengeDialog fullWidth studies={lab.studies} defaultStudyId={studyId} onCreate={lab.create} />
         </div>
 
         {lab.projects.length > 1 ? (
