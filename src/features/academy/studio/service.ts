@@ -13,6 +13,7 @@ import type {
   StudioEditorState,
 } from "./types";
 import { StudioStorage } from "./storage";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import { AcademyStorage } from "../storage/AcademyStorage";
 import { getPedagogicalTemplateById, getTemplateById } from "./templates";
 import type { AcademyGeneratedContent, AcademyStudy } from "../types";
@@ -432,9 +433,15 @@ export const StudioService = {
     return this.updateDocument(document);
   },
 
-  async updateSection(documentId: string, sectionId: string, updates: Partial<DocumentSection>) {
+  async updateSection(documentId: string, sectionId: string, updates: Partial<DocumentSection>, expectedVersion?: number) {
+    const operation = SessionOperationManager.start();
+    try {
     const document = await this.getDocument(documentId);
+    operation.assertCurrent();
     if (!document?.documentStructure) throw new Error("Documento não encontrado.");
+    if (expectedVersion !== undefined && document.version !== expectedVersion) {
+      throw new Error("O documento foi alterado em outra operação. Preserve sua edição antes de reabrir.");
+    }
 
     const index = document.documentStructure.sections.findIndex((item) => item.id === sectionId);
     if (index === -1) throw new Error("Seção não encontrada.");
@@ -442,7 +449,11 @@ export const StudioService = {
     document.documentStructure.sections[index] = { ...document.documentStructure.sections[index], ...updates };
     document.documentStructure.metadata.updatedAt = new Date().toISOString();
 
-    return this.updateDocument(document);
+    operation.assertCurrent();
+    return await this.updateDocument(document);
+    } finally {
+      operation.release();
+    }
   },
 
   async updateStructure(documentId: string, updates: Partial<DocumentStructure>) {

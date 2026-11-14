@@ -92,7 +92,7 @@ export const MaterialService = {
   async remove(id: string) {
     const current = await StorageManager.get<Material>("documents", id);
     if (!current) return false;
-    await MaterialBinaryStorage.remove(id);
+    await MaterialBinaryStorage.remove(current.binaryStorageId ?? id);
     await StorageManager.delete("documents", id);
     emitUpdate();
     return true;

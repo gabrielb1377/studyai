@@ -110,7 +110,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
 
   // Autosave com debounce
   useEffect(() => {
-    if (!document || !editorState.unsavedChanges || isSaving) return;
+    if (!document || !editorState.unsavedChanges || isSaving || lastError) return;
     if (autosaveRef.current) clearTimeout(autosaveRef.current);
     autosaveRef.current = setTimeout(() => {
       setIsSaving(true);
@@ -127,7 +127,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
     return () => {
       if (autosaveRef.current) clearTimeout(autosaveRef.current);
     };
-  }, [document, editorState.unsavedChanges, isSaving]);
+  }, [document, editorState.unsavedChanges, isSaving, lastError]);
 
   const actions = useMemo(() => ({
     createNew: async (
@@ -224,6 +224,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
 
     saveDocument: async () => {
       if (!document) return null;
+      setLastError(null);
       setIsSaving(true);
       try {
         const saved = await StudioService.updateDocument(document);
@@ -306,7 +307,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       if (!document) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.updateSection(document.id, sectionId, updates);
+        const updated = await StudioService.updateSection(document.id, sectionId, updates, document.version);
         setDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;

@@ -47,7 +47,14 @@ export const StudioStorage = {
       version: document.version + 1,
       updatedAt: now,
     };
-    await StorageManager.put(STUDIO_STORE, updatedDocument);
+    await StorageManager.transaction([STUDIO_STORE], async (storage) => {
+      const current = await storage.get<unknown>(STUDIO_STORE, document.id);
+      if (!isStudioDocument(current)) throw new Error("Documento não encontrado para salvar.");
+      if (current.version !== document.version) {
+        throw new Error("O documento foi alterado em outra operação. Reabra antes de salvar novamente.");
+      }
+      await storage.put(STUDIO_STORE, updatedDocument);
+    });
     emitUpdate();
     return updatedDocument;
   },

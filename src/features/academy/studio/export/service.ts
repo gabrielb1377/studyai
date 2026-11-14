@@ -6,12 +6,16 @@
  * (navegador), não usa IA e não altera o documento original.
  */
 
-import { ContentStorage } from "@/features/extraction/ContentStorage";
+import { EXTRACTION_UPDATE_EVENT } from "@/features/extraction/ContentStorage";
+import { StorageManager } from "@/lib/storage/StorageManager";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { MaterialRuntimeStore } from "@/services/material-runtime-store";
+import type { ContentChunk } from "@/features/retrieval/RetrievalTypes";
 import type { ExtractedContent, IngestionStage } from "@/features/extraction/ExtractionTypes";
 import { ChunkService } from "@/features/retrieval/ChunkService";
-import { ChunkStorage } from "@/features/retrieval/ChunkStorage";
+import { CHUNKS_UPDATE_EVENT } from "@/features/retrieval/ChunkStorage";
 import { MaterialBinaryStorage } from "@/services/material-binary-storage";
-import { MaterialService } from "@/services/material-service";
+import { MATERIALS_UPDATED_EVENT } from "@/services/material-service";
 import type { Material } from "@/types/material";
 import { buildDeckModel, buildDocumentModel, modelToMarkdown } from "./model";
 import type { StudioPdfOptions } from "./pdf";
@@ -111,18 +115,24 @@ export const StudioExportService = {
     options: StudioPdfOptions & { studySubject?: string; studyTopic?: string; download?: boolean } = { includeAnswers: true },
   ): Promise<StudioExportResult> {
     assertExportable(document);
+    const operation = SessionOperationManager.start();
+    try {
     const documentModel = kind === "pdf" ? buildDocumentModel(document) : undefined;
     const deckModel = kind === "pptx" ? buildDeckModel(document) : undefined;
     const artifact: ExportArtifact = kind === "pdf"
       ? await (await import("./pdf")).StudioPdfExporter.generate(documentModel!, document.customization, options)
       : await (await import("./pptx")).StudioPptxExporter.generate(deckModel!, document.customization);
 
+    operation.assertCurrent();
     const now = new Date().toISOString();
     const materialId = `studio-export-${document.id}-${kind}`;
     const fileType = kind === "pdf" ? "pdf" : "pptx";
     const mimeType = kind === "pdf" ? PDF_MIME : PPTX_MIME;
     const file = new File([artifact.blob], artifact.fileName, { type: mimeType, lastModified: Date.now() });
-    const persistentBinary = await MaterialBinaryStorage.save(materialId, file);
+    const binaryStorageId = `${materialId}-${crypto.randomUUID()}`;
+    const persistentBinary = await MaterialBinaryStorage.save(binaryStorageId, file);
+    if (!persistentBinary) throw new Error("Não foi possível salvar o arquivo local. Tente novamente.");
+    operation.assertCurrent();
 
     const material: Material = {
       id: materialId,
@@ -143,6 +153,8 @@ export const StudioExportService = {
       subject: options.studySubject,
       topic: options.studyTopic,
       persistentBinary,
+      binaryStorageId,
+      studioExportVersion: document.version,
       sourceType: "ai-generated",
       academyStudyId: document.studyId,
       academyContentId: document.contentId,
@@ -150,8 +162,6 @@ export const StudioExportService = {
       academyStudioDocumentId: document.id,
       tags: ["Academy Studio", kind === "pdf" ? "PDF Gerado" : "Apresentação Gerada"],
     };
-    await MaterialService.upsert(material);
-
     const markdown = documentModel
       ? modelToMarkdown(documentModel)
       : deckModel!.slides.map((slide) => `## ${slide.title}\n\n${slide.blocks.map((block) => ("text" in block ? block.text : "")).join("\n\n")}`).join("\n\n");
@@ -190,9 +200,36 @@ export const StudioExportService = {
       status: "extracted",
       createdAt: now,
     };
-    await ContentStorage.upsert(extracted);
     const chunks = ChunkService.createChunks(extracted);
-    await ChunkStorage.replaceForContent(extracted.id, chunks);
+    await StorageManager.transaction(["documents", "contents", "chunks", "embeddings"], async (storage) => {
+      const previous = await storage.get<Material>("documents", materialId);
+      operation.assertCurrent();
+      if (previous?.studioExportVersion !== undefined && previous.studioExportVersion > document.version) {
+        throw new Error("Uma revisão mais recente já foi publicada.");
+      }
+      const previousChunks = await storage.getAll<ContentChunk>("chunks");
+      for (const chunk of previousChunks) {
+        if (chunk.metadata.extractedContentId === extracted.id) {
+          await storage.delete("chunks", chunk.id);
+          await storage.delete("embeddings", chunk.id);
+        }
+      }
+      operation.assertCurrent();
+      await storage.put("contents", extracted);
+      for (const chunk of chunks) await storage.put("chunks", chunk);
+      await storage.put("documents", {
+        ...material,
+        importedAt: previous?.importedAt ?? material.importedAt,
+        isFavorite: previous?.isFavorite ?? material.isFavorite,
+      });
+    });
+    operation.assertCurrent();
+    MaterialRuntimeStore.remove(materialId);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event(EXTRACTION_UPDATE_EVENT));
+      window.dispatchEvent(new Event(CHUNKS_UPDATE_EVENT));
+      window.dispatchEvent(new Event(MATERIALS_UPDATED_EVENT));
+    }
 
     const record: StudioExportRecord = {
       id: materialId,
@@ -217,5 +254,8 @@ export const StudioExportService = {
       pageCount: artifact.pageCount,
       slideCount: artifact.slideCount,
     };
+    } finally {
+      operation.release();
+    }
   },
 };

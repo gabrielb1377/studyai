@@ -189,8 +189,11 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               {material.academyStudioDocumentId && material.academyStudyId ? (
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}${material.academyContentId ? `&conteudo=${material.academyContentId}` : `&documento=${material.academyStudioDocumentId}`}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
               ) : null}
-              {material.fileType === "png" && material.studyId ? (
+              {(material.fileType === "png" || Boolean(material.academyStudioDocumentId)) && material.studyId ? (
                 <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=material&origem=biblioteca`}><Eye />Abrir material</Link></Button>
+              ) : null}
+              {material.academyStudioDocumentId && material.studyId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=ia&origem=biblioteca`}><Bot />Tutor</Link></Button>
               ) : null}
             </>
           ) : <>

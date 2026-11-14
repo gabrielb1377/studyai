@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { BookOpen, CheckCircle2, Download, FileText, Loader2, Presentation, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,13 +28,15 @@ interface StudioExportPanelProps {
 
 export function StudioExportPanel({ document, studySubject, studyTopic, onExported }: StudioExportPanelProps) {
   const [state, setState] = useState<ExportState>("idle");
+  const inFlight = useRef(false);
   const [activeKind, setActiveKind] = useState<StudioExportKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<ExportOutcome | null>(null);
   const [includeAnswers, setIncludeAnswers] = useState(true);
 
   const run = useCallback(async (kind: StudioExportKind) => {
-    if (state === "generating") return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     setState("generating");
     setActiveKind(kind);
     setError(null);
@@ -60,9 +62,10 @@ export function StudioExportPanel({ document, studySubject, studyTopic, onExport
       setError(cause instanceof Error ? cause.message : "Não foi possível gerar a exportação.");
       setState("error");
     } finally {
+      inFlight.current = false;
       setActiveKind(null);
     }
-  }, [document, includeAnswers, onExported, state, studySubject, studyTopic]);
+  }, [document, includeAnswers, onExported, studySubject, studyTopic]);
 
   const busy = state === "generating";
 

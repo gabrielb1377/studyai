@@ -16,5 +16,6 @@ export type StudyMaterial = {
     slide?: number;
   }>;
   persistentBinary?: boolean;
+  binaryStorageId?: string;
   lastModified?: number;
 };

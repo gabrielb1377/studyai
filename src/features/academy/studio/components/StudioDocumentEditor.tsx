@@ -116,8 +116,9 @@ export function StudioDocumentEditor({
     }
     // Alteração externa (por exemplo, sugestão da IA) enquanto a seção está em foco.
     if (syncedContent.current !== content) {
+      const previousContent = syncedContent.current;
       syncedContent.current = content;
-      if (draft !== content) setDraft(content);
+      if (draft === previousContent && draft !== content) setDraft(content);
     }
     const currentTitle = activeSection.title ?? "";
     if (syncedTitle.current !== currentTitle) {
@@ -131,6 +132,12 @@ export function StudioDocumentEditor({
     if (draft === (activeSection.content ?? "")) return;
     onUpdateSection(draftSectionId, { content: draft });
   }, [activeSection, draft, draftSectionId, onUpdateSection]);
+
+  useEffect(() => {
+    if (readOnly || !activeSection || draftSectionId !== activeSection.id || draft === (activeSection.content ?? "")) return;
+    const timer = window.setTimeout(() => onUpdateSection(activeSection.id, { content: draft }), 800);
+    return () => window.clearTimeout(timer);
+  }, [activeSection, draft, draftSectionId, onUpdateSection, readOnly]);
 
   const handleInsertKind = useCallback(
     (kind: StudioInsertableBlockKind, afterSectionId?: string) => {

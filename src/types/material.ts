@@ -44,6 +44,8 @@ export type Material = {
   professor?: string;
   tags?: string[];
   persistentBinary?: boolean;
+  binaryStorageId?: string;
+  studioExportVersion?: number;
   sourceType?: "imported" | "ai-generated" | "lab";
   academyStudyId?: string;
   academyContentId?: string;

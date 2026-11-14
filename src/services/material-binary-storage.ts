@@ -43,11 +43,11 @@ export const MaterialBinaryStorage = {
     }
   },
 
-  async load(material: Pick<Material, "id" | "name" | "mimeType"> & { lastModified?: number }) {
+  async load(material: Pick<Material, "id" | "name" | "mimeType"> & { lastModified?: number; binaryStorageId?: string }) {
     const targetDirectory = await directory(false);
     if (!targetDirectory) return null;
     try {
-      const handle = await targetDirectory.getFileHandle(material.id);
+      const handle = await targetDirectory.getFileHandle(material.binaryStorageId ?? material.id);
       const stored = await handle.getFile();
       return new File([stored], material.name, {
         type: material.mimeType || stored.type,

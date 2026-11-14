@@ -54,6 +54,7 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
         textContent: extracted?.extractedText,
         chapters: extracted?.metadata.chapters,
         persistentBinary: material.persistentBinary,
+        binaryStorageId: material.binaryStorageId,
         lastModified: material.lastModified,
       };
     });

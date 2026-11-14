@@ -77,7 +77,7 @@ export function MaterialViewer({
   const selectAgain = async (file: File | undefined) => {
     if (!file) return;
     MaterialRuntimeStore.register(material.id, file);
-    const persistentBinary = await MaterialBinaryStorage.save(material.id, file);
+    const persistentBinary = await MaterialBinaryStorage.save(material.binaryStorageId ?? material.id, file);
     await MaterialService.update(material.id, { persistentBinary });
     setSource(MaterialRuntimeStore.get(material.id)?.source);
     setPdfView("pdf");
