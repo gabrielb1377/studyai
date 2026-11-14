@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useStudioEditor } from "./hooks/useStudioEditor";
-import { StudioService } from "./service";
+import { StudioService, createSectionDraftForKind } from "./service";
 import { StudioAIPanel } from "./components/StudioAIPanel";
 import { StudioCustomizationPanel } from "./components/StudioCustomizationPanel";
 import { StudioDiagramsPanel } from "./components/StudioDiagramsPanel";
@@ -35,7 +35,12 @@ import { StudioPreviewPanel } from "./components/StudioPreviewPanel";
 import { StudioPresentationEditor } from "./components/StudioPresentationEditor";
 import { StudioTemplatesPanel } from "./components/StudioTemplatesPanel";
 import type { AcademyGeneratedContent, AcademyStudy } from "../types";
-import type { StudioDocumentTemplate, StudioDocumentType, StudioPedagogicalTemplateId } from "./types";
+import type {
+  StudioDocumentTemplate,
+  StudioDocumentType,
+  StudioInsertableBlockKind,
+  StudioPedagogicalTemplateId,
+} from "./types";
 
 const DEFAULT_TEMPLATES: Record<StudioDocumentType, StudioDocumentTemplate> = {
   document: "academic",
@@ -199,6 +204,13 @@ export function StudioEditor({
     void addSection({ type: "paragraph", title: "Nova seção", content: "", level: 2 });
   }, [addSection]);
 
+  const handleAddTypedSection = useCallback(
+    (kind: StudioInsertableBlockKind, afterSectionId?: string) => {
+      void addSection(createSectionDraftForKind(kind), afterSectionId);
+    },
+    [addSection],
+  );
+
   const handleAddSlide = useCallback(() => {
     void addSlide({ layout: "title-content", title: "Novo slide", content: "" });
   }, [addSlide]);
@@ -285,6 +297,7 @@ export function StudioEditor({
             onSectionClick={setActiveSection}
             onSlideClick={setActiveSlide}
             onAddSection={handleAddSection}
+            onAddTypedSection={handleAddTypedSection}
             onAddSlide={handleAddSlide}
             onRemoveSection={(id) => void removeSection(id)}
             onDuplicateSection={(id) => void duplicateSection(id)}
@@ -380,6 +393,7 @@ export function StudioEditor({
       }
       onSectionClick={setActiveSection}
       onAddSection={handleAddSection}
+      onAddTypedSection={handleAddTypedSection}
       onUpdateStructure={(updates) => void updateStructure(updates)}
       onUpdateSection={(id, updates) => void updateSection(id, updates)}
       onRemoveSection={(id) => void removeSection(id)}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Trash2, Copy, Plus, Type, List, Code, Table, Lightbulb, ListChecks, PenLine, Sigma, Quote, Heading } from "lucide-react";
+import { Trash2, Copy, Plus, Type, List, Code, Table, Lightbulb, ListChecks, PenLine, Sigma, Quote, Heading, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { markdownToSafeHtml } from "../sanitize";
+import { STUDIO_INSERTABLE_BLOCKS, isChapterSection, isSubsectionHeading } from "../service";
 import type {
   DocumentSection,
   DocumentStructure,
+  StudioInsertableBlockKind,
   StudioPedagogicalTemplate,
   StudioPedagogicalTemplateId,
 } from "../types";
@@ -29,6 +31,25 @@ const SECTION_TYPES: { id: DocumentSection["type"]; label: string; icon: typeof 
   { id: "blockquote", label: "Citação", icon: Quote },
 ];
 
+const HEADING_LEVEL_OPTIONS = [
+  { value: "1", label: "Capítulo (Nível 1)" },
+  { value: "2", label: "Subseção (Nível 2)" },
+  { value: "3", label: "Tópico (Nível 3)" },
+];
+
+const QUICK_INSERT_KINDS: { kind: StudioInsertableBlockKind; label: string }[] = [
+  { kind: "chapter", label: "Capítulo" },
+  { kind: "paragraph", label: "Parágrafo" },
+  { kind: "list", label: "Lista" },
+  { kind: "summary", label: "Resumo" },
+  { kind: "exercise", label: "Exercício" },
+  { kind: "example", label: "Exemplo" },
+  { kind: "code", label: "Código" },
+  { kind: "table", label: "Tabela" },
+  { kind: "blockquote", label: "Citação" },
+  { kind: "diagram", label: "Diagrama" },
+];
+
 interface StudioDocumentEditorProps {
   structure?: DocumentStructure;
   activeSectionId?: string;
@@ -37,6 +58,7 @@ interface StudioDocumentEditorProps {
   onApplyPedagogicalTemplate?: (templateId: StudioPedagogicalTemplateId) => void;
   onSectionClick: (id: string) => void;
   onAddSection: () => void;
+  onAddTypedSection?: (kind: StudioInsertableBlockKind, afterSectionId?: string) => void;
   onUpdateStructure: (updates: Partial<DocumentStructure>) => void;
   onUpdateSection: (id: string, updates: Partial<DocumentSection>) => void;
   onRemoveSection: (id: string) => void;
@@ -53,6 +75,7 @@ export function StudioDocumentEditor({
   onApplyPedagogicalTemplate,
   onSectionClick,
   onAddSection,
+  onAddTypedSection,
   onUpdateStructure,
   onUpdateSection,
   onRemoveSection,
@@ -66,6 +89,8 @@ export function StudioDocumentEditor({
   const syncedTitle = useRef<string | null>(null);
   const [metaDraft, setMetaDraft] = useState({ title: "", subtitle: "", description: "" });
   const [titleDraft, setTitleDraft] = useState("");
+  const [bottomInsertKind, setBottomInsertKind] = useState<StudioInsertableBlockKind>("paragraph");
+  const [inlineInsertKind, setInlineInsertKind] = useState<StudioInsertableBlockKind>("paragraph");
 
   const sections = useMemo(() => structure?.sections ?? [], [structure?.sections]);
   const activeSection = sections.find((section) => section.id === activeSectionId);
@@ -102,9 +127,21 @@ export function StudioDocumentEditor({
   }, [activeSection, draftSectionId, draft, titleDraft]);
 
   const handleCommit = useCallback(() => {
-    if (!draftSectionId) return;
+    if (!draftSectionId || !activeSection) return;
+    if (draft === (activeSection.content ?? "")) return;
     onUpdateSection(draftSectionId, { content: draft });
-  }, [draft, draftSectionId, onUpdateSection]);
+  }, [activeSection, draft, draftSectionId, onUpdateSection]);
+
+  const handleInsertKind = useCallback(
+    (kind: StudioInsertableBlockKind, afterSectionId?: string) => {
+      if (onAddTypedSection) {
+        onAddTypedSection(kind, afterSectionId);
+        return;
+      }
+      onAddSection();
+    },
+    [onAddSection, onAddTypedSection],
+  );
 
   const handleMove = useCallback((id: string, direction: "up" | "down") => {
     const ids = sections.map((section) => section.id);
@@ -182,13 +219,29 @@ export function StudioDocumentEditor({
       <ScrollArea className="flex-1 p-4">
         <div className="mx-auto max-w-3xl space-y-4">
           {sections.map((section, index) => {
-            const Icon = SECTION_TYPES.find((item) => item.id === section.type)?.icon ?? Type;
+            const isChapter = isChapterSection(section);
+            const isSubsection = isSubsectionHeading(section);
+            const Icon = isChapter
+              ? BookOpen
+              : (SECTION_TYPES.find((item) => item.id === section.type)?.icon ?? Type);
             const isActive = section.id === activeSectionId;
+            const badgeLabel = isChapter
+              ? "Capítulo"
+              : isSubsection
+                ? "Subseção"
+                : (SECTION_TYPES.find((item) => item.id === section.type)?.label ?? section.type);
             return (
               <article
                 key={section.id}
+                data-section-id={section.id}
+                data-section-type={section.type}
+                data-section-level={section.level ?? 2}
                 className={`group rounded-xl border p-4 transition-colors ${
-                  isActive ? "border-primary bg-primary/5" : "hover:bg-muted/30"
+                  isActive
+                    ? "border-primary bg-primary/5"
+                    : isChapter
+                      ? "border-primary/25 bg-muted/20 hover:bg-muted/35"
+                      : "hover:bg-muted/30"
                 }`}
               >
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -197,7 +250,11 @@ export function StudioDocumentEditor({
                     <Input
                       value={titleDraft}
                       onChange={(event) => setTitleDraft(event.target.value)}
-                      onBlur={() => onUpdateSection(section.id, { title: titleDraft })}
+                      onBlur={() => {
+                        if (titleDraft !== (section.title ?? "")) {
+                          onUpdateSection(section.id, { title: titleDraft });
+                        }
+                      }}
                       placeholder="Título da seção"
                       className="h-8 max-w-xs flex-1 text-sm font-semibold"
                     />
@@ -210,8 +267,8 @@ export function StudioDocumentEditor({
                       {section.title || "Sem título"}
                     </button>
                   )}
-                  <Badge variant="outline" className="text-[10px] capitalize">
-                    {SECTION_TYPES.find((item) => item.id === section.type)?.label ?? section.type}
+                  <Badge variant={isChapter ? "secondary" : "outline"} className="text-[10px] capitalize">
+                    {badgeLabel}
                   </Badge>
                   <span className="ml-auto flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                     {!readOnly && (
@@ -234,7 +291,7 @@ export function StudioDocumentEditor({
                 </div>
 
                 {isActive && !readOnly ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     <Textarea
                       value={draftSectionId === section.id ? draft : section.content}
                       onChange={(event) => {
@@ -249,15 +306,74 @@ export function StudioDocumentEditor({
                     <div className="flex flex-wrap items-center gap-2">
                       <Select
                         value={section.type}
-                        onValueChange={(value) => onUpdateSection(section.id, { type: value as DocumentSection["type"] })}
+                        onValueChange={(value) => {
+                          const nextType = value as DocumentSection["type"];
+                          const nextLevel = nextType === "heading" ? (section.level ?? 1) : (section.level ?? 2);
+                          onUpdateSection(section.id, { type: nextType, level: nextLevel });
+                        }}
                         options={SECTION_TYPES.map((item) => ({ value: item.id, label: item.label }))}
                         aria-label="Tipo da seção"
-                        className="h-8 w-44 text-xs"
+                        className="h-8 w-40 text-xs"
                       />
+                      {section.type === "heading" ? (
+                        <Select
+                          value={String(section.level ?? 1)}
+                          onValueChange={(value) =>
+                            onUpdateSection(section.id, { level: Number(value) as 1 | 2 | 3 })
+                          }
+                          options={HEADING_LEVEL_OPTIONS}
+                          aria-label="Nível do título"
+                          className="h-8 w-44 text-xs"
+                        />
+                      ) : null}
                       <span className="text-[11px] text-muted-foreground">
                         Alterações são salvas automaticamente.
                       </span>
                     </div>
+
+                    {onAddTypedSection ? (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed bg-background/60 p-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-muted-foreground">
+                            Inserir abaixo desta seção:
+                          </span>
+                          <Select
+                            value={inlineInsertKind}
+                            onValueChange={(value) => setInlineInsertKind(value as StudioInsertableBlockKind)}
+                            options={STUDIO_INSERTABLE_BLOCKS.map((item) => ({ value: item.kind, label: item.label }))}
+                            aria-label="Tipo de bloco para inserir abaixo"
+                            className="h-7 w-44 text-xs"
+                          />
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            onClick={() => handleInsertKind(inlineInsertKind, section.id)}
+                          >
+                            <Plus className="size-3 me-1" aria-hidden="true" />
+                            Inserir abaixo
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {(["chapter", "summary", "exercise", "example", "paragraph"] as StudioInsertableBlockKind[]).map((kind) => {
+                            const blockInfo = STUDIO_INSERTABLE_BLOCKS.find((item) => item.kind === kind)!;
+                            return (
+                              <Button
+                                key={kind}
+                                type="button"
+                                size="xs"
+                                variant="ghost"
+                                className="h-6 px-2 text-[11px]"
+                                onClick={() => handleInsertKind(kind, section.id)}
+                                aria-label={`Inserir ${blockInfo.shortLabel.toLowerCase()} abaixo`}
+                              >
+                                + {blockInfo.shortLabel}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div
@@ -270,11 +386,44 @@ export function StudioDocumentEditor({
           })}
 
           {!readOnly && (
-            <div className="rounded-xl border-2 border-dashed p-4 text-center">
-              <p className="text-sm text-muted-foreground">Adicionar uma nova seção ao documento.</p>
-              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onAddSection}>
-                <Plus className="size-3.5 me-1" /> Adicionar seção
-              </Button>
+            <div className="space-y-3 rounded-xl border-2 border-dashed p-4 text-center">
+              <p className="text-sm font-medium text-foreground">Adicionar bloco ao final do documento</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {onAddTypedSection ? (
+                  <Select
+                    value={bottomInsertKind}
+                    onValueChange={(value) => setBottomInsertKind(value as StudioInsertableBlockKind)}
+                    options={STUDIO_INSERTABLE_BLOCKS.map((item) => ({ value: item.kind, label: item.label }))}
+                    aria-label="Tipo de bloco para adicionar"
+                    className="h-8 w-48 text-xs"
+                  />
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => (onAddTypedSection ? handleInsertKind(bottomInsertKind) : onAddSection())}
+                >
+                  <Plus className="size-3.5 me-1" /> Adicionar seção
+                </Button>
+              </div>
+              {onAddTypedSection ? (
+                <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1" role="group" aria-label="Inserção rápida de blocos">
+                  {QUICK_INSERT_KINDS.map((item) => (
+                    <Button
+                      key={item.kind}
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => handleInsertKind(item.kind)}
+                      aria-label={`Adicionar ${item.label.toLowerCase()}`}
+                    >
+                      + {item.label}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
         </div>

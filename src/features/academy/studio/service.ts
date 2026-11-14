@@ -6,6 +6,7 @@ import type {
   StudioDocumentTemplate,
   StudioPedagogicalTemplateId,
   StudioExportRecord,
+  StudioInsertableBlockKind,
   DocumentStructure,
   DocumentSection,
   Slide,
@@ -18,6 +19,47 @@ import type { AcademyGeneratedContent, AcademyStudy } from "../types";
 
 function generateId() {
   return crypto.randomUUID();
+}
+
+export interface StudioInsertableBlockOption {
+  kind: StudioInsertableBlockKind;
+  label: string;
+  shortLabel: string;
+  sectionType: DocumentSection["type"];
+  level: 1 | 2 | 3;
+  defaultTitle: string;
+}
+
+export const STUDIO_INSERTABLE_BLOCKS: StudioInsertableBlockOption[] = [
+  { kind: "chapter", label: "Capítulo / Título", shortLabel: "Capítulo", sectionType: "heading", level: 1, defaultTitle: "Novo capítulo" },
+  { kind: "heading", label: "Subseção / Título", shortLabel: "Subseção", sectionType: "heading", level: 2, defaultTitle: "Nova subseção" },
+  { kind: "paragraph", label: "Parágrafo", shortLabel: "Parágrafo", sectionType: "paragraph", level: 2, defaultTitle: "Nova seção" },
+  { kind: "list", label: "Lista", shortLabel: "Lista", sectionType: "list", level: 2, defaultTitle: "Lista" },
+  { kind: "summary", label: "Resumo", shortLabel: "Resumo", sectionType: "summary", level: 2, defaultTitle: "Resumo" },
+  { kind: "exercise", label: "Exercício", shortLabel: "Exercício", sectionType: "exercise", level: 2, defaultTitle: "Exercício" },
+  { kind: "example", label: "Exemplo", shortLabel: "Exemplo", sectionType: "example", level: 2, defaultTitle: "Exemplo" },
+  { kind: "code", label: "Código", shortLabel: "Código", sectionType: "code", level: 2, defaultTitle: "Código" },
+  { kind: "table", label: "Tabela", shortLabel: "Tabela", sectionType: "table", level: 2, defaultTitle: "Tabela" },
+  { kind: "blockquote", label: "Citação", shortLabel: "Citação", sectionType: "blockquote", level: 2, defaultTitle: "Citação" },
+  { kind: "diagram", label: "Diagrama", shortLabel: "Diagrama", sectionType: "diagram", level: 2, defaultTitle: "Novo diagrama" },
+];
+
+export function createSectionDraftForKind(kind: StudioInsertableBlockKind): Omit<DocumentSection, "id" | "order"> {
+  const option = STUDIO_INSERTABLE_BLOCKS.find((item) => item.kind === kind) ?? STUDIO_INSERTABLE_BLOCKS[2];
+  return {
+    type: option.sectionType,
+    title: option.defaultTitle,
+    content: "",
+    level: option.level,
+  };
+}
+
+export function isChapterSection(section: Pick<DocumentSection, "type" | "level">): boolean {
+  return section.type === "heading" && (section.level ?? 1) === 1;
+}
+
+export function isSubsectionHeading(section: Pick<DocumentSection, "type" | "level">): boolean {
+  return section.type === "heading" && (section.level ?? 1) === 2;
 }
 
 function createDefaultCustomization(templateId: StudioDocumentTemplate): StudioCustomization {
@@ -357,21 +399,17 @@ export const StudioService = {
     const document = await this.getDocument(documentId);
     if (!document?.documentStructure) throw new Error("Documento não encontrado ou sem estrutura.");
 
+    const sections = [...document.documentStructure.sections];
+    const afterIndex = afterSectionId ? sections.findIndex((item) => item.id === afterSectionId) : -1;
+    const insertIndex = afterIndex >= 0 ? afterIndex + 1 : sections.length;
+
     const newSection: DocumentSection = {
       ...section,
       id: generateId(),
-      order: afterSectionId
-        ? document.documentStructure.sections.findIndex((item) => item.id === afterSectionId) + 1
-        : document.documentStructure.sections.length,
+      order: insertIndex,
     };
 
-    const sections = [...document.documentStructure.sections];
-    if (afterSectionId) {
-      const insertIndex = sections.findIndex((item) => item.id === afterSectionId) + 1;
-      sections.splice(insertIndex, 0, newSection);
-    } else {
-      sections.push(newSection);
-    }
+    sections.splice(insertIndex, 0, newSection);
     sections.forEach((item, index) => { item.order = index; });
 
     document.documentStructure = {

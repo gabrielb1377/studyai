@@ -9,6 +9,19 @@ export type StudioPedagogicalTemplateId =
   | "textbook-chapter"
   | "blank-document";
 
+export type StudioInsertableBlockKind =
+  | "chapter"
+  | "heading"
+  | "paragraph"
+  | "list"
+  | "summary"
+  | "exercise"
+  | "example"
+  | "code"
+  | "table"
+  | "blockquote"
+  | "diagram";
+
 export type StudioDocumentTemplate = 
   | "academic" 
   | "modern" 

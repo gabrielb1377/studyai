@@ -606,7 +606,7 @@ test("salvar o diagrama na Biblioteca cria material vinculado ao Studio", async 
 
   const open = page.getByRole("link", { name: "Abrir material" }).first();
   await expect(open).toBeVisible();
-  await expect(open).toHaveAttribute("href", `/estudo?tema=${STUDY_ID}&arquivo=studio-diagram-diagram-fixture&aba=material`);
+  await expect(open).toHaveAttribute("href", `/estudo?tema=${STUDY_ID}&arquivo=studio-diagram-diagram-fixture&aba=material&origem=biblioteca`);
   await expect(page.getByRole("link", { name: "Reabrir no Studio" }).first()).toBeVisible();
 
   await open.click();

@@ -112,18 +112,28 @@ export function StudioPreviewPanel({ structure, slides = [], docType, customizat
     }
 
     if (customization.tableOfContents.enabled && page === coverOffset) {
+      const tocMaxLevel = customization.tableOfContents.depth ?? 2;
+      const tocHeadings = structure.sections.filter(
+        (section) => section.type === "heading" && (section.level ?? 1) <= tocMaxLevel,
+      );
       return (
         <div className="p-10" style={{ color: theme.colors.ink }}>
           <h2 className="border-b pb-3 text-2xl font-bold" style={{ borderColor: `${theme.colors.accent}33`, fontFamily: theme.font.web }}>
             Sumário
           </h2>
           <ol className="mt-4 space-y-2">
-            {structure.sections.filter((section) => section.type === "heading").map((section, index) => (
-              <li key={section.id} className="flex items-center gap-2 text-sm">
-                <span style={{ color: theme.colors.accent }}>{index + 1}.</span>
-                <span>{section.title || "Seção"}</span>
-              </li>
-            ))}
+            {tocHeadings.map((section, index) => {
+              const isSubsection = (section.level ?? 1) > 1;
+              return (
+                <li
+                  key={section.id}
+                  className={`flex items-center gap-2 text-sm ${isSubsection ? "ps-5 text-xs opacity-85" : "font-medium"}`}
+                >
+                  <span style={{ color: theme.colors.accent }}>{index + 1}.</span>
+                  <span>{section.title || "Seção"}</span>
+                </li>
+              );
+            })}
           </ol>
         </div>
       );

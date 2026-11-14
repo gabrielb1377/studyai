@@ -270,11 +270,17 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
 
     addSection: async (section: Omit<DocumentSection, "id" | "order">, afterSectionId?: string) => {
       if (!document) return null;
+      const beforeIds = new Set(document.documentStructure?.sections.map((item) => item.id) ?? []);
       pushHistory(snapshot());
       try {
         const updated = await StudioService.addSection(document.id, section, afterSectionId);
+        const created = updated.documentStructure?.sections.find((item) => !beforeIds.has(item.id));
         setDocument(updated);
-        setEditorState((state) => ({ ...state, unsavedChanges: true }));
+        setEditorState((state) => ({
+          ...state,
+          unsavedChanges: true,
+          activeSectionId: created?.id ?? state.activeSectionId,
+        }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível adicionar a seção.");
