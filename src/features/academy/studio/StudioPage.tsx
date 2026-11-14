@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -44,6 +44,7 @@ export function StudioPage() {
   const [pendingType, setPendingType] = useState<Record<string, StudioDocumentType>>({});
   const [pendingManualType, setPendingManualType] = useState<Record<string, StudioDocumentType>>({});
   const [pendingPedagogical, setPendingPedagogical] = useState<Record<string, StudioPedagogicalTemplateId>>({});
+  const consumedUrlRef = useRef(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -68,7 +69,7 @@ export function StudioPage() {
 
   // Recupera a seleção a partir da URL (deep link vindo da Academy ou da Biblioteca).
   useEffect(() => {
-    if (isLoading || selection) return;
+    if (isLoading || selection || consumedUrlRef.current) return;
     const params = new URLSearchParams(window.location.search);
     const studyId = params.get("estudo");
     const contentId = params.get("conteudo") || undefined;
@@ -77,6 +78,7 @@ export function StudioPage() {
     const estrutura = params.get("estrutura");
     const pedagogicalTemplate = isPedagogicalTemplateId(estrutura) ? estrutura : undefined;
     if (!studyId) return;
+    consumedUrlRef.current = true;
     setSelection({ studyId, contentId, documentId, docType: tipo, pedagogicalTemplate });
   }, [isLoading, selection]);
 
@@ -137,7 +139,15 @@ export function StudioPage() {
           <p className="max-w-sm text-sm text-muted-foreground">
             {error ?? "O conteúdo selecionado não existe mais. Escolha outro material na Academy."}
           </p>
-          <Button type="button" variant="outline" onClick={() => setSelection(null)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              consumedUrlRef.current = true;
+              setSelection(null);
+              router.replace("/academy/studio", { scroll: false });
+            }}
+          >
             <ArrowLeft className="size-3.5 me-1" aria-hidden="true" /> Escolher outro conteúdo
           </Button>
         </div>
@@ -362,7 +372,7 @@ export function StudioPage() {
               <LayoutTemplate className="size-4 text-primary" aria-hidden="true" /> Próximos passos
             </h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2"><BookOpen className="size-3.5" aria-hidden="true" /> A exportação profissional em PDF e PPTX chega na Sprint 37C.2; hoje o Studio edita e salva o conteúdo.</li>
+              <li className="flex items-center gap-2"><BookOpen className="size-3.5" aria-hidden="true" /> Exporte em PDF ou PowerPoint na aba Exportar para publicar na Biblioteca e consultar no Workspace ou no Tutor.</li>
               <li className="flex items-center gap-2"><Sparkles className="size-3.5" aria-hidden="true" /> A assistência por IA usa o mesmo AI Core do restante do StudyAI, com as suas chaves (BYOK).</li>
             </ul>
           </section>

@@ -83,6 +83,7 @@ export function StudioEditor({
     createNew,
     createManual,
     saveDocument,
+    prepareForExport,
     addSection,
     updateSection,
     updateStructure,
@@ -360,6 +361,7 @@ export function StudioEditor({
             document={document}
             studySubject={study.subject}
             studyTopic={study.topic}
+            onBeforeExport={prepareForExport}
             onExported={handleExported}
           />
         </TabsContent>
@@ -453,7 +455,14 @@ export function StudioEditor({
               <Save className="size-3.5 me-1" aria-hidden="true" /> Salvar
             </Button>
             {onOpenWorkspace ? (
-              <Button type="button" size="sm" variant="ghost" onClick={onOpenWorkspace}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void prepareForExport().then(() => onOpenWorkspace());
+                }}
+              >
                 Abrir no Workspace
               </Button>
             ) : null}

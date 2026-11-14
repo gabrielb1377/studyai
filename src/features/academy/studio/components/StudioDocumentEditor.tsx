@@ -179,7 +179,9 @@ export function StudioDocumentEditor({
               <Input
                 value={metaDraft.title}
                 onChange={(event) => setMetaDraft((current) => ({ ...current, title: event.target.value }))}
-                onBlur={() => onUpdateStructure({ title: metaDraft.title })}
+                onBlur={() => {
+                  if (metaDraft.title !== (structure.title ?? "")) onUpdateStructure({ title: metaDraft.title });
+                }}
                 placeholder="Título do documento"
               />
             </label>
@@ -188,7 +190,9 @@ export function StudioDocumentEditor({
               <Input
                 value={metaDraft.subtitle}
                 onChange={(event) => setMetaDraft((current) => ({ ...current, subtitle: event.target.value }))}
-                onBlur={() => onUpdateStructure({ subtitle: metaDraft.subtitle })}
+                onBlur={() => {
+                  if (metaDraft.subtitle !== (structure.subtitle ?? "")) onUpdateStructure({ subtitle: metaDraft.subtitle });
+                }}
                 placeholder="Subtítulo do documento"
               />
             </label>
@@ -198,7 +202,9 @@ export function StudioDocumentEditor({
             <Input
               value={metaDraft.description}
               onChange={(event) => setMetaDraft((current) => ({ ...current, description: event.target.value }))}
-              onBlur={() => onUpdateStructure({ description: metaDraft.description })}
+              onBlur={() => {
+                if (metaDraft.description !== (structure.description ?? "")) onUpdateStructure({ description: metaDraft.description });
+              }}
               placeholder="Resumo curto exibido na capa"
             />
           </label>

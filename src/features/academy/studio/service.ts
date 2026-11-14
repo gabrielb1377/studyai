@@ -460,6 +460,11 @@ export const StudioService = {
     const document = await this.getDocument(documentId);
     if (!document?.documentStructure) throw new Error("Documento não encontrado.");
 
+    const nextTitle = typeof updates.title === "string" && updates.title.trim()
+      ? updates.title.trim()
+      : document.title;
+
+    document.title = nextTitle;
     document.documentStructure = {
       ...document.documentStructure,
       ...updates,

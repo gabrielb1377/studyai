@@ -23,10 +23,11 @@ interface StudioExportPanelProps {
   document: StudioDocument;
   studySubject?: string;
   studyTopic?: string;
+  onBeforeExport?: () => Promise<StudioDocument | null>;
   onExported?: (outcome: ExportOutcome) => void;
 }
 
-export function StudioExportPanel({ document, studySubject, studyTopic, onExported }: StudioExportPanelProps) {
+export function StudioExportPanel({ document, studySubject, studyTopic, onBeforeExport, onExported }: StudioExportPanelProps) {
   const [state, setState] = useState<ExportState>("idle");
   const inFlight = useRef(false);
   const [activeKind, setActiveKind] = useState<StudioExportKind | null>(null);
@@ -42,7 +43,8 @@ export function StudioExportPanel({ document, studySubject, studyTopic, onExport
     setError(null);
     setOutcome(null);
     try {
-      const result = await StudioExportService.export(document, kind, {
+      const targetDocument = (await onBeforeExport?.()) ?? document;
+      const result = await StudioExportService.export(targetDocument, kind, {
         includeAnswers,
         studySubject,
         studyTopic,
@@ -65,7 +67,7 @@ export function StudioExportPanel({ document, studySubject, studyTopic, onExport
       inFlight.current = false;
       setActiveKind(null);
     }
-  }, [document, includeAnswers, onExported, studySubject, studyTopic]);
+  }, [document, includeAnswers, onBeforeExport, onExported, studySubject, studyTopic]);
 
   const busy = state === "generating";
 

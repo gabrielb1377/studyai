@@ -24,6 +24,7 @@ const STORAGE_KEY = "studyai:studio-editor-state:v1";
 const HISTORY_LIMIT = 40;
 
 type HistoryEntry = {
+  title?: string;
   documentStructure?: StudioDocument["documentStructure"];
   slides?: StudioDocument["slides"];
 };
@@ -54,6 +55,25 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
   const historyRef = useRef<HistoryEntry[]>([]);
   const futureRef = useRef<HistoryEntry[]>([]);
   const [historyVersion, setHistoryVersion] = useState(0);
+  const documentRef = useRef<StudioDocument | null>(document);
+  documentRef.current = document;
+  const editorStateRef = useRef(editorState);
+  editorStateRef.current = editorState;
+  const lastErrorRef = useRef(lastError);
+  lastErrorRef.current = lastError;
+  const mutationQueueRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  const commitDocument = useCallback((nextDoc: StudioDocument | null) => {
+    documentRef.current = nextDoc;
+    setDocument(nextDoc);
+  }, []);
+
+  /** Serializa mutações da mesma aba para evitar falsos conflitos de versão. */
+  const enqueueMutation = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    const run = mutationQueueRef.current.catch(() => undefined).then(task);
+    mutationQueueRef.current = run.catch(() => undefined);
+    return run;
+  }, []);
 
   useEffect(() => {
     setAvailableTemplates(studioTemplates);
@@ -75,59 +95,71 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
     setHistoryVersion((value) => value + 1);
   }, []);
 
-  const snapshot = useCallback((): HistoryEntry => ({
-    documentStructure: document?.documentStructure,
-    slides: document?.slides,
-  }), [document]);
-
-  const applySnapshot = useCallback((entry: HistoryEntry) => {
-    setDocument((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        documentStructure: entry.documentStructure,
-        slides: entry.slides,
-      };
-    });
-    setEditorState((state) => ({ ...state, unsavedChanges: true }));
+  const snapshot = useCallback((): HistoryEntry => {
+    const current = documentRef.current;
+    return {
+      title: current?.title,
+      documentStructure: current?.documentStructure,
+      slides: current?.slides,
+    };
   }, []);
 
+  const applySnapshot = useCallback((entry: HistoryEntry) => {
+    const current = documentRef.current;
+    if (!current) return;
+    commitDocument({
+      ...current,
+      title: entry.title ?? current.title,
+      documentStructure: entry.documentStructure,
+      slides: entry.slides,
+    });
+    setEditorState((state) => ({ ...state, unsavedChanges: true }));
+  }, [commitDocument]);
+
   const undo = useCallback(() => {
-    const previous = historyRef.current.pop();
-    if (!previous) return;
-    futureRef.current = [snapshot(), ...futureRef.current].slice(0, HISTORY_LIMIT);
-    applySnapshot(previous);
-    setHistoryVersion((value) => value + 1);
-  }, [applySnapshot, snapshot]);
+    void enqueueMutation(async () => {
+      const previous = historyRef.current.pop();
+      if (!previous) return;
+      futureRef.current = [snapshot(), ...futureRef.current].slice(0, HISTORY_LIMIT);
+      applySnapshot(previous);
+      setHistoryVersion((value) => value + 1);
+    });
+  }, [applySnapshot, enqueueMutation, snapshot]);
 
   const redo = useCallback(() => {
-    const next = futureRef.current.shift();
-    if (!next) return;
-    historyRef.current = [...historyRef.current, snapshot()].slice(-HISTORY_LIMIT);
-    applySnapshot(next);
-    setHistoryVersion((value) => value + 1);
-  }, [applySnapshot, snapshot]);
+    void enqueueMutation(async () => {
+      const next = futureRef.current.shift();
+      if (!next) return;
+      historyRef.current = [...historyRef.current, snapshot()].slice(-HISTORY_LIMIT);
+      applySnapshot(next);
+      setHistoryVersion((value) => value + 1);
+    });
+  }, [applySnapshot, enqueueMutation, snapshot]);
 
   // Autosave com debounce
   useEffect(() => {
     if (!document || !editorState.unsavedChanges || isSaving || lastError) return;
     if (autosaveRef.current) clearTimeout(autosaveRef.current);
     autosaveRef.current = setTimeout(() => {
-      setIsSaving(true);
-      void StudioService.autosave(document)
-        .then((saved) => {
-          setDocument(saved);
+      void enqueueMutation(async () => {
+        const current = documentRef.current;
+        if (!current || !editorStateRef.current.unsavedChanges || lastErrorRef.current) return;
+        setIsSaving(true);
+        try {
+          const saved = await StudioService.autosave(current);
+          commitDocument(saved);
           setEditorState((state) => ({ ...state, unsavedChanges: false, lastSavedAt: new Date().toISOString() }));
-        })
-        .catch((error: unknown) => {
+        } catch (error) {
           setLastError(error instanceof Error ? error.message : "Não foi possível salvar automaticamente.");
-        })
-        .finally(() => setIsSaving(false));
+        } finally {
+          setIsSaving(false);
+        }
+      });
     }, AUTOSAVE_DELAY);
     return () => {
       if (autosaveRef.current) clearTimeout(autosaveRef.current);
     };
-  }, [document, editorState.unsavedChanges, isSaving, lastError]);
+  }, [commitDocument, document, editorState.unsavedChanges, enqueueMutation, isSaving, lastError]);
 
   const actions = useMemo(() => ({
     createNew: async (
@@ -141,7 +173,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       setLastError(null);
       try {
         const created = await StudioService.createDocument(studyId, academyContent, type, templateId, kind);
-        setDocument(created);
+        commitDocument(created);
         setContent(academyContent);
         historyRef.current = [];
         futureRef.current = [];
@@ -172,7 +204,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       setLastError(null);
       try {
         const created = await StudioService.createManualDocument(study, type, pedagogicalTemplateId, visualTemplateId);
-        setDocument(created);
+        commitDocument(created);
         setContent(null);
         historyRef.current = [];
         futureRef.current = [];
@@ -202,7 +234,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
           setLastError("Documento não encontrado.");
           return null;
         }
-        setDocument(loaded);
+        commitDocument(loaded);
         historyRef.current = [];
         futureRef.current = [];
         setHistoryVersion((value) => value + 1);
@@ -222,13 +254,18 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       }
     },
 
-    saveDocument: async () => {
-      if (!document) return null;
+    saveDocument: async () => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
+      if (autosaveRef.current) {
+        clearTimeout(autosaveRef.current);
+        autosaveRef.current = null;
+      }
       setLastError(null);
       setIsSaving(true);
       try {
-        const saved = await StudioService.updateDocument(document);
-        setDocument(saved);
+        const saved = await StudioService.updateDocument(current);
+        commitDocument(saved);
         setEditorState((state) => ({ ...state, unsavedChanges: false, lastSavedAt: new Date().toISOString() }));
         return saved;
       } catch (error) {
@@ -237,14 +274,38 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       } finally {
         setIsSaving(false);
       }
-    },
+    }),
+
+    prepareForExport: async () => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
+      if (autosaveRef.current) {
+        clearTimeout(autosaveRef.current);
+        autosaveRef.current = null;
+      }
+      if (!editorStateRef.current.unsavedChanges) return current;
+      setLastError(null);
+      setIsSaving(true);
+      try {
+        const saved = await StudioService.autosave(current);
+        commitDocument(saved);
+        setEditorState((state) => ({ ...state, unsavedChanges: false, lastSavedAt: new Date().toISOString() }));
+        return saved;
+      } catch (error) {
+        setLastError(error instanceof Error ? error.message : "Não foi possível salvar antes da exportação.");
+        return current;
+      } finally {
+        setIsSaving(false);
+      }
+    }),
 
     duplicateDocument: async () => {
-      if (!document) return null;
+      const current = documentRef.current;
+      if (!current) return null;
       setIsLoading(true);
       try {
-        const duplicated = await StudioService.duplicateDocument(document.id);
-        setDocument(duplicated);
+        const duplicated = await StudioService.duplicateDocument(current.id);
+        commitDocument(duplicated);
         setEditorState((state) => ({ ...state, activeDocumentId: duplicated.id, unsavedChanges: false }));
         return duplicated;
       } catch (error) {
@@ -256,11 +317,12 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
     },
 
     deleteDocument: async () => {
-      if (!document) return;
+      const current = documentRef.current;
+      if (!current) return;
       setIsLoading(true);
       try {
-        await StudioService.deleteDocument(document.id);
-        setDocument(null);
+        await StudioService.deleteDocument(current.id);
+        commitDocument(null);
         setEditorState((state) => ({ ...state, activeDocumentId: undefined, activeSectionId: undefined, activeSlideId: undefined }));
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível excluir.");
@@ -269,14 +331,15 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       }
     },
 
-    addSection: async (section: Omit<DocumentSection, "id" | "order">, afterSectionId?: string) => {
-      if (!document) return null;
-      const beforeIds = new Set(document.documentStructure?.sections.map((item) => item.id) ?? []);
+    addSection: async (section: Omit<DocumentSection, "id" | "order">, afterSectionId?: string) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
+      const beforeIds = new Set(current.documentStructure?.sections.map((item) => item.id) ?? []);
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.addSection(document.id, section, afterSectionId);
+        const updated = await StudioService.addSection(current.id, section, afterSectionId);
         const created = updated.documentStructure?.sections.find((item) => !beforeIds.has(item.id));
-        setDocument(updated);
+        commitDocument(updated);
         setEditorState((state) => ({
           ...state,
           unsavedChanges: true,
@@ -287,52 +350,57 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
         setLastError(error instanceof Error ? error.message : "Não foi possível adicionar a seção.");
         return null;
       }
-    },
+    }),
 
-    removeSection: async (sectionId: string) => {
-      if (!document) return null;
+    removeSection: async (sectionId: string) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.removeSection(document.id, sectionId);
-        setDocument(updated);
+        const updated = await StudioService.removeSection(current.id, sectionId);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true, activeSectionId: undefined }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível remover a seção.");
         return null;
       }
-    },
+    }),
 
-    updateSection: async (sectionId: string, updates: Partial<DocumentSection>) => {
-      if (!document) return null;
+    updateSection: async (sectionId: string, updates: Partial<DocumentSection>) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.updateSection(document.id, sectionId, updates, document.version);
-        setDocument(updated);
+        const updated = await StudioService.updateSection(current.id, sectionId, updates, current.version);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível atualizar a seção.");
         return null;
       }
-    },
+    }),
 
-    updateStructure: async (updates: Partial<DocumentStructure>) => {
-      if (!document) return null;
+    updateStructure: async (updates: Partial<DocumentStructure>) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
+      pushHistory(snapshot());
       try {
-        const updated = await StudioService.updateStructure(document.id, updates);
-        setDocument(updated);
+        const updated = await StudioService.updateStructure(current.id, updates);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível atualizar o documento.");
         return null;
       }
-    },
+    }),
 
     duplicateSection: async (sectionId: string) => {
-      if (!document?.documentStructure) return null;
-      const source = document.documentStructure.sections.find((section) => section.id === sectionId);
+      const current = documentRef.current;
+      if (!current?.documentStructure) return null;
+      const source = current.documentStructure.sections.find((section) => section.id === sectionId);
       if (!source) return null;
       return actions.addSection(
         { type: source.type, title: source.title, content: source.content, level: source.level, metadata: source.metadata },
@@ -340,65 +408,70 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       );
     },
 
-    reorderSections: async (sectionIds: string[]) => {
-      if (!document) return null;
+    reorderSections: async (sectionIds: string[]) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.reorderSections(document.id, sectionIds);
-        setDocument(updated);
+        const updated = await StudioService.reorderSections(current.id, sectionIds);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível reordenar as seções.");
         return null;
       }
-    },
+    }),
 
-    addSlide: async (slide: Omit<Slide, "id" | "order">, afterSlideId?: string) => {
-      if (!document) return null;
+    addSlide: async (slide: Omit<Slide, "id" | "order">, afterSlideId?: string) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.addSlide(document.id, slide, afterSlideId);
-        setDocument(updated);
+        const updated = await StudioService.addSlide(current.id, slide, afterSlideId);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível adicionar o slide.");
         return null;
       }
-    },
+    }),
 
-    removeSlide: async (slideId: string) => {
-      if (!document) return null;
+    removeSlide: async (slideId: string) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.removeSlide(document.id, slideId);
-        setDocument(updated);
+        const updated = await StudioService.removeSlide(current.id, slideId);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true, activeSlideId: undefined }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível remover o slide.");
         return null;
       }
-    },
+    }),
 
-    updateSlide: async (slideId: string, updates: Partial<Slide>) => {
-      if (!document) return null;
+    updateSlide: async (slideId: string, updates: Partial<Slide>) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.updateSlide(document.id, slideId, updates);
-        setDocument(updated);
+        const updated = await StudioService.updateSlide(current.id, slideId, updates);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível atualizar o slide.");
         return null;
       }
-    },
+    }),
 
     duplicateSlide: async (slideId: string) => {
-      if (!document?.slides) return null;
-      const source = document.slides.find((slide) => slide.id === slideId);
+      const current = documentRef.current;
+      if (!current?.slides) return null;
+      const source = current.slides.find((slide) => slide.id === slideId);
       if (!source) return null;
       return actions.addSlide(
         {
@@ -413,43 +486,46 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       );
     },
 
-    reorderSlides: async (slideIds: string[]) => {
-      if (!document) return null;
+    reorderSlides: async (slideIds: string[]) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.reorderSlides(document.id, slideIds);
-        setDocument(updated);
+        const updated = await StudioService.reorderSlides(current.id, slideIds);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível reordenar os slides.");
         return null;
       }
-    },
+    }),
 
-    changeTemplate: async (templateId: StudioDocumentTemplate) => {
-      if (!document) return null;
+    changeTemplate: async (templateId: StudioDocumentTemplate) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.changeTemplate(document.id, templateId);
-        setDocument(updated);
+        const updated = await StudioService.changeTemplate(current.id, templateId);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível alterar o template.");
         return null;
       }
-    },
+    }),
 
     applyPedagogicalTemplate: async (
       pedagogicalTemplateId: StudioPedagogicalTemplateId,
       context?: { title?: string; topic?: string; subject?: string },
-    ) => {
-      if (!document) return null;
+    ) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       pushHistory(snapshot());
       try {
-        const updated = await StudioService.applyPedagogicalTemplate(document.id, pedagogicalTemplateId, context);
-        setDocument(updated);
+        const updated = await StudioService.applyPedagogicalTemplate(current.id, pedagogicalTemplateId, context);
+        commitDocument(updated);
         setEditorState((state) => ({
           ...state,
           activeSectionId: updated.documentStructure?.sections[0]?.id,
@@ -461,32 +537,34 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
         setLastError(error instanceof Error ? error.message : "Não foi possível aplicar o template pedagógico.");
         return null;
       }
-    },
+    }),
 
-    registerExport: async (record: StudioExportRecord) => {
-      if (!document) return null;
+    registerExport: async (record: StudioExportRecord) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       try {
-        const updated = await StudioService.registerExport(document.id, record);
-        setDocument(updated);
+        const updated = await StudioService.registerExport(current.id, record);
+        commitDocument(updated);
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível registrar a exportação.");
         return null;
       }
-    },
+    }),
 
-    updateCustomization: async (customization: Partial<StudioCustomization>) => {
-      if (!document) return null;
+    updateCustomization: async (customization: Partial<StudioCustomization>) => enqueueMutation(async () => {
+      const current = documentRef.current;
+      if (!current) return null;
       try {
-        const updated = await StudioService.updateCustomization(document.id, customization);
-        setDocument(updated);
+        const updated = await StudioService.updateCustomization(current.id, customization);
+        commitDocument(updated);
         setEditorState((state) => ({ ...state, unsavedChanges: true }));
         return updated;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Não foi possível atualizar a personalização.");
         return null;
       }
-    },
+    }),
 
     undo,
     redo,
@@ -510,7 +588,7 @@ export function useStudioEditor(initialDocument?: StudioDocument, initialContent
       setEditorState((state) => ({ ...state, unsavedChanges: true }));
     },
     clearError: () => setLastError(null),
-  }), [document, pushHistory, snapshot, undo, redo]);
+  }), [commitDocument, enqueueMutation, pushHistory, snapshot, undo, redo]);
 
   return {
     document,
