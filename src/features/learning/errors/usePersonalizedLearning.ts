@@ -17,6 +17,15 @@ import {
   ErrorNotebookStorage,
 } from "./ErrorNotebookStorage";
 import type { ErrorNotebookEntry, ErrorReviewStatus } from "./types";
+import {
+  LONG_TERM_MEMORY_UPDATED_EVENT,
+  LongTermMemoryStorage,
+} from "../memory/LongTermMemoryStorage";
+import type {
+  ExplanationLevel,
+  LongTermMemoryStoreState,
+  MemoryCategory,
+} from "../memory/types";
 
 export type ManualErrorDraft = {
   studyId?: string;
@@ -43,6 +52,10 @@ export function usePersonalizedLearning() {
 
   const [rawErrors, setRawErrors] = useState<ErrorNotebookEntry[]>([]);
   const [topicReviews, setTopicReviews] = useState<TopicReview[]>([]);
+  const [memoryState, setMemoryState] = useState<LongTermMemoryStoreState>({
+    settings: { enabled: true },
+    entries: [],
+  });
   const [auxLoading, setAuxLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,12 +64,14 @@ export function usePersonalizedLearning() {
 
   const loadAuxData = useCallback(async () => {
     try {
-      const [loadedErrors, loadedReviews] = await Promise.all([
+      const [loadedErrors, loadedReviews, loadedMemory] = await Promise.all([
         ErrorNotebookStorage.load(),
         TopicReviewStorage.load(),
+        LongTermMemoryStorage.load(),
       ]);
       setRawErrors(loadedErrors);
       setTopicReviews(loadedReviews);
+      setMemoryState(loadedMemory);
       setError(null);
     } catch (caught) {
       setError(
@@ -76,9 +91,11 @@ export function usePersonalizedLearning() {
     };
     window.addEventListener(STORAGE_UPDATED_EVENT, reload);
     window.addEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, reload);
+    window.addEventListener(LONG_TERM_MEMORY_UPDATED_EVENT, reload);
     return () => {
       window.removeEventListener(STORAGE_UPDATED_EVENT, reload);
       window.removeEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, reload);
+      window.removeEventListener(LONG_TERM_MEMORY_UPDATED_EVENT, reload);
     };
   }, [loadAuxData]);
 
@@ -86,6 +103,11 @@ export function usePersonalizedLearning() {
     if (studiesLoading) return rawErrors;
     return ErrorNotebookStorage.reconcileWithStudies(rawErrors, studies);
   }, [rawErrors, studies, studiesLoading]);
+
+  const memories = useMemo(() => {
+    if (studiesLoading) return memoryState.entries;
+    return LongTermMemoryStorage.reconcileWithStudies(memoryState.entries, studies);
+  }, [memoryState.entries, studies, studiesLoading]);
 
   const { items: difficultyItems, recommendations } = useMemo(
     () =>
@@ -238,9 +260,84 @@ export function usePersonalizedLearning() {
         ? String(studiesError)
         : null);
 
+  const toggleMemoryEnabled = useCallback(
+    async (enabled: boolean) => {
+      await enqueueOperation(async () => {
+        const next = await LongTermMemoryStorage.setEnabled(enabled);
+        setMemoryState(next);
+      }, enabled ? "Memória de longo prazo ativada." : "Memória de longo prazo desativada.");
+    },
+    [enqueueOperation],
+  );
+
+  const setExplanationLevel = useCallback(
+    async (level: ExplanationLevel | undefined) => {
+      await enqueueOperation(async () => {
+        const next = await LongTermMemoryStorage.setExplanationLevel(level);
+        setMemoryState(next);
+      }, "Preferência de nível de explicação salva.");
+    },
+    [enqueueOperation],
+  );
+
+  const addExplicitMemory = useCallback(
+    async (draft: {
+      category: MemoryCategory;
+      studyId?: string;
+      title: string;
+      content: string;
+    }) => {
+      const linkedStudy = draft.studyId
+        ? studies.find((study) => study.studyId === draft.studyId)
+        : undefined;
+      await enqueueOperation(async () => {
+        const next = await LongTermMemoryStorage.addMemory({
+          category: draft.category,
+          source: "explicit",
+          studyId: linkedStudy?.studyId,
+          studyTitle: linkedStudy?.title,
+          subject: linkedStudy?.subject,
+          title: draft.title,
+          content: draft.content,
+        });
+        setMemoryState(next);
+      }, "Memória salva com sucesso.");
+    },
+    [enqueueOperation, studies],
+  );
+
+  const updateMemory = useCallback(
+    async (id: string, patch: { title?: string; content?: string }) => {
+      await enqueueOperation(async () => {
+        const next = await LongTermMemoryStorage.updateMemory(id, patch);
+        setMemoryState(next);
+      }, "Memória atualizada.");
+    },
+    [enqueueOperation],
+  );
+
+  const removeMemory = useCallback(
+    async (id: string) => {
+      await enqueueOperation(async () => {
+        const next = await LongTermMemoryStorage.removeMemory(id);
+        setMemoryState(next);
+      }, "Memória removida do armazenamento local.");
+    },
+    [enqueueOperation],
+  );
+
+  const clearAllMemories = useCallback(async () => {
+    await enqueueOperation(async () => {
+      const next = await LongTermMemoryStorage.clearAll();
+      setMemoryState(next);
+    }, "Todas as memórias locais foram removidas.");
+  }, [enqueueOperation]);
+
   return {
     studies,
     entries,
+    memories,
+    memorySettings: memoryState.settings,
     difficultyItems,
     recommendations,
     summary,
@@ -253,5 +350,11 @@ export function usePersonalizedLearning() {
     markErrorStatus,
     removeEntry,
     completeTargetedReview,
+    toggleMemoryEnabled,
+    setExplanationLevel,
+    addExplicitMemory,
+    updateMemory,
+    removeMemory,
+    clearAllMemories,
   };
 }

@@ -10,6 +10,9 @@ import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
 import { LearningStorage } from "@/features/learning/LearningStorage";
 import { StudyPriorityEngine } from "@/features/learning/StudyPriorityEngine";
 import { MentorStorage } from "@/features/mentor/services/MentorStorage";
+import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
+import { LongTermMemoryStorage } from "@/features/learning/memory/LongTermMemoryStorage";
+import { MemoryRetrievalEngine } from "@/features/learning/memory/MemoryRetrievalEngine";
 
 export const TutorContextService = {
   async loadCurrent(requestedStudyId?: string): Promise<TutorStudyContext | null> {
@@ -18,7 +21,7 @@ export const TutorContextService = {
       ? studies.find((item) => item.studyId === requestedStudyId)
       : studies.sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
     if (!study) return null;
-    const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile, mentor] = await Promise.all([
+    const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile, mentor, memoryState, rawErrors] = await Promise.all([
       SummaryStorage.load(),
       NotesService.load(),
       ContentStorage.load(),
@@ -26,6 +29,8 @@ export const TutorContextService = {
       QuizService.load(),
       LearningStorage.load(),
       MentorStorage.load(),
+      LongTermMemoryStorage.load(),
+      ErrorNotebookStorage.load(),
     ]);
     const summary = (storedSummaries ?? [])
       .filter((item) => item.studyId === study.studyId)
@@ -50,6 +55,17 @@ export const TutorContextService = {
       .filter((recommendation) => recommendation.studyId === study.studyId)
       .slice(0, 3)
       .map(({ title, reason, priority: recommendationPriority }) => ({ title, reason, priority: recommendationPriority }));
+    const reconciledErrors = ErrorNotebookStorage.reconcileWithStudies(rawErrors, studies);
+    const reconciledMemories = {
+      ...memoryState,
+      entries: LongTermMemoryStorage.reconcileWithStudies(memoryState.entries, studies),
+    };
+    const memory = MemoryRetrievalEngine.selectForTutor({
+      state: reconciledMemories,
+      errorEntries: reconciledErrors,
+      studyId: study.studyId,
+      subject: study.subject,
+    });
 
     return {
       studyId: study.studyId,
@@ -102,6 +118,7 @@ export const TutorContextService = {
             recommendations: mentorRecommendations,
           }
         : undefined,
+      memory,
     };
   },
 };

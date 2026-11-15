@@ -22,8 +22,9 @@ import { Input } from "@/components/ui/input";
 import type { DifficultyLevelState } from "./DifficultyMapEngine";
 import type { ErrorReviewStatus, ErrorSource } from "./types";
 import { usePersonalizedLearning } from "./usePersonalizedLearning";
+import { MemoryManagementTab } from "../memory/MemoryManagementTab";
 
-export type LearningWorkspaceTab = "mapa" | "erros" | "revisoes";
+export type LearningWorkspaceTab = "mapa" | "erros" | "revisoes" | "memoria";
 
 const LEVEL_LABELS: Record<DifficultyLevelState, string> = {
   critical: "Dificuldade alta",
@@ -75,6 +76,8 @@ export function PersonalizedLearningWorkspace({
   const {
     studies,
     entries,
+    memories,
+    memorySettings,
     difficultyItems,
     recommendations,
     summary,
@@ -86,6 +89,12 @@ export function PersonalizedLearningWorkspace({
     markErrorStatus,
     removeEntry,
     completeTargetedReview,
+    toggleMemoryEnabled,
+    setExplanationLevel,
+    addExplicitMemory,
+    updateMemory,
+    removeMemory,
+    clearAllMemories,
   } = usePersonalizedLearning();
 
   const [activeTab, setActiveTab] = useState<LearningWorkspaceTab>(initialTab ?? "mapa");
@@ -261,6 +270,16 @@ export function PersonalizedLearningWorkspace({
             onClick={() => setActiveTab("revisoes")}
           >
             Revisões direcionadas ({recommendations.length})
+          </Button>
+          <Button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "memoria"}
+            variant={activeTab === "memoria" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("memoria")}
+          >
+            Memória ({memories.length})
           </Button>
         </div>
 
@@ -717,6 +736,21 @@ export function PersonalizedLearningWorkspace({
             </div>
           )}
         </section>
+      ) : null}
+
+      {activeTab === "memoria" ? (
+        <MemoryManagementTab
+          studies={studies}
+          settings={memorySettings}
+          memories={memories}
+          isSaving={isSaving}
+          onToggleEnabled={toggleMemoryEnabled}
+          onChangeLevel={setExplanationLevel}
+          onAddMemory={addExplicitMemory}
+          onUpdateMemory={updateMemory}
+          onRemoveMemory={removeMemory}
+          onClearAll={clearAllMemories}
+        />
       ) : null}
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Bot, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
+import Link from "next/link";
+import { AlertCircle, Bot, BrainCircuit, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -232,13 +233,20 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
               </p>
             )}
           </div>
-          <div role="group" className="flex max-w-full rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
-            <Button type="button" size="sm" variant={teacher.mode === "tutor" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "tutor"} onClick={() => teacher.setMode("tutor")}>
-              <Bot aria-hidden="true" />Tutor
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild type="button" size="sm" variant="outline">
+              <Link href={context?.studyId ? `/aprendizagem?estudo=${encodeURIComponent(context.studyId)}&aba=memoria` : "/aprendizagem?aba=memoria"}>
+                <BrainCircuit aria-hidden="true" />Memória
+              </Link>
             </Button>
-            <Button type="button" size="sm" variant={teacher.mode === "teacher" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "teacher"} onClick={() => teacher.setMode("teacher")}>
-              <GraduationCap aria-hidden="true" />Professor
-            </Button>
+            <div role="group" className="flex max-w-full rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
+              <Button type="button" size="sm" variant={teacher.mode === "tutor" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "tutor"} onClick={() => teacher.setMode("tutor")}>
+                <Bot aria-hidden="true" />Tutor
+              </Button>
+              <Button type="button" size="sm" variant={teacher.mode === "teacher" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "teacher"} onClick={() => teacher.setMode("teacher")}>
+                <GraduationCap aria-hidden="true" />Professor
+              </Button>
+            </div>
           </div>
         </div>
         {error && (

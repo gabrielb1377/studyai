@@ -1,5 +1,23 @@
 import type { StudyStatus } from "@/types/study-engine";
 
+export type TutorMemoryContext = {
+  enabled: boolean;
+  explanationLevel?: "basic" | "intermediate" | "advanced" | "technical";
+  items: Array<{
+    category: "preference" | "goal" | "difficulty" | "continuity" | "milestone";
+    source: "explicit" | "session";
+    title: string;
+    content: string;
+    updatedAt: string;
+    stale?: boolean;
+  }>;
+  pendingErrors?: Array<{
+    topic: string;
+    prompt: string;
+    occurrences: number;
+  }>;
+};
+
 export type TutorStudyContext = {
   studyId: string;
   title: string;
@@ -57,4 +75,5 @@ export type TutorStudyContext = {
       priority: "Alta" | "Média" | "Baixa";
     }>;
   };
+  memory?: TutorMemoryContext;
 };

@@ -18,6 +18,9 @@ import { ContentStorage } from "@/features/extraction/ContentStorage";
 import { MaterialService } from "@/services/material-service";
 import { disciplineMaterials, retrieveDiscipline, type DisciplineSelection } from "../services/DisciplineContext";
 import { StudyEngine } from "@/features/study/services/StudyEngine";
+import { LongTermMemoryStorage } from "@/features/learning/memory/LongTermMemoryStorage";
+import { MemoryRetrievalEngine } from "@/features/learning/memory/MemoryRetrievalEngine";
+import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
 
 function sourceReferences(chunks: readonly RetrievedChunk[]) {
   return chunks.map(({ id, metadata, text }) => ({
@@ -187,11 +190,26 @@ export function useTutor(instanceId?: string, studyId?: string) {
           }
         : requestContext;
       requestContext = contextualized;
+      if (requestContext) {
+        const [memoryState, rawErrors] = await Promise.all([
+          LongTermMemoryStorage.load(),
+          ErrorNotebookStorage.load(),
+        ]);
+        sessionOperation.assertCurrent();
+        const memory = MemoryRetrievalEngine.selectForTutor({
+          state: memoryState,
+          errorEntries: rawErrors,
+          studyId: discipline ? undefined : requestContext.studyId,
+          subject: requestContext.subject,
+          query,
+        });
+        requestContext = { ...requestContext, memory };
+      }
       requestChunks = retrieval.chunks;
       const response = await TutorService.requestReply(
         conversation.messages,
         nextContent,
-        contextualized,
+        requestContext,
         retrieval.chunks,
         {
           onDelta: (delta) => {
@@ -221,6 +239,14 @@ export function useTutor(instanceId?: string, studyId?: string) {
         }),
       );
       if (!discipline && context?.studyId) LearningService.enqueueActivity({ type: "tutor", studyId: context.studyId });
+      if (requestContext) {
+        void LongTermMemoryStorage.recordSessionContinuity({
+          studyId: discipline ? undefined : requestContext.studyId,
+          studyTitle: discipline ? discipline.subject : requestContext.title,
+          subject: requestContext.subject,
+          question: nextContent,
+        });
+      }
       return true;
     } catch (requestError) {
       if (sessionOperation.signal.aborted) return false;

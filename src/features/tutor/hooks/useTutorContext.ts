@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/features/account/AuthProvider";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import type { TutorStudyContext } from "@/types/tutor-context";
+import { ERROR_NOTEBOOK_UPDATED_EVENT } from "@/features/learning/errors/ErrorNotebookStorage";
+import { LONG_TERM_MEMORY_UPDATED_EVENT } from "@/features/learning/memory/LongTermMemoryStorage";
 import { TutorContextService } from "../services/TutorContextService";
 
 export function useTutorContext(studyId?: string) {
@@ -29,6 +31,8 @@ export function useTutorContext(studyId?: string) {
     window.addEventListener("studyai:summaries-updated", handleReload);
     window.addEventListener("studyai:extraction-updated", handleReload);
     window.addEventListener("studyai:learning-updated", handleReload);
+    window.addEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, handleReload);
+    window.addEventListener(LONG_TERM_MEMORY_UPDATED_EVENT, handleReload);
 
     return () => {
       active = false;
@@ -37,6 +41,8 @@ export function useTutorContext(studyId?: string) {
       window.removeEventListener("studyai:summaries-updated", handleReload);
       window.removeEventListener("studyai:extraction-updated", handleReload);
       window.removeEventListener("studyai:learning-updated", handleReload);
+      window.removeEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, handleReload);
+      window.removeEventListener(LONG_TERM_MEMORY_UPDATED_EVENT, handleReload);
     };
   }, [auth.isLoading, auth.session?.user.id, studyId]);
 

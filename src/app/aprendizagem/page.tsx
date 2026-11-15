@@ -7,7 +7,9 @@ export const metadata: Metadata = {
 };
 
 function resolveTab(value: string | undefined): LearningWorkspaceTab | undefined {
-  if (value === "mapa" || value === "erros" || value === "revisoes") return value;
+  if (value === "mapa" || value === "erros" || value === "revisoes" || value === "memoria") {
+    return value;
+  }
   return undefined;
 }
 
