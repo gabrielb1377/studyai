@@ -3,6 +3,7 @@ import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
 import { ReviewScheduler } from "@/features/learning/ReviewScheduler";
 import { StudyPriorityEngine } from "@/features/learning/StudyPriorityEngine";
 import { reviewPeriod, type TopicReview } from "@/features/learning/TopicReview";
+import type { ErrorNotebookEntry } from "@/features/learning/errors/types";
 import type { LearningProfile } from "@/features/learning/types";
 import type { Exam } from "@/types/exam";
 import type { Flashcard } from "@/types/flashcard";
@@ -31,6 +32,7 @@ export type PlanningSignalInput = {
   quizzes: readonly QuizResult[];
   topicReviews: readonly TopicReview[];
   exams: readonly Exam[];
+  errorEntries?: readonly ErrorNotebookEntry[];
   now?: Date;
 };
 
@@ -131,8 +133,14 @@ function createCandidates(
       signals.flashcards,
       now,
     );
+    const studyPendingErrors = (signals.errorEntries ?? []).filter(
+      (entry) => entry.studyId === study.studyId && entry.status === "pending",
+    );
     const manualPriority = config.manualStudyPriorities[study.studyId];
-    const baseScore = calculatedPriority.score + manualPriorityBoost(manualPriority);
+    const baseScore =
+      calculatedPriority.score +
+      manualPriorityBoost(manualPriority) +
+      Math.min(18, studyPendingErrors.length * 6);
 
     const studyExams = upcomingExams.filter(
       ({ exam }) => matchExamToStudy(exam, [study])?.studyId === study.studyId,
@@ -195,6 +203,29 @@ function createCandidates(
       });
     }
 
+    if (studyPendingErrors.length > 0) {
+      const errorBonus =
+        20 +
+        Math.min(16, studyPendingErrors.length * 4) +
+        (config.preferredFocus === "reviews" ? 18 : 0);
+      const score = clampNumber(baseScore + errorBonus, 10, 100, 74);
+      pushCandidate({
+        id: `${study.studyId}:review:error_notebook`,
+        studyId: study.studyId,
+        studyTitle: study.title,
+        subject: study.subject,
+        kind: "review",
+        title: `Revisar erros registrados · ${study.title}`,
+        reason: `${studyPendingErrors.length} erro(s) pendente(s) no Caderno de Erros`,
+        priority: manualPriority ?? mapScoreToPriority(score),
+        priorityScore: score,
+        estimatedMinutes: clampItemMinutes(15 + studyPendingErrors.length * 5, 25),
+        completed: false,
+        targetHref: `/aprendizagem?estudo=${encodeURIComponent(study.studyId)}&aba=revisoes`,
+        preferredMaxDay: 1,
+      });
+    }
+
     const dueFlashcards = signals.flashcards.filter(
       (card) => card.studyId === study.studyId && ReviewScheduler.isDue(card, now),
     );
@@ -254,7 +285,12 @@ function createCandidates(
         completed: false,
         targetHref: buildTargetHref(study.studyId, needsReading ? "leitura" : "quiz"),
       });
-    } else if (studyExams.length === 0 && dueReviews.length === 0 && dueFlashcards.length === 0) {
+    } else if (
+      studyExams.length === 0 &&
+      dueReviews.length === 0 &&
+      dueFlashcards.length === 0 &&
+      studyPendingErrors.length === 0
+    ) {
       const score = clampNumber(baseScore, 10, 100, 35);
       pushCandidate({
         id: `${study.studyId}:practice_quiz:general`,

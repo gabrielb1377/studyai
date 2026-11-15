@@ -156,11 +156,14 @@ export function PlanningWorkspace({ requestedExamId }: { requestedExamId?: strin
             <Clock3 className="size-4 text-amber-600 dark:text-amber-400" />
           </div>
           <p className="text-2xl font-semibold tracking-tight">
-            {summary.dueReviewsCount + summary.dueFlashcardsCount}
+            {summary.dueReviewsCount + summary.dueFlashcardsCount + summary.pendingErrorsCount}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {summary.dueReviewsCount} tópicos · {summary.dueFlashcardsCount} flashcards
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>{summary.dueReviewsCount} tópicos · {summary.dueFlashcardsCount} flashcards · {summary.pendingErrorsCount} erros</span>
+            <Link href="/aprendizagem" className="font-medium text-primary hover:underline">
+              Caderno de Erros
+            </Link>
+          </div>
         </Card>
 
         <Card className="gap-1.5 p-4 shadow-none">

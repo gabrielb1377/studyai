@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import type { Exam, MaterialExamAttempt, MaterialExamQuestion } from "@/types/exam";
 import { ExamService } from "./ExamService";
 import { confirmedChoice, questionRevision } from "./ExamAnswerKey";
+import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
 
 export function ExamMaterialSimulation({ exam, catalog, save }: {
   exam: Exam;
@@ -68,8 +69,26 @@ export function ExamMaterialSimulation({ exam, catalog, save }: {
             <select className="w-full rounded border bg-background p-2" value={key ?? ""} onChange={(event) => {
               const confirmedKeys = { ...attempt.confirmedKeys };
               if (!event.target.value) delete confirmedKeys[question.id];
-              else confirmedKeys[question.id] = { choice: Number(event.target.value), source: "student-document",
-                confirmedAt: new Date().toISOString(), revision: questionRevision(question) };
+              else {
+                const choice = Number(event.target.value);
+                confirmedKeys[question.id] = { choice, source: "student-document",
+                  confirmedAt: new Date().toISOString(), revision: questionRevision(question) };
+                if (answer && answer.choice !== choice) {
+                  void ErrorNotebookStorage.recordEntries([
+                    {
+                      studyId: question.studyId ?? exam.studyId,
+                      studyTitle: exam.title,
+                      subject: exam.discipline,
+                      topic: question.materialName,
+                      source: "exam_material",
+                      sourceId: question.id,
+                      questionPrompt: question.statement,
+                      wrongAnswer: question.alternatives[answer.choice] ?? `Alternativa ${answer.choice + 1}`,
+                      correctAnswer: question.alternatives[choice],
+                    },
+                  ]);
+                }
+              }
               save({ ...attempt, confirmedKeys });
             }}>
               <option value="">Sem confirmação</option>
@@ -83,6 +102,24 @@ export function ExamMaterialSimulation({ exam, catalog, save }: {
             <select className="w-full rounded border bg-background p-2" value={answer.assessment ?? ""} onChange={(event) => {
               const value = event.target.value;
               const assessment = value === "correct" || value === "wrong" ? value : undefined;
+              if (assessment === "wrong" && answer.assessment !== "wrong") {
+                void ErrorNotebookStorage.recordEntries([
+                  {
+                    studyId: question.studyId ?? exam.studyId,
+                    studyTitle: exam.title,
+                    subject: exam.discipline,
+                    topic: question.materialName,
+                    source: "exam_material",
+                    sourceId: question.id,
+                    questionPrompt: question.statement,
+                    wrongAnswer: question.alternatives[answer.choice] ?? `Alternativa ${answer.choice + 1}`,
+                    correctAnswer:
+                      question.suggestedChoice !== undefined
+                        ? question.alternatives[question.suggestedChoice]
+                        : undefined,
+                  },
+                ]);
+              }
               save({ ...attempt, answers: { ...attempt.answers, [question.id]: { ...answer, assessment } } });
             }}>
               <option value="">Sem correção</option>

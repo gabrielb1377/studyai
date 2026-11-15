@@ -5,6 +5,7 @@ import type { Flashcard } from "@/types/flashcard";
 import type { StudyRecord } from "@/types/study-engine";
 import { FlashcardService } from "./FlashcardService";
 import { LearningService } from "@/features/learning/LearningService";
+import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
 
 export function useFlashcards(studyId?: string) {
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -57,13 +58,28 @@ export function useFlashcards(studyId?: string) {
     generate,
     review: (cardId: string, rating: "errei" | "dificil" | "acertei" | boolean) => {
       const card = allCards.find((item) => item.id === cardId);
+      const isWrong = typeof rating === "boolean" ? !rating : rating === "errei";
       updateCards((current) => FlashcardService.review(current, cardId, rating));
-      if (card) LearningService.enqueueActivity({
-        type: "flashcard",
-        studyId: card.studyId,
-        correctAnswers: (typeof rating === "boolean" ? rating : rating !== "errei") ? 1 : 0,
-        wrongAnswers: (typeof rating === "boolean" ? !rating : rating === "errei") ? 1 : 0,
-      });
+      if (card) {
+        LearningService.enqueueActivity({
+          type: "flashcard",
+          studyId: card.studyId,
+          correctAnswers: isWrong ? 0 : 1,
+          wrongAnswers: isWrong ? 1 : 0,
+        });
+        if (isWrong) {
+          void ErrorNotebookStorage.recordEntries([
+            {
+              studyId: card.studyId,
+              source: "flashcard",
+              sourceId: card.id,
+              questionPrompt: card.question,
+              wrongAnswer: "Avaliado como Errei",
+              correctAnswer: card.answer,
+            },
+          ]);
+        }
+      }
     },
     clearError: () => setError(null),
   };

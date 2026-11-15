@@ -13,6 +13,8 @@ import { useQuiz } from "./useQuiz";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
 import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
 import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
+import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
+import type { CreateErrorEntryInput } from "@/features/learning/errors/types";
 
 
 export function QuizWorkspace({ study }: { study: StudyRecord }) {
@@ -54,6 +56,31 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
     const correct = questions.reduce((total, question, qIdx) => total + (answers[qIdx] === question.correctAnswer ? 1 : 0), 0);
     const wrong = questions.length - correct;
     saveResult(QuizService.createResult(study.studyId, questions.map((q) => q.id), correct, wrong));
+    const wrongEntries: CreateErrorEntryInput[] = questions.flatMap((question, qIdx) => {
+      const selectedChoice = answers[qIdx];
+      if (selectedChoice === question.correctAnswer) return [];
+      const wrongAnswer =
+        selectedChoice === null || selectedChoice === undefined
+          ? "Sem resposta selecionada"
+          : question.alternatives[selectedChoice] ?? `Alternativa ${selectedChoice + 1}`;
+      return [
+        {
+          studyId: study.studyId,
+          studyTitle: study.title,
+          subject: study.subject,
+          topic: study.title,
+          source: "quiz" as const,
+          sourceId: question.id,
+          questionPrompt: question.question,
+          wrongAnswer,
+          correctAnswer: question.alternatives[question.correctAnswer],
+          explanation: question.explanation,
+        },
+      ];
+    });
+    if (wrongEntries.length > 0) {
+      void ErrorNotebookStorage.recordEntries(wrongEntries);
+    }
     setIsFinished(true);
     savePractice({ index, answers, isFinished: true, mode });
   };

@@ -6,6 +6,8 @@ import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { ReviewScheduler } from "@/features/learning/ReviewScheduler";
 import { reviewPeriod, type TopicReview } from "@/features/learning/TopicReview";
 import { TopicReviewStorage } from "@/features/learning/TopicReviewStorage";
+import { ERROR_NOTEBOOK_UPDATED_EVENT, ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
+import type { ErrorNotebookEntry } from "@/features/learning/errors/types";
 import { useLearningEngine } from "@/features/learning/hooks/useLearningEngine";
 import { useQuiz } from "@/features/quiz/useQuiz";
 import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
@@ -34,6 +36,7 @@ export function useStudyPlan(requestedExamId?: string) {
 
   const [exams, setExams] = useState<Exam[]>([]);
   const [topicReviews, setTopicReviews] = useState<TopicReview[]>([]);
+  const [errorEntries, setErrorEntries] = useState<ErrorNotebookEntry[]>([]);
   const [savedPlan, setSavedPlan] = useState<StudyPlan | null>(null);
   const savedPlanRef = useRef<StudyPlan | null>(null);
   const [configDraft, setConfigDraft] = useState<StudyPlanConfig>(createDefaultPlanConfig);
@@ -51,11 +54,13 @@ export function useStudyPlan(requestedExamId?: string) {
 
   const loadAuxData = useCallback(async () => {
     try {
-      const [loadedReviews, loadedPlan] = await Promise.all([
+      const [loadedReviews, loadedPlan, loadedErrors] = await Promise.all([
         TopicReviewStorage.load(),
         PlanningStorage.load(),
+        ErrorNotebookStorage.load(),
       ]);
       setTopicReviews(loadedReviews);
+      setErrorEntries(loadedErrors);
       setExams(ExamService.load());
       commitLocalPlan(loadedPlan);
       if (loadedPlan) {
@@ -89,10 +94,12 @@ export function useStudyPlan(requestedExamId?: string) {
     window.addEventListener(STORAGE_UPDATED_EVENT, reload);
     window.addEventListener(EXAM_UPDATED_EVENT, reloadExams);
     window.addEventListener(PLANNING_UPDATED_EVENT, reload);
+    window.addEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, reload);
     return () => {
       window.removeEventListener(STORAGE_UPDATED_EVENT, reload);
       window.removeEventListener(EXAM_UPDATED_EVENT, reloadExams);
       window.removeEventListener(PLANNING_UPDATED_EVENT, reload);
+      window.removeEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, reload);
     };
   }, [loadAuxData]);
 
@@ -201,6 +208,7 @@ export function useStudyPlan(requestedExamId?: string) {
           quizzes,
           topicReviews,
           exams,
+          errorEntries,
         },
         savedPlan,
       );
@@ -209,7 +217,7 @@ export function useStudyPlan(requestedExamId?: string) {
         savedPlan ? "Plano atualizado com prioridades reais." : "Plano inteligente criado e salvo.",
       );
     },
-    [configDraft, enqueuePersist, exams, flashcards, isSaving, profile, quizzes, savedPlan, studies, topicReviews],
+    [configDraft, enqueuePersist, errorEntries, exams, flashcards, isSaving, profile, quizzes, savedPlan, studies, topicReviews],
   );
 
   const toggleItemCompleted = useCallback(
@@ -319,18 +327,20 @@ export function useStudyPlan(requestedExamId?: string) {
     const completedItems = items.filter((item) => item.completed).length;
     const totalMinutes = items.reduce((sum, item) => sum + item.estimatedMinutes, 0);
     const unavailableItems = items.filter((item) => item.sourceUnavailable).length;
+    const pendingErrorsCount = errorEntries.filter((entry) => entry.status === "pending").length;
 
     return {
       totalStudies: studies.length,
       upcomingExamsCount: upcomingExams.length,
       dueFlashcardsCount: dueFlashcards,
       dueReviewsCount: dueReviews,
+      pendingErrorsCount,
       plannedItemsCount: items.length,
       completedItemsCount: completedItems,
       totalMinutes,
       unavailableItemsCount: unavailableItems,
     };
-  }, [exams, flashcards, plan, studies.length, topicReviews]);
+  }, [errorEntries, exams, flashcards, plan, studies.length, topicReviews]);
 
   const isLoading = planLoading || studiesLoading || !flashcardsReady || learningLoading;
   const resolvedError = error ?? (studiesError instanceof Error ? studiesError.message : studiesError ? String(studiesError) : null);
