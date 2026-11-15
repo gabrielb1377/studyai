@@ -14,7 +14,7 @@ const actionInstructions: Record<TeacherAction, string> = {
   flowchart: "Gere um fluxograma em um bloco Mermaid `flowchart TD`. Inclua apenas relações sustentadas pelo material e acrescente uma explicação curta após o diagrama.",
   mind_map: "Gere um mapa mental em um bloco Mermaid `mindmap`. Use somente conceitos presentes no contexto e não crie ramificações sem evidência.",
   timeline: "Crie uma linha do tempo apenas se o material possuir ordem cronológica ou sequencial. Caso contrário, explique objetivamente por que esse formato não se aplica, sem inventar datas.",
-  exercise: "Proponha um exercício adequado ao tema. Varie entre múltipla escolha, verdadeiro/falso, completar, associação, discursiva, código e estudo de caso. Apresente um exercício por vez e aguarde a resposta.",
+  exercise: "Proponha um exercício gradual adequado ao tema e ao nível do estudante. Comece por fixação conceitual (etapa 1: fácil), avance para aplicação (etapa 2: médio) e depois análise/síntese (etapa 3+: difícil), ajustando conforme acertos e erros pendentes. Varie entre múltipla escolha, verdadeiro/falso, completar, associação, discursiva, código e estudo de caso. Apresente um exercício por vez e aguarde a resposta.",
   compare: "Compare os conceitos pedidos em uma tabela clara, destacando definição, finalidade, diferenças, semelhanças e um exemplo sustentado pelo contexto.",
   adaptive_summary: "Produza o resumo no formato solicitado, preservando conceitos, relações e ressalvas importantes do material.",
   explain_selection: "Explique prioritariamente o trecho selecionado e use os demais trechos apenas para esclarecer seu contexto. Informe a página ou capítulo quando disponível.",
@@ -52,6 +52,15 @@ export const TeacherPromptBuilder = {
       "Quando corrigir uma resposta, mostre: resposta correta, justificativa, conceito relacionado, fonte utilizada e recomendação de revisão.",
       "Ao usar uma fonte, cite o rótulo de fonte recebido no contexto; não invente páginas, capítulos ou referências.",
     ];
+    if (request.action === "exercise" && request.exerciseStage) {
+      const stage = request.exerciseStage;
+      const stageGuidance = stage === 1
+        ? "Progressão gradual — Etapa 1 (fácil/fixação): verifique compreensão básica antes de aumentar a complexidade."
+        : stage === 2
+          ? "Progressão gradual — Etapa 2 (médio/aplicação): exija aplicação do conceito em cenário concreto."
+          : `Progressão gradual — Etapa ${stage} (difícil/análise): proponha problema de síntese, comparação ou caso complexo.`;
+      blocks.push(stageGuidance);
+    }
     if (request.action === "adaptive_summary") {
       blocks.push(`Formato do resumo: ${teacherSummaryStyleLabels[request.summaryStyle]}.`);
     }
@@ -69,7 +78,12 @@ export const TeacherPromptBuilder = {
     return blocks.join("\n");
   },
 
-  actionMessage(action: TeacherAction, context?: TutorStudyContext | null, summaryStyle?: TeacherRequest["summaryStyle"]) {
+  actionMessage(
+    action: TeacherAction,
+    context?: TutorStudyContext | null,
+    summaryStyle?: TeacherRequest["summaryStyle"],
+    exerciseStage?: number,
+  ) {
     const topic = context?.topic || context?.title || "o tema atual";
     const messages: Record<TeacherAction, string> = {
       dialogue: "Responda considerando meu nível e o método de ensino selecionado.",
@@ -78,7 +92,9 @@ export const TeacherPromptBuilder = {
       flowchart: `Crie um fluxograma dos conceitos e relações centrais de ${topic}.`,
       mind_map: `Crie um mapa mental dos conceitos centrais de ${topic}.`,
       timeline: `Verifique se ${topic} possui uma sequência cronológica ou processual e, quando fizer sentido, crie uma linha do tempo.`,
-      exercise: `Proponha um exercício sobre ${topic} e aguarde minha resposta.`,
+      exercise: exerciseStage
+        ? `Proponha um exercício gradual (etapa ${exerciseStage}) sobre ${topic} e aguarde minha resposta.`
+        : `Proponha um exercício sobre ${topic} e aguarde minha resposta.`,
       compare: `Compare os conceitos centrais e mais relacionados de ${topic}.`,
       adaptive_summary: `Gere um ${teacherSummaryStyleLabels[summaryStyle ?? "medium"].toLocaleLowerCase("pt-BR")} de ${topic}.`,
       explain_selection: "Explique o trecho selecionado com base no contexto do material.",

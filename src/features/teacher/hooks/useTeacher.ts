@@ -75,6 +75,7 @@ export function useTeacher() {
   const [preferences, setPreferences] = useState<TeacherPreferences>(defaultTeacherPreferences);
   const [audioPreferences, setAudioPreferences] = useState<TeacherAudioLessonPreferences>(defaultTeacherAudioLessonPreferences);
   const [selection, setSelection] = useState<TeacherMaterialSelection | null>(null);
+  const [exerciseStage, setExerciseStage] = useState(1);
   const [audioLessonMode, setAudioLessonMode] = useState<"idle" | "active" | "paused">("idle");
   const [audioLessonSession, setAudioLessonSession] = useState<{
     sessionId: string;
@@ -211,6 +212,10 @@ export function useTeacher() {
 
   const createRequest = useCallback((action: TeacherAction, context?: TutorStudyContext | null) => {
     const basePrefs = audioLessonMode === "active" ? audioPreferences : preferences;
+    const stage = action === "exercise" ? exerciseStage : undefined;
+    if (action === "exercise") {
+      setExerciseStage((current) => Math.min(current + 1, 20));
+    }
     const teaching: TeacherRequest = {
       mode: "teacher",
       action,
@@ -219,12 +224,13 @@ export function useTeacher() {
       rate: audioPreferences.rate,
       autoplay: audioPreferences.autoplay,
       selection: action === "explain_selection" ? selection ?? undefined : undefined,
+      ...(stage ? { exerciseStage: stage } : {}),
     };
     return {
-      content: TeacherPromptBuilder.actionMessage(action, context, basePrefs.summaryStyle),
+      content: TeacherPromptBuilder.actionMessage(action, context, basePrefs.summaryStyle, stage),
       teaching,
     };
-  }, [preferences, audioPreferences, audioLessonMode, selection]);
+  }, [preferences, audioPreferences, audioLessonMode, selection, exerciseStage]);
 
   return {
     mode,

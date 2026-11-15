@@ -70,6 +70,7 @@ export type TeacherRequest = TeacherPreferences & {
   mode: "teacher";
   action: TeacherAction;
   selection?: TeacherMaterialSelection;
+  exerciseStage?: number;
   voice?: string;
   rate?: number;
   autoplay?: boolean;
