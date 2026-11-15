@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, ClipboardCheck, LoaderCircle, Plus, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { CheckCircle2, ClipboardCheck, LoaderCircle, Plus, ChevronLeft, ChevronRight, RotateCcw, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { StudyRecord } from "@/types/study-engine";
+import type { Flashcard } from "@/types/flashcard";
 import { QuizService } from "./QuizService";
 import { QuizQuestion } from "./QuizQuestion";
 import { SecureExamPanel } from "./SecureExamPanel";
@@ -13,8 +15,13 @@ import { useQuiz } from "./useQuiz";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
 import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
 import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
-import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
-import type { CreateErrorEntryInput } from "@/features/learning/errors/types";
+import { ErrorNotebookStorage, ERROR_NOTEBOOK_UPDATED_EVENT } from "@/features/learning/errors/ErrorNotebookStorage";
+import type { CreateErrorEntryInput, ErrorNotebookEntry } from "@/features/learning/errors/types";
+import { FlashcardService } from "@/features/flashcards/FlashcardService";
+import { LearningStorage } from "@/features/learning/LearningStorage";
+import type { LearningProfile } from "@/features/learning/types";
+import { AdaptiveAssessmentEngine } from "@/features/learning/adaptive/AdaptiveAssessmentEngine";
+import type { AdaptiveDifficultyMode, AdaptiveSelectionReason } from "@/features/learning/adaptive/types";
 
 
 export function QuizWorkspace({ study }: { study: StudyRecord }) {
@@ -26,14 +33,66 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
   const [mode, setMode] = useState<"practice" | "exam">(stored.mode ?? "practice");
   const [showConfig, setShowConfig] = useState(false);
   const [questionCount, setQuestionCount] = useState<number>(5);
-  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
+  const [difficulty, setDifficulty] = useState<AdaptiveDifficultyMode>("adaptive");
+  const [errorEntries, setErrorEntries] = useState<ErrorNotebookEntry[]>([]);
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [learningProfile, setLearningProfile] = useState<LearningProfile | null>(null);
+  const [adaptiveQuestionIds, setAdaptiveQuestionIds] = useState<string[] | null>(null);
+  const [adaptiveSummary, setAdaptiveSummary] = useState<string | null>(null);
+  const [adaptiveReasons, setAdaptiveReasons] = useState<Record<string, AdaptiveSelectionReason>>({});
 
   useEffect(() => {
-    if (questions.length > 0 && index >= questions.length) setIndex(0);
-  }, [index, questions.length]);
+    let cancelled = false;
+    const loadSignals = () => {
+      void Promise.all([
+        ErrorNotebookStorage.load().catch(() => []),
+        FlashcardService.load().catch(() => []),
+        LearningStorage.load().catch(() => null),
+      ]).then(([loadedErrors, loadedCards, loadedProfile]) => {
+        if (cancelled) return;
+        setErrorEntries(loadedErrors.filter((entry) => entry.studyId === study.studyId));
+        setFlashcards(loadedCards.filter((card) => card.studyId === study.studyId));
+        setLearningProfile(loadedProfile);
+      });
+    };
+    loadSignals();
+    window.addEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, loadSignals);
+    window.addEventListener("studyai:flashcards-updated", loadSignals);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, loadSignals);
+      window.removeEventListener("studyai:flashcards-updated", loadSignals);
+    };
+  }, [study.studyId]);
 
-  const currentQuestion = questions[index];
+  const activeQuestions = useMemo(() => {
+    if (!adaptiveQuestionIds) return questions;
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    const mapped = adaptiveQuestionIds.map((id) => byId.get(id)).filter((q): q is NonNullable<typeof q> => Boolean(q));
+    return mapped.length > 0 ? mapped : questions;
+  }, [adaptiveQuestionIds, questions]);
+
+  useEffect(() => {
+    if (activeQuestions.length > 0 && index >= activeQuestions.length) setIndex(0);
+  }, [index, activeQuestions.length]);
+
+  const currentQuestion = activeQuestions[index];
   const canGenerate = hasStructuredStudyContent(study);
+  const studyKnowledge = useMemo(
+    () => (learningProfile ? KnowledgeEngine.calculate(study, learningProfile, flashcards, results) : undefined),
+    [flashcards, learningProfile, results, study],
+  );
+  const indicator = useMemo(
+    () =>
+      AdaptiveAssessmentEngine.computeReliableIndicators({
+        study,
+        quizzes: results,
+        flashcards,
+        errorEntries,
+        knowledge: studyKnowledge,
+      }),
+    [errorEntries, flashcards, results, study, studyKnowledge],
+  );
 
   const savePractice = (changes: { index: number; answers: Array<number | null>; isFinished: boolean; mode: "practice" | "exam" }) => {
     const current = WorkspacePersistence.load(study.studyId).quiz;
@@ -53,10 +112,10 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
   };
 
   const submitExam = () => {
-    const correct = questions.reduce((total, question, qIdx) => total + (answers[qIdx] === question.correctAnswer ? 1 : 0), 0);
-    const wrong = questions.length - correct;
-    saveResult(QuizService.createResult(study.studyId, questions.map((q) => q.id), correct, wrong));
-    const wrongEntries: CreateErrorEntryInput[] = questions.flatMap((question, qIdx) => {
+    const correct = activeQuestions.reduce((total, question, qIdx) => total + (answers[qIdx] === question.correctAnswer ? 1 : 0), 0);
+    const wrong = activeQuestions.length - correct;
+    saveResult(QuizService.createResult(study.studyId, activeQuestions.map((q) => q.id), correct, wrong));
+    const wrongEntries: CreateErrorEntryInput[] = activeQuestions.flatMap((question, qIdx) => {
       const selectedChoice = answers[qIdx];
       if (selectedChoice === question.correctAnswer) return [];
       const wrongAnswer =
@@ -85,6 +144,26 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
     savePractice({ index, answers, isFinished: true, mode });
   };
 
+  const startAdaptiveSession = () => {
+    const selection = AdaptiveAssessmentEngine.selectAdaptiveQuizQuestions({
+      questions,
+      results,
+      errorEntries,
+      knowledge: studyKnowledge,
+      count: questionCount,
+      mode: difficulty,
+    });
+    if (selection.selectedQuestions.length === 0) return;
+    setAdaptiveQuestionIds(selection.selectedQuestions.map((q) => q.id));
+    setAdaptiveReasons(selection.reasonsByQuestionId);
+    setAdaptiveSummary(selection.summary);
+    setIndex(0);
+    setAnswers([]);
+    setIsFinished(false);
+    setShowConfig(false);
+    savePractice({ index: 0, answers: [], isFinished: false, mode: "practice" });
+  };
+
   const restart = () => {
     setIndex(0);
     setAnswers([]);
@@ -102,11 +181,17 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
           <h2 id="quiz-workspace-title" className="text-lg font-semibold tracking-tight">Simulado & Quiz Explicado</h2>
           <p className="mt-1 text-sm text-muted-foreground">{mode === "practice" ? `${questions.length} questões disponíveis · Modo Prática` : "Questões geradas e corrigidas no servidor"}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">{indicator.reliabilityLabel} · {indicator.sampleSize} q.</Badge>
           <select aria-label="Modo do simulado" className="rounded-md border bg-background px-3 py-1.5 text-xs font-medium" value={mode} onChange={(e) => { const nextMode = e.target.value as "practice" | "exam"; const current = WorkspacePersistence.load(study.studyId).quiz; setMode(nextMode); WorkspacePersistence.save(study.studyId, { quiz: { ...current, index, answers, isFinished, mode: nextMode } }); }}>
             <option value="practice">Modo Prática</option>
             <option value="exam">Modo Prova protegido</option>
           </select>
+          {mode === "practice" && questions.length > 0 && (
+            <Button type="button" variant="secondary" size="sm" onClick={startAdaptiveSession}>
+              <Sparkles className="size-4 mr-1" /> Simulado adaptativo
+            </Button>
+          )}
           {mode === "practice" && (
             <Button type="button" variant="outline" onClick={() => setShowConfig(!showConfig)} disabled={isGenerating || !canGenerate}>
               <Plus className="size-4 mr-1" /> {isGenerating ? "Criando..." : "Novo Simulado"}
@@ -129,14 +214,19 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
             </div>
             <div>
               <label className="text-xs text-muted-foreground uppercase font-semibold">Dificuldade</label>
-              <select className="w-full rounded-md border bg-background px-3 py-2 text-sm mt-1" value={difficulty} onChange={(e) => setDifficulty(e.target.value as "easy" | "medium" | "hard")}>
+              <select aria-label="Dificuldade do simulado" className="w-full rounded-md border bg-background px-3 py-2 text-sm mt-1" value={difficulty} onChange={(e) => setDifficulty(e.target.value as AdaptiveDifficultyMode)}>
+                <option value="adaptive">Adaptativa (recomendada)</option>
                 <option value="easy">Fácil</option>
                 <option value="medium">Média</option>
                 <option value="hard">Difícil</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <Button className="w-full" onClick={() => { setShowConfig(false); void generate(study); }}>Gerar com IA</Button>
+            <div className="flex items-end gap-2">
+              <Button className="w-full" onClick={() => {
+                setShowConfig(false);
+                const resolvedDifficulty = difficulty === "adaptive" ? indicator.recommendedDifficulty : difficulty;
+                void generate(study, { count: Math.min(10, Math.max(3, questionCount)), difficulty: resolvedDifficulty });
+              }}>Gerar com IA</Button>
             </div>
           </div>
         </Card>
@@ -191,9 +281,30 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
             </div>
           </div>
 
+          <div className="w-full space-y-3 rounded-lg border bg-muted/20 p-4 text-left">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Indicador confiável &amp; Revisão inteligente</p>
+              <Badge variant="outline">{indicator.reliabilityLabel} · {indicator.sampleSize} questões</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">{indicator.disclaimer}</p>
+            {indicator.nextReviewSteps.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {indicator.nextReviewSteps.map((step) => (
+                  <Link key={step.id} href={step.href} className="rounded-lg border bg-background p-3 text-xs transition-colors hover:bg-accent">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="text-foreground">{step.title}</strong>
+                      <Badge variant="secondary">{step.priority}</Badge>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{step.description}</p>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="w-full space-y-3 text-left">
             <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Revisão Questão a Questão</h4>
-            {questions.map((q, qIdx) => {
+            {activeQuestions.map((q, qIdx) => {
               const userAns = answers[qIdx];
               const correct = userAns === q.correctAnswer;
               return (
@@ -218,15 +329,23 @@ export function QuizWorkspace({ study }: { study: StudyRecord }) {
         </Card>
       ) : (
         <div className="space-y-4">
+          {adaptiveSummary && (
+            <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+              <span>{adaptiveSummary}</span>
+              {adaptiveReasons[currentQuestion.id] && (
+                <Badge variant="secondary">{adaptiveReasons[currentQuestion.id].reasons[0]}</Badge>
+              )}
+            </div>
+          )}
           <QuizQuestion question={currentQuestion} selectedAnswer={answers[index] ?? null} onAnswer={(alt) => handleAnswer(index, alt)} />
           <div className="flex items-center justify-between gap-3">
             <Button type="button" variant="ghost" size="sm" onClick={() => goToQuestion(Math.max(0, index - 1))} disabled={index === 0}><ChevronLeft className="size-4 mr-1" /> Anterior</Button>
-            <span className="text-xs text-muted-foreground">Questão {index + 1} de {questions.length}</span>
+            <span className="text-xs text-muted-foreground">Questão {index + 1} de {activeQuestions.length}</span>
             <Button type="button" size="sm" onClick={() => {
-              if (index + 1 < questions.length) goToQuestion(index + 1);
+              if (index + 1 < activeQuestions.length) goToQuestion(index + 1);
               else submitExam();
             }}>
-              {index + 1 === questions.length ? "Finalizar Simulado" : "Próxima"} <ChevronRight className="size-4 ml-1" />
+              {index + 1 === activeQuestions.length ? "Finalizar Simulado" : "Próxima"} <ChevronRight className="size-4 ml-1" />
             </Button>
           </div>
         </div>

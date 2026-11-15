@@ -1,5 +1,7 @@
 import type { Exam, ExamPlanItem, MaterialExamAttempt, MaterialExamQuestion } from "@/types/exam";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import type { ErrorNotebookEntry } from "@/features/learning/errors/types";
+import { AdaptiveAssessmentEngine } from "@/features/learning/adaptive/AdaptiveAssessmentEngine";
 
 const STORAGE_KEY_PREFIX = "studyai:exams:";
 export const EXAM_UPDATED_EVENT = "studyai:exams-updated";
@@ -138,6 +140,36 @@ export const ExamService = {
     return {
       id: crypto.randomUUID(), examId: exam.id, disciplineKey: exam.disciplineKey,
       source: "material", startedAt: new Date().toISOString(), questions: questions.slice(0, count), answers: {},
+    };
+  },
+
+  startAdaptiveMaterialAttempt(
+    exam: Exam,
+    catalog: readonly MaterialExamQuestion[],
+    count: number,
+    errorEntries: readonly ErrorNotebookEntry[],
+  ): { attempt: MaterialExamAttempt; summary: string } | null {
+    const questions = [...new Map(catalog.filter((question) => exam.materialIds.includes(question.materialId))
+      .map((question) => [question.id, question])).values()];
+    if (!exam.disciplineKey || !Number.isInteger(count) || count < 1 || count > 30 || count > questions.length) return null;
+    const selection = AdaptiveAssessmentEngine.selectAdaptiveMaterialQuestions({
+      questions,
+      errorEntries,
+      attempts: exam.materialAttempts ?? [],
+      count,
+    });
+    if (selection.selectedQuestions.length === 0) return null;
+    return {
+      attempt: {
+        id: crypto.randomUUID(),
+        examId: exam.id,
+        disciplineKey: exam.disciplineKey,
+        source: "material",
+        startedAt: new Date().toISOString(),
+        questions: selection.selectedQuestions,
+        answers: {},
+      },
+      summary: selection.summary,
     };
   },
 

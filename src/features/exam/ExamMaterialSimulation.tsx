@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { Exam, MaterialExamAttempt, MaterialExamQuestion } from "@/types/exam";
 import { ExamService } from "./ExamService";
 import { confirmedChoice, questionRevision } from "./ExamAnswerKey";
-import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
+import { ErrorNotebookStorage, ERROR_NOTEBOOK_UPDATED_EVENT } from "@/features/learning/errors/ErrorNotebookStorage";
+import type { ErrorNotebookEntry } from "@/features/learning/errors/types";
 
 export function ExamMaterialSimulation({ exam, catalog, save }: {
   exam: Exam;
@@ -15,6 +16,28 @@ export function ExamMaterialSimulation({ exam, catalog, save }: {
 }) {
   const attempts = (exam.materialAttempts ?? []).filter((item) => item.examId === exam.id && item.disciplineKey === exam.disciplineKey);
   const [selected, setSelected] = useState("");
+  const [adaptiveNote, setAdaptiveNote] = useState<string | null>(null);
+  const [errorEntries, setErrorEntries] = useState<ErrorNotebookEntry[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadErrors = () => {
+      void ErrorNotebookStorage.load()
+        .then((loaded) => {
+          if (!cancelled) setErrorEntries(loaded);
+        })
+        .catch(() => {
+          if (!cancelled) setErrorEntries([]);
+        });
+    };
+    loadErrors();
+    window.addEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, loadErrors);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, loadErrors);
+    };
+  }, []);
+
   const active = attempts.find((item) => !item.completedAt);
   const attempt = active ?? attempts.find((item) => item.id === selected) ?? attempts[0];
   const [count, setCount] = useState(5);
@@ -34,9 +57,14 @@ export function ExamMaterialSimulation({ exam, catalog, save }: {
       </label>
       <Button type="button" disabled={count < 1 || count > limit} onClick={() => {
         const next = ExamService.startMaterialAttempt(exam, catalog, count);
-        if (next) { save(next); setSelected(next.id); }
+        if (next) { setAdaptiveNote(null); save(next); setSelected(next.id); }
       }}>Iniciar simulado dos materiais</Button>
+      <Button type="button" variant="secondary" disabled={count < 1 || count > limit} onClick={() => {
+        const next = ExamService.startAdaptiveMaterialAttempt(exam, catalog, count, errorEntries);
+        if (next) { setAdaptiveNote(next.summary); save(next.attempt); setSelected(next.attempt.id); }
+      }}>Simulado adaptativo dos materiais</Button>
     </div>}
+    {adaptiveNote && <p role="status" className="text-xs text-muted-foreground">{adaptiveNote}</p>}
     {!active && count > limit && <p role="status">{limit ? `Escolha até ${limit} questões ou adicione outros materiais.` : "Sem questões confirmadas. Consulte os documentos originais ou use o Modo Prova do estudo."}</p>}
     {!catalog.length && exam.materialIds.length > 0 && <p className="text-sm text-muted-foreground">
       Se a extração antiga juntou alternativas, abra o material vinculado e confira o original. Na revisão de um PDF, reprocese apenas a página afetada e mantenha as correções manuais. Para outros formatos, reimporte uma cópia do original pela Biblioteca.

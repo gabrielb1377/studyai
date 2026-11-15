@@ -19,13 +19,15 @@ import { withAIQuota, createQuotaAwareAIRequest } from "@/server/ai/QuotaMiddlew
 
 export const runtime = "nodejs";
 
-type QuizRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; model?: string; models?: AIModelPreferences; mode?: AISelectionMode; provider?: AIProviderId };
+type QuizRequest = { studyId: string; title: string; subject: string; chunks: RetrievedChunk[]; count?: number; difficulty?: "easy" | "medium" | "hard"; model?: string; models?: AIModelPreferences; mode?: AISelectionMode; provider?: AIProviderId };
 type GeneratedQuestion = { question: string; alternatives: string[]; correctAnswer: number; explanation: string; difficulty: "easy" | "medium" | "hard" };
 
 function isRequest(value: unknown): value is QuizRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Partial<QuizRequest>;
   return typeof request.studyId === "string" && typeof request.title === "string" && typeof request.subject === "string" &&
+    (request.count === undefined || (Number.isInteger(request.count) && request.count! >= 3 && request.count! <= 10)) &&
+    (request.difficulty === undefined || request.difficulty === "easy" || request.difficulty === "medium" || request.difficulty === "hard") &&
     (request.provider === undefined || isAIProviderId(request.provider)) &&
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     isAIModelPreferences(request.models) &&
@@ -38,7 +40,7 @@ function isRequest(value: unknown): value is QuizRequest {
 function parseQuestions(value: string): GeneratedQuestion[] | null {
   try {
     const parsed: unknown = JSON.parse(value.replace(/^```json\s*|\s*```$/g, "").trim());
-    return Array.isArray(parsed) && parsed.length >= 5 && parsed.length <= 10 && parsed.every((item) =>
+    return Array.isArray(parsed) && parsed.length >= 3 && parsed.length <= 10 && parsed.every((item) =>
       Boolean(item) && typeof item.question === "string" && item.question.trim().length > 0 && Array.isArray(item.alternatives) && item.alternatives.length === 4 &&
       item.alternatives.every((alternative: unknown) => typeof alternative === "string" && alternative.trim().length > 0) &&
       Number.isInteger(item.correctAnswer) && item.correctAnswer >= 0 && item.correctAnswer < 4 &&
@@ -71,5 +73,5 @@ export async function POST(request: Request) {
       const normalized = normalizeAIError(error, "Erro inesperado ao criar o quiz.");
       return NextResponse.json(normalized.body, { status: normalized.status });
     }
-  }, { history: [], message: PromptBuilder.quiz(body.title, body.subject, body.chunks) });
+  }, { history: [], message: PromptBuilder.quiz(body.title, body.subject, body.chunks, { count: body.count, difficulty: body.difficulty }) });
 }

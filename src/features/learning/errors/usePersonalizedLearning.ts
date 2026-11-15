@@ -26,6 +26,7 @@ import type {
   LongTermMemoryStoreState,
   MemoryCategory,
 } from "../memory/types";
+import { AdaptiveAssessmentEngine } from "../adaptive/AdaptiveAssessmentEngine";
 
 export type ManualErrorDraft = {
   studyId?: string;
@@ -333,6 +334,16 @@ export function usePersonalizedLearning() {
     }, "Todas as memórias locais foram removidas.");
   }, [enqueueOperation]);
 
+  const assessmentIndicator = useMemo(
+    () =>
+      AdaptiveAssessmentEngine.computeReliableIndicators({
+        quizzes,
+        flashcards,
+        errorEntries: entries,
+      }),
+    [entries, flashcards, quizzes],
+  );
+
   return {
     studies,
     entries,
@@ -340,6 +351,7 @@ export function usePersonalizedLearning() {
     memorySettings: memoryState.settings,
     difficultyItems,
     recommendations,
+    assessmentIndicator,
     summary,
     isLoading,
     isSaving,

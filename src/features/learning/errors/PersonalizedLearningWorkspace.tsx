@@ -80,6 +80,7 @@ export function PersonalizedLearningWorkspace({
     memorySettings,
     difficultyItems,
     recommendations,
+    assessmentIndicator,
     summary,
     isLoading,
     isSaving,
@@ -306,6 +307,33 @@ export function PersonalizedLearningWorkspace({
 
       {activeTab === "mapa" ? (
         <section aria-label="Mapa de dificuldades" className="space-y-4">
+          {difficultyItems.length > 0 ? (
+            <Card className="gap-2 p-4 shadow-none">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold">Indicadores confiáveis de avaliação</h2>
+                  <p className="text-xs text-muted-foreground">{assessmentIndicator.disclaimer}</p>
+                </div>
+                <Badge variant="outline">
+                  {assessmentIndicator.reliabilityLabel} · {assessmentIndicator.sampleSize} questão(ões)
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span>
+                  Acurácia média:{" "}
+                  <strong className="text-foreground">
+                    {assessmentIndicator.accuracyPercent !== null ? `${assessmentIndicator.accuracyPercent}%` : "Sem questões avaliadas"}
+                  </strong>
+                </span>
+                <span>
+                  Sessões avaliadas: <strong className="text-foreground">{assessmentIndicator.sessionsCount}</strong>
+                </span>
+                <span>
+                  Revisões vencidas: <strong className="text-foreground">{assessmentIndicator.dueFlashcardsCount}</strong>
+                </span>
+              </div>
+            </Card>
+          ) : null}
           {difficultyItems.length === 0 ? (
             <Card className="items-center gap-3 p-8 text-center shadow-none">
               <BookOpen className="size-8 text-muted-foreground" />
