@@ -7,15 +7,13 @@ import type {
 
 // Factory function - retorna a implementação baseada no ambiente
 export function createVoiceService(): VoiceService {
-  // Verificar se Web Speech API está disponível
-  const window = (globalThis as unknown as { speechSynthesis?: SpeechSynthesis });
-  const hasWebSpeech = typeof window?.speechSynthesis?.speak === "function";
+  const win = globalThis as unknown as { speechSynthesis?: SpeechSynthesis };
+  const hasWebSpeech = typeof win?.speechSynthesis?.speak === "function";
 
   if (hasWebSpeech) {
-    return createWebSpeechService(window);
+    return createWebSpeechService(win);
   }
 
-  // Fallback -provider não disponível
   return {
     init: async () => ({
       supported: false,
@@ -27,7 +25,9 @@ export function createVoiceService(): VoiceService {
       available: false,
       error: { code: "NOT_SUPPORTED", message: "Web Speech API não suportada." },
     }),
-    speak: async () => {},
+    speak: async () => {
+      throw new Error("Síntese de voz não suportada neste navegador.");
+    },
     pause: async () => {},
     resume: async () => {},
     stop: async () => {},
@@ -56,7 +56,7 @@ export function createSpeechRecognitionService(): SpeechRecognitionService {
         provider: "web-speech",
         error: {
           code: "not-allowed",
-          message: "Web Speech Recognition API não disponível neste navegador.",
+          message: "Reconhecimento de fala não disponível neste navegador.",
         },
       }),
       getStatus: async () => ({
@@ -64,7 +64,7 @@ export function createSpeechRecognitionService(): SpeechRecognitionService {
         available: false,
         error: {
           code: "not-allowed",
-          message: "Web Speech Recognition API não disponível.",
+          message: "Reconhecimento de fala não disponível.",
         },
       }),
       start: async () => {},
@@ -91,10 +91,7 @@ export function createSpeechRecognitionService(): SpeechRecognitionService {
       provider: "web-speech",
       available: true,
     }),
-    start: async () => {
-      // The actual recognition is started by the hook directly
-      return Promise.resolve();
-    },
+    start: async () => Promise.resolve(),
     stop: async () => Promise.resolve(),
     abort: async () => Promise.resolve(),
     getPreferences: () => ({
@@ -108,37 +105,57 @@ export function createSpeechRecognitionService(): SpeechRecognitionService {
   };
 }
 
-function createWebSpeechService(window: { speechSynthesis?: SpeechSynthesis }): VoiceService {
+function createWebSpeechService(win: { speechSynthesis?: SpeechSynthesis }): VoiceService {
   let voices: SpeechSynthesisVoice[] = [];
   let isSpeaking = false;
   let isPaused = false;
-  let pendingText = "";
-  let pendingOptions: { rate?: number; voice?: string; volume?: number } | null = null;
+  let settleActive: (() => void) | null = null;
+  let activeUtterance: SpeechSynthesisUtterance | null = null;
 
-  // Carregar vozes quando disponíveis
   const loadVoices = () => {
-    voices = window?.speechSynthesis?.getVoices() ?? [];
+    voices = win?.speechSynthesis?.getVoices?.() ?? [];
   };
 
-  // Inicializar ao carregar
   loadVoices();
-  if (window?.speechSynthesis?.onvoiceschanged !== undefined) {
-    window?.speechSynthesis?.addEventListener("voiceschanged", loadVoices);
+  if (win?.speechSynthesis && typeof win.speechSynthesis.addEventListener === "function") {
+    win.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+  }
+
+  function clearUtteranceHandlers(utterance: SpeechSynthesisUtterance | null) {
+    if (!utterance) return;
+    utterance.onstart = null;
+    utterance.onpause = null;
+    utterance.onresume = null;
+    utterance.onend = null;
+    utterance.onerror = null;
+  }
+
+  function stopInternal() {
+    clearUtteranceHandlers(activeUtterance);
+    activeUtterance = null;
+    if (settleActive) {
+      const finish = settleActive;
+      settleActive = null;
+      finish();
+    }
+    win?.speechSynthesis?.cancel();
+    isSpeaking = false;
+    isPaused = false;
   }
 
   const service: VoiceService = {
     init: async () => {
       loadVoices();
-      const supported = voices.length > 0 || typeof window?.speechSynthesis?.speak === "function";
+      const hasSpeak = typeof win?.speechSynthesis?.speak === "function";
       return {
-        supported,
+        supported: hasSpeak,
         provider: "web-speech",
-        error: supported ? undefined : { code: "NOT_SUPPORTED", message: "Nenhuma voz disponível." },
+        error: hasSpeak ? undefined : { code: "NOT_SUPPORTED", message: "Nenhuma voz disponível." },
       };
     },
 
     getStatus: async () => {
-      const isAvailable = typeof window?.speechSynthesis?.speak === "function";
+      const isAvailable = typeof win?.speechSynthesis?.speak === "function";
       return {
         provider: "web-speech",
         available: isAvailable,
@@ -146,75 +163,106 @@ function createWebSpeechService(window: { speechSynthesis?: SpeechSynthesis }): 
     },
 
     speak: async (text: string, options: { rate?: number; voice?: string; volume?: number } = {}) => {
-      // Cancel any ongoing speech
       stopInternal();
 
-      if (!text?.trim()) {
+      const cleanText = text?.trim();
+      if (!cleanText) {
         throw new Error("Texto vazio para síntese");
       }
 
+      if (typeof win?.speechSynthesis?.speak !== "function") {
+        throw new Error("Síntese de voz indisponível neste navegador.");
+      }
+
+      loadVoices();
       const rate = options.rate ?? 1;
       const voiceName = options.voice ?? "";
 
-      // Filtrar voz selecionada
       const selectedVoice = voiceName
         ? voices.find((v) => v.name === voiceName) || voices.find((v) => v.default)
         : voices.find((v) => v.default) || voices[0];
 
-      const utterance = new SpeechSynthesisUtterance(text.trim());
+      const utterance = new SpeechSynthesisUtterance(cleanText);
       utterance.rate = Math.max(0.1, Math.min(3, rate));
-      utterance.volume = options.volume ?? 1;
-      utterance.text = text.trim();
+      utterance.volume = Math.max(0, Math.min(1, options.volume ?? 1));
 
       if (selectedVoice) {
         utterance.voice = selectedVoice;
       }
 
-      // Event handlers
-      utterance.onstart = () => {
-        isSpeaking = true;
-        isPaused = false;
-        pendingText = "";
-      };
+      activeUtterance = utterance;
+      isSpeaking = true;
+      isPaused = false;
 
-      utterance.onpause = () => {
-        isPaused = true;
-      };
+      return new Promise<void>((resolve, reject) => {
+        let settled = false;
 
-      utterance.onresume = () => {
-        isPaused = false;
-      };
+        const finish = (err?: Error) => {
+          if (settled) return;
+          settled = true;
+          clearUtteranceHandlers(utterance);
+          if (activeUtterance === utterance) {
+            activeUtterance = null;
+          }
+          if (settleActive === cancelFinish) {
+            settleActive = null;
+          }
+          isSpeaking = false;
+          isPaused = false;
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        };
 
-      utterance.onend = async () => {
-        isSpeaking = false;
-        isPaused = false;
-        pendingText = "";
-        // Processar próximo na fila se houver
-        if (pendingText) {
-          await service.speak(pendingText, pendingOptions!);
-          pendingText = "";
-          pendingOptions = null;
+        const cancelFinish = () => finish();
+        settleActive = cancelFinish;
+
+        utterance.onstart = () => {
+          isSpeaking = true;
+          isPaused = false;
+        };
+
+        utterance.onpause = () => {
+          isPaused = true;
+        };
+
+        utterance.onresume = () => {
+          isPaused = false;
+        };
+
+        utterance.onend = () => {
+          finish();
+        };
+
+        utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+          if (event?.error === "canceled" || event?.error === "interrupted") {
+            finish();
+            return;
+          }
+          finish(new Error(`Erro na síntese de voz${event?.error ? `: ${event.error}` : ""}`));
+        };
+
+        try {
+          win.speechSynthesis?.speak(utterance);
+        } catch (error) {
+          finish(error instanceof Error ? error : new Error("Falha ao iniciar síntese de voz."));
         }
-      };
-
-      utterance.onerror = () => {
-        isSpeaking = false;
-        isPaused = false;
-        pendingText = "";
-      };
-
-      window?.speechSynthesis?.speak(utterance);
+      });
     },
 
     pause: async () => {
       if (isSpeaking && !isPaused) {
-        window?.speechSynthesis?.pause();
+        win?.speechSynthesis?.pause();
+        isPaused = true;
       }
     },
 
     resume: async () => {
       if (isSpeaking && isPaused) {
-        window?.speechSynthesis?.resume();
+        win?.speechSynthesis?.resume();
+        isPaused = false;
       }
     },
 
@@ -230,23 +278,13 @@ function createWebSpeechService(window: { speechSynthesis?: SpeechSynthesis }): 
       autoplay: false,
     }),
 
-    setPreferences: async (): Promise<void> => {
-      // Preferências são salvas via zustand/localStorage pelo consumer
-      // Esta função é um no-op no service layer; o consumer trata a persistência
-    },
+    setPreferences: async (): Promise<void> => {},
 
     getAvailableVoices: (): SpeechSynthesisVoice[] => {
+      loadVoices();
       return voices;
     },
   };
 
   return service;
-
-  function stopInternal() {
-    window?.speechSynthesis?.cancel();
-    isSpeaking = false;
-    isPaused = false;
-    pendingText = "";
-    pendingOptions = null;
-  }
 }

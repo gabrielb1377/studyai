@@ -7,6 +7,17 @@ import type {
 // Provider Web Speech API - sem necessidade de API Key
 // Utiliza o mecanismo nativo do navegador: SpeechSynthesis API
 
+let activeFinish: (() => void) | null = null;
+
+function stopActiveSynthesis(globalWindow: Window & typeof globalThis) {
+  if (activeFinish) {
+    const finish = activeFinish;
+    activeFinish = null;
+    finish();
+  }
+  globalWindow.speechSynthesis?.cancel();
+}
+
 export const webSpeechProvider: VoiceService = {
   init: async () => {
     const globalWindow = globalThis as unknown as Window & typeof globalThis;
@@ -23,7 +34,6 @@ export const webSpeechProvider: VoiceService = {
       };
     }
 
-    // Carregar vozes assim que disponíveis
     return {
       supported: true,
       provider: "web-speech",
@@ -46,49 +56,76 @@ export const webSpeechProvider: VoiceService = {
     const globalWindow = globalThis as unknown as Window & typeof globalThis;
 
     if (!globalWindow.speechSynthesis?.speak) {
-      throw new Error("Web Speech API não disponível");
+      throw new Error("Web Speech API não disponível neste navegador.");
     }
+
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    stopActiveSynthesis(globalWindow);
 
     const rate = options?.rate ?? 1;
     const voiceName = options?.voice ?? "";
 
-    // Filtrar voz pelo nome ou usar padrão
     const voices: SpeechSynthesisVoice[] = globalWindow.speechSynthesis.getVoices?.() ?? [];
     const selectedVoice: SpeechSynthesisVoice | null = voiceName
       ? voices.find((v) => v.name.toLowerCase().includes(voiceName.toLowerCase())) ?? null
       : null;
 
-    const utterance = new SpeechSynthesisUtterance(text.trim());
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = Math.max(0.1, Math.min(3, rate ?? 1));
-    utterance.volume = options?.volume ?? 1;
-    utterance.text = text.trim();
+    utterance.volume = Math.max(0, Math.min(1, options?.volume ?? 1));
 
     if (selectedVoice || !voiceName) {
-      const fallbackVoice: SpeechSynthesisVoice | null = voices.find((v) => v.default) ?? (voices.length > 0 ? voices[0] : null);
+      const fallbackVoice: SpeechSynthesisVoice | null =
+        voices.find((v) => v.default) ?? (voices.length > 0 ? voices[0] : null);
       utterance.voice = selectedVoice ?? fallbackVoice;
     }
 
-    // Retornar promise que resolve quando a narração terminar
     return new Promise<void>((resolve, reject) => {
-      const handlers = {
-        onstart: () => {
-          globalWindow.removeEventListener("onstart", handlers.onstart);
-        },
-        onend: () => {
-          globalWindow.removeEventListener("onend", handlers.onend);
-          resolve();
-        },
-        onerror: () => {
-          globalWindow.removeEventListener("onerror", handlers.onerror);
-          reject(new Error("Erro na síntese de áudio"));
-        },
+      let settled = false;
+
+      const cleanup = () => {
+        utterance.onstart = null;
+        utterance.onend = null;
+        utterance.onerror = null;
+        if (activeFinish === cancelResolve) {
+          activeFinish = null;
+        }
       };
 
-      globalWindow.addEventListener("onstart", handlers.onstart);
-      globalWindow.addEventListener("onend", handlers.onend);
-      globalWindow.addEventListener("onerror", handlers.onerror);
+      const cancelResolve = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
 
-      globalWindow.speechSynthesis?.speak(utterance);
+      activeFinish = cancelResolve;
+
+      utterance.onstart = () => {
+        // Síntese iniciada na instância da utterance
+      };
+
+      utterance.onend = () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      };
+
+      utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (event?.error === "canceled" || event?.error === "interrupted") {
+          resolve();
+          return;
+        }
+        reject(new Error(`Erro na síntese de áudio${event?.error ? `: ${event.error}` : ""}`));
+      };
+
+      globalWindow.speechSynthesis.speak(utterance);
     });
   },
 
@@ -104,7 +141,7 @@ export const webSpeechProvider: VoiceService = {
 
   stop: async () => {
     const globalWindow = globalThis as unknown as Window & typeof globalThis;
-    globalWindow.speechSynthesis?.cancel();
+    stopActiveSynthesis(globalWindow);
   },
 
   getPreferences: (): VoicePreferences => ({

@@ -349,8 +349,27 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
         )}
         {activeConversation ? (
           <>
-            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} assistantLabel={teacher.mode === "teacher" ? "Professor" : "Tutor"} onResponseAction={(action, response) => { void runResponseAction(action, response); }} />
-            <TutorComposer mode={teacher.mode} draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
+            <TutorConversation
+              messages={activeConversation.messages}
+              isLoading={isLoading}
+              assistantLabel={teacher.mode === "teacher" ? "Professor" : "Tutor"}
+              conversationId={activeConversation.id}
+              studyId={studyId ?? context?.studyId}
+              userScope={auth.session?.user.id ?? "guest"}
+              onResponseAction={(action, response) => { void runResponseAction(action, response); }}
+            />
+            <TutorComposer
+              mode={teacher.mode}
+              draft={draft}
+              isLoading={isLoading}
+              isSummaryLoading={isSummaryLoading}
+              conversationId={activeConversation.id}
+              studyId={studyId ?? context?.studyId}
+              userScope={auth.session?.user.id ?? "guest"}
+              onDraftChange={setDraft}
+              onGenerateSummary={() => { void generateSummary(); }}
+              onSend={() => { void sendDraft(); }}
+            />
           </>
         ) : (
           <div className="px-2 py-8 text-center">
