@@ -150,6 +150,10 @@ export type MediaChapter = {
   end: number;
 };
 
+export const mediaTranscriptionModes = ["auto", "metadata"] as const;
+export type MediaTranscriptionMode = (typeof mediaTranscriptionModes)[number];
+export type MediaTranscriptionSource = "automatic" | "manual" | "subtitle";
+
 export type ExtractionMetadata = {
   name: string;
   type: string;
@@ -185,6 +189,7 @@ export type ExtractionMetadata = {
   hasScannedPages?: boolean;
   quality?: QualityLevel;
   transcriptionPerformed?: boolean;
+  transcriptionSource?: MediaTranscriptionSource;
   transcriptionModel?: string;
   transcriptionConfidence?: number;
   processingTimeMs?: number;

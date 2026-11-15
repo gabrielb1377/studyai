@@ -121,6 +121,27 @@ export const ContextBuilder = {
       }
       blocks.push(memoryLines.join("\n"));
     }
+    if (context.media?.length) {
+      const sourceLabels = {
+        automatic: "automática",
+        manual: "manual",
+        subtitle: "legenda",
+      } as const;
+      const mediaLines = [
+        "Mídias vinculadas ao estudo (diferencie conteúdo transcrito de metadados):",
+        ...context.media.map((item) => {
+          const typeLabel = item.type === "audio" ? "Áudio" : "Vídeo";
+          const durationLabel = typeof item.durationSeconds === "number"
+            ? `, duração ${Math.round(item.durationSeconds)}s`
+            : "";
+          const transcriptLabel = item.hasTranscription
+            ? `com transcrição${item.transcriptionSource ? ` (${sourceLabels[item.transcriptionSource]})` : ""}`
+            : "somente metadados — sem transcrição";
+          return `- ${item.name} (${typeLabel}${durationLabel}): ${transcriptLabel}`;
+        }),
+      ];
+      blocks.push(mediaLines.join("\n"));
+    }
     return blocks.join("\n");
   },
 

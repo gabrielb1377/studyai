@@ -4,7 +4,7 @@ import {
   TRANSCRIPTION_MODEL,
 } from "./MediaTranscriptionService";
 import { DocumentOcrEngine } from "../ocr/engine";
-import type { ExtractionFileType, ExtractionResult, OcrMode } from "./ExtractionTypes";
+import type { ExtractionFileType, ExtractionResult, MediaTranscriptionMode, OcrMode } from "./ExtractionTypes";
 import type { IngestionStageId, IngestionStageStatus } from "./ExtractionTypes";
 
 const IMAGE_TYPES = new Set<ExtractionFileType>(["png", "jpg", "jpeg", "webp"]);
@@ -15,6 +15,7 @@ type PipelineOptions = {
   onStage?: (stage: IngestionStageId, status: IngestionStageStatus, message: string) => void | Promise<void>;
   onPage?: (page: number, pages: number) => void;
   ocrMode?: OcrMode;
+  transcriptionMode?: MediaTranscriptionMode;
   signal?: AbortSignal;
 };
 
@@ -97,17 +98,36 @@ export const MediaExtractionPipeline = {
       };
     }
 
-    const baseResult = await ContentExtractionService.extract(file, fileType);
+    const baseResult = await ContentExtractionService.extract(file, fileType, options.signal);
+    if (options.signal?.aborted) throw new Error("Processamento cancelado pelo usuário.");
     await options.onStage?.("extraction", "completed", "Conteúdo e metadados básicos extraídos.");
     options.onProgress?.(15);
 
     if (AUDIO_TYPES.has(fileType) || fileType === "mp4") {
+      if (options.transcriptionMode === "metadata") {
+        await options.onStage?.(
+          "extraction",
+          "completed",
+          "Mídia validada com metadados e pronta para reprodução. Transcrição automática desativada; adicione legenda ou transcrição manual quando desejar.",
+        );
+        await options.onStage?.("ocr", "skipped", "OCR e transcrição automática não solicitados para esta mídia.");
+        options.onProgress?.(95);
+        return {
+          ...baseResult,
+          metadata: {
+            ...baseResult.metadata,
+            transcriptionPerformed: false,
+            processingTimeMs: elapsedSince(startedAt),
+          },
+        };
+      }
       await options.onStage?.("extraction", "processing", fileType === "mp4"
         ? "Extraindo áudio do vídeo e transcrevendo localmente."
         : "Transcrevendo o áudio localmente.");
       const transcription = await MediaTranscriptionService.transcribe(file, (progress) => {
         options.onProgress?.(15 + progress * 0.8);
-      });
+      }, options.signal);
+      if (options.signal?.aborted) throw new Error("Processamento cancelado pelo usuário.");
       await options.onStage?.("extraction", "completed", "Transcrição dividida em blocos com timestamps.");
       return {
         extractedText: transcription.text,
@@ -123,6 +143,7 @@ export const MediaExtractionPipeline = {
           ...baseResult.metadata,
           duration: baseResult.metadata.duration ?? transcription.duration,
           transcriptionPerformed: true,
+          transcriptionSource: "automatic",
           transcriptionModel: TRANSCRIPTION_MODEL,
           transcriptionConfidence: transcription.confidence,
           language: transcription.language,

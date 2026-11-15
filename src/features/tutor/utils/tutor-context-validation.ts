@@ -81,6 +81,26 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     ))
   );
 
+  const validMedia = context.media === undefined || (
+    Array.isArray(context.media) &&
+    context.media.length <= 20 &&
+    context.media.every((item) =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof item.name === "string" &&
+      item.name.trim().length > 0 &&
+      item.name.length <= 240 &&
+      (item.type === "audio" || item.type === "video") &&
+      (item.durationSeconds === undefined ||
+        (typeof item.durationSeconds === "number" && Number.isFinite(item.durationSeconds) && item.durationSeconds >= 0)) &&
+      typeof item.hasTranscription === "boolean" &&
+      (item.transcriptionSource === undefined ||
+        item.transcriptionSource === "automatic" ||
+        item.transcriptionSource === "manual" ||
+        item.transcriptionSource === "subtitle"),
+    )
+  );
+
   return typeof context.studyId === "string" && typeof context.title === "string" &&
     typeof context.subject === "string" && typeof context.topic === "string" &&
     typeof context.progress === "number" &&
@@ -90,5 +110,5 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     ) && (context.summary === undefined || (
       typeof context.summary === "object" && context.summary !== null &&
       typeof context.summary.title === "string" && typeof context.summary.content === "string"
-    )) && validDocument && validLearning && validKnowledge && validMentor && validMemory;
+    )) && validDocument && validLearning && validKnowledge && validMentor && validMemory && validMedia;
 }

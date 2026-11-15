@@ -46,6 +46,29 @@ export const TutorContextService = {
       .filter((record) => record.status === "extracted" && !contentNeedsTutorReview(record))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
+    const media = studyContents
+      .filter(
+        (record) =>
+          record.status === "extracted" &&
+          (record.fileType === "mp3" || record.fileType === "wav" || record.fileType === "m4a" || record.fileType === "mp4"),
+      )
+      .slice(0, 20)
+      .map((record) => {
+        const type: "audio" | "video" = record.fileType === "mp4" ? "video" : "audio";
+        const hasTranscription = Boolean(record.metadata.transcriptionPerformed) && record.extractedText.trim().length > 0;
+        const durationSeconds = typeof record.metadata.duration === "number" && Number.isFinite(record.metadata.duration)
+          ? record.metadata.duration
+          : undefined;
+        return {
+          name: record.metadata.name,
+          type,
+          durationSeconds,
+          hasTranscription,
+          transcriptionSource: hasTranscription ? (record.metadata.transcriptionSource ?? "automatic") : undefined,
+        };
+      });
+
+
     const knowledge = KnowledgeEngine.calculate(study, profile, flashcards, quizzes.results);
     const priority = StudyPriorityEngine.calculate(study, knowledge, profile, flashcards);
     const lastMentorSession = mentor.sessions
@@ -119,6 +142,7 @@ export const TutorContextService = {
           }
         : undefined,
       memory,
+      media: media.length > 0 ? media : undefined,
     };
   },
 };

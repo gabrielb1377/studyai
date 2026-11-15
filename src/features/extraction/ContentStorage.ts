@@ -97,6 +97,7 @@ function isMetadata(value: unknown): value is ExtractionMetadata {
     isOptionalNumber(metadata.width) && isOptionalNumber(metadata.height) &&
     isOptionalBoolean(metadata.hasTextLayer) && isOptionalBoolean(metadata.ocrPerformed) &&
     isOptionalNumber(metadata.ocrConfidence) && isOptionalBoolean(metadata.transcriptionPerformed) &&
+    (metadata.transcriptionSource === undefined || metadata.transcriptionSource === "automatic" || metadata.transcriptionSource === "manual" || metadata.transcriptionSource === "subtitle") &&
     isOptionalString(metadata.transcriptionModel) && isOptionalNumber(metadata.transcriptionConfidence) &&
     isOptionalNumber(metadata.processingTimeMs) && isOptionalString(metadata.createdAt) &&
     isOptionalString(metadata.updatedAt);

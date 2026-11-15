@@ -4,6 +4,7 @@ import type {
 import { DocumentAnalyzer } from "./DocumentAnalyzer";
 import { TextNormalizationService } from "./TextNormalizationService";
 import type { MediaChapter, TranscriptionSegment } from "./ExtractionTypes";
+import { MEDIA_LIMITS } from "./media-validation";
 
 export const TRANSCRIPTION_MODEL = "onnx-community/whisper-tiny";
 const TARGET_SAMPLE_RATE = 16_000;
@@ -125,8 +126,16 @@ export const MediaTranscriptionService = {
   async transcribe(
     file: File,
     onProgress?: TranscriptionProgress,
+    signal?: AbortSignal,
   ): Promise<MediaTranscriptionResult> {
+    if (signal?.aborted) throw new Error("Transcrição cancelada pelo usuário.");
+    if (file.size > MEDIA_LIMITS.maxTranscriptionDecodeBytes) {
+      throw new Error(
+        `O arquivo ${file.name} excede 60 MB para decodificação automática no navegador. Use transcrição manual ou importe uma legenda (.srt/.vtt).`,
+      );
+    }
     const audio = await decodeToMono(file, onProgress);
+    if (signal?.aborted) throw new Error("Transcrição cancelada pelo usuário.");
     currentProgress = onProgress;
     try {
       transcriberPromise ??= withTimeout(

@@ -22,12 +22,14 @@ import type {
   ExtractionProgress,
   IngestionStageId,
   IngestionStageStatus,
+  MediaTranscriptionMode,
   OcrMode,
 } from "./ExtractionTypes";
 
 type PipelineOptions = {
   onProgress?: (progress: ExtractionProgress) => void;
   ocrMode?: OcrMode;
+  transcriptionMode?: MediaTranscriptionMode;
   signal?: AbortSignal;
 };
 
@@ -99,6 +101,7 @@ export const ExtractionPipeline = {
       try {
         const extraction = await MediaExtractionPipeline.extract(input.file, fileType, {
           ocrMode: options.ocrMode,
+          transcriptionMode: options.transcriptionMode,
           signal: options.signal,
           onProgress: (progress) => options.onProgress?.({
             fileId: input.id,

@@ -7,12 +7,14 @@ import { AudioLines, ChevronLeft, ChevronRight, Download, FileText, Headphones, 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatMediaDuration, getExtension, isMediaExtension, validateMediaSignature } from "@/features/extraction/media-validation";
 import { formatFileSize } from "@/features/import/import-utils";
 import type { StudyMaterial } from "@/types/study";
 import { MaterialBinaryStorage } from "@/services/material-binary-storage";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
 import { CloudFileService } from "@/features/sync/CloudFileService";
+import { MediaTranscriptPanel } from "./MediaTranscriptPanel";
 
 const PdfMaterialViewer = dynamic(() => import("./PdfMaterialViewer"), {
   ssr: false,
@@ -53,6 +55,7 @@ export function MaterialViewer({
   const router = useRouter();
   const [source, setSource] = useState(material.source);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [pdfView, setPdfView] = useState<"text" | "pdf">("pdf");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -60,6 +63,7 @@ export function MaterialViewer({
     let active = true;
     const runtimeSource = MaterialRuntimeStore.get(material.id)?.source ?? material.source;
     setSource(runtimeSource);
+    setPlaybackError(null);
     setPdfView("pdf");
     if (runtimeSource) return () => { active = false; };
     setIsRestoring(true);
@@ -76,11 +80,20 @@ export function MaterialViewer({
 
   const selectAgain = async (file: File | undefined) => {
     if (!file) return;
-    MaterialRuntimeStore.register(material.id, file);
-    const persistentBinary = await MaterialBinaryStorage.save(material.binaryStorageId ?? material.id, file);
-    await MaterialService.update(material.id, { persistentBinary });
-    setSource(MaterialRuntimeStore.get(material.id)?.source);
-    setPdfView("pdf");
+    setPlaybackError(null);
+    try {
+      const ext = getExtension(file.name);
+      if ((material.type === "audio" || material.type === "video") && isMediaExtension(ext)) {
+        await validateMediaSignature(file, ext);
+      }
+      MaterialRuntimeStore.register(material.id, file);
+      const persistentBinary = await MaterialBinaryStorage.save(material.binaryStorageId ?? material.id, file);
+      await MaterialService.update(material.id, { persistentBinary });
+      setSource(MaterialRuntimeStore.get(material.id)?.source);
+      setPdfView("pdf");
+    } catch (error) {
+      setPlaybackError(error instanceof Error ? error.message : "Não foi possível validar o arquivo selecionado.");
+    }
   };
 
   const [isDownloading, setIsDownloading] = useState(false);
@@ -111,6 +124,13 @@ export function MaterialViewer({
     }
   };
 
+  const durationLabel = formatMediaDuration(material.duration);
+  const acceptAttribute =
+    material.type === "pdf" ? ".pdf,application/pdf" :
+    material.type === "video" ? ".mp4,video/mp4" :
+    material.type === "audio" ? ".mp3,.wav,.m4a,audio/*" :
+    undefined;
+
   return (
     <Card className="gap-0 overflow-hidden py-0 shadow-none">
       <CardHeader className="gap-4 border-b px-5 py-5 sm:px-6">
@@ -124,6 +144,7 @@ export function MaterialViewer({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="font-normal text-muted-foreground">{material.type.toUpperCase()}</Badge>
                 <span className="text-xs text-muted-foreground">{formatFileSize(material.size)}</span>
+                {durationLabel && <span className="text-xs text-muted-foreground">· {durationLabel}</span>}
               </div>
             </div>
           </div>
@@ -150,7 +171,7 @@ export function MaterialViewer({
         </div>
       </CardHeader>
       <CardContent className="p-4 sm:p-6">
-        <input ref={fileInputRef} type="file" className="sr-only" accept={material.type === "pdf" ? ".pdf,application/pdf" : undefined} onChange={(event) => { void selectAgain(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+        <input ref={fileInputRef} type="file" className="sr-only" accept={acceptAttribute} onChange={(event) => { void selectAgain(event.target.files?.[0]); event.currentTarget.value = ""; }} />
         {material.type === "pdf" && (
           <div className="space-y-4">
             <div className="inline-flex rounded-lg border bg-muted p-1" role="tablist" aria-label="Visualização do material">
@@ -169,22 +190,77 @@ export function MaterialViewer({
           </div>
         )}
         {material.type === "video" && (
-          <div className="overflow-hidden rounded-xl border bg-black/90">
-            <video controls className="aspect-video w-full" aria-label={`Player de vídeo: ${material.name}`}>
-              {source && <source src={source} type="video/mp4" />}
-            </video>
-            {!source && <p className="px-4 py-3 text-center text-xs text-white/60">Selecione novamente o arquivo para reproduzi-lo.</p>}
+          <div>
+            {playbackError && (
+              <p role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                {playbackError}
+              </p>
+            )}
+            <div className="overflow-hidden rounded-xl border bg-black/90">
+              {source ? (
+                <video
+                  key={source}
+                  src={source}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="aspect-video w-full"
+                  aria-label={`Player de vídeo: ${material.name}`}
+                  onError={() => setPlaybackError("Não foi possível reproduzir este vídeo neste navegador.")}
+                />
+              ) : (
+                <div className="p-8 text-center text-sm text-white/75">
+                  <p>{isRestoring ? "Recuperando o vídeo neste dispositivo..." : "O arquivo de vídeo não está disponível neste dispositivo."}</p>
+                  {!isRestoring && (
+                    <Button type="button" variant="secondary" size="sm" className="mt-4" onClick={() => fileInputRef.current?.click()}>
+                      <RefreshCw className="size-3.5" aria-hidden="true" />
+                      Selecionar novamente
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            <MediaTranscriptPanel material={material} studyId={studyId} />
           </div>
         )}
         {material.type === "audio" && (
-          <div className="rounded-xl border bg-secondary/40 p-5 sm:p-8">
-            <div className="mb-5 flex items-center gap-3">
-              <span className="flex size-12 items-center justify-center rounded-xl bg-card text-primary shadow-sm"><AudioLines className="size-6" aria-hidden="true" /></span>
-              <div><p className="text-sm font-medium">Player de áudio</p><p className="text-xs text-muted-foreground">{source ? "Arquivo importado" : "Selecione novamente para reproduzir"}</p></div>
+          <div>
+            {playbackError && (
+              <p role="alert" className="mb-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
+                {playbackError}
+              </p>
+            )}
+            <div className="rounded-xl border bg-secondary/40 p-5 sm:p-8">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex size-12 items-center justify-center rounded-xl bg-card text-primary shadow-sm"><AudioLines className="size-6" aria-hidden="true" /></span>
+                  <div>
+                    <p className="text-sm font-medium">Player de áudio{durationLabel ? ` · ${durationLabel}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {source ? "Arquivo pronto para reprodução" : isRestoring ? "Recuperando o áudio..." : "Arquivo indisponível neste dispositivo"}
+                    </p>
+                  </div>
+                </div>
+                {!source && !isRestoring && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <RefreshCw className="size-3.5" aria-hidden="true" />
+                    Selecionar novamente
+                  </Button>
+                )}
+              </div>
+              {source && (
+                <audio
+                  key={source}
+                  src={source}
+                  controls
+                  preload="metadata"
+                  className="w-full"
+                  aria-label={`Player de áudio: ${material.name}`}
+                  onError={() => setPlaybackError("Não foi possível reproduzir este áudio neste navegador.")}
+                />
+              )}
             </div>
-            <audio controls className="w-full" aria-label={`Player de áudio: ${material.name}`}>
-              {source && <source src={source} type={material.mimeType} />}
-            </audio>
+            <MediaTranscriptPanel material={material} studyId={studyId} />
           </div>
         )}
         {(material.type === "text" || material.type === "document") && (

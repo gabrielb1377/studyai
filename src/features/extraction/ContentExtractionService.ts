@@ -7,6 +7,7 @@ import type {
 } from "./ExtractionTypes";
 import { pagesFromSections } from "../ocr/structure";
 import { inspectPdf } from "../ocr/pdf";
+import { getExtension, validateMediaSignature } from "./media-validation";
 
 function baseMetadata(file: File): ExtractionMetadata {
   const now = new Date().toISOString();
@@ -227,12 +228,20 @@ async function extractTxt(file: File): Promise<ExtractionResult> {
   };
 }
 
-function extractMedia(file: File, type: "audio" | "video"): Promise<ExtractionResult> {
+async function extractMedia(file: File, type: "audio" | "video", signal?: AbortSignal): Promise<ExtractionResult> {
+  if (signal?.aborted) throw new Error("Processamento cancelado pelo usuário.");
+  await validateMediaSignature(file, getExtension(file.name));
+  if (signal?.aborted) throw new Error("Processamento cancelado pelo usuário.");
   return new Promise((resolve, reject) => {
     const element = document.createElement(type);
     const source = URL.createObjectURL(file);
+    let settled = false;
+    const onAbort = () => finish(() => reject(new Error("Processamento cancelado pelo usuário.")));
     const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
       element.removeAttribute("src");
       element.load();
       URL.revokeObjectURL(source);
@@ -241,6 +250,7 @@ function extractMedia(file: File, type: "audio" | "video"): Promise<ExtractionRe
     const timeout = window.setTimeout(() => finish(() => reject(
       new Error("Não foi possível ler os metadados da mídia em até 10 segundos."),
     )), 10_000);
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     element.preload = "metadata";
     element.onloadedmetadata = () => finish(() => {
@@ -274,15 +284,15 @@ async function extractImage(file: File): Promise<ExtractionResult> {
   }
 }
 
-const extractors: Record<ExtractionFileType, (file: File) => Promise<ExtractionResult>> = {
+const extractors: Record<ExtractionFileType, (file: File, signal?: AbortSignal) => Promise<ExtractionResult>> = {
   pdf: extractPdf,
   docx: extractDocx,
   pptx: extractPptx,
   txt: extractTxt,
-  mp3: (file) => extractMedia(file, "audio"),
-  wav: (file) => extractMedia(file, "audio"),
-  m4a: (file) => extractMedia(file, "audio"),
-  mp4: (file) => extractMedia(file, "video"),
+  mp3: (file, signal) => extractMedia(file, "audio", signal),
+  wav: (file, signal) => extractMedia(file, "audio", signal),
+  m4a: (file, signal) => extractMedia(file, "audio", signal),
+  mp4: (file, signal) => extractMedia(file, "video", signal),
   png: extractImage,
   jpg: extractImage,
   jpeg: extractImage,
@@ -290,8 +300,8 @@ const extractors: Record<ExtractionFileType, (file: File) => Promise<ExtractionR
 };
 
 export const ContentExtractionService = {
-  extract(file: File, fileType: ExtractionFileType) {
-    return extractors[fileType](file);
+  extract(file: File, fileType: ExtractionFileType, signal?: AbortSignal) {
+    return extractors[fileType](file, signal);
   },
 
   createBaseMetadata: baseMetadata,

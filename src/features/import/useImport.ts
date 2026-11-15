@@ -4,7 +4,9 @@ import { useMemo, useRef, useState } from "react";
 import { ExtractionPipeline } from "@/features/extraction/ExtractionPipeline";
 import { OCRService } from "@/features/extraction/OCRService";
 import { OCR_LIMITS } from "@/features/ocr/limits";
-import type { OcrMode } from "@/features/extraction/ExtractionTypes";
+import type { MediaTranscriptionMode, OcrMode } from "@/features/extraction/ExtractionTypes";
+import { hasBlockedMediaMime, isWithinMediaLimit } from "@/features/extraction/media-validation";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import { OrganizationService } from "@/features/organization/OrganizationService";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import { MaterialService } from "@/services/material-service";
@@ -26,7 +28,7 @@ function withinImportLimits(file: File) {
   const extension = getFileExtension(file.name);
   if (imageExtensions.has(extension)) return file.size <= OCR_LIMITS.maxImageBytes;
   if (extension === "pdf") return file.size <= OCR_LIMITS.maxDocumentBytes;
-  return true;
+  return isWithinMediaLimit(file);
 }
 
 export function useImport() {
@@ -35,6 +37,7 @@ export function useImport() {
   const [feedback, setFeedback] = useState("");
   const [duplicateConflicts, setDuplicateConflicts] = useState<DuplicateConflict[]>([]);
   const [ocrMode, setOcrMode] = useState<OcrMode>("auto");
+  const [transcriptionMode, setTranscriptionMode] = useState<MediaTranscriptionMode>("auto");
   const abortRef = useRef<AbortController | null>(null);
 
   function cancelImport() {
@@ -44,10 +47,12 @@ export function useImport() {
   }
 
   async function addFiles(incoming: File[]): Promise<AddFilesResult> {
-    const unsupported = incoming.filter((file) => !isSupportedFile(file));
-    const recognized = incoming.filter(isSupportedFile);
-    const oversized = recognized.filter((file) => !withinImportLimits(file));
-    const supported = recognized.filter(withinImportLimits);
+    const unsupported = incoming.filter((file) => !isSupportedFile(file) || hasBlockedMediaMime(file));
+    const recognized = incoming.filter((file) => isSupportedFile(file) && !hasBlockedMediaMime(file));
+    const emptyFiles = recognized.filter((file) => file.size <= 0);
+    const nonEmpty = recognized.filter((file) => file.size > 0);
+    const oversized = nonEmpty.filter((file) => !withinImportLimits(file));
+    const supported = nonEmpty.filter(withinImportLimits);
     const queuedIds = new Set(files.map(({ file }) => getFileIdentity(file)));
     const queuedHashes = new Set(files.flatMap((item) => item.contentHash
       ? [`${item.extension}:${item.contentHash}`]
@@ -116,8 +121,11 @@ export function useImport() {
     if (unique.length > 0) setPhase("idle");
 
     const messages = [];
+    if (emptyFiles.length) {
+      messages.push(`Arquivos vazios ignorados: ${emptyFiles.map((file) => file.name).join(", ")}`);
+    }
     if (oversized.length) {
-      messages.push(`Arquivos acima do limite (PDF: 150 MB, imagem: 40 MB): ${oversized.map((file) => file.name).join(", ")}`);
+      messages.push(`Arquivos acima do limite (PDF: 150 MB, imagem: 40 MB, áudio: 100 MB, vídeo: 250 MB): ${oversized.map((file) => file.name).join(", ")}`);
     }
     if (unsupported.length) {
       messages.push(
@@ -179,88 +187,121 @@ export function useImport() {
       return;
     }
 
+    let sessionOperation: ReturnType<typeof SessionOperationManager.start>;
+    try {
+      sessionOperation = SessionOperationManager.start();
+    } catch {
+      setFeedback("Sua sessão mudou. Entre novamente antes de importar.");
+      return;
+    }
+
     setFeedback("");
     setPhase("processing");
     const controller = new AbortController();
+    const abortFromSession = () => controller.abort();
+    sessionOperation.signal.addEventListener("abort", abortFromSession, { once: true });
     abortRef.current = controller;
-    const pendingFiles = files.filter(
-      (file) => file.status === "uploaded" || file.status === "error",
-    );
-    const extractionInputs = [];
-    for (const item of pendingFiles) {
-      const existingMaterial = await MaterialService.findById(item.id);
-      const material = existingMaterial
-        ? {
-            ...existingMaterial,
-            status: "processing" as const,
-            progress: 0,
-            error: undefined,
-            contentHash: item.contentHash ?? existingMaterial.contentHash,
-            updatedAt: new Date().toISOString(),
-          }
-          : MaterialService.createFromFile(
-            item.file,
-            item.extension as MaterialFileType,
-            item.id,
-            item.contentHash,
-          );
-      MaterialRuntimeStore.register(item.id, item.file);
-      const persistentBinary = await MaterialBinaryStorage.save(item.id, item.file);
-      await MaterialService.upsert({ ...material, persistentBinary });
-      const organized = await OrganizationService.organizeImported(material.id);
-      extractionInputs.push({ id: item.id, file: item.file, studyId: organized.studyId });
-    }
-    setFiles((current) =>
-      current.map((file) =>
-        pendingFiles.some((pending) => pending.id === file.id)
-          ? { ...file, status: "processing", progress: 10 }
-          : file,
-      ),
-    );
 
-    const results = await ExtractionPipeline.run(extractionInputs, {
-      ocrMode,
-      signal: controller.signal,
-      onProgress: ({ fileId, status, progress, stage, message, errorDetails, cancelled }) => {
-        void MaterialService.update(fileId, {
-          progress,
-          status: status === "extracted" ? "ready" : status,
-        });
-        setFiles((current) => current.map((file) => file.id === fileId
+    try {
+      const pendingFiles = files.filter(
+        (file) => file.status === "uploaded" || file.status === "error",
+      );
+      const extractionInputs = [];
+      for (const item of pendingFiles) {
+        sessionOperation.assertCurrent();
+        const existingMaterial = await MaterialService.findById(item.id);
+        sessionOperation.assertCurrent();
+        const material = existingMaterial
           ? {
-              ...file,
-              status: status === "extracted" ? "complete" : status,
-              progress,
-              stage,
-              message: cancelled ? "Cancelado; conteúdo parcial preservado." : message,
-              errorDetails,
+              ...existingMaterial,
+              status: "processing" as const,
+              progress: 0,
+              error: undefined,
+              contentHash: item.contentHash ?? existingMaterial.contentHash,
+              updatedAt: new Date().toISOString(),
             }
-          : file,
-        ));
-      },
-    });
-    abortRef.current = null;
-    for (const result of results) {
-      if (result.status === "error") {
-        await MaterialService.update(result.fileId, {
-          status: "error",
-          progress: 100,
-          error: result.error,
-        });
-        setFiles((current) => current.map((file) => file.id === result.fileId
-          ? { ...file, errorDetails: result.errorDetails }
-          : file,
-        ));
-      } else {
-        await MaterialService.update(result.fileId, { status: "ready", progress: 100, error: undefined });
+          : MaterialService.createFromFile(
+              item.file,
+              item.extension as MaterialFileType,
+              item.id,
+              item.contentHash,
+            );
+        MaterialRuntimeStore.register(item.id, item.file);
+        const persistentBinary = await MaterialBinaryStorage.save(item.id, item.file);
+        sessionOperation.assertCurrent();
+        await MaterialService.upsert({ ...material, persistentBinary });
+        const organized = await OrganizationService.organizeImported(material.id);
+        sessionOperation.assertCurrent();
+        extractionInputs.push({ id: item.id, file: item.file, studyId: organized.studyId });
       }
-    }
-    setPhase("complete");
-    if (controller.signal.aborted) {
-      setFiles((current) => current.map((file) => file.status === "processing"
-        ? { ...file, status: "uploaded", progress: 0, message: "Cancelado antes do processamento." }
-        : file));
-      setFeedback("Importação cancelada. Os arquivos e páginas já concluídos foram preservados.");
+      setFiles((current) =>
+        current.map((file) =>
+          pendingFiles.some((pending) => pending.id === file.id)
+            ? { ...file, status: "processing", progress: 10 }
+            : file,
+        ),
+      );
+
+      const results = await ExtractionPipeline.run(extractionInputs, {
+        ocrMode,
+        transcriptionMode,
+        signal: controller.signal,
+        onProgress: ({ fileId, status, progress, stage, message, errorDetails, cancelled }) => {
+          try {
+            sessionOperation.assertCurrent();
+          } catch {
+            return;
+          }
+          void MaterialService.update(fileId, {
+            progress,
+            status: status === "extracted" ? "ready" : status,
+          });
+          setFiles((current) => current.map((file) => file.id === fileId
+            ? {
+                ...file,
+                status: status === "extracted" ? "complete" : status,
+                progress,
+                stage,
+                message: cancelled ? "Cancelado; conteúdo parcial preservado." : message,
+                errorDetails,
+              }
+            : file,
+          ));
+        },
+      });
+      sessionOperation.assertCurrent();
+      for (const result of results) {
+        sessionOperation.assertCurrent();
+        if (result.status === "error") {
+          await MaterialService.update(result.fileId, {
+            status: "error",
+            progress: 100,
+            error: result.error,
+          });
+          setFiles((current) => current.map((file) => file.id === result.fileId
+            ? { ...file, errorDetails: result.errorDetails }
+            : file,
+          ));
+        } else {
+          await MaterialService.update(result.fileId, { status: "ready", progress: 100, error: undefined });
+        }
+      }
+      setPhase("complete");
+      if (controller.signal.aborted) {
+        setFiles((current) => current.map((file) => file.status === "processing"
+          ? { ...file, status: "uploaded", progress: 0, message: "Cancelado antes do processamento." }
+          : file));
+        setFeedback("Importação cancelada. Os arquivos e páginas já concluídos foram preservados.");
+      }
+    } catch {
+      if (sessionOperation.signal.aborted) {
+        setFeedback("Importação interrompida porque a sessão foi alterada.");
+        setPhase("idle");
+      }
+    } finally {
+      abortRef.current = null;
+      sessionOperation.signal.removeEventListener("abort", abortFromSession);
+      sessionOperation.release();
     }
   }
 
@@ -287,6 +328,8 @@ export function useImport() {
     resolveDuplicates,
     ocrMode,
     setOcrMode,
+    transcriptionMode,
+    setTranscriptionMode,
     cancelImport,
   };
 }

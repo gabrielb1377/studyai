@@ -76,4 +76,13 @@ export type TutorStudyContext = {
     }>;
   };
   memory?: TutorMemoryContext;
+  media?: TutorMediaContext[];
+};
+
+export type TutorMediaContext = {
+  name: string;
+  type: "audio" | "video";
+  durationSeconds?: number;
+  hasTranscription: boolean;
+  transcriptionSource?: "automatic" | "manual" | "subtitle";
 };

@@ -533,8 +533,9 @@ test("normaliza, analisa e registra todas as etapas antes de indexar", async ({ 
   expect(record.logs!.length).toBeGreaterThanOrEqual(7);
 
   await page.goto("/biblioteca");
-  await expect(page.getByRole("article", { name: "algoritmos-e-vetores.txt" }))
-    .toContainText("Algoritmos e Estruturas de Dados");
+  const card = page.getByRole("article", { name: "algoritmos-e-vetores.txt" });
+  await expect(card).toContainText("Algoritmos e Estruturas de Dados");
+  await card.getByRole("button", { name: "Detalhes" }).click();
   await expect(page.getByText("Analisado", { exact: true })).toBeVisible();
   await expect(page.getByText("pt-BR", { exact: true })).toBeVisible();
 
