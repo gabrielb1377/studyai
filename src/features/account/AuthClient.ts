@@ -50,7 +50,7 @@ export const AuthClient = {
   reset: (token: string, password: string) => request("/auth/reset", { method: "POST", body: JSON.stringify({ token, password }) }),
   verify: (token: string) => request("/auth/verify", { method: "POST", body: JSON.stringify({ token }) }),
   updateProfile: (changes: Record<string, unknown>) => request("/profile", { method: "PATCH", body: JSON.stringify(changes) }),
-  changePassword: (currentPassword: string, password: string) => request("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, password }) }),
+  changePassword: (currentPassword: string, password: string) => request("/auth/change-password", { method: "POST", body: JSON.stringify({ currentPassword, password, deviceId: deviceId(), deviceName: deviceName() }) }),
   changeEmail: (password: string, email: string) => request("/auth/change-email", { method: "POST", body: JSON.stringify({ password, email }) }),
   revokeSession: (id: string) => request(`/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   request,

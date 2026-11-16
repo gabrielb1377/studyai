@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { QuotaService, type QuotaStatus } from "./QuotaService";
-import { requireCsrf, requireUser } from "@/server/auth/http";
+import { requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import {
   aiProviderIds,
   type AIFallbackConsent,
@@ -85,6 +85,7 @@ export async function withQuotaEnforcement(
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const userId = user.sub;
 
     // Load user's BYOK keys
@@ -226,6 +227,7 @@ export async function withAIQuota(
     }
 
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const userId = user.sub;
 
     // Load user's BYOK keys

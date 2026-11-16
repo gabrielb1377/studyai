@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/server/auth/http";
+import { requireActiveSession, requireUser } from "@/server/auth/http";
 import { QuotaService } from "@/server/ai/QuotaService";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
 import { aiProviderIds } from "@/features/ai/AIProvider";
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const userId = user.sub;
 
     // Get quota info from QuotaService

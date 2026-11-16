@@ -72,6 +72,21 @@ export async function rateLimitStrict(
   }
 }
 
+function validIpLiteral(value: string | null | undefined) {
+  const candidate = value?.split(",")[0]?.trim();
+  return candidate && /^[a-fA-F0-9:.]{3,45}$/.test(candidate) ? candidate : undefined;
+}
+
 export function requestAddress(request: Request) {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
+  if (process.env.VERCEL) {
+    return validIpLiteral(request.headers.get("x-vercel-forwarded-for")) ?? "local";
+  }
+  if (process.env.TRUST_PROXY_HEADERS === "true") {
+    return (
+      validIpLiteral(request.headers.get("x-real-ip")) ??
+      validIpLiteral(request.headers.get("x-forwarded-for")) ??
+      "local"
+    );
+  }
+  return "local";
 }

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
 import { aiProviderIds, type AIProviderId } from "@/features/ai/AIProvider";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
-import { apiError, requireUser } from "@/server/auth/http";
+import { apiError, requireActiveSession, requireUser } from "@/server/auth/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const apiKeys: Partial<Record<AIProviderId, string>> = {};
     const unreadable = new Set<AIProviderId>();
     await Promise.all(aiProviderIds.map(async (provider) => {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
-import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
+import { apiError, jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import { aiProviderIds, type AIProviderId } from "@/features/ai/AIProvider";
 import {
   generateAlternativeExplanation,
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
     try {
       requireCsrf(request);
       const user = requireUser(request);
+      await requireActiveSession(request, user);
       const body = await jsonBody<Body>(request);
 
       const teaching = body.teaching ?? {

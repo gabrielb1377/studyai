@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { apiError, jsonBody, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
+import { apiError, jsonBody, requireActiveSession, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
 import { ExamAttemptServer } from "@/server/exam/ExamAttemptServer";
 
 export const runtime = "nodejs";
@@ -10,6 +10,7 @@ export async function POST(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     requireSessionOwner(request, user.sub);
     const body = await jsonBody<GradePayload>(request);
     const result = await ExamAttemptServer.grade(user.sub, body.attemptId, body.answers);

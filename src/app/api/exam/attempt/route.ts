@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { apiError, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
+import { apiError, requireActiveSession, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
 import { hasPostgres } from "@/server/database/Postgres";
 import { ExamAttemptServer, parseGeneratedQuestions } from "@/server/exam/ExamAttemptServer";
 import { AIService } from "@/features/ai/AIService";
@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     requireSessionOwner(request, user.sub);
 
     const body: unknown = await request.clone().json().catch(() => null);
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     requireSessionOwner(request, user.sub);
     const attemptId = new URL(request.url).searchParams.get("id");
     const attempt = await ExamAttemptServer.get(user.sub, attemptId);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { apiError, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
+import { apiError, requireActiveSession, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
 import { SyncService } from "@/server/cloud/SyncService";
 import { syncEntities, type SyncMutation } from "@/server/cloud/types";
 import { gunzipSync } from "node:zlib";
@@ -33,5 +33,5 @@ function validMutation(item: SyncMutation) {
     && !Number.isNaN(Date.parse(item.updatedAt));
 }
 
-export async function GET(request:Request){try{const user=requireUser(request);requireSessionOwner(request,user.sub);const since=Math.max(0,Math.floor(Number(new URL(request.url).searchParams.get("since")??0)));const changes=await SyncService.pull(user.sub,Number.isFinite(since)?since:0);return NextResponse.json({changes,cursor:changes.at(-1)?.sequence??since});}catch(error){return apiError(error);}}
-export async function POST(request:Request){try{requireCsrf(request);const user=requireUser(request);requireSessionOwner(request,user.sub);const limit = await rateLimit(`sync:${user.sub}`,120,60_000); if(!limit.allowed)return NextResponse.json({error:"Sincronização temporariamente limitada."},{status:429});const {mutations}=await syncBody(request);if(!Array.isArray(mutations)||mutations.length>2_000||mutations.some((item)=>!validMutation(item)))return NextResponse.json({error:"Mutações inválidas."},{status:400});return NextResponse.json(await SyncService.push(user.sub,mutations));}catch(error){return apiError(error);}}
+export async function GET(request:Request){try{const user=requireUser(request);await requireActiveSession(request,user);requireSessionOwner(request,user.sub);const since=Math.max(0,Math.floor(Number(new URL(request.url).searchParams.get("since")??0)));const changes=await SyncService.pull(user.sub,Number.isFinite(since)?since:0);return NextResponse.json({changes,cursor:changes.at(-1)?.sequence??since});}catch(error){return apiError(error);}}
+export async function POST(request:Request){try{requireCsrf(request);const user=requireUser(request);await requireActiveSession(request,user);requireSessionOwner(request,user.sub);const limit = await rateLimit(`sync:${user.sub}`,120,60_000); if(!limit.allowed)return NextResponse.json({error:"Sincronização temporariamente limitada."},{status:429});const {mutations}=await syncBody(request);if(!Array.isArray(mutations)||mutations.length>2_000||mutations.some((item)=>!validMutation(item)))return NextResponse.json({error:"Mutações inválidas."},{status:400});return NextResponse.json(await SyncService.push(user.sub,mutations));}catch(error){return apiError(error);}}

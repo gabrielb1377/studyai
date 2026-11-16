@@ -11,7 +11,7 @@ import {
 import { LabChallengeHttpError, LabChallengeService, verifyChallengeOwnership } from "@/features/lab/services/LabChallengeService";
 import { isLabChallengeRequest } from "@/features/lab/validators/lab-validation";
 import { withAIQuota } from "@/server/ai/QuotaMiddleware";
-import { apiError, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
+import { apiError, requireActiveSession, requireCsrf, requireSessionOwner, requireUser } from "@/server/auth/http";
 
 export const runtime = "nodejs";
 
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     if (request.headers.has("x-studyai-session-user")) {
       requireSessionOwner(request, user.sub);
     }

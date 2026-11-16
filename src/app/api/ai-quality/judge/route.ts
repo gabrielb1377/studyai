@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
 import type { AIProviderId } from "@/features/ai/AIProvider";
-import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
+import { apiError, jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import { withAIQuota } from "@/server/ai/QuotaMiddleware";
 
 const ALLOWED_PROVIDERS: readonly AIProviderId[] = ["gemini", "ollama", "groq", "openrouter"];
@@ -20,7 +20,8 @@ function validateProvider(provider: string): provider is AIProviderId {
 export async function POST(request: Request) {
   try {
     requireCsrf(request);
-    requireUser(request);
+    const user = requireUser(request);
+    await requireActiveSession(request, user);
     const body = await jsonBody<JudgeApiRequest>(request.clone(), 32 * 1024);
     const { prompt, provider, model, maxTokens } = body;
 

@@ -83,6 +83,7 @@ test("LLM Judge exige sessão e CSRF e ignora chave enviada pelo navegador", asy
     "@/server/auth/http": {
       requireCsrf: () => checks.push("csrf"),
       requireUser: () => { checks.push("user"); return { sub: "user-A" }; },
+      requireActiveSession: async () => ({ sub: "user-A" }),
       jsonBody: async (request: Request) => request.json(),
       apiError: () => FakeNextResponse.json({ error: "safe" }, { status: 500 }),
     },

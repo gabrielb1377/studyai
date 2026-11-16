@@ -140,6 +140,7 @@ function authenticatedHttp() {
   const http = loadHttp({ NextResponse: FakeNextResponse }) as unknown as Record<string, unknown>;
   http.requireCsrf = () => undefined;
   http.requireUser = () => ({ sub: "user-A" });
+  http.requireActiveSession = async () => ({ sub: "user-A" });
   http.requireSessionOwner = () => undefined;
   return http;
 }

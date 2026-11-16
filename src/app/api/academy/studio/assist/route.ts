@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
+import { apiError, jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import { StudioAssistService, type StudioAssistAction } from "@/features/academy/studio/StudioAssistService";
 import { clampText } from "@/features/academy/studio/sanitize";
 import { withAIQuota } from "@/server/ai/QuotaMiddleware";
@@ -21,7 +21,8 @@ const ALLOWED_ACTIONS: StudioAssistAction[] = [
 export async function POST(request: Request) {
   try {
     requireCsrf(request);
-    requireUser(request);
+    const user = requireUser(request);
+    await requireActiveSession(request, user);
 
     const body = await jsonBody<{ action?: string; text?: string; context?: string }>(request.clone(), 32 * 1024);
 

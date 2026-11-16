@@ -794,6 +794,7 @@ test("isolamento entre contas e contrato server-side de autenticação, ownershi
     "@/server/auth/http": {
       requireCsrf: () => undefined,
       requireUser: () => ({ sub: "user-1" }),
+      requireActiveSession: async () => ({ sub: "user-1" }),
       requireSessionOwner: () => undefined,
       apiError: (error: unknown) => new Response(String(error), { status: 500 }),
     },

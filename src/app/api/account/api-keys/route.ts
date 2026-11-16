@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
-import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
+import { apiError, jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import { isAIProviderId } from "@/features/ai/AIProvider";
 import { rateLimitRejection } from "@/server/security/RateLimitHttp";
 
@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const keys = await ApiKeyService.list(user.sub);
     return NextResponse.json({ keys }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const body = await jsonBody<{ provider?: string; key?: string }>(request);
     if (!isAIProviderId(body.provider)) throw new Error("Provider de IA inválido.");
     if (typeof body.key !== "string" || body.key.trim().length === 0) throw new Error("Informe a chave de API.");
@@ -40,6 +42,7 @@ export async function DELETE(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const url = new URL(request.url);
     const provider = url.searchParams.get("provider");
     if (!isAIProviderId(provider)) throw new Error("Provider de IA inválido.");

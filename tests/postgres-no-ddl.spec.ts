@@ -26,11 +26,13 @@ test("consulta de arquivo pela API não inicializa ou altera o esquema", async (
   };
   const postgres = load("src/server/database/Postgres.ts", { "server-only": {}, pg: { Pool: class { constructor() { return pool; } } } });
   const cloud = load("src/server/cloud/CloudDatabase.ts", { "server-only": {}, "@/server/database/Postgres": postgres, "@/server/storage/ObjectStorage": { ObjectStorage: {} } });
+  const fileSecurity = load("src/server/storage/FileSecurity.ts", { "server-only": {} });
   const route = load("src/app/api/files/[id]/route.ts", {
     "@/server/cloud/CloudDatabase": cloud,
-    "@/server/auth/http": { requireUser: () => ({ sub: "user" }), requireSessionOwner: () => undefined, apiError: (error: unknown) => { throw error; } },
+    "@/server/auth/http": { requireUser: () => ({ sub: "user" }), requireActiveSession: async () => ({ sub: "user" }), requireSessionOwner: () => undefined, apiError: (error: unknown) => { throw error; } },
     "@/server/security/Crypto": {},
     "@/server/security/RateLimit": {},
+    "@/server/storage/FileSecurity": fileSecurity,
   });
   const response = await (route.GET as (request: Request, params: unknown) => Promise<Response>)(new Request("http://localhost/api/files/file"), { params: Promise.resolve({ id: "file" }) });
   expect(response.status).toBe(200);

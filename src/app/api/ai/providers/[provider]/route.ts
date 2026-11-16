@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
 import { isAIProviderId } from "@/features/ai/AIProvider";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
-import { apiError, requireUser } from "@/server/auth/http";
+import { apiError, requireActiveSession, requireUser } from "@/server/auth/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +19,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
     const url = new URL(request.url);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     let apiKey: string | undefined;
     try { apiKey = await ApiKeyService.getDecrypted(user.sub, provider); }
     catch { return NextResponse.json({ provider, available: false, models: [], latencyMs: 0, error: "Não foi possível ler a chave salva." }, { status: 503, headers: { "Cache-Control": "no-store" } }); }

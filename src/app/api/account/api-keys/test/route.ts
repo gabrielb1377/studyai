@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
-import { apiError, jsonBody, requireCsrf, requireUser } from "@/server/auth/http";
+import { apiError, jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import { ProviderRegistry } from "@/features/ai/ProviderRegistry";
 import { isAIProviderId } from "@/features/ai/AIProvider";
 import { rateLimitRejection } from "@/server/security/RateLimitHttp";
@@ -13,6 +13,7 @@ export async function POST(request: Request) {
   try {
     requireCsrf(request);
     const user = requireUser(request);
+    await requireActiveSession(request, user);
     const limit = await ApiKeyService.rateLimitTest(user.sub);
     if (!limit.allowed) {
       return rateLimitRejection(limit, "Muitas tentativas. Tente novamente em instantes.");

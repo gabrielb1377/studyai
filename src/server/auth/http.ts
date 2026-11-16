@@ -27,6 +27,31 @@ export function requireUser(request: Request): AccessClaims {
   return user;
 }
 
+const activeSessionRequests = new WeakMap<Request, Promise<AccessClaims>>();
+
+export async function requireActiveSession(request: Request, claims?: AccessClaims): Promise<AccessClaims> {
+  const existing = activeSessionRequests.get(request);
+  if (existing) return existing;
+  const verification = (async () => {
+    const user = claims ?? requireUser(request);
+    if (typeof user.sessionId !== "string" || !user.sessionId) {
+      throw new Response(JSON.stringify({ error: "AUTH_REQUIRED" }), { status: 401, headers: { "content-type": "application/json" } });
+    }
+    const active = await AuthService.isSessionActive(user.sub, user.sessionId);
+    if (!active) {
+      throw new Response(JSON.stringify({ error: "AUTH_REQUIRED" }), { status: 401, headers: { "content-type": "application/json" } });
+    }
+    return user;
+  })();
+  activeSessionRequests.set(request, verification);
+  try {
+    return await verification;
+  } catch (error) {
+    activeSessionRequests.delete(request);
+    throw error;
+  }
+}
+
 export function requireCsrf(request: Request) {
   const header = request.headers.get("x-csrf-token") ?? "";
   const value = cookie(request, authCookies.csrf) ?? "";
