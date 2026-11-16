@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, FileText, LoaderCircle, Mic, MicOff, Paperclip, Send, X } from "lucide-react";
+import { AlertCircle, FileText, LoaderCircle, Mic, MicOff, Paperclip, Send, WifiOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSpeechRecognition } from "@/features/voice/hooks/useSpeechRecognition";
 import {
@@ -12,6 +12,7 @@ import {
   type VoiceConsentState,
 } from "@/features/voice/voice-consent";
 import { ExperiencePreferencesService } from "@/features/preferences/ExperiencePreferences";
+import { useConnectivity } from "@/features/platform/useConnectivity";
 
 const tutorQuickActions = ["Explicar", "Resumir", "Flashcards", "Exercícios"];
 const teacherQuickActions = ["Explique este conceito", "Dê um exemplo prático", "Faça uma pergunta", "Revise comigo"];
@@ -39,6 +40,7 @@ export function TutorComposer({
   onGenerateSummary: () => void;
   onSend: () => void;
 }) {
+  const { isOnline } = useConnectivity();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const baseDraftRef = useRef("");
   const wasListeningRef = useRef(false);
@@ -163,6 +165,15 @@ export function TutorComposer({
 
   return (
     <div className="mt-5">
+      {!isOnline && (
+        <div role="status" className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-muted-foreground">
+          <WifiOff className="mt-0.5 size-3.5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+          <p className="flex-1">
+            Sem conexão com a internet. A geração de respostas e resumos com IA está indisponível offline; suas conversas e materiais locais continuam acessíveis.
+          </p>
+        </div>
+      )}
+
       <div className="mb-3 flex flex-wrap gap-2" aria-label="Ações rápidas">
         {(mode === "teacher" ? teacherQuickActions : tutorQuickActions).map((action) => (
           <Button
@@ -175,7 +186,7 @@ export function TutorComposer({
             {action}
           </Button>
         ))}
-        <Button type="button" size="sm" variant="secondary" onClick={onGenerateSummary} disabled={isLoading || isSummaryLoading}>
+        <Button type="button" size="sm" variant="secondary" onClick={onGenerateSummary} disabled={isLoading || isSummaryLoading || !isOnline}>
           <FileText className="size-4" aria-hidden="true" />
           {isSummaryLoading ? "Gerando resumo..." : "Gerar resumo"}
         </Button>
@@ -237,6 +248,7 @@ export function TutorComposer({
         className="rounded-2xl border bg-card/95 p-2 shadow-[var(--shadow-card)] transition-shadow focus-within:border-primary/35 focus-within:shadow-md"
         onSubmit={(event) => {
           event.preventDefault();
+          if (!isOnline) return;
           if (isListening) {
             void stopListening();
           }
@@ -251,7 +263,7 @@ export function TutorComposer({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              if (draft.trim() && !isLoading) {
+              if (draft.trim() && !isLoading && isOnline) {
                 if (isListening) void stopListening();
                 onSend();
               }
@@ -289,7 +301,7 @@ export function TutorComposer({
               </Button>
             )}
           </div>
-          <Button type="submit" size="sm" className="h-9" disabled={!draft.trim() || isLoading}>
+          <Button type="submit" size="sm" className="h-9" disabled={!draft.trim() || isLoading || !isOnline}>
             {isLoading ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Send className="size-4" aria-hidden="true" />}
             {isLoading ? "Enviando..." : "Enviar"}
           </Button>

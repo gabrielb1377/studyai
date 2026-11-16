@@ -21,6 +21,10 @@ import { StudyEngine } from "@/features/study/services/StudyEngine";
 import { LongTermMemoryStorage } from "@/features/learning/memory/LongTermMemoryStorage";
 import { MemoryRetrievalEngine } from "@/features/learning/memory/MemoryRetrievalEngine";
 import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
+import { ConnectivityService, isLikelyNetworkError } from "@/features/platform/ConnectivityService";
+
+const TUTOR_OFFLINE_ERROR =
+  "Sem conexão com a internet. A geração de respostas do Tutor IA está indisponível offline; suas conversas e materiais salvos continuam acessíveis para consulta.";
 
 function sourceReferences(chunks: readonly RetrievedChunk[]) {
   return chunks.map(({ id, metadata, text }) => ({
@@ -59,7 +63,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
   ) => {
     setConversations((current) => {
       const nextConversations = updater(current);
-      void TutorStorage.save(nextConversations);
+      void TutorStorage.save(nextConversations).catch(() => undefined);
       return nextConversations;
     });
   };
@@ -125,6 +129,10 @@ export function useTutor(instanceId?: string, studyId?: string) {
   const sendMessage = async (content: string, options?: { teaching?: TeacherRequest }) => {
     const nextContent = content.trim();
     if (!nextContent || isLoading || !ready) return false;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError(TUTOR_OFFLINE_ERROR);
+      return false;
+    }
     let sessionOperation: ReturnType<typeof SessionOperationManager.start>;
     try {
       sessionOperation = SessionOperationManager.start();
@@ -171,8 +179,8 @@ export function useTutor(instanceId?: string, studyId?: string) {
         };
       } else {
         retrieval = options?.teaching && context?.studyId && isBroadTeacherAction(options.teaching.action)
-        ? await RetrievalPipeline.forStudy(context.studyId)
-        : await RetrievalPipeline.forQuestion(query, context?.studyId);
+          ? await RetrievalPipeline.forStudy(context.studyId)
+          : await RetrievalPipeline.forQuestion(query, context?.studyId);
       }
       sessionOperation.assertCurrent();
       const contextualized = context && retrieval.knowledge?.hasContext
@@ -231,6 +239,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
         },
       );
       sessionOperation.assertCurrent();
+      ConnectivityService.reportNetworkSuccess();
       updateConversations((current) =>
         TutorService.replaceMessage(current, conversation.id, assistantMessage.id, {
           content: response.text,
@@ -266,6 +275,9 @@ export function useTutor(instanceId?: string, studyId?: string) {
           teaching: options?.teaching,
         });
         setError(null);
+      } else if (isLikelyNetworkError(requestError)) {
+        ConnectivityService.reportNetworkFailure(requestError);
+        setError(TUTOR_OFFLINE_ERROR);
       } else {
         setError(requestError instanceof Error ? requestError.message : "Erro inesperado no Tutor IA.");
       }
@@ -281,6 +293,10 @@ export function useTutor(instanceId?: string, studyId?: string) {
 
   const acceptFallback = async (provider: AIProviderId) => {
     if (!pendingFallback || isLoading) return false;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. Aguarde a reconexão para usar uma alternativa de IA.");
+      return false;
+    }
     let sessionOperation: ReturnType<typeof SessionOperationManager.start>;
     try {
       sessionOperation = SessionOperationManager.start();
@@ -329,6 +345,7 @@ export function useTutor(instanceId?: string, studyId?: string) {
         },
       );
       sessionOperation.assertCurrent();
+      ConnectivityService.reportNetworkSuccess();
       updateConversations((current) => TutorService.replaceMessage(current, pending.conversationId, assistantMessage.id, {
         content: response.text,
         metadata: response.metadata,
@@ -339,7 +356,12 @@ export function useTutor(instanceId?: string, studyId?: string) {
     } catch (requestError) {
       if (sessionOperation.signal.aborted) return false;
       updateConversations((current) => TutorService.removeMessage(current, pending.conversationId, assistantMessage.id));
-      setError(requestError instanceof Error ? requestError.message : "A alternativa autorizada não conseguiu responder.");
+      if (isLikelyNetworkError(requestError)) {
+        ConnectivityService.reportNetworkFailure(requestError);
+        setError(TUTOR_OFFLINE_ERROR);
+      } else {
+        setError(requestError instanceof Error ? requestError.message : "A alternativa autorizada não conseguiu responder.");
+      }
       return false;
     } finally {
       const current = SessionOperationManager.current();

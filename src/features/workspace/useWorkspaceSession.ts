@@ -162,7 +162,7 @@ export function useWorkspaceSession(
         if (ownerRef.current !== ownerId) return;
         sessionRef.current = updated;
         setSession(updated);
-      });
+      }).catch(() => undefined);
     };
 
     checkpoint();
@@ -202,7 +202,7 @@ export function useWorkspaceSession(
             if (ownerRef.current !== ownerId) return;
             sessionRef.current = updated;
             setSession(updated);
-          });
+          }).catch(() => undefined);
         }
       }
     };
@@ -248,7 +248,7 @@ export function useWorkspaceSession(
       }
       void SessionTracker.setChapter(current, detail.chapter).then((updated) => {
         setManagedSession(updated, false);
-      });
+      }).catch(() => undefined);
     };
     window.addEventListener("studyai:workspace-chapter", onChapter);
     return () => window.removeEventListener("studyai:workspace-chapter", onChapter);

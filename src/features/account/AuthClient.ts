@@ -1,4 +1,5 @@
 import type { AccountSession } from "./types";
+import { ConnectivityService } from "@/features/platform/ConnectivityService";
 import { DeviceManager } from "@/features/platform/DeviceManager";
 import type { SessionOperation } from "./SessionOperationManager";
 
@@ -23,7 +24,14 @@ async function request<T>(url: string, init?: SessionRequestInit) {
   let body=init?.body;const extraHeaders:Record<string,string>={};
   if(url==="/sync"&&typeof body==="string"&&body.length>50_000&&"CompressionStream" in window){const stream=new Blob([body]).stream().pipeThrough(new CompressionStream("gzip"));body=await new Response(stream).blob();extraHeaders["content-encoding"]="gzip";}
   operation?.assertCurrent();
-  const response = await fetch(url, { ...requestInit, signal: operation?.signal ?? init?.signal, body, headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...extraHeaders, ...(init?.headers ?? {}), ...(operation ? { "x-studyai-session-user": operation.userId } : {}), ...(init?.method && init.method !== "GET" ? { "x-csrf-token": csrf() } : {}) } });
+  let response: Response;
+  try {
+    response = await fetch(url, { ...requestInit, signal: operation?.signal ?? init?.signal, body, headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...extraHeaders, ...(init?.headers ?? {}), ...(operation ? { "x-studyai-session-user": operation.userId } : {}), ...(init?.method && init.method !== "GET" ? { "x-csrf-token": csrf() } : {}) } });
+  } catch (error) {
+    ConnectivityService.reportNetworkFailure(error);
+    throw error;
+  }
+  ConnectivityService.reportNetworkSuccess();
   operation?.assertCurrent();
   const data = await response.json().catch(() => ({})) as T & { error?: string };
   operation?.assertCurrent();

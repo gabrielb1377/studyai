@@ -31,9 +31,12 @@ import { TeacherControls } from "@/features/teacher/components/TeacherControls";
 import { useTeacher } from "@/features/teacher/hooks/useTeacher";
 import type { TeacherAction } from "@/features/teacher/types";
 import type { TeacherAudioLessonPreferences, RateOption } from "@/features/teacher/types";
+import { ConnectivityService, isLikelyNetworkError } from "@/features/platform/ConnectivityService";
+import { useConnectivity } from "@/features/platform/useConnectivity";
 
 export function TutorWorkspace({ compact = false, instanceId, studyId }: { compact?: boolean; instanceId?: string; studyId?: string } = {}) {
   const auth = useAuth();
+  const { isOnline } = useConnectivity();
   const {
     activeConversation,
     activeConversationId,
@@ -138,6 +141,10 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
 
   const generateSummary = async () => {
     if (!activeConversation || isSummaryLoading) return;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. A geração de resumos com IA está indisponível offline.");
+      return;
+    }
     if (!context) {
       setError("Abra um estudo organizado antes de gerar um resumo.");
       return;
@@ -151,6 +158,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
     clearError();
     try {
       const response = await TutorService.requestSummary(activeConversation.messages, context, chunks);
+      ConnectivityService.reportNetworkSuccess();
       const created = SummaryService.create({
         conversationId: activeConversation.id,
         conversationTitle: activeConversation.title,
@@ -161,7 +169,12 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
       setSummaryDraft(created);
       setIsSummaryOpen(true);
     } catch (summaryError) {
-      setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao gerar o resumo.");
+      if (isLikelyNetworkError(summaryError)) {
+        ConnectivityService.reportNetworkFailure(summaryError);
+        setError("Sem conexão com a internet. A geração de resumos com IA exige conectividade.");
+      } else {
+        setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao gerar o resumo.");
+      }
     } finally {
       setIsSummaryLoading(false);
     }
@@ -169,6 +182,10 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
 
   const regenerateSummary = async () => {
     if (!summaryDraft || isSummaryLoading) return;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. A atualização de resumos com IA está indisponível offline.");
+      return;
+    }
     const conversation = conversations.find((item) => item.id === summaryDraft.conversationId);
     if (!conversation) {
       setError("A conversa de origem deste resumo não está mais disponível.");
@@ -187,6 +204,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
     clearError();
     try {
       const response = await TutorService.requestSummary(conversation.messages, context, chunks);
+      ConnectivityService.reportNetworkSuccess();
       setSummaryDraft((current) => {
         if (!current) return current;
         const updated = { ...current, content: response.text, updatedAt: new Date().toISOString() };
@@ -194,7 +212,12 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
         return updated;
       });
     } catch (summaryError) {
-      setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");
+      if (isLikelyNetworkError(summaryError)) {
+        ConnectivityService.reportNetworkFailure(summaryError);
+        setError("Sem conexão com a internet. A atualização de resumos com IA exige conectividade.");
+      } else {
+        setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");
+      }
     } finally {
       setIsSummaryLoading(false);
     }
@@ -274,7 +297,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
                   <Button
                     type="button"
                     size="sm"
-                    disabled={isLoading}
+                    disabled={isLoading || !isOnline}
                     onClick={() => {
                       void acceptFallback(alternative.provider).then((sent) => {
                         if (sent) setDraft("");
@@ -322,7 +345,7 @@ export function TutorWorkspace({ compact = false, instanceId, studyId }: { compa
         {teacher.mode === "teacher" && (
           <TeacherControls
             context={context}
-            disabled={isLoading}
+            disabled={isLoading || !isOnline}
             preferences={teacher.preferences}
             audioPreferences={teacher.audioPreferences as TeacherAudioLessonPreferences & { rate: RateOption }}
             selection={teacher.selection}

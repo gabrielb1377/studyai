@@ -9,6 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMediaDuration, getExtension, isMediaExtension, validateMediaSignature } from "@/features/extraction/media-validation";
 import { formatFileSize } from "@/features/import/import-utils";
+import { checkMaterialOfflineAvailability, type MaterialOfflineStatus } from "@/features/library/MaterialAvailability";
+import { ConnectivityService } from "@/features/platform/ConnectivityService";
+import { useConnectivity } from "@/features/platform/useConnectivity";
 import type { StudyMaterial } from "@/types/study";
 import { MaterialBinaryStorage } from "@/services/material-binary-storage";
 import { MaterialRuntimeStore } from "@/services/material-runtime-store";
@@ -34,6 +37,19 @@ const materialIcons = {
   image: ImageIcon,
 };
 
+function availabilityBadgeLabel(status: MaterialOfflineStatus, isOnline: boolean): string {
+  switch (status) {
+    case "local-complete":
+      return "Disponível neste dispositivo";
+    case "text-only":
+      return isOnline ? "Somente texto local" : "Somente texto offline";
+    case "storage-unavailable":
+      return "OPFS indisponível";
+    case "remote-only":
+      return isOnline ? "Somente na nuvem" : "Indisponível offline";
+  }
+}
+
 export function MaterialViewer({
   material,
   studyId,
@@ -53,7 +69,15 @@ export function MaterialViewer({
 }) {
   const Icon = materialIcons[material.type];
   const router = useRouter();
+  const connectivity = useConnectivity();
   const [source, setSource] = useState(material.source);
+  const [availability, setAvailability] = useState<MaterialOfflineStatus>(() => (
+    material.source || MaterialRuntimeStore.get(material.id)
+      ? "local-complete"
+      : material.textContent?.trim()
+        ? "text-only"
+        : "remote-only"
+  ));
   const [isRestoring, setIsRestoring] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [pdfView, setPdfView] = useState<"text" | "pdf">("pdf");
@@ -65,18 +89,31 @@ export function MaterialViewer({
     setSource(runtimeSource);
     setPlaybackError(null);
     setPdfView("pdf");
-    if (runtimeSource) return () => { active = false; };
+    if (runtimeSource) {
+      setAvailability("local-complete");
+      return () => { active = false; };
+    }
     setIsRestoring(true);
-    void MaterialBinaryStorage.load(material).then(async (localFile) => {
-      const file = localFile ?? await CloudFileService.download(material).catch(() => null);
-      if (!active || !file) return;
-      MaterialRuntimeStore.register(material.id, file);
+    void checkMaterialOfflineAvailability(material).then(async (result) => {
+      if (!active) return;
+      if (result.file) {
+        MaterialRuntimeStore.register(material.id, result.file);
+        setSource(MaterialRuntimeStore.get(material.id)?.source);
+        setAvailability("local-complete");
+        return;
+      }
+      setAvailability(result.status);
+      if (!ConnectivityService.getSnapshot().isOnline) return;
+      const remoteFile = await CloudFileService.download(material).catch(() => null);
+      if (!active || !remoteFile) return;
+      MaterialRuntimeStore.register(material.id, remoteFile);
       setSource(MaterialRuntimeStore.get(material.id)?.source);
+      setAvailability("local-complete");
     }).finally(() => {
       if (active) setIsRestoring(false);
     });
     return () => { active = false; };
-  }, [material]);
+  }, [connectivity.isOnline, material]);
 
   const selectAgain = async (file: File | undefined) => {
     if (!file) return;
@@ -90,6 +127,7 @@ export function MaterialViewer({
       const persistentBinary = await MaterialBinaryStorage.save(material.binaryStorageId ?? material.id, file);
       await MaterialService.update(material.id, { persistentBinary });
       setSource(MaterialRuntimeStore.get(material.id)?.source);
+      setAvailability("local-complete");
       setPdfView("pdf");
     } catch (error) {
       setPlaybackError(error instanceof Error ? error.message : "Não foi possível validar o arquivo selecionado.");
@@ -103,11 +141,17 @@ export function MaterialViewer({
     setIsDownloading(true);
     setDownloadError(null);
     try {
-      const runtime = MaterialRuntimeStore.get(material.id)?.file;
-      const local = runtime ?? await MaterialBinaryStorage.load(material);
-      const file = local ?? await CloudFileService.download(material).catch(() => null);
+      const result = await checkMaterialOfflineAvailability(material);
+      let file = result.file;
+      if (!file && ConnectivityService.getSnapshot().isOnline) {
+        file = await CloudFileService.download(material).catch(() => null);
+      }
       if (!file) {
-        setDownloadError("O arquivo original não está disponível neste dispositivo.");
+        setDownloadError(
+          ConnectivityService.getSnapshot().isOnline
+            ? "O arquivo original não está disponível neste dispositivo nem na nuvem."
+            : "Sem conexão com a internet. O arquivo original não foi salvo localmente neste dispositivo.",
+        );
         return;
       }
       const url = URL.createObjectURL(file);
@@ -131,6 +175,13 @@ export function MaterialViewer({
     material.type === "audio" ? ".mp3,.wav,.m4a,audio/*" :
     undefined;
 
+  const missingBinaryMessage =
+    availability === "storage-unavailable"
+      ? "O armazenamento de arquivos grandes (OPFS) não está disponível neste navegador."
+      : !connectivity.isOnline
+        ? "Sem conexão com a internet e o arquivo original não está salvo neste dispositivo."
+        : "O arquivo original não está disponível neste dispositivo.";
+
   return (
     <Card className="gap-0 overflow-hidden py-0 shadow-none">
       <CardHeader className="gap-4 border-b px-5 py-5 sm:px-6">
@@ -143,6 +194,9 @@ export function MaterialViewer({
               <CardTitle className="truncate text-base">{material.name}</CardTitle>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="font-normal text-muted-foreground">{material.type.toUpperCase()}</Badge>
+                <Badge variant={availability === "local-complete" ? "secondary" : "outline"} className="font-normal">
+                  {availabilityBadgeLabel(availability, connectivity.isOnline)}
+                </Badge>
                 <span className="text-xs text-muted-foreground">{formatFileSize(material.size)}</span>
                 {durationLabel && <span className="text-xs text-muted-foreground">· {durationLabel}</span>}
               </div>
@@ -182,9 +236,16 @@ export function MaterialViewer({
             {pdfView === "pdf" && source && <PdfMaterialViewer key={material.id} material={{ ...material, source }} studyId={studyId} compact={compact} />}
             {pdfView === "pdf" && !source && (
               <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-                <p>{isRestoring ? "Procurando o PDF neste dispositivo e na nuvem…" : "O PDF original não está disponível neste dispositivo."}</p>
-                {!isRestoring && <Button type="button" variant="outline" className="mt-4" onClick={() => fileInputRef.current?.click()}><RefreshCw />Selecionar novamente</Button>}
-                <p className="mt-3 text-xs">Página, zoom, capítulo e marcadores permanecem salvos.</p>
+                <p>{isRestoring ? "Procurando o PDF neste dispositivo…" : missingBinaryMessage}</p>
+                {!isRestoring && (
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><RefreshCw />Selecionar novamente</Button>
+                    {material.textContent?.trim() ? (
+                      <Button type="button" variant="secondary" onClick={() => setPdfView("text")}>Ler texto extraído</Button>
+                    ) : null}
+                  </div>
+                )}
+                <p className="mt-3 text-xs">Página, zoom, capítulo e marcadores permanecem salvos neste dispositivo.</p>
               </div>
             )}
           </div>
@@ -210,7 +271,7 @@ export function MaterialViewer({
                 />
               ) : (
                 <div className="p-8 text-center text-sm text-white/75">
-                  <p>{isRestoring ? "Recuperando o vídeo neste dispositivo..." : "O arquivo de vídeo não está disponível neste dispositivo."}</p>
+                  <p>{isRestoring ? "Recuperando o vídeo neste dispositivo..." : missingBinaryMessage}</p>
                   {!isRestoring && (
                     <Button type="button" variant="secondary" size="sm" className="mt-4" onClick={() => fileInputRef.current?.click()}>
                       <RefreshCw className="size-3.5" aria-hidden="true" />
@@ -237,7 +298,7 @@ export function MaterialViewer({
                   <div>
                     <p className="text-sm font-medium">Player de áudio{durationLabel ? ` · ${durationLabel}` : ""}</p>
                     <p className="text-xs text-muted-foreground">
-                      {source ? "Arquivo pronto para reprodução" : isRestoring ? "Recuperando o áudio..." : "Arquivo indisponível neste dispositivo"}
+                      {source ? "Arquivo pronto para reprodução" : isRestoring ? "Recuperando o áudio..." : missingBinaryMessage}
                     </p>
                   </div>
                 </div>
@@ -284,7 +345,15 @@ export function MaterialViewer({
           <img src={source} alt={material.name} className="mx-auto max-h-[620px] rounded-xl object-contain" />
         )}
         {material.type === "image" && !source && (
-          <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Reimporte a imagem para visualizá-la nesta sessão.</p>
+          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+            <p>{isRestoring ? "Recuperando a imagem neste dispositivo..." : missingBinaryMessage}</p>
+            {!isRestoring && (
+              <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => fileInputRef.current?.click()}>
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+                Selecionar novamente
+              </Button>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

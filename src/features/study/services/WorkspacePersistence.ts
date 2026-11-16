@@ -3,7 +3,7 @@ import { SessionOperationManager } from "@/features/account/SessionOperationMana
 export const workspaceTabs = ["material", "ia", "mentor", "knowledge", "flashcards", "quiz", "notes", "lab", "revisao", "ia-quality"] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
-export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
+export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
 
 export type PdfAnnotation = {
   id: string;
@@ -118,8 +118,21 @@ export const WorkspacePersistence = {
     if (typeof window === "undefined") return normalize(null);
     if (!currentUserId()) return normalize(null);
     const next = { ...this.load(studyId), ...changes, updatedAt: new Date().toISOString() };
-    window.localStorage.setItem(`${PREFIX}${studyId}`, JSON.stringify({ version: VERSION, ...next }));
-    window.localStorage.setItem(LAST_STUDY_KEY, studyId);
+    try {
+      window.localStorage.setItem(`${PREFIX}${studyId}`, JSON.stringify({ version: VERSION, ...next }));
+      window.localStorage.setItem(LAST_STUDY_KEY, studyId);
+    } catch (error) {
+      const isQuota = error instanceof DOMException && error.name === "QuotaExceededError";
+      window.dispatchEvent(new CustomEvent("studyai:storage-error", {
+        detail: {
+          code: isQuota ? "FULL" : "UNAVAILABLE",
+          message: isQuota
+            ? "O armazenamento local do navegador está cheio e não conseguiu salvar o estado do estudo."
+            : "Não foi possível gravar as preferências locais do estudo neste navegador.",
+        },
+      }));
+      return next;
+    }
     window.dispatchEvent(new Event("studyai:workspace-updated"));
     return next;
   },
@@ -130,6 +143,10 @@ export const WorkspacePersistence = {
   },
 
   loadLastStudyId() {
-    return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_STUDY_KEY);
+    try {
+      return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_STUDY_KEY);
+    } catch {
+      return null;
+    }
   },
 };

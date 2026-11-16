@@ -10,6 +10,7 @@ import {
 } from "./StorageVersion";
 
 export const STORAGE_UPDATED_EVENT = "studyai:storage-updated";
+export const STORAGE_ERROR_EVENT = "studyai:storage-error";
 
 export class StorageError extends Error {
   constructor(
@@ -42,6 +43,16 @@ function normalizeError(error: unknown) {
     "UNKNOWN",
     { cause: error },
   );
+}
+
+function handleWriteError(error: unknown): never {
+  const normalized = normalizeError(error);
+  if (typeof window !== "undefined" && (normalized.code === "FULL" || normalized.code === "UNAVAILABLE")) {
+    window.dispatchEvent(new CustomEvent(STORAGE_ERROR_EVENT, {
+      detail: { code: normalized.code, message: normalized.message },
+    }));
+  }
+  throw normalized;
 }
 
 function emit(store: StorageStoreName, key?: IDBValidKey) {
@@ -84,6 +95,7 @@ export type StorageDiagnostics = {
   counts: Record<StorageStoreName, number>;
   usageBytes?: number;
   quotaBytes?: number;
+  persisted?: boolean;
   lastMigration?: string;
 };
 
@@ -130,7 +142,7 @@ export const StorageManager = {
       emit("metadata", key);
       return value;
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -141,7 +153,7 @@ export const StorageManager = {
       if (options.notify !== false) emit(store, valueKey(value));
       return key;
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -153,7 +165,7 @@ export const StorageManager = {
       });
       emit(store);
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -166,7 +178,7 @@ export const StorageManager = {
       });
       emit(store);
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -176,7 +188,7 @@ export const StorageManager = {
       await IndexedDB.transaction([store], "readwrite", (storage) => storage.delete(store, key));
       emit(store);
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -190,7 +202,7 @@ export const StorageManager = {
       stores.forEach(emit);
       return result;
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -217,15 +229,21 @@ export const StorageManager = {
       await IndexedDB.transaction([store], "readonly", (storage) => storage.count(store)),
     ]))) as Record<StorageStoreName, number>;
     const migration = await this.get<{ key: string; value: number; updatedAt: string }>("metadata", STORAGE_MIGRATION_KEY);
-    const estimate = typeof navigator !== "undefined" && navigator.storage?.estimate
-      ? await navigator.storage.estimate().catch(() => undefined)
-      : undefined;
+    const [estimate, persisted] = await Promise.all([
+      typeof navigator !== "undefined" && navigator.storage?.estimate
+        ? navigator.storage.estimate().catch(() => undefined)
+        : Promise.resolve(undefined),
+      typeof navigator !== "undefined" && navigator.storage?.persisted
+        ? navigator.storage.persisted().catch(() => undefined)
+        : Promise.resolve(undefined),
+    ]);
     return {
       database: currentDatabaseName(),
       version: STORAGE_DATABASE_VERSION,
       counts,
       usageBytes: estimate?.usage,
       quotaBytes: estimate?.quota,
+      persisted,
       lastMigration: migration?.updatedAt,
     };
   },

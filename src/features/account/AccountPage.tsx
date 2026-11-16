@@ -37,7 +37,8 @@ export function AccountPage() {
     if (!auth.session) return;
     const userId = auth.session?.user.id;
     if (!userId) return;
-    const [state, conflictItems, backupData, shareData,historyData] = await Promise.all([CloudSyncManager.state(userId), CloudSyncManager.conflicts(userId), AuthClient.request<{backups:BackupItem[]}>("/backup"), AuthClient.request<{shares:ShareItem[]}>("/share"),AuthClient.request<{history:HistoryItem[]}>("/sync/history")]);
+    const [conflictItems, backupData, shareData, historyData] = await Promise.all([CloudSyncManager.conflicts(userId), AuthClient.request<{backups:BackupItem[]}>("/backup"), AuthClient.request<{shares:ShareItem[]}>("/share"),AuthClient.request<{history:HistoryItem[]}>("/sync/history")]);
+    const state = await CloudSyncManager.state(userId);
     setSync(state); setConflicts(conflictItems); setBackups(backupData.backups); setShares(shareData.shares);setHistory(historyData.history);
   }, [auth.session]);
   useEffect(() => { void loadCloud(); const listener=(event:Event)=>setSync((event as CustomEvent<CloudSyncState>).detail); window.addEventListener("studyai:cloud-sync",listener); return()=>window.removeEventListener("studyai:cloud-sync",listener); }, [loadCloud]);

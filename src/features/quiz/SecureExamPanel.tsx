@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, LoaderCircle, RotateCcw, ShieldCheck, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/features/account/AuthProvider";
 import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine";
 import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
+import { ConnectivityService, isLikelyNetworkError } from "@/features/platform/ConnectivityService";
+import { useConnectivity } from "@/features/platform/useConnectivity";
 import type { ExamAttemptRecord, ExamAttemptResult } from "@/types/exam";
 import type { StudyRecord } from "@/types/study-engine";
 import { SecureExamClient, type SecureExamConfig } from "./SecureExamClient";
@@ -35,6 +37,7 @@ function saveQuizState(studyId: string, changes: { index?: number; attemptId?: s
 
 export function SecureExamPanel({ study }: { study: StudyRecord }) {
   const { session, isLoading: isAuthLoading } = useAuth();
+  const { isOnline } = useConnectivity();
   const stored = currentQuizState(study.studyId);
   const [attempt, setAttempt] = useState<ExamAttemptRecord | null>(null);
   const [result, setResult] = useState<ExamAttemptResult | null>(null);
@@ -51,12 +54,14 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
 
   useEffect(() => {
     const userId = session?.user.id;
-    if (!attemptId || !userId) return;
+    if (!attemptId || !userId || !isOnline) return;
     let active = true;
     setIsResuming(true);
+    setError(null);
     void SecureExamClient.resume(attemptId, userId)
       .then((loaded) => {
         if (!active) return;
+        ConnectivityService.reportNetworkSuccess();
         setAttempt(loaded);
         if (loaded.result) {
           setResult(loaded.result);
@@ -65,7 +70,11 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
         }
       })
       .catch((resumeError: unknown) => {
-        if (active) {
+        if (!active) return;
+        if (isLikelyNetworkError(resumeError)) {
+          ConnectivityService.reportNetworkFailure(resumeError);
+          setError("Sem conexão com a internet para retomar a tentativa no servidor. Suas respostas locais foram preservadas.");
+        } else {
           setError(SecureExamClient.message(resumeError));
           setShowConfig(true);
         }
@@ -74,7 +83,7 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
         if (active) setIsResuming(false);
       });
     return () => { active = false; };
-  }, [attemptId, session?.user.id]);
+  }, [attemptId, isOnline, session?.user.id]);
 
   useEffect(() => {
     if (attempt && index >= attempt.questions.length) setIndex(0);
@@ -89,6 +98,10 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
 
   const generate = async () => {
     if (!session || isGenerating) return;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. O Modo Prova protegido exige conexão para gerar questões no servidor.");
+      return;
+    }
     setError(null);
     setIsGenerating(true);
     setResult(null);
@@ -97,13 +110,19 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
     setIndex(0);
     try {
       const created = await SecureExamClient.create(study, { count, difficulty }, session.user.id);
+      ConnectivityService.reportNetworkSuccess();
       setAttempt(created);
       setAttemptId(created.attemptId);
       setAnswers(Array.from({ length: created.totalCount }, () => null));
       saveQuizState(study.studyId, { attemptId: created.attemptId, answers: Array.from({ length: created.totalCount }, () => null), index: 0, finished: false });
       setShowConfig(false);
     } catch (generationError) {
-      setError(SecureExamClient.message(generationError));
+      if (isLikelyNetworkError(generationError)) {
+        ConnectivityService.reportNetworkFailure(generationError);
+        setError("Sem conexão com a internet. Aguarde a reconexão para gerar a prova protegida.");
+      } else {
+        setError(SecureExamClient.message(generationError));
+      }
       setShowConfig(true);
     } finally {
       setIsGenerating(false);
@@ -124,16 +143,26 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
 
   const submit = async () => {
     if (!session || !attempt || isSubmitting) return;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. Suas marcações permanecem salvas localmente; entregue a prova quando reconectar.");
+      return;
+    }
     setError(null);
     setIsSubmitting(true);
     try {
       const graded = await SecureExamClient.grade(attempt.attemptId, answers, session.user.id);
+      ConnectivityService.reportNetworkSuccess();
       setResult(graded);
       setAnswers(graded.answers);
       setIndex(0);
       saveQuizState(study.studyId, { attemptId: attempt.attemptId, answers: graded.answers, index: 0, finished: true });
     } catch (submissionError) {
-      setError(SecureExamClient.message(submissionError));
+      if (isLikelyNetworkError(submissionError)) {
+        ConnectivityService.reportNetworkFailure(submissionError);
+        setError("Sem conexão com a internet. Suas marcações continuam salvas localmente para envio após a reconexão.");
+      } else {
+        setError(SecureExamClient.message(submissionError));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -205,7 +234,7 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
           })}
         </div>
 
-        <Button type="button" variant="outline" onClick={restart}><RotateCcw className="mr-2 size-4" /> Refazer prova protegida</Button>
+        <Button type="button" variant="outline" onClick={restart} disabled={!isOnline}><RotateCcw className="mr-2 size-4" /> Refazer prova protegida</Button>
       </div>
     );
   }
@@ -224,6 +253,15 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
             <p className="mt-1 text-sm text-muted-foreground">As questões são geradas no servidor. Você só verá o gabarito e as explicações depois de entregar.</p>
           </div>
         </div>
+
+        {!isOnline && (
+          <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-xs text-muted-foreground">
+            <WifiOff className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+            <p>
+              Modo Prova protegido indisponível sem internet. Para proteger os gabaritos e corrigir com segurança no servidor, aguarde a reconexão.
+            </p>
+          </div>
+        )}
 
         {(showConfig || !attemptId) && (
           <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
@@ -244,7 +282,7 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
               </select>
             </div>
             <div className="flex items-end">
-              <Button type="button" className="w-full" onClick={() => void generate()} disabled={isGenerating || !canGenerate}>
+              <Button type="button" className="w-full" onClick={() => void generate()} disabled={isGenerating || !canGenerate || !isOnline}>
                 {isGenerating ? <><LoaderCircle className="mr-2 size-4 animate-spin" /> Gerando…</> : "Gerar prova protegida"}
               </Button>
             </div>
@@ -259,6 +297,15 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
 
   return (
     <div className="space-y-4">
+      {!isOnline && (
+        <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-xs text-muted-foreground">
+          <WifiOff className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+          <p>
+            Sem conexão com a internet. Você pode marcar suas respostas localmente, mas a entrega com correção no servidor só fica disponível após a reconexão.
+          </p>
+        </div>
+      )}
+
       <Card className="space-y-4 p-5 shadow-none sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Badge variant="secondary"><ShieldCheck className="mr-1 size-3.5" /> Questão {index + 1} de {attempt.totalCount}</Badge>
@@ -306,7 +353,7 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
         {index + 1 < attempt.questions.length ? (
           <Button type="button" size="sm" onClick={() => goTo(index + 1)}>Próxima <ChevronRight className="ml-1 size-4" /></Button>
         ) : (
-          <Button type="button" size="sm" onClick={() => void submit()} disabled={isSubmitting}>
+          <Button type="button" size="sm" onClick={() => void submit()} disabled={isSubmitting || !isOnline}>
             {isSubmitting ? <><LoaderCircle className="mr-2 size-4 animate-spin" /> Corrigindo…</> : "Entregar Prova"}
           </Button>
         )}

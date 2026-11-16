@@ -1,5 +1,6 @@
 import { Header } from "./header";
 import { Sidebar } from "./sidebar";
+import { ConnectivityBanner } from "./connectivity-banner";
 import { HelpCenter } from "@/features/help/HelpCenter";
 import { Onboarding } from "@/features/help/Onboarding";
 import { ContextualGuide } from "@/features/help/ContextualGuide";
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="min-w-0 flex-1 lg:pl-0">
         <Header />
+        <ConnectivityBanner />
         <main
           id="conteudo"
           tabIndex={-1}
