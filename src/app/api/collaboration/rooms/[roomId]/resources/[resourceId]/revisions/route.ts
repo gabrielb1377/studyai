@@ -23,7 +23,7 @@ export async function POST(request: Request, { params }: Context) {
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
     const { roomId, resourceId } = await params;
-    const body = await jsonBody<{ version?: unknown }>(request);
+    const body = await jsonBody<{ version?: unknown }>(request, 8 * 1024);
     return NextResponse.json({
       resource: await CollaborationService.restoreResource(roomId, user.sub, resourceId, Number(body.version)),
     });

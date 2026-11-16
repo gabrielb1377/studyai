@@ -2,7 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { QuotaService, type QuotaStatus } from "./QuotaService";
-import { requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
+import { jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import {
   aiProviderIds,
   type AIFallbackConsent,
@@ -13,6 +13,9 @@ import {
 import { ApiKeyService } from "./ApiKeyService";
 import { AIError } from "@/features/ai/AIErrors";
 import type { TutorStudyContext } from "@/types/tutor-context";
+import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
+import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
+import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
 import { needsSharedQuota, providersToCheckFor, quotaExceededMessage, quotaRateLimitHeaders } from "./quota-policy";
 import { AIRoutingService } from "./AIRoutingService";
 
@@ -149,8 +152,8 @@ export async function withQuotaEnforcement(
 export async function createQuotaAwareAIRequest(
   request: Request,
   body: {
-    history: Array<{ role: "user" | "assistant"; content: string }>;
-    message: string;
+    history?: Array<{ role: "user" | "assistant"; content: string }>;
+    message?: string;
     model?: string;
     models?: Record<string, string>;
     mode?: "automatic" | "manual";
@@ -167,21 +170,20 @@ export async function createQuotaAwareAIRequest(
   userApiKeys: Partial<Record<string, string>>,
   routing?: { task?: AITaskDescription; routingPolicy?: "smart"; promptPrepared?: boolean },
 ) {
-  const studyContext = body.context as { studyId?: string } | undefined;
-  let chunks = body.chunks as unknown[] | undefined;
-
-  if (!chunks && studyContext?.studyId) {
-    const retrieved = await (await import("@/features/ai/RetrievalPipeline")).RetrievalPipeline.forStudy(studyContext.studyId);
-    chunks = retrieved.chunks;
-  }
+  const safeHistory = Array.isArray(body.history) ? body.history : [];
+  const safeMessage = typeof body.message === "string" ? body.message : "";
+  const studyContext = isTutorStudyContext(body.context) ? body.context : undefined;
+  const chunks = Array.isArray(body.chunks)
+    ? body.chunks.filter(isRetrievedChunk)
+    : ([] as RetrievedChunk[]);
 
   const prompt = routing?.promptPrepared
-    ? { history: body.history, message: body.message }
+    ? { history: safeHistory, message: safeMessage }
     : (await import("@/features/ai/PromptBuilder")).PromptBuilder.contextual({
-        question: body.message,
-        history: body.history,
+        question: safeMessage,
+        history: safeHistory,
         studyContext: studyContext as TutorStudyContext | null | undefined,
-        chunks: (chunks ?? []) as unknown as readonly import("@/features/retrieval/RetrievalTypes").RetrievedChunk[],
+        chunks,
         teaching: body.teaching as import("@/features/teacher/types").TeacherRequest | undefined,
       });
 
@@ -211,6 +213,8 @@ export async function withAIQuota(
     message: string;
     task?: AITaskDescription;
     routingPolicy?: "smart";
+    maxBytes?: number;
+    validate?: (body: unknown) => string | null;
   }
 ): Promise<NextResponse | Response> {
   try {
@@ -218,17 +222,24 @@ export async function withAIQuota(
     // validam o payload novamente (ex.: diagrams, lab, audio-lesson). Um
     // Request só pode ser consumido uma vez.
     requireCsrf(request);
-    const originalBody = await request.clone().json().catch(() => null);
-    const body = prepared && originalBody && typeof originalBody === "object"
-      ? { ...originalBody, ...prepared, chunks: undefined, context: undefined }
-      : originalBody;
-    if (!body || typeof body !== "object") {
-      return NextResponse.json({ code: "INVALID_REQUEST", error: "Corpo da requisição inválido." }, { status: 400 });
-    }
-
     const user = requireUser(request);
     await requireActiveSession(request, user);
     const userId = user.sub;
+
+    const maxBytes = prepared?.maxBytes ?? 512 * 1024;
+    const originalBody = await jsonBody<unknown>(request.clone(), maxBytes);
+    if (!originalBody || typeof originalBody !== "object" || Array.isArray(originalBody)) {
+      return NextResponse.json({ code: "INVALID_REQUEST", error: "Corpo da requisição inválido." }, { status: 400 });
+    }
+    if (prepared?.validate) {
+      const validationError = prepared.validate(originalBody);
+      if (validationError) {
+        return NextResponse.json({ code: "INVALID_REQUEST", error: validationError }, { status: 400 });
+      }
+    }
+    const body = (prepared
+      ? { ...originalBody, ...prepared, chunks: undefined, context: undefined }
+      : originalBody) as Parameters<typeof createQuotaAwareAIRequest>[1];
 
     // Load user's BYOK keys
     const userApiKeys: Partial<Record<string, string>> = {};

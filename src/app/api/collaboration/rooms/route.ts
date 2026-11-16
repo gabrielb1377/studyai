@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const user = requireUser(request);
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
-    const body = await jsonBody<{ name?: unknown; description?: unknown; kind?: unknown }>(request);
+    const body = await jsonBody<{ name?: unknown; description?: unknown; kind?: unknown }>(request, 16 * 1024);
     const room = await CollaborationService.createRoom(user.sub, body);
     return NextResponse.json({ room }, { status: 201 });
   } catch (error) {

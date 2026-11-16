@@ -12,7 +12,7 @@ export async function PATCH(request: Request, { params }: Context) {
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
     const { roomId } = await params;
-    const body = await jsonBody<{ userId?: unknown; role?: unknown }>(request);
+    const body = await jsonBody<{ userId?: unknown; role?: unknown }>(request, 8 * 1024);
     await CollaborationService.changeMember(roomId, user.sub, body.userId, body.role);
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -27,7 +27,7 @@ export async function DELETE(request: Request, { params }: Context) {
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
     const { roomId } = await params;
-    const body = await jsonBody<{ userId?: unknown }>(request);
+    const body = await jsonBody<{ userId?: unknown }>(request, 8 * 1024);
     await CollaborationService.removeMember(roomId, user.sub, body.userId ?? user.sub);
     return NextResponse.json({ ok: true });
   } catch (error) {

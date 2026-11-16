@@ -12,7 +12,7 @@ export async function POST(request: Request, { params }: Context) {
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
     const { roomId } = await params;
-    const body = await jsonBody<Record<string, unknown>>(request);
+    const body = await jsonBody<Record<string, unknown>>(request, 32 * 1024);
     return NextResponse.json({ comment: await CommentService.add(roomId, user.sub, body) }, { status: 201 });
   } catch (error) {
     return collaborationError(error);

@@ -12,7 +12,7 @@ export async function POST(request: Request, { params }: Context) {
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
     const { roomId } = await params;
-    const body = await jsonBody<Record<string, unknown>>(request);
+    const body = await jsonBody<Record<string, unknown>>(request, 8 * 1024);
     return NextResponse.json({ presence: await PresenceService.heartbeat(roomId, user.sub, body) });
   } catch (error) {
     return collaborationError(error);

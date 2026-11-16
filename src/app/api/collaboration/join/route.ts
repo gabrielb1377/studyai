@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const user = requireUser(request);
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
-    const body = await jsonBody<{ token?: unknown }>(request);
+    const body = await jsonBody<{ token?: unknown }>(request, 8 * 1024);
     return NextResponse.json({ room: await CollaborationService.join(user.sub, body.token) });
   } catch (error) {
     return collaborationError(error);

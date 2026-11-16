@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const user = requireUser(request);
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
-    const body = await jsonBody<{ roomId?: unknown; role?: unknown; expiresAt?: unknown; maxUses?: unknown }>(request);
+    const body = await jsonBody<{ roomId?: unknown; role?: unknown; expiresAt?: unknown; maxUses?: unknown }>(request, 8 * 1024);
     const roomId = typeof body.roomId === "string" ? body.roomId : "";
     const invite = await CollaborationService.invite(roomId, user.sub, body);
     return NextResponse.json({ invite, url: `${publicOrigin(request)}/salas?convite=${invite.token}` }, { status: 201 });

@@ -23,7 +23,7 @@ export async function PATCH(request: Request, { params }: Context) {
     await requireActiveSession(request, user);
     await collaborationRateLimit(user.sub);
     const { roomId } = await params;
-    const body = await jsonBody<{ name?: unknown; description?: unknown }>(request);
+    const body = await jsonBody<{ name?: unknown; description?: unknown }>(request, 16 * 1024);
     return NextResponse.json({ room: await CollaborationService.updateRoom(roomId, user.sub, body) });
   } catch (error) {
     return collaborationError(error);
