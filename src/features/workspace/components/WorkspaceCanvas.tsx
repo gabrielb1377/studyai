@@ -51,7 +51,7 @@ const subscribeMobileWorkspace = (listener: () => void) => {
 };
 const getMobileWorkspace = () => window.matchMedia(mobileWorkspaceQuery).matches;
 
-export function WorkspaceCanvas({ study, materials, requestedMaterialId, requestedTab, requestedLayoutId, resetWorkspace = false, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange }: {
+export function WorkspaceCanvas({ study, materials, requestedMaterialId, requestedTab, requestedLayoutId, resetWorkspace = false, flashcards, quizzes, onMaterialChange, onProgressChange, onStatusChange, onFocusModeChange }: {
   study: StudyRecord;
   materials: readonly StudyMaterial[];
   requestedMaterialId?: string;
@@ -63,6 +63,7 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
   onMaterialChange: (materialId: string) => void;
   onProgressChange: (progress: number) => void;
   onStatusChange: (status: StudyStatus) => void;
+  onFocusModeChange?: (active: boolean) => void;
 }) {
   const [state, setState] = useState<WorkspaceRuntimeState>();
   const [layouts, setLayouts] = useState(() => LayoutManager.builtIn);
@@ -128,7 +129,18 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
 
   const tools = useMemo(() => state?.panels.filter((panel) => !panel.minimized).map((panel) => panel.type) ?? [], [state?.panels]);
   const fileIds = useMemo(() => state?.panels.filter((panel) => panel.type === "material" && panel.resourceId).map((panel) => panel.resourceId!) ?? [], [state?.panels]);
-  const session = useWorkspaceSession(study.studyId, fileIds, tools);
+  const session = useWorkspaceSession(study.studyId, fileIds, tools, {
+    subject: study.subject,
+    studyTitle: study.title,
+  });
+
+  const isFocusModeActive = Boolean(
+    session.session?.focusMode && session.session.status !== "completed" && session.session.status !== "cancelled",
+  );
+
+  useEffect(() => {
+    onFocusModeChange?.(isFocusModeActive);
+  }, [isFocusModeActive, onFocusModeChange]);
 
   if (!state) return <p className="rounded-xl border p-8 text-center text-sm text-muted-foreground">Restaurando Workspace…</p>;
   const maximized = state.panels.find((panel) => panel.maximized);
@@ -169,7 +181,11 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
         layouts={layouts}
         activeLayoutId={state.layoutId}
         activeTool={activeTool}
+        currentStudyId={study.studyId}
+        studyTitle={study.title}
+        studySubject={study.subject}
         session={session.session}
+        pendingRecovery={session.pendingRecovery}
         progress={study.progress}
         status={study.status}
         onApplyLayout={(layoutId) => update((current) => WorkspaceManager.applyLayout(current, layoutId))}
@@ -186,9 +202,16 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
           setLayouts(WorkspaceStorage.loadLayouts());
           update((current) => WorkspaceManager.applyLayout(current, "reading"));
         }}
+        onEnterFocusMode={(goalLabel) => { void session.enterFocusMode(goalLabel); }}
+        onExitFocusMode={() => { void session.exitFocusMode(); }}
+        onUpdateGoalLabel={(goalLabel) => { void session.updateGoalLabel(goalLabel); }}
         onPauseSession={() => { void session.pause(); }}
         onResumeSession={() => { void session.resume(); }}
         onFinishSession={() => { void session.finish(); }}
+        onCancelSession={() => { void session.cancel(); }}
+        onResumeRecovered={(sessionId) => { void session.resumeRecoveredSession(sessionId); }}
+        onCompleteRecoveredAndStart={() => { void session.completeRecoveredAndStart(); }}
+        onDiscardRecoveredAndStart={() => { void session.discardRecoveredAndStart(); }}
         onProgressChange={onProgressChange}
         onStatusChange={onStatusChange}
       />

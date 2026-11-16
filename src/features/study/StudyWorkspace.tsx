@@ -38,6 +38,8 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   const { cards: flashcards } = useFlashcards(studyId);
   const { results: quizzes } = useQuiz(studyId);
   const [workspace, setWorkspace] = useState<StudyWorkspaceState | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [sidebarInFocus, setSidebarInFocus] = useState(false);
 
   const studyMaterials = useMemo<StudyMaterial[]>(() => {
     if (!studyId) return [];
@@ -111,11 +113,27 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
     ? workspace.materialId
     : studyMaterials[0]?.id;
   const activeMaterial = studyMaterials.find((material) => material.id === activeMaterialId);
+  const showSidebar = !focusMode || sidebarInFocus;
   return (
     <>
-      <StudyHeader study={record} fileName={activeMaterial?.name} returnHref={returnHref} />
-      <div className="grid items-start gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <StudyNavigationSidebar studies={records} materials={materials} activeStudyId={record.studyId} activeMaterialId={activeMaterialId} returnHref={returnHref} />
+      <StudyHeader
+        study={record}
+        fileName={activeMaterial?.name}
+        returnHref={returnHref}
+        focusMode={focusMode}
+        sidebarVisible={sidebarInFocus}
+        onToggleSidebar={() => setSidebarInFocus((current) => !current)}
+      />
+      <div className={`grid items-start gap-5 ${showSidebar ? "lg:grid-cols-[16rem_minmax(0,1fr)]" : "grid-cols-1"}`}>
+        {showSidebar ? (
+          <StudyNavigationSidebar
+            studies={records}
+            materials={materials}
+            activeStudyId={record.studyId}
+            activeMaterialId={activeMaterialId}
+            returnHref={returnHref}
+          />
+        ) : null}
         <main className="min-w-0">
           <WorkspaceCanvas
             study={record}
@@ -129,6 +147,10 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
             onMaterialChange={(materialId) => updateWorkspace({ materialId })}
             onProgressChange={(progress) => setProgress(record.studyId, progress)}
             onStatusChange={(status) => setStatus(record.studyId, status)}
+            onFocusModeChange={(active) => {
+              setFocusMode(active);
+              if (!active) setSidebarInFocus(false);
+            }}
           />
         </main>
       </div>

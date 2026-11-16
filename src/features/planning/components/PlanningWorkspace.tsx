@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { formatDateLabel, MIN_DAILY_MINUTES, MAX_DAILY_MINUTES, MIN_ITEM_MINUTES, MAX_ITEM_MINUTES } from "../PlanningValidation";
 import { useStudyPlan } from "../hooks/useStudyPlan";
 import type { PlanningActivityKind, PlanningFocus, PlanningPriority, StudyPlanItem } from "../types";
+import { WeeklyGoalPanel } from "./WeeklyGoalPanel";
 
 const KIND_LABELS: Record<PlanningActivityKind, string> = {
   exam_prep: "Semana de Prova",
@@ -207,6 +208,8 @@ export function PlanningWorkspace({ requestedExamId }: { requestedExamId?: strin
           ) : null}
         </div>
       ) : null}
+
+      <WeeklyGoalPanel />
 
       {/* Painel de Configuração de Metas e Prioridades */}
       <Card className="gap-4 p-5 shadow-none">

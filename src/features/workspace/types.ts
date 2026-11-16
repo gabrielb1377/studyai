@@ -47,19 +47,30 @@ export type WorkspaceRuntimeState = {
   updatedAt: string;
 };
 
-export type StudySessionStatus = "active" | "paused" | "completed";
+export type StudySessionStatus = "active" | "paused" | "completed" | "cancelled";
+
+export type StudySessionOrigin = "workspace" | "focus";
 
 export type WorkspaceStudySession = {
   id: string;
   studyId: string;
+  userId?: string;
+  subject?: string;
+  studyTitle?: string;
+  goalLabel?: string;
+  origin?: StudySessionOrigin;
+  focusMode?: boolean;
   startedAt: string;
   endedAt?: string;
   status: StudySessionStatus;
   durationSeconds: number;
   focusSeconds: number;
   pausedSeconds: number;
+  pausedMs?: number;
   pauseCount: number;
   activePauseStartedAt?: string;
+  manualPause?: boolean;
+  recordedAt?: string;
   fileIds: string[];
   tools: WorkspacePanelType[];
   chapterSeconds?: Record<string, number>;
