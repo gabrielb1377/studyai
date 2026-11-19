@@ -152,10 +152,14 @@ test("diagnóstico fica em drawer e pipeline não ocupa o Dashboard", async ({ p
 });
 
 test("drop em nova estrutura cria hierarquia e organização usa autosave", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await importTextMaterial(page, "novo-tema.txt", "Conteúdo de um novo tema.");
   await page.goto("/organizar");
   const source = page.getByText("novo-tema.txt", { exact: true }).locator("xpath=ancestor::li[1]");
-  await source.dragTo(page.locator('[data-drop-level="new"]'));
+  const destination = page.locator('[data-drop-level="new"]');
+  await expect(source).toBeInViewport();
+  await expect(destination).toBeInViewport();
+  await source.dragTo(destination, { sourcePosition: { x: 48, y: 20 } });
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Curso", exact: true }).fill("Novo curso");
   await dialog.getByRole("textbox", { name: "Semestre", exact: true }).fill("2º semestre");

@@ -352,7 +352,8 @@ test("o material exportado abre no Workspace e pode ser baixado", async ({ page 
   await exportDocument(page, "Exportar PowerPoint");
 
   await page.goto(`/estudo?tema=${studyId}&arquivo=studio-export-studio-fixture-deck-pptx&aba=material`);
-  await expect(page.getByText(/pré-visualização nativa de arquivos do PowerPoint/i)).toBeVisible();
+  // The cold dev server can still be mounting the study and its viewer.
+  await page.getByText(/pré-visualização nativa de arquivos do PowerPoint/i).waitFor();
   await expect(page.getByRole("button", { name: "Baixar original" }).first()).toBeVisible();
 });
 

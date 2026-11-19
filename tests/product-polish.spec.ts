@@ -99,12 +99,13 @@ test("produção possui Object Storage, HTTPS, containers e entrega contínua", 
 });
 
 test("deploy online possui runbook, migração e produção sem dependência implícita de localhost", async () => {
-  const [online, checklist, productionEnv, migration, railway, middleware, ollama] = await Promise.all([
+  const [online, checklist, productionEnv, migration, railway, dockerfile, middleware, ollama] = await Promise.all([
     readFile(path.join(root, "docs", "DEPLOY_ONLINE.md"), "utf8"),
     readFile(path.join(root, "docs", "DEPLOY_CHECKLIST.md"), "utf8"),
     readFile(path.join(root, ".env.production.example"), "utf8"),
     readFile(path.join(root, "scripts", "db-migrate.mjs"), "utf8"),
     readFile(path.join(root, "railway.toml"), "utf8"),
+    readFile(path.join(root, "Dockerfile"), "utf8"),
     readFile(path.join(root, "src", "middleware.ts"), "utf8"),
     readFile(path.join(root, "src", "features", "ai", "providers", "OllamaProvider.ts"), "utf8"),
   ]);
@@ -117,7 +118,9 @@ test("deploy online possui runbook, migração e produção sem dependência imp
   expect(productionEnv).toContain("APP_URL=https://");
   expect(migration).toContain("BEGIN");
   expect(migration).toContain("ROLLBACK");
-  expect(railway).toContain('healthcheckPath = "/api/health/live"');
+  expect(railway).toContain('healthcheckPath = "/api/health"');
+  expect(dockerfile).toMatch(/^HEALTHCHECK .*\/api\/health\/live/m);
+  expect(dockerfile).toMatch(/^CMD \["node", "server\.js"\]/m);
   expect(middleware).toContain('process.env.NODE_ENV==="development"');
   expect(ollama).toContain('process.env.NODE_ENV === "production"');
 });

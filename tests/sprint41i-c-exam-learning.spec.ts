@@ -123,7 +123,10 @@ test("Semana de Prova abre Tutor, Flashcards, Quiz e Simulado com contexto no de
   await expect(page.getByRole("heading", { name: "Flashcards", exact: true })).toBeVisible();
 
   await page.goto(examLearningHref(studyId, "quiz"));
-  await expect(page.getByRole("heading", { name: "Simulado & Quiz Explicado" })).toBeVisible();
+  // Wait for the lazy tool to mount within the test deadline. On a cold
+  // Next.js dev server, the selected tab may still be compiling its chunk.
+  await page.getByRole("tabpanel", { name: "Quiz" })
+    .getByRole("heading", { name: "Simulado & Quiz Explicado", exact: true }).waitFor();
   await expect(page.getByLabel("Modo do simulado")).toHaveValue("practice");
 
   await page.goto(examLearningHref(studyId, "exam"));

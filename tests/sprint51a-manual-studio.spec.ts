@@ -45,8 +45,10 @@ test("cria estudo livre, abre no Studio sem chamar IA e aplica templates pedagó
   expect(aiCalled).toBe(false);
 
   // Abre o Academy Studio diretamente pelo card do estudo sem conteúdo gerado por IA.
-  await page.getByRole("link", { name: "Editar no Studio" }).click();
-  await expect(page).toHaveURL(/\/academy\/studio\?estudo=/);
+  await Promise.all([
+    page.waitForURL(/\/academy\/studio\?estudo=/),
+    page.getByRole("link", { name: "Editar no Studio" }).click(),
+  ]);
   const editor = editorRegion(page);
   await expect(editor).toBeVisible();
 

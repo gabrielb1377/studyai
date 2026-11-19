@@ -73,7 +73,7 @@ npm run db:migrate
 
 O comando exige `DATABASE_URL`, aplica o schema dentro de uma transação e não imprime a URL. Não existe seed de produção no projeto.
 
-O container também executa a migração antes de iniciar o servidor. `GET /api/health/live` é o liveness (processo HTTP vivo, sem consultar banco/S3) e `GET /api/health` é o readiness (conexão, schema, Object Storage e URL pública). Uma falha de banco ou storage retorna `503` apenas no readiness; as APIs apresentam uma mensagem genérica, sem expor detalhes da conexão.
+Execute a migração separadamente antes de iniciar a versão que exige o schema atualizado. `GET /api/health/live` é o liveness (processo HTTP vivo, sem consultar banco/S3) e `GET /api/health` é o readiness (conexão, schema, Object Storage e URL pública). Uma falha de banco ou storage retorna `503` apenas no readiness; as APIs apresentam uma mensagem genérica, sem expor detalhes da conexão.
 
 ## Opção A — Railway (recomendada para a Beta)
 
@@ -81,7 +81,7 @@ O container também executa a migração antes de iniciar o servidor. `GET /api/
 
 1. Envie o repositório para o GitHub sem arquivos `.env`.
 2. No Railway, crie um projeto a partir do repositório.
-3. Adicione o serviço Next.js usando o `Dockerfile` existente. O arquivo `railway.toml` configura `/api/health/live` (liveness) e reinício em falha. O readiness fica em `/api/health` e deve ser monitorado separadamente.
+3. Adicione o serviço Next.js usando o `Dockerfile` existente. O arquivo `railway.toml` configura `/api/health` (readiness) para a promoção. O Dockerfile usa `/api/health/live` (liveness) para verificar o processo.
 4. Adicione um PostgreSQL ao mesmo projeto.
 5. Crie ou conecte um bucket S3 compatível. Se o Object Storage escolhido estiver fora do Railway, mantenha o bucket privado.
 
@@ -98,7 +98,7 @@ No serviço da aplicação:
 
 ### 3. Implantar
 
-O Railway construirá a imagem, executará `npm run db:migrate` pelo comando do container, iniciará o Next.js e aguardará `/api/health/live` responder `200`. O liveness não consulta banco nem S3: uma falha temporária de storage não provoca reinício em loop. O readiness em `/api/health` retorna `503` quando banco, schema, S3 ou URL pública estiverem indisponíveis; ele alimenta alertas/monitoramento e não o healthcheck de reinício do Railway.
+Antes da promoção, aplique e valide a migração autorizada no ambiente alvo. O Railway construirá a imagem, iniciará o Next.js e aguardará `/api/health` responder `200` para liberar tráfego. O liveness do Docker verifica apenas o processo HTTP.
 
 Depois do primeiro deploy:
 
@@ -229,7 +229,7 @@ Há dois contratos distintos:
 
 | Endpoint | Tipo | Consulta dependências? | Uso |
 | --- | --- | --- | --- |
-| `GET /api/health/live` | Liveness | Não | Healthcheck do Railway/Docker e detecção de processo travado |
+| `GET /api/health/live` | Liveness | Não | Healthcheck do Docker e detecção de processo travado |
 | `GET /api/health` | Readiness | Sim (PostgreSQL, schema, S3, URL pública) | Monitoramento e alertas de indisponibilidade |
 
 `GET /api/health/live` retorna `200` com `status: "ok"` e `check: "liveness"` enquanto o processo HTTP estiver vivo.
