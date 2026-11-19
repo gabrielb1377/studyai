@@ -72,20 +72,62 @@ export async function rateLimitStrict(
   }
 }
 
-function validIpLiteral(value: string | null | undefined) {
-  const candidate = value?.split(",")[0]?.trim();
+function ipLiteral(value: string | null | undefined) {
+  const candidate = value?.trim();
   return candidate && /^[a-fA-F0-9:.]{3,45}$/.test(candidate) ? candidate : undefined;
 }
 
+function firstIpLiteral(value: string | null | undefined) {
+  return ipLiteral(value?.split(",")[0]);
+}
+
+/**
+ * Em `X-Forwarded-For`, cada proxy acrescenta o endereço de quem o chamou ao
+ * FINAL da lista; as entradas à esquerda são controladas pelo cliente. Por
+ * isso o endereço confiável é o que está `TRUSTED_PROXY_HOPS` posições a
+ * partir da direita (padrão: 1 proxy confiável na frente da aplicação).
+ */
+function trustedForwardedFor(value: string | null | undefined) {
+  if (!value) return undefined;
+  const entries = value.split(",").map((item) => item.trim()).filter(Boolean);
+  const configuredHops = Number(process.env.TRUSTED_PROXY_HOPS ?? 1);
+  const hops = Number.isSafeInteger(configuredHops) && configuredHops >= 1 ? configuredHops : 1;
+  if (entries.length < hops) return undefined;
+  return ipLiteral(entries[entries.length - hops]);
+}
+
+export type ClientAddressSource = "vercel" | "trusted-proxy" | "none";
+
+/**
+ * Indica de onde o endereço do cliente é obtido. Em produção, `"none"`
+ * significa que todos os limites por IP compartilham a mesma chave global
+ * (`"local"`), e a readiness em `/api/health` reporta configuração incompleta.
+ */
+export function clientAddressSource(): ClientAddressSource {
+  if (process.env.VERCEL) return "vercel";
+  if (process.env.TRUST_PROXY_HEADERS === "true") return "trusted-proxy";
+  return "none";
+}
+
+let warnedMissingSource = false;
+
 export function requestAddress(request: Request) {
-  if (process.env.VERCEL) {
-    return validIpLiteral(request.headers.get("x-vercel-forwarded-for")) ?? "local";
+  const source = clientAddressSource();
+  if (source === "vercel") {
+    return firstIpLiteral(request.headers.get("x-vercel-forwarded-for")) ?? "local";
   }
-  if (process.env.TRUST_PROXY_HEADERS === "true") {
+  if (source === "trusted-proxy") {
     return (
-      validIpLiteral(request.headers.get("x-real-ip")) ??
-      validIpLiteral(request.headers.get("x-forwarded-for")) ??
+      ipLiteral(request.headers.get("x-real-ip")) ??
+      trustedForwardedFor(request.headers.get("x-forwarded-for")) ??
       "local"
+    );
+  }
+  if (process.env.NODE_ENV === "production" && !warnedMissingSource) {
+    warnedMissingSource = true;
+    console.error(
+      "[RateLimit] Nenhuma fonte confiável de IP configurada (VERCEL ou TRUST_PROXY_HEADERS=true). " +
+        "Todos os limites por IP compartilham uma única chave global.",
     );
   }
   return "local";

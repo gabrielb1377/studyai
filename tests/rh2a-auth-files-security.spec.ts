@@ -497,16 +497,21 @@ test.describe("RH-2A — R-03 Upload e download seguros", () => {
 
 test.describe("RH-2A — R-04 Rate limiting consistente e deviceId", () => {
   test("requestAddress ignora cabeçalhos de IP controláveis sem política de proxy confiável", () => {
+    const warnings: unknown[][] = [];
     const rlNoProxy = loadModule(
       "src/server/security/RateLimit.ts",
       { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
-      { process: { env: { NODE_ENV: "production" } } },
+      { process: { env: { NODE_ENV: "production" } }, console: { error: (...args: unknown[]) => warnings.push(args) } },
     ) as { requestAddress: (r: Request) => string };
 
     const spoofed = new Request("https://studyai.invalid/auth/reset", {
       headers: { "x-forwarded-for": "1.2.3.4", "x-real-ip": "5.6.7.8" },
     });
     expect(rlNoProxy.requestAddress(spoofed)).toBe("local");
+    expect(rlNoProxy.requestAddress(spoofed)).toBe("local");
+    // Alerta operacional emitido uma única vez por processo, sem dados do request.
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0][0])).not.toContain("1.2.3.4");
 
     const rlTrustedProxy = loadModule(
       "src/server/security/RateLimit.ts",
@@ -514,6 +519,41 @@ test.describe("RH-2A — R-04 Rate limiting consistente e deviceId", () => {
       { process: { env: { NODE_ENV: "production", TRUST_PROXY_HEADERS: "true" } } },
     ) as { requestAddress: (r: Request) => string };
     expect(rlTrustedProxy.requestAddress(spoofed)).toBe("5.6.7.8");
+  });
+
+  test("requestAddress usa a entrada de X-Forwarded-For acrescentada pelo proxy confiável, não a do cliente", () => {
+    const load = (env: Record<string, string>) => loadModule(
+      "src/server/security/RateLimit.ts",
+      { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
+      { process: { env: { NODE_ENV: "production", TRUST_PROXY_HEADERS: "true", ...env } } },
+    ) as { requestAddress: (r: Request) => string };
+    const forwarded = (value: string) => new Request("https://studyai.invalid/auth/login", {
+      headers: { "x-forwarded-for": value },
+    });
+
+    const oneHop = load({});
+    // O cliente forja "1.1.1.1"; o proxy acrescenta o IP real ao final.
+    expect(oneHop.requestAddress(forwarded("1.1.1.1, 203.0.113.7"))).toBe("203.0.113.7");
+    expect(oneHop.requestAddress(forwarded("203.0.113.7"))).toBe("203.0.113.7");
+    expect(oneHop.requestAddress(forwarded("not-an-ip"))).toBe("local");
+
+    const twoHops = load({ TRUSTED_PROXY_HOPS: "2" });
+    expect(twoHops.requestAddress(forwarded("1.1.1.1, 203.0.113.7, 10.0.0.2"))).toBe("203.0.113.7");
+    expect(twoHops.requestAddress(forwarded("10.0.0.2"))).toBe("local");
+
+    const invalidHops = load({ TRUSTED_PROXY_HOPS: "0" });
+    expect(invalidHops.requestAddress(forwarded("1.1.1.1, 203.0.113.7"))).toBe("203.0.113.7");
+  });
+
+  test("clientAddressSource indica configuração ausente em produção sem proxy confiável", () => {
+    const load = (env: Record<string, string>) => loadModule(
+      "src/server/security/RateLimit.ts",
+      { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
+      { process: { env }, console: { error: () => undefined } },
+    ) as { clientAddressSource: () => string };
+    expect(load({ NODE_ENV: "production" }).clientAddressSource()).toBe("none");
+    expect(load({ NODE_ENV: "production", TRUST_PROXY_HEADERS: "true" }).clientAddressSource()).toBe("trusted-proxy");
+    expect(load({ NODE_ENV: "production", VERCEL: "1" }).clientAddressSource()).toBe("vercel");
   });
 
   test("aplica 429 nos 5 endpoints de auth após exceder limite e não consome cota em payload inválido", async () => {
