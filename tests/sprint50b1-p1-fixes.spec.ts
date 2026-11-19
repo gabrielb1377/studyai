@@ -86,9 +86,11 @@ test("P1-A: links do Dashboard para Estudo abrem o estudo correspondente mesmo q
 
   await page.goto("/");
   const prereqLink = page.getByRole("link", { name: /Matrizes/ });
-  await expect(prereqLink).toBeVisible();
-  await prereqLink.click();
-  await expect(page).toHaveURL(/\/estudo\?tema=study-alpha&aba=knowledge/);
+  await expect(prereqLink).toHaveAttribute("href", "/estudo?tema=study-alpha&aba=knowledge");
+  await Promise.all([
+    page.waitForURL(/\/estudo\?tema=study-alpha&aba=knowledge$/),
+    prereqLink.click(),
+  ]);
 
   await expect(page.getByRole("heading", { name: "Álgebra Linear", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mapa de Conhecimento" })).toBeVisible();
