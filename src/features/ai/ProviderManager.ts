@@ -1,13 +1,16 @@
 import "server-only";
 
-import { AIError, safeAIErrorLogMessage } from "./AIErrors";
-import type {
-  AIManagerRequest,
-  AIManagerStatus,
-  AIProviderLog,
-  AIProviderId,
-  AIProviderStatistics,
-  AIResponse,
+import { AIFallbackConsentError, AIError, safeAIErrorLogMessage } from "./AIErrors";
+import {
+  aiProviderIds,
+  type AIFallbackAlternative,
+  type AIManagerRequest,
+  type AIManagerStatus,
+  type AIModel,
+  type AIProviderLog,
+  type AIProviderId,
+  type AIProviderStatistics,
+  type AIResponse,
 } from "./AIProvider";
 import { HealthService } from "./HealthService";
 import { LatencyService } from "./LatencyService";
@@ -16,8 +19,78 @@ import { AIResponseCache } from "./AIResponseCache";
 import type { AIStreamEvent } from "./AIProvider";
 import { TokenCounter } from "./TokenCounter";
 
-const FALLBACK_ORDER: readonly AIProviderId[] = ["ollama", "gemini", "groq", "openrouter"];
 const MAX_LOGS = 200;
+const FALLBACK_ATTEMPT_TTL_MS = 5 * 60_000;
+
+// Never repeat rejected authentication, permission or validation requests.
+function isRecoverableProviderError(error: unknown) {
+  if (!(error instanceof AIError) || error.code === "MISSING_API_KEY" || error.code === "INVALID_RESPONSE") return false;
+  return error.status === 429 || (error.status >= 500 && error.status < 600);
+}
+
+const fallbackRuntime = globalThis as typeof globalThis & {
+  __studyAIFallbackAttempts?: Map<string, { expiresAt: number; promise: Promise<AIResponse> }>;
+};
+const fallbackAttempts = fallbackRuntime.__studyAIFallbackAttempts ?? new Map();
+fallbackRuntime.__studyAIFallbackAttempts = fallbackAttempts;
+
+function fallbackCost(provider: AIProviderId, request: AIManagerRequest): Pick<AIFallbackAlternative, "cost" | "notice"> {
+  if (provider === "ollama") {
+    return { cost: "local", notice: "Execução local; não usa a cota compartilhada." };
+  }
+  if (request.apiKeys?.[provider]) {
+    return { cost: "byok", notice: "Usa sua chave pessoal; podem existir custos na conta do provedor." };
+  }
+  return { cost: "shared_quota", notice: "Usa uma tentativa da cota compartilhada do StudyAI." };
+}
+
+async function availableFallbacks(request: AIManagerRequest, preferred: AIProviderId) {
+  const alternatives = await Promise.all(aiProviderIds
+    .filter((provider) => provider !== preferred)
+    .map(async (provider): Promise<AIFallbackAlternative | null> => {
+      const status = await HealthService.check(provider, {
+        force: true,
+        signal: request.signal,
+        apiKey: request.apiKeys?.[provider],
+      });
+      if (!status.available || status.models.length === 0) return null;
+      const requestedModel = request.models?.[provider];
+      const model = requestedModel && status.models.some((item: AIModel) => item.name === requestedModel)
+        ? requestedModel
+        : status.models[0].name;
+      return { provider, model, ...fallbackCost(provider, request) };
+    }));
+  return alternatives.filter((alternative): alternative is AIFallbackAlternative => alternative !== null);
+}
+
+async function requireFallbackConsent(request: AIManagerRequest, preferred: AIProviderId, error: unknown): Promise<never> {
+  if (request.fallbackPolicy !== "consent" || !request.requestId || !isRecoverableProviderError(error)) throw error;
+  const alternatives = await availableFallbacks(request, preferred);
+  if (alternatives.length === 0) throw error;
+  throw new AIFallbackConsentError({
+    requestId: request.requestId,
+    primaryProvider: preferred,
+    primaryModel: request.model ?? request.models?.[preferred],
+    alternatives,
+  });
+}
+
+async function authorizedProvider(request: AIManagerRequest, preferred: AIProviderId) {
+  const consent = request.fallbackConsent;
+  if (!consent) return { provider: preferred, model: request.model ?? request.models?.[preferred], fallback: false };
+  if (!request.requestId || consent.requestId !== request.requestId || consent.originalProvider !== preferred || consent.provider === preferred) {
+    throw new AIError("A autorização de fallback não corresponde à requisição original.", "PROVIDER_ERROR", 400, preferred);
+  }
+  const status = await HealthService.check(consent.provider, {
+    force: true,
+    signal: request.signal,
+    apiKey: request.apiKeys?.[consent.provider],
+  });
+  if (!status.available || !status.models.some((model: AIModel) => model.name === consent.model)) {
+    throw new AIError("A alternativa autorizada não está mais disponível.", "PROVIDER_UNAVAILABLE", 503, consent.provider);
+  }
+  return { provider: consent.provider, model: consent.model, fallback: true };
+}
 
 const providerRuntime = globalThis as typeof globalThis & {
   __studyAIProviderLogs?: AIProviderLog[];
@@ -32,15 +105,6 @@ function addLog(log: Omit<AIProviderLog, "id" | "timestamp">) {
     timestamp: new Date().toISOString(),
   });
   if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
-}
-
-async function automaticOrder(signal?: AbortSignal): Promise<AIProviderId[]> {
-  const statuses = await HealthService.checkAll({ signal });
-  const online = statuses
-    .filter((status) => status.available)
-    .sort((left, right) => left.latencyMs - right.latencyMs)
-    .map((status) => status.provider);
-  return [...online, ...FALLBACK_ORDER.filter((provider) => !online.includes(provider))];
 }
 
 function statistics(): AIProviderStatistics {
@@ -60,18 +124,14 @@ function statistics(): AIProviderStatistics {
 export const ProviderManager = {
   async generate(request: AIManagerRequest): Promise<AIResponse> {
     const preferred = request.provider ?? "gemini";
-    const candidates: AIProviderId[] = request.mode === "automatic"
-      ? await automaticOrder(request.signal)
-      : [preferred];
-    const attemptedProviders: AIProviderId[] = [];
-    let lastError: unknown;
+    const authorized = await authorizedProvider(request, preferred);
+    const attemptedProviders: AIProviderId[] = authorized.fallback ? [preferred, authorized.provider] : [preferred];
 
-    for (const providerId of candidates) {
-      if (request.signal?.aborted) throw lastError ?? new AIError("Operação cancelada.", "TIMEOUT", 499);
+    const execute = async (): Promise<AIResponse> => {
+      if (request.signal?.aborted) throw new AIError("Operação cancelada.", "TIMEOUT", 499, authorized.provider);
+      const providerId = authorized.provider;
       const provider = ProviderRegistry.get(providerId);
-      const fallback = attemptedProviders.length > 0;
-      attemptedProviders.push(providerId);
-      const selectedModel = request.models?.[providerId] ?? (providerId === preferred ? request.model : undefined);
+      const selectedModel = authorized.model;
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
       const cached = AIResponseCache.get(cacheKey);
       if (cached) {
@@ -79,15 +139,17 @@ export const ProviderManager = {
           ...cached,
           execution: {
             attemptedProviders,
-            fallbackUsed: fallback,
+            fallbackUsed: authorized.fallback,
             latencyMs: 0,
             cached: true,
+            routing: request.routingDecision,
           },
         };
       }
       const measured = await LatencyService.measure(() => provider.generate({
         ...request,
         model: selectedModel,
+        apiKey: request.apiKeys?.[providerId] ?? request.apiKey,
       }));
 
       if (!("error" in measured)) {
@@ -97,55 +159,61 @@ export const ProviderManager = {
           model: measured.value.model,
           latencyMs: measured.latencyMs,
           success: true,
-          fallback,
+          fallback: authorized.fallback,
           tokens: totalTokens,
         });
         const response: AIResponse = {
           ...measured.value,
           execution: {
             attemptedProviders,
-            fallbackUsed: fallback,
+            fallbackUsed: authorized.fallback,
             latencyMs: measured.latencyMs,
+            routing: request.routingDecision,
           },
         };
         AIResponseCache.set(cacheKey, response);
         return response;
       }
 
-      lastError = measured.error;
       addLog({
         provider: providerId,
         model: request.models?.[providerId],
         latencyMs: measured.latencyMs,
         success: false,
-        fallback,
+        fallback: authorized.fallback,
         error: safeAIErrorLogMessage(measured.error),
       });
+      if (authorized.fallback) throw measured.error;
+      return await requireFallbackConsent(request, preferred, measured.error);
+    };
+
+    if (!authorized.fallback || !request.requestOwner || !request.requestId) return execute();
+    const key = `${request.requestOwner}:${request.requestId}:${authorized.provider}`;
+    const now = Date.now();
+    for (const [attemptKey, attempt] of fallbackAttempts) {
+      if (attempt.expiresAt <= now) fallbackAttempts.delete(attemptKey);
     }
-
-    if (lastError instanceof AIError) throw lastError;
-
-    throw new AIError(
-      "Nenhum provider de IA está disponível. Inicie o Ollama ou configure um provider online.",
-      "PROVIDER_UNAVAILABLE",
-      503,
-      preferred,
-    );
+    const existing = fallbackAttempts.get(key);
+    if (existing) return existing.promise;
+    const promise = execute();
+    fallbackAttempts.set(key, { expiresAt: now + FALLBACK_ATTEMPT_TTL_MS, promise });
+    return promise;
   },
 
   async *stream(request: AIManagerRequest): AsyncGenerator<AIStreamEvent> {
     const preferred = request.provider ?? "gemini";
-    const candidates: AIProviderId[] = request.mode === "automatic"
-      ? await automaticOrder(request.signal)
-      : [preferred];
-    const attemptedProviders: AIProviderId[] = [];
-    let lastError: unknown;
-
-    for (const providerId of candidates) {
+    if (request.fallbackConsent) {
+      const response = await this.generate({ ...request, stream: false });
+      yield { type: "delta", text: response.text };
+      yield { type: "done", response };
+      return;
+    }
+    const attemptedProviders: AIProviderId[] = [preferred];
+    {
+      const providerId = preferred;
       const provider = ProviderRegistry.get(providerId);
-      const fallback = attemptedProviders.length > 0;
-      attemptedProviders.push(providerId);
-      const selectedModel = request.models?.[providerId] ?? (providerId === preferred ? request.model : undefined);
+      const fallback = false;
+      const selectedModel = request.model ?? request.models?.[providerId];
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
       const cached = AIResponseCache.get(cacheKey);
       if (cached) {
@@ -156,7 +224,7 @@ export const ProviderManager = {
           type: "done",
           response: {
             ...cached,
-            execution: { attemptedProviders, fallbackUsed: fallback, latencyMs: 0, cached: true },
+            execution: { attemptedProviders, fallbackUsed: fallback, latencyMs: 0, cached: true, routing: request.routingDecision },
           },
         };
         return;
@@ -166,7 +234,7 @@ export const ProviderManager = {
       let emitted = false;
       try {
         if (provider.stream) {
-          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true })) {
+          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey })) {
             if (event.type === "delta") {
               emitted = true;
               yield event;
@@ -175,7 +243,7 @@ export const ProviderManager = {
             const latencyMs = Math.round(performance.now() - startedAt);
             const response: AIResponse = {
               ...event.response,
-              execution: { attemptedProviders, fallbackUsed: fallback, latencyMs },
+              execution: { attemptedProviders, fallbackUsed: fallback, latencyMs, routing: request.routingDecision },
             };
             AIResponseCache.set(cacheKey, response);
             const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
@@ -184,13 +252,13 @@ export const ProviderManager = {
             return;
           }
         } else {
-          const response = await provider.generate({ ...request, model: selectedModel, stream: false });
+          const response = await provider.generate({ ...request, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey });
           for (const line of response.text.match(/.{1,80}(?:\s|$)/g) ?? [response.text]) {
             emitted = true;
             yield { type: "delta", text: line };
           }
           const latencyMs = Math.round(performance.now() - startedAt);
-          const completed = { ...response, execution: { attemptedProviders, fallbackUsed: fallback, latencyMs } };
+          const completed = { ...response, execution: { attemptedProviders, fallbackUsed: fallback, latencyMs, routing: request.routingDecision } };
           AIResponseCache.set(cacheKey, completed);
           const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
           addLog({ provider: providerId, model: response.model, latencyMs, success: true, fallback, tokens });
@@ -198,21 +266,27 @@ export const ProviderManager = {
           return;
         }
       } catch (error) {
-        lastError = error;
         const latencyMs = Math.round(performance.now() - startedAt);
         addLog({ provider: providerId, model: selectedModel, latencyMs, success: false, fallback, error: safeAIErrorLogMessage(error) });
-        if (emitted || request.mode !== "automatic") throw error;
+        if (emitted) {
+          throw new AIError(
+            "A resposta foi interrompida após o início. O conteúdo parcial foi preservado e não será enviado a outro provedor.",
+            "PARTIAL_RESPONSE",
+            409,
+            providerId,
+          );
+        }
+        if (request.signal?.aborted) throw error;
+        await requireFallbackConsent(request, preferred, error);
       }
     }
-
-    throw lastError ?? new AIError("Nenhum provider de IA está disponível.", "PROVIDER_UNAVAILABLE", 503, preferred);
   },
 
-  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal }) {
+  inspect(providerId: AIProviderId, options?: { force?: boolean; signal?: AbortSignal; apiKey?: string }) {
     return HealthService.check(providerId, options);
   },
 
-  async status(options?: { force?: boolean; signal?: AbortSignal }): Promise<AIManagerStatus> {
+  async status(options?: { force?: boolean; signal?: AbortSignal; apiKeys?: Partial<Record<AIProviderId, string>> }): Promise<AIManagerStatus> {
     const statuses = await HealthService.checkAll(options);
     return {
       providers: statuses.map((status) => {

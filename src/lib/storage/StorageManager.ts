@@ -1,6 +1,7 @@
 import { IndexedDB, type StorageTransaction } from "./IndexedDB";
-import { currentDatabaseName, setStudyDatabaseScope } from "./Database";
+import { currentDatabaseGeneration, currentDatabaseName, setStudyDatabaseScope } from "./Database";
 import { Migration } from "./Migration";
+import { MaterialRuntimeStore } from "@/services/material-runtime-store";
 import {
   STORAGE_DATABASE_VERSION,
   STORAGE_MIGRATION_KEY,
@@ -9,6 +10,7 @@ import {
 } from "./StorageVersion";
 
 export const STORAGE_UPDATED_EVENT = "studyai:storage-updated";
+export const STORAGE_ERROR_EVENT = "studyai:storage-error";
 
 export class StorageError extends Error {
   constructor(
@@ -43,6 +45,16 @@ function normalizeError(error: unknown) {
   );
 }
 
+function handleWriteError(error: unknown): never {
+  const normalized = normalizeError(error);
+  if (typeof window !== "undefined" && (normalized.code === "FULL" || normalized.code === "UNAVAILABLE")) {
+    window.dispatchEvent(new CustomEvent(STORAGE_ERROR_EVENT, {
+      detail: { code: normalized.code, message: normalized.message },
+    }));
+  }
+  throw normalized;
+}
+
 function emit(store: StorageStoreName, key?: IDBValidKey) {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(STORAGE_UPDATED_EVENT, { detail: { store, key } }));
@@ -65,12 +77,25 @@ async function ready() {
   await initialization;
 }
 
+async function readyForOperation() {
+  const generation = currentDatabaseGeneration();
+  await ready();
+  return generation;
+}
+
+function assertGeneration(generation: number) {
+  if (generation !== currentDatabaseGeneration()) {
+    throw new StorageError("A conta mudou durante a operação de armazenamento. Tente novamente.", "TRANSACTION");
+  }
+}
+
 export type StorageDiagnostics = {
   database: string;
   version: number;
   counts: Record<StorageStoreName, number>;
   usageBytes?: number;
   quotaBytes?: number;
+  persisted?: boolean;
   lastMigration?: string;
 };
 
@@ -80,15 +105,16 @@ export const StorageManager = {
   async setUserScope(userId?: string) {
     const changed = setStudyDatabaseScope(userId ? `user-${userId}` : "guest");
     if (!changed) return;
+    MaterialRuntimeStore.clear();
     initialization = undefined;
-    await ready();
+    assertGeneration(await readyForOperation());
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent(STORAGE_UPDATED_EVENT, { detail: { scopeChanged: true } }));
     }
   },
 
   async get<T>(store: StorageStoreName, key: IDBValidKey) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       return await IndexedDB.transaction([store], "readonly", (storage) => storage.get<T>(store, key));
     } catch (error) {
@@ -97,7 +123,7 @@ export const StorageManager = {
   },
 
   async getAll<T>(store: StorageStoreName) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       return await IndexedDB.transaction([store], "readonly", (storage) => storage.getAll<T>(store));
     } catch (error) {
@@ -105,31 +131,46 @@ export const StorageManager = {
     }
   },
 
+  async updateMetadata<T extends { key: string }>(key: string, update: (current: T | undefined) => T) {
+    assertGeneration(await readyForOperation());
+    try {
+      const value = await IndexedDB.transaction(["metadata"], "readwrite", async (storage) => {
+        const next = update(await storage.get<T>("metadata", key));
+        await storage.put("metadata", next);
+        return next;
+      });
+      emit("metadata", key);
+      return value;
+    } catch (error) {
+      handleWriteError(error);
+    }
+  },
+
   async put<T>(store: StorageStoreName, value: T, options: { notify?: boolean } = {}) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       const key = await IndexedDB.transaction([store], "readwrite", (storage) => storage.put(store, value));
       if (options.notify !== false) emit(store, valueKey(value));
       return key;
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
   async putMany<T>(store: StorageStoreName, values: readonly T[]) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       await IndexedDB.transaction([store], "readwrite", async (storage) => {
         for (const value of values) await storage.put(store, value);
       });
       emit(store);
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
   async replaceAll<T>(store: StorageStoreName, values: readonly T[]) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       await IndexedDB.transaction([store], "readwrite", async (storage) => {
         await storage.clear(store);
@@ -137,17 +178,17 @@ export const StorageManager = {
       });
       emit(store);
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
   async delete(store: StorageStoreName, key: IDBValidKey) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       await IndexedDB.transaction([store], "readwrite", (storage) => storage.delete(store, key));
       emit(store);
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
@@ -155,18 +196,18 @@ export const StorageManager = {
     stores: readonly StorageStoreName[],
     operation: (storage: StorageTransaction) => Promise<T>,
   ) {
-    await ready();
+    assertGeneration(await readyForOperation());
     try {
       const result = await IndexedDB.transaction(stores, "readwrite", operation);
       stores.forEach(emit);
       return result;
     } catch (error) {
-      throw normalizeError(error);
+      handleWriteError(error);
     }
   },
 
   async paginate<T>(store: StorageStoreName, page: number, pageSize: number) {
-    await ready();
+    assertGeneration(await readyForOperation());
     const safePage = Math.max(1, Math.floor(page));
     const safeSize = Math.max(1, Math.floor(pageSize));
     const start = (safePage - 1) * safeSize;
@@ -182,21 +223,27 @@ export const StorageManager = {
   },
 
   async diagnostics(): Promise<StorageDiagnostics> {
-    await ready();
+    assertGeneration(await readyForOperation());
     const counts = Object.fromEntries(await Promise.all(STORAGE_STORES.map(async (store) => [
       store,
       await IndexedDB.transaction([store], "readonly", (storage) => storage.count(store)),
     ]))) as Record<StorageStoreName, number>;
     const migration = await this.get<{ key: string; value: number; updatedAt: string }>("metadata", STORAGE_MIGRATION_KEY);
-    const estimate = typeof navigator !== "undefined" && navigator.storage?.estimate
-      ? await navigator.storage.estimate().catch(() => undefined)
-      : undefined;
+    const [estimate, persisted] = await Promise.all([
+      typeof navigator !== "undefined" && navigator.storage?.estimate
+        ? navigator.storage.estimate().catch(() => undefined)
+        : Promise.resolve(undefined),
+      typeof navigator !== "undefined" && navigator.storage?.persisted
+        ? navigator.storage.persisted().catch(() => undefined)
+        : Promise.resolve(undefined),
+    ]);
     return {
       database: currentDatabaseName(),
       version: STORAGE_DATABASE_VERSION,
       counts,
       usageBytes: estimate?.usage,
       quotaBytes: estimate?.quota,
+      persisted,
       lastMigration: migration?.updatedAt,
     };
   },

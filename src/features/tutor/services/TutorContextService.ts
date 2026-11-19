@@ -2,6 +2,7 @@ import { NotesService } from "@/features/notes/NotesService";
 import { StudyEngine } from "@/features/study/services/StudyEngine";
 import { SummaryStorage } from "@/features/summaries/services/SummaryStorage";
 import { ContentStorage } from "@/features/extraction/ContentStorage";
+import { contentNeedsTutorReview } from "@/features/ocr/exercise-review";
 import type { TutorStudyContext } from "@/types/tutor-context";
 import { FlashcardService } from "@/features/flashcards/FlashcardService";
 import { QuizService } from "@/features/quiz/QuizService";
@@ -9,13 +10,18 @@ import { KnowledgeEngine } from "@/features/learning/KnowledgeEngine";
 import { LearningStorage } from "@/features/learning/LearningStorage";
 import { StudyPriorityEngine } from "@/features/learning/StudyPriorityEngine";
 import { MentorStorage } from "@/features/mentor/services/MentorStorage";
+import { ErrorNotebookStorage } from "@/features/learning/errors/ErrorNotebookStorage";
+import { LongTermMemoryStorage } from "@/features/learning/memory/LongTermMemoryStorage";
+import { MemoryRetrievalEngine } from "@/features/learning/memory/MemoryRetrievalEngine";
 
 export const TutorContextService = {
-  async loadCurrent(): Promise<TutorStudyContext | null> {
-    const study = (await StudyEngine.load())
-      .sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
+  async loadCurrent(requestedStudyId?: string): Promise<TutorStudyContext | null> {
+    const studies = await StudyEngine.load();
+    const study = requestedStudyId
+      ? studies.find((item) => item.studyId === requestedStudyId)
+      : studies.sort((a, b) => b.lastAccessedAt.localeCompare(a.lastAccessedAt))[0];
     if (!study) return null;
-    const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile, mentor] = await Promise.all([
+    const [storedSummaries, storedNotes, storedContents, flashcards, quizzes, profile, mentor, memoryState, rawErrors] = await Promise.all([
       SummaryStorage.load(),
       NotesService.load(),
       ContentStorage.load(),
@@ -23,6 +29,8 @@ export const TutorContextService = {
       QuizService.load(),
       LearningStorage.load(),
       MentorStorage.load(),
+      LongTermMemoryStorage.load(),
+      ErrorNotebookStorage.load(),
     ]);
     const summary = (storedSummaries ?? [])
       .filter((item) => item.studyId === study.studyId)
@@ -31,9 +39,35 @@ export const TutorContextService = {
       .filter((note) => note.studyId === study.studyId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map(({ title, content }) => ({ title, content }));
-    const extracted = storedContents.records
-      .filter((record) => record.studyId === study.studyId && record.status === "extracted")
+    const studyContents = storedContents.records.filter((record) =>
+      record.studyId === study.studyId || study.materialIds.includes(record.fileId));
+    const pendingReview = studyContents.some(contentNeedsTutorReview);
+    const extracted = studyContents
+      .filter((record) => record.status === "extracted" && !contentNeedsTutorReview(record))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+
+    const media = studyContents
+      .filter(
+        (record) =>
+          record.status === "extracted" &&
+          (record.fileType === "mp3" || record.fileType === "wav" || record.fileType === "m4a" || record.fileType === "mp4"),
+      )
+      .slice(0, 20)
+      .map((record) => {
+        const type: "audio" | "video" = record.fileType === "mp4" ? "video" : "audio";
+        const hasTranscription = Boolean(record.metadata.transcriptionPerformed) && record.extractedText.trim().length > 0;
+        const durationSeconds = typeof record.metadata.duration === "number" && Number.isFinite(record.metadata.duration)
+          ? record.metadata.duration
+          : undefined;
+        return {
+          name: record.metadata.name,
+          type,
+          durationSeconds,
+          hasTranscription,
+          transcriptionSource: hasTranscription ? (record.metadata.transcriptionSource ?? "automatic") : undefined,
+        };
+      });
+
 
     const knowledge = KnowledgeEngine.calculate(study, profile, flashcards, quizzes.results);
     const priority = StudyPriorityEngine.calculate(study, knowledge, profile, flashcards);
@@ -44,12 +78,23 @@ export const TutorContextService = {
       .filter((recommendation) => recommendation.studyId === study.studyId)
       .slice(0, 3)
       .map(({ title, reason, priority: recommendationPriority }) => ({ title, reason, priority: recommendationPriority }));
+    const reconciledErrors = ErrorNotebookStorage.reconcileWithStudies(rawErrors, studies);
+    const reconciledMemories = {
+      ...memoryState,
+      entries: LongTermMemoryStorage.reconcileWithStudies(memoryState.entries, studies),
+    };
+    const memory = MemoryRetrievalEngine.selectForTutor({
+      state: reconciledMemories,
+      errorEntries: reconciledErrors,
+      studyId: study.studyId,
+      subject: study.subject,
+    });
 
     return {
       studyId: study.studyId,
-      title: study.title,
-      subject: study.subject,
-      topic: study.title,
+      title: pendingReview ? "Estudo com extração pendente de revisão" : study.title,
+      subject: pendingReview ? "Não confirmada" : study.subject,
+      topic: pendingReview ? "Não confirmado" : study.title,
       status: study.status,
       progress: study.progress,
       learning: {
@@ -76,7 +121,7 @@ export const TutorContextService = {
             chapterCount: extracted.metadata.chapters?.length ?? 0,
             chapters: (extracted.metadata.chapters ?? []).map(({ title, marker, page, slide }) => ({ title, marker, page, slide })),
           }
-        : study.initialSummary
+        : !pendingReview && study.initialSummary
           ? {
               title: study.detectedTitle,
               subject: study.detectedSubject,
@@ -96,6 +141,8 @@ export const TutorContextService = {
             recommendations: mentorRecommendations,
           }
         : undefined,
+      memory,
+      media: media.length > 0 ? media : undefined,
     };
   },
 };

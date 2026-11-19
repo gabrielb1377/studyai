@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle, Bot, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { AlertCircle, Bot, BrainCircuit, ChevronDown, GraduationCap, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,21 +21,31 @@ import { SummaryService } from "@/features/summaries/services/SummaryService";
 import { RetrievalPipeline } from "@/features/ai/RetrievalPipeline";
 import { useTutor } from "./hooks/useTutor";
 import { TutorService } from "./services/TutorService";
+import { takeReviewedTutorDraft } from "./services/ReviewedTutorDraft";
+import { useAuth } from "@/features/account/AuthProvider";
 import { TutorComposer } from "./TutorComposer";
 import { TutorConversation } from "./TutorConversation";
+import { DisciplinePanel } from "./DisciplinePanel";
 import { TutorSidebar } from "./TutorSidebar";
 import { TeacherControls } from "@/features/teacher/components/TeacherControls";
 import { useTeacher } from "@/features/teacher/hooks/useTeacher";
 import type { TeacherAction } from "@/features/teacher/types";
+import type { TeacherAudioLessonPreferences, RateOption } from "@/features/teacher/types";
+import { ConnectivityService, isLikelyNetworkError } from "@/features/platform/ConnectivityService";
+import { useConnectivity } from "@/features/platform/useConnectivity";
 
-export function TutorWorkspace({ compact = false, instanceId }: { compact?: boolean; instanceId?: string } = {}) {
+export function TutorWorkspace({ compact = false, instanceId, studyId }: { compact?: boolean; instanceId?: string; studyId?: string } = {}) {
+  const auth = useAuth();
+  const { isOnline } = useConnectivity();
   const {
     activeConversation,
     activeConversationId,
     conversations,
     context,
     error,
+    pendingFallback,
     isLoading,
+    ready,
     clearError,
     setError,
     createConversation,
@@ -42,7 +53,9 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     deleteConversation,
     selectConversation,
     sendMessage,
-  } = useTutor(instanceId);
+    acceptFallback,
+    declineFallback,
+  } = useTutor(instanceId, studyId);
   const { summaries, saveSummary, deleteSummary } = useSummaries();
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
@@ -53,6 +66,22 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const teacher = useTeacher();
   const setTeacherMode = teacher.setMode;
+  const draftSession = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (auth.isLoading) {
+      draftSession.current = null;
+      setDraft("");
+      return;
+    }
+    if (!ready || compact || studyId) return;
+    const owner = auth.session?.user.id ?? "offline-session";
+    if (draftSession.current === owner) return;
+    draftSession.current = owner;
+    const prepared = takeReviewedTutorDraft();
+    if (prepared?.selection) createConversation(prepared.selection);
+    setDraft(prepared?.text ?? "");
+  }, [compact, auth.isLoading, auth.session?.user.id, ready, studyId, createConversation]);
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("modo") === "professor") setTeacherMode("teacher");
@@ -60,7 +89,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
 
   const startNewConversation = () => {
     createConversation();
-    setDraft("");
+    if (activeConversation) setDraft("");
   };
 
   const openRename = (conversation: TutorConversationType) => {
@@ -112,6 +141,10 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
 
   const generateSummary = async () => {
     if (!activeConversation || isSummaryLoading) return;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. A geração de resumos com IA está indisponível offline.");
+      return;
+    }
     if (!context) {
       setError("Abra um estudo organizado antes de gerar um resumo.");
       return;
@@ -125,6 +158,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     clearError();
     try {
       const response = await TutorService.requestSummary(activeConversation.messages, context, chunks);
+      ConnectivityService.reportNetworkSuccess();
       const created = SummaryService.create({
         conversationId: activeConversation.id,
         conversationTitle: activeConversation.title,
@@ -135,7 +169,12 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
       setSummaryDraft(created);
       setIsSummaryOpen(true);
     } catch (summaryError) {
-      setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao gerar o resumo.");
+      if (isLikelyNetworkError(summaryError)) {
+        ConnectivityService.reportNetworkFailure(summaryError);
+        setError("Sem conexão com a internet. A geração de resumos com IA exige conectividade.");
+      } else {
+        setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao gerar o resumo.");
+      }
     } finally {
       setIsSummaryLoading(false);
     }
@@ -143,6 +182,10 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
 
   const regenerateSummary = async () => {
     if (!summaryDraft || isSummaryLoading) return;
+    if (!ConnectivityService.getSnapshot().isOnline) {
+      setError("Sem conexão com a internet. A atualização de resumos com IA está indisponível offline.");
+      return;
+    }
     const conversation = conversations.find((item) => item.id === summaryDraft.conversationId);
     if (!conversation) {
       setError("A conversa de origem deste resumo não está mais disponível.");
@@ -161,6 +204,7 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
     clearError();
     try {
       const response = await TutorService.requestSummary(conversation.messages, context, chunks);
+      ConnectivityService.reportNetworkSuccess();
       setSummaryDraft((current) => {
         if (!current) return current;
         const updated = { ...current, content: response.text, updatedAt: new Date().toISOString() };
@@ -168,13 +212,25 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
         return updated;
       });
     } catch (summaryError) {
-      setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");
+      if (isLikelyNetworkError(summaryError)) {
+        ConnectivityService.reportNetworkFailure(summaryError);
+        setError("Sem conexão com a internet. A atualização de resumos com IA exige conectividade.");
+      } else {
+        setError(summaryError instanceof Error ? summaryError.message : "Erro inesperado ao atualizar o resumo.");
+      }
     } finally {
       setIsSummaryLoading(false);
     }
   };
 
   return (
+    <>
+    {!compact && !studyId && ready && <div id="materia-completa">
+      <DisciplinePanel key={activeConversation?.id ?? "new"} selection={activeConversation?.discipline} disabled={isLoading} onConfirm={(selection) => {
+        createConversation(selection);
+        setDraft("");
+      }} />
+    </div>}
     <div className={compact ? "grid min-h-[34rem] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden 2xl:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-rows-1" : "grid h-[calc(100dvh-9rem)] min-h-[38rem] max-h-[58rem] grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden lg:h-[calc(100dvh-12rem)] lg:grid-cols-[15rem_minmax(0,1fr)] lg:grid-rows-1"}>
       <TutorSidebar
         compact={compact}
@@ -188,11 +244,8 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
         onDeleteConversation={deleteConversation}
       />
       <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border bg-card/45 p-3 shadow-[var(--shadow-card)] sm:p-4">
-        <div className="mb-4 flex flex-wrap items-center gap-3 px-1">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            {teacher.mode === "teacher" ? <GraduationCap className="size-5" aria-hidden="true" /> : <Bot className="size-5" aria-hidden="true" />}
-          </span>
-          <div className="min-w-0 flex-1">
+        <div className="mb-4 flex min-w-0 flex-col items-start gap-3 px-1 sm:flex-row sm:items-center">
+          <div className="min-w-0 w-full sm:flex-1">
             <h2 className="text-lg font-semibold tracking-tight">
               {activeConversation?.title ?? "Nova conversa"}
             </h2>
@@ -203,13 +256,20 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
               </p>
             )}
           </div>
-          <div className="flex rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
-            <Button type="button" size="sm" variant={teacher.mode === "tutor" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "tutor"} onClick={() => teacher.setMode("tutor")}>
-              <Bot aria-hidden="true" />Tutor
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild type="button" size="sm" variant="outline">
+              <Link href={context?.studyId ? `/aprendizagem?estudo=${encodeURIComponent(context.studyId)}&aba=memoria` : "/aprendizagem?aba=memoria"}>
+                <BrainCircuit aria-hidden="true" />Memória
+              </Link>
             </Button>
-            <Button type="button" size="sm" variant={teacher.mode === "teacher" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "teacher"} onClick={() => teacher.setMode("teacher")}>
-              <GraduationCap aria-hidden="true" />Professor
-            </Button>
+            <div role="group" className="flex max-w-full rounded-lg border bg-muted p-0.5" aria-label="Modo do assistente">
+              <Button type="button" size="sm" variant={teacher.mode === "tutor" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "tutor"} onClick={() => teacher.setMode("tutor")}>
+                <Bot aria-hidden="true" />Tutor
+              </Button>
+              <Button type="button" size="sm" variant={teacher.mode === "teacher" ? "secondary" : "ghost"} aria-pressed={teacher.mode === "teacher"} onClick={() => teacher.setMode("teacher")}>
+                <GraduationCap aria-hidden="true" />Professor
+              </Button>
+            </div>
           </div>
         </div>
         {error && (
@@ -220,6 +280,39 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
               <X className="size-4" aria-hidden="true" />
             </Button>
           </div>
+        )}
+        {pendingFallback && (
+          <aside className="mb-4 rounded-xl border border-amber-500/35 bg-amber-500/5 p-4" aria-label="Alternativa de provedor de IA">
+            <p className="text-sm font-semibold">O provedor escolhido não respondeu</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Sua mensagem foi preservada. Nenhuma alternativa será usada sem sua confirmação.
+            </p>
+            <div className="mt-3 space-y-2">
+              {pendingFallback.alternatives.map((alternative) => (
+                <div key={`${alternative.provider}:${alternative.model}`} className="flex flex-col gap-2 rounded-lg border bg-background/70 p-3 sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{alternative.provider} · {alternative.model}</p>
+                    <p className="text-xs text-muted-foreground">{alternative.notice}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isLoading || !isOnline}
+                    onClick={() => {
+                      void acceptFallback(alternative.provider).then((sent) => {
+                        if (sent) setDraft("");
+                      });
+                    }}
+                  >
+                    Usar esta alternativa
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={declineFallback} disabled={isLoading}>
+              Cancelar e manter mensagem
+            </Button>
+          </aside>
         )}
         {context?.document && (
           <aside className="mb-4" aria-label="Contexto identificado do documento">
@@ -252,23 +345,58 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
         {teacher.mode === "teacher" && (
           <TeacherControls
             context={context}
-            disabled={isLoading}
+            disabled={isLoading || !isOnline}
             preferences={teacher.preferences}
+            audioPreferences={teacher.audioPreferences as TeacherAudioLessonPreferences & { rate: RateOption }}
             selection={teacher.selection}
+            audioLessonMode={teacher.audioLessonMode}
+            audioLessonSession={teacher.audioLessonSession}
             onPreferencesChange={teacher.updatePreferences}
+            onAudioPreferencesChange={teacher.updateAudioPreferences}
             onAction={(action) => { void runTeacherAction(action); }}
             onClearSelection={teacher.clearSelection}
+            onStartAudioLesson={teacher.startAudioLesson}
+            onAdvanceStep={teacher.advanceAudioLessonStep}
+            onPreviousStep={teacher.previousAudioLessonStep}
+            onRepeatStep={teacher.repeatCurrentStep}
+            onPlayPause={teacher.audioLessonMode === "active" ? teacher.pauseAudioLesson : teacher.resumeAudioLesson}
+            onStop={teacher.endAudioLesson}
+            onPauseLesson={teacher.pauseAudioLesson}
+            onResumeLesson={teacher.resumeAudioLesson}
+            onEndLesson={teacher.endAudioLesson}
+            onVoiceQuestion={(question) => {
+              const teaching = teacher.createRequest("voice_question", context).teaching;
+              void sendMessage(question, { teaching });
+            }}
           />
         )}
         {activeConversation ? (
           <>
-            <TutorConversation messages={activeConversation.messages} isLoading={isLoading} assistantLabel={teacher.mode === "teacher" ? "Professor" : "Tutor"} onResponseAction={(action, response) => { void runResponseAction(action, response); }} />
-            <TutorComposer mode={teacher.mode} draft={draft} isLoading={isLoading} isSummaryLoading={isSummaryLoading} onDraftChange={setDraft} onGenerateSummary={() => { void generateSummary(); }} onSend={() => { void sendDraft(); }} />
+            <TutorConversation
+              messages={activeConversation.messages}
+              isLoading={isLoading}
+              assistantLabel={teacher.mode === "teacher" ? "Professor" : "Tutor"}
+              conversationId={activeConversation.id}
+              studyId={studyId ?? context?.studyId}
+              userScope={auth.session?.user.id ?? "guest"}
+              onResponseAction={(action, response) => { void runResponseAction(action, response); }}
+            />
+            <TutorComposer
+              mode={teacher.mode}
+              draft={draft}
+              isLoading={isLoading}
+              isSummaryLoading={isSummaryLoading}
+              conversationId={activeConversation.id}
+              studyId={studyId ?? context?.studyId}
+              userScope={auth.session?.user.id ?? "guest"}
+              onDraftChange={setDraft}
+              onGenerateSummary={() => { void generateSummary(); }}
+              onSend={() => { void sendDraft(); }}
+            />
           </>
         ) : (
-          <div className="rounded-xl border border-dashed p-10 text-center">
+          <div className="px-2 py-8 text-center">
             <p className="text-sm text-muted-foreground">Crie uma conversa para começar.</p>
-            <Button type="button" className="mt-4" onClick={startNewConversation}>Nova conversa</Button>
           </div>
         )}
       </section>
@@ -304,5 +432,6 @@ export function TutorWorkspace({ compact = false, instanceId }: { compact?: bool
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }

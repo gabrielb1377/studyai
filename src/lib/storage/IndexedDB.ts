@@ -1,4 +1,4 @@
-import { openStudyDatabase } from "./Database";
+import { currentDatabaseGeneration, openStudyDatabase } from "./Database";
 import type { StorageStoreName } from "./StorageVersion";
 
 export type StorageTransaction = {
@@ -71,12 +71,22 @@ export const IndexedDB = {
     mode: IDBTransactionMode,
     operation: (storage: StorageTransaction) => Promise<T>,
   ) {
+    const generation = currentDatabaseGeneration();
     const database = await openStudyDatabase();
+    if (generation !== currentDatabaseGeneration()) {
+      throw new Error("A conta mudou durante a abertura do armazenamento local. Tente novamente.");
+    }
     const transaction = database.transaction([...stores], mode);
     const completion = transactionDone(transaction);
     try {
       const result = await operation(createTransactionApi(transaction));
+      if (generation !== currentDatabaseGeneration()) {
+        throw new Error("A conta mudou durante a transação local. Tente novamente.");
+      }
       await completion;
+      if (generation !== currentDatabaseGeneration()) {
+        throw new Error("A conta mudou durante a transação local. Tente novamente.");
+      }
       return result;
     } catch (error) {
       try {

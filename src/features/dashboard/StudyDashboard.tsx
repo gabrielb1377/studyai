@@ -16,26 +16,31 @@ import { SmartLearningDashboard } from "@/features/learning/components/SmartLear
 import { useExperiencePreferences } from "@/features/preferences/ExperiencePreferences";
 import { WorkspaceLauncher } from "./WorkspaceLauncher";
 import { RecentActivityPanel } from "./RecentActivityPanel";
+import { StudyProgressPanel } from "./StudyProgressPanel";
+import { WeeklyGoalPanel } from "@/features/planning/components/WeeklyGoalPanel";
 
 const DiagnosticsDrawer = dynamic(() => import("./DiagnosticsDrawer").then((module) => module.DiagnosticsDrawer));
 const KnowledgeDashboard = dynamic(() => import("@/features/semantic/KnowledgeDashboard").then((module) => module.KnowledgeDashboard), { loading: () => <div className="h-40 animate-pulse rounded-2xl border bg-muted/30" /> });
 const AcademyLabOverview = dynamic(() => import("./AcademyLabOverview").then((module) => module.AcademyLabOverview), { loading: () => <div className="h-44 animate-pulse rounded-2xl border bg-muted/30" /> });
 
 export function StudyDashboard() {
-  const { records } = useStudyEngine();
+  const { records, isLoading: studiesLoading, error: studiesError } = useStudyEngine();
   const { cards } = useFlashcards();
   const { results: quizzes } = useQuiz();
   const { notes } = useNotes();
-  const { materials } = useMaterials();
+  const { materials, isLoading: materialsLoading, error: materialsError } = useMaterials();
   const { records: contents } = useExtraction();
   const experience = useExperiencePreferences();
 
   return (
     <div className="space-y-7">
-      <div className="grid gap-5 xl:grid-cols-[1fr_0.43fr]">
+      <div className={records.length ? "grid gap-5 xl:grid-cols-[1fr_0.43fr]" : ""}>
         <ContinueStudying records={records} materials={materials} />
-        <ImportMaterial />
+        {records.length > 0 && <ImportMaterial />}
       </div>
+      <StudyProgressPanel studies={records} materials={materials} contents={contents}
+        loading={studiesLoading || materialsLoading} incomplete={Boolean(studiesError || materialsError)} />
+      <WeeklyGoalPanel compact showPlanningLink />
       <WorkspaceLauncher studies={records} />
       <AcademyLabOverview />
       <DashboardStats materials={materials} studies={records} flashcards={cards} quizzes={quizzes} contents={contents} advanced={experience.mode === "advanced"} />

@@ -9,12 +9,15 @@ import type { StudyRecord } from "@/types/study-engine";
 const courseOf = (study: StudyRecord) => study.course || "Curso não informado";
 const semesterOf = (study: StudyRecord) => study.semester || "Semestre não informado";
 
-export function StudyNavigationSidebar({ studies, materials, activeStudyId, activeMaterialId }: {
+export function StudyNavigationSidebar({ studies, materials, activeStudyId, activeMaterialId, returnHref }: {
   studies: readonly StudyRecord[];
   materials: readonly Material[];
   activeStudyId: string;
   activeMaterialId?: string;
+  returnHref?: string;
 }) {
+  const examId = returnHref?.startsWith("/provas?") ? new URLSearchParams(returnHref.split("?")[1]).get("prova") : null;
+  const origin = returnHref === "/biblioteca" ? "&origem=biblioteca" : examId ? `&origem=provas&prova=${encodeURIComponent(examId)}` : "";
   const courses = Array.from(new Set(studies.map(courseOf))).sort();
   const [mobileOpen, setMobileOpen] = useState(false);
   return (
@@ -37,12 +40,12 @@ export function StudyNavigationSidebar({ studies, materials, activeStudyId, acti
                     <p className="px-2 py-1 text-xs font-semibold">{subject}</p>
                     <ul className="mt-1 space-y-1 border-l pl-2">
                       {semesterStudies.filter((study) => study.subject === subject).map((study) => <li key={study.studyId}>
-                        <Link href={`/estudo?tema=${study.studyId}`} aria-current={study.studyId === activeStudyId ? "page" : undefined} className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors ${study.studyId === activeStudyId ? "bg-accent font-medium" : "hover:bg-accent/60"}`}>
+                        <Link href={`/estudo?tema=${encodeURIComponent(study.studyId)}${origin}`} aria-current={study.studyId === activeStudyId ? "page" : undefined} className={`flex items-center gap-2 rounded-md px-2 py-2 text-sm transition-colors ${study.studyId === activeStudyId ? "bg-accent font-medium" : "hover:bg-accent/60"}`}>
                           <ChevronRight className="size-3.5" />{study.title}
                         </Link>
                         {study.studyId === activeStudyId && <ul className="ml-4 space-y-1 border-l pl-2">
                           {materials.filter((material) => material.studyId === study.studyId).map((material) => <li key={material.id}>
-                            <Link href={`/estudo?tema=${study.studyId}&arquivo=${material.id}&aba=material`} aria-current={material.id === activeMaterialId ? "page" : undefined} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${material.id === activeMaterialId ? "bg-secondary font-medium" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"}`}>
+                            <Link href={`/estudo?tema=${encodeURIComponent(study.studyId)}&arquivo=${encodeURIComponent(material.id)}&aba=material${origin}`} aria-current={material.id === activeMaterialId ? "page" : undefined} className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${material.id === activeMaterialId ? "bg-secondary font-medium" : "text-muted-foreground hover:bg-accent/60 hover:text-foreground"}`}>
                               <FileText className="size-3.5 shrink-0" /><span className="truncate">{material.name}</span>
                             </Link>
                           </li>)}

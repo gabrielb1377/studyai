@@ -18,10 +18,14 @@ export function isTeacherRequest(value: unknown): value is TeacherRequest {
     (selection.chapter === undefined || typeof selection.chapter === "string")
   );
 
+  const validExerciseStage = request.exerciseStage === undefined ||
+    (Number.isInteger(request.exerciseStage) && request.exerciseStage >= 1 && request.exerciseStage <= 20);
+
   return request.mode === "teacher" &&
     teacherLevels.includes(request.level as TeacherRequest["level"]) &&
     teacherMethods.includes(request.method as TeacherRequest["method"]) &&
     teacherActions.includes(request.action as TeacherRequest["action"]) &&
     teacherSummaryStyles.includes(request.summaryStyle as TeacherRequest["summaryStyle"]) &&
-    validSelection;
+    validSelection &&
+    validExerciseStage;
 }

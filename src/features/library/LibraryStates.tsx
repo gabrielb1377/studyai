@@ -17,17 +17,19 @@ export function LibraryEmptyState() {
   );
 }
 
-export function LibraryNoResults({ onClear }: { onClear: () => void }) {
+export function LibraryNoResults({ query, onClear }: { query: string; onClear: () => void }) {
   return (
+    <div className="[overflow-wrap:anywhere]">
     <EmptyState
       icon={SearchX}
       title="Nenhum material encontrado"
-      description="Tente outro termo ou remova os filtros para ver todos os materiais."
+      description={query ? `Sem resultados para “${query}”. Tente outro termo ou remova os filtros.` : "Remova os filtros para voltar a ver os materiais."}
     >
       <Button variant="outline" onClick={onClear}>
         Limpar pesquisa e filtros
       </Button>
     </EmptyState>
+    </div>
   );
 }
 

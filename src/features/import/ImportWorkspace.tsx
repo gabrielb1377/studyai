@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { CheckCircle2, Copy, RefreshCw, Upload, XCircle } from "lucide-react";
+import { CheckCircle2, Copy, Headphones, RefreshCw, ScanText, Square, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { MediaTranscriptionMode, OcrMode } from "@/features/extraction/ExtractionTypes";
 import { DropZone } from "./DropZone";
 import { ImportFileCard } from "./ImportFileCard";
 import { ImportProgress } from "./ImportProgress";
@@ -22,6 +24,11 @@ export function ImportWorkspace() {
     removeFile,
     importFiles,
     resolveDuplicates,
+    ocrMode,
+    setOcrMode,
+    transcriptionMode,
+    setTranscriptionMode,
+    cancelImport,
   } = useImport();
   const processing = phase === "processing";
   const addFilesRef = useRef(addFiles);
@@ -53,6 +60,57 @@ export function ImportWorkspace() {
   return (
     <div className="space-y-6">
       <DropZone disabled={processing} onFiles={addFiles} />
+
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <ScanText className="size-4 text-primary" aria-hidden="true" />
+            Extração de texto
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            O OCR roda localmente, página por página, e só é acionado quando o texto nativo não é suficiente.
+          </p>
+        </div>
+        <div className="w-full sm:w-64">
+          <label htmlFor="import-ocr-mode" className="sr-only">Modo de extração de texto</label>
+          <Select
+            id="import-ocr-mode"
+            value={ocrMode}
+            onValueChange={(value) => setOcrMode(value as OcrMode)}
+            options={[
+              { value: "auto", label: "Automático (recomendado)" },
+              { value: "native", label: "Somente texto nativo" },
+              { value: "force", label: "Forçar OCR" },
+            ]}
+            disabled={processing}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <Headphones className="size-4 text-primary" aria-hidden="true" />
+            Transcrição de áudio e vídeo
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Limites: áudio até 100 MB e vídeo até 250 MB. A transcrição automática roda localmente no navegador (baixa modelo ~150 MB na 1ª vez, sem enviar áudio). Você também pode importar apenas metadados e adicionar legenda (.srt/.vtt) ou transcrição manual depois.
+          </p>
+        </div>
+        <div className="w-full sm:w-64">
+          <label htmlFor="import-transcription-mode" className="sr-only">Modo de transcrição de mídia</label>
+          <Select
+            id="import-transcription-mode"
+            value={transcriptionMode}
+            onValueChange={(value) => setTranscriptionMode(value as MediaTranscriptionMode)}
+            options={[
+              { value: "auto", label: "Transcrição local (Whisper)" },
+              { value: "metadata", label: "Somente metadados e player" },
+            ]}
+            disabled={processing}
+          />
+        </div>
+      </div>
 
       {feedback && (
         <p
@@ -95,6 +153,12 @@ export function ImportWorkspace() {
                   ? "Extração concluída"
                   : "Importar"}
             </Button>
+            {processing ? (
+              <Button type="button" variant="destructive" className="h-11" onClick={cancelImport}>
+                <Square className="size-4" aria-hidden="true" />
+                Cancelar
+              </Button>
+            ) : null}
           </div>
 
           <div

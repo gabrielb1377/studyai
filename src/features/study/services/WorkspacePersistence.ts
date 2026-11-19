@@ -1,4 +1,6 @@
-export const workspaceTabs = ["material", "ia", "mentor", "knowledge", "flashcards", "quiz", "notes", "lab"] as const;
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+
+export const workspaceTabs = ["material", "ia", "mentor", "knowledge", "flashcards", "quiz", "notes", "lab", "revisao", "ia-quality"] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number];
 
 export type PdfAnnotationKind = "highlight" | "comment" | "drawing" | "link";
@@ -29,8 +31,13 @@ export type PdfViewState = {
 
 export type QuizViewState = {
   index: number;
-  answers: number[];
+  answers: Array<number | null>;
   isFinished: boolean;
+  mode?: "practice" | "exam";
+  /** Tentativa protegida ativa; nunca contém o gabarito. */
+  attemptId?: string;
+  secureAnswers?: Array<number | null>;
+  secureFinished?: boolean;
 };
 
 export type StudyWorkspaceState = {
@@ -47,6 +54,12 @@ const VERSION = 1;
 const PREFIX = "studyai:workspace:";
 const LAST_STUDY_KEY = "studyai:workspace-current";
 
+function currentUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  const session = SessionOperationManager.current();
+  return session.userId ?? null;
+}
+
 const DEFAULT_STATE: StudyWorkspaceState = {
   activeTab: "material",
   pdf: {},
@@ -57,6 +70,12 @@ const DEFAULT_STATE: StudyWorkspaceState = {
 
 function isWorkspaceTab(value: unknown): value is WorkspaceTab {
   return typeof value === "string" && workspaceTabs.includes(value as WorkspaceTab);
+}
+
+function normalizeAnswers(value: unknown): Array<number | null> {
+  return Array.isArray(value)
+    ? value.map((answer) => typeof answer === "number" && Number.isInteger(answer) && answer >= 0 && answer < 5 ? answer : null)
+    : [];
 }
 
 function normalize(value: unknown): StudyWorkspaceState {
@@ -70,8 +89,12 @@ function normalize(value: unknown): StudyWorkspaceState {
     quiz: state.quiz && typeof state.quiz === "object"
       ? {
           index: typeof state.quiz.index === "number" ? Math.max(0, state.quiz.index) : 0,
-          answers: Array.isArray(state.quiz.answers) ? state.quiz.answers.filter((answer) => typeof answer === "number") : [],
+          answers: normalizeAnswers(state.quiz.answers),
           isFinished: state.quiz.isFinished === true,
+          mode: state.quiz.mode === "exam" ? "exam" : "practice",
+          attemptId: typeof state.quiz.attemptId === "string" && state.quiz.attemptId ? state.quiz.attemptId : undefined,
+          secureAnswers: normalizeAnswers(state.quiz.secureAnswers),
+          secureFinished: state.quiz.secureFinished === true,
         }
       : { ...DEFAULT_STATE.quiz },
     noteId: typeof state.noteId === "string" ? state.noteId : undefined,
@@ -82,6 +105,7 @@ function normalize(value: unknown): StudyWorkspaceState {
 export const WorkspacePersistence = {
   load(studyId: string): StudyWorkspaceState {
     if (typeof window === "undefined") return normalize(null);
+    if (!currentUserId()) return normalize(null);
     try {
       const parsed: unknown = JSON.parse(window.localStorage.getItem(`${PREFIX}${studyId}`) ?? "null");
       return normalize(parsed);
@@ -91,9 +115,24 @@ export const WorkspacePersistence = {
   },
 
   save(studyId: string, changes: Partial<StudyWorkspaceState>) {
+    if (typeof window === "undefined") return normalize(null);
+    if (!currentUserId()) return normalize(null);
     const next = { ...this.load(studyId), ...changes, updatedAt: new Date().toISOString() };
-    window.localStorage.setItem(`${PREFIX}${studyId}`, JSON.stringify({ version: VERSION, ...next }));
-    window.localStorage.setItem(LAST_STUDY_KEY, studyId);
+    try {
+      window.localStorage.setItem(`${PREFIX}${studyId}`, JSON.stringify({ version: VERSION, ...next }));
+      window.localStorage.setItem(LAST_STUDY_KEY, studyId);
+    } catch (error) {
+      const isQuota = error instanceof DOMException && error.name === "QuotaExceededError";
+      window.dispatchEvent(new CustomEvent("studyai:storage-error", {
+        detail: {
+          code: isQuota ? "FULL" : "UNAVAILABLE",
+          message: isQuota
+            ? "O armazenamento local do navegador está cheio e não conseguiu salvar o estado do estudo."
+            : "Não foi possível gravar as preferências locais do estudo neste navegador.",
+        },
+      }));
+      return next;
+    }
     window.dispatchEvent(new Event("studyai:workspace-updated"));
     return next;
   },
@@ -104,6 +143,10 @@ export const WorkspacePersistence = {
   },
 
   loadLastStudyId() {
-    return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_STUDY_KEY);
+    try {
+      return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_STUDY_KEY);
+    } catch {
+      return null;
+    }
   },
 };

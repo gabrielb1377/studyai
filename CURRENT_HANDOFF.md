@@ -1,565 +1,293 @@
-# Handoff Atual — Sprint 36.5: Beta Readiness
+# Handoff atual — StudyAI V1.2
 
-Atualizado em 2 de outubro de 2026.
+## Estado atual — fechamento da V1.2 (19/11/2026)
 
-## Deploy online 24h
+Este é o estado vigente. Diagnósticos anteriores neste arquivo são históricos. As Sprints funcionais 41–58 estão no Git. Esta etapa é o hardening e a homologação da V1.2.
 
-O repositório agora possui runbook para Railway, Vercel/Supabase e VPS/Docker Compose, com Railway recomendado para a Beta. `railway.toml` aponta para o Dockerfile e `/api/health`; o container aplica o schema PostgreSQL antes de iniciar.
+- Branch de trabalho: `v1.1-development`. A referência remota contém `0a9602c` após push autorizado. `main` está em `7e3d89b` e `exp/s3-direct-upload` em `7b7be19`. As correções posteriores à CI permanecem em commits locais.
+- CI anterior em 7859c79: push com 501 aprovados, 4 falhas e 11 ignorados; PR com 498 aprovados, 7 falhas e 11 ignorados. As correções desse ciclo foram publicadas em 0a9602c.
+- CI de 0a9602c: [push 44629854222](https://github.com/gabrielb1377/studyai/actions/runs/44629854222) com 503 aprovados, 2 falhas e 11 ignorados; [PR 44629863626](https://github.com/gabrielb1377/studyai/actions/runs/44629863626) com 375 aprovados, 1 falha, 11 ignorados e 129 não executados. Qualidade e PostgreSQL 17 passaram nas duas execuções (2 testes por execução no job de banco). O shard 3 do PR parou no download opcional de CUDA durante `npm ci`. Os shards 2 falharam no gesto nativo de arraste. No push, o shard 4 falhou aguardando a URL do pré-requisito do Dashboard; no PR, passou 127/127. Nenhum shard atingiu o limite de 30 minutos.
+- Correções locais após 0a9602c: o workflow desativa somente o download opcional de CUDA no runner CPU. O teste de arraste dispara eventos HTML de arraste no navegador e o payload produzido pelo componente, preservando a validação do autosave. Passou em 3 repetições locais sem retries; o gesto nativo no Chromium Linux continua sem validação. O teste do Dashboard confirma o destino exato e aguarda a navegação iniciada pelo clique. A spec de Dashboard e Biblioteca passou 2/2. Typecheck, lint (0 erros, 44 avisos) e diff-check passaram.
+- A validação local de proxy ignora `X-Real-IP` no modo genérico e aceita apenas a parte validada de `X-Forwarded-For` conforme a topologia configurada. Configuração inválida usa a chave compartilhada de fallback. Validar em staging o isolamento da origem, a cadeia de proxies e o cabeçalho efetivamente fornecido antes de habilitar a confiança.
+- A limpeza dos rate limits tem piso fixo de duas horas, que também é o máximo de janela aceito pelo serviço para PostgreSQL. O teste descartável PostgreSQL 18 validou manutenção das janelas ativas, limpeza concorrente e preservação dos agregados diários. A limpeza segue sem agendamento.
+- No Railway, o Dockerfile usa `/api/health/live` para liveness e a configuração de promoção usa `/api/health` para readiness. O container só inicia o servidor. Prepare schema e valide readiness antes da promoção. A infraestrutura consultada só apresentou ambiente de produção.
+- Consulta somente leitura ao Supabase `studyai-v1` confirmou PostgreSQL 17.11, 31 tabelas públicas com RLS habilitada e nenhuma política pública cadastrada. As estimativas de linhas não substituem inventário definitivo antes de uma migração. O schema do repositório tem 32 tabelas e inclui `exam_attempts`, ausente no ambiente consultado. A migração versionada 0001 inclui RLS e exige aplicação separada e autorizada, primeiro em staging. Confirme a role usada pela aplicação e que contas do Data API não leem gabaritos. Aferir também deriva de colunas, constraints e índices antes da promoção.
+- Validação local sem retries: 31 testes focados de proxy e regressões recuperadas, 39 de prova protegida, quotas e isolamento (há sobreposição entre baterias) e teste de retenção/RLS no PostgreSQL 18 descartável. A bateria de navegador inicial teve 16 aprovados, 1 falha e 16 não executados por timeout global. O PDF sintético curto acionava OCR no teste de carregamento sob demanda. A fixture textual passou no lote posterior, que terminou com 9 aprovados e 1 falha no teste de criação de salas. A execução isolada passou após aguardar os HTTP 201 e 200 e manter as verificações de seleção da interface. O fluxo persistido de Tutor, resumo, flashcards e quiz passou em teste separado com IA controlada. O cenário mobile da Semana de Prova passou na amostra.
+- **NO-GO para lançamento.** Faltam CI verde e homologação integrada com PostgreSQL 17, S3, SMTP, proxy e provedores autorizados, além de restauração de backup. O reload intermitente da Semana de Prova permanece em observação.
 
-Produção não aceita mais persistência efêmera: PostgreSQL e S3 são obrigatórios, e o health check retorna `503` se banco, schema ou bucket estiverem indisponíveis. `APP_URL` é a origem canônica para emails e links públicos. Ollama sem URL explícita permanece somente no desenvolvimento; providers remotos continuam atrás do AIService/ProviderManager no servidor.
+### Pendências do fechamento
 
-Consulte `docs/DEPLOY_ONLINE.md` e execute `docs/DEPLOY_CHECKLIST.md` após o provisionamento. Nenhum serviço externo, domínio ou credencial foi criado por esta alteração.
+1. Sincronizar as correções locais somente após nova autorização. Confirmar os quatro shards no Linux e investigar qualquer falha remanescente. Os testes PostgreSQL da CI cobrem limpeza e schema; o fluxo completo do Modo Prova com banco real continua pendente.
+2. Preparar staging separado com conta e dados sintéticos, banco e bucket próprios. Validar readiness, arquivo, autenticação, sincronização, colaboração, Modo Prova e backup/restore. Documentar snapshots e procedimento de rollback antes de mexer em produção.
+3. Quotas: o fluxo compartilhado ainda consome por requisição. O campo de tokens é gravado com zero pelos caminhos de consumo examinados. Projetar reserva e reconciliação por tentativa, teto global, separação BYOK/local e verificação de email na fronteira do uso da chave compartilhada. Arquivos e backups ainda precisam de orçamento agregado e controle concorrente.
+4. Atomicidade: refresh ainda lê e revoga antes de criar a próxima sessão. Sync resolve conflito antes do upsert no SQL. Restore grava registros um a um. Fechar essas janelas com contratos explícitos e testes de concorrência e rollback no PostgreSQL real.
+5. Investigar índices não cobertos por chaves atuais em `refresh_tokens`, `backups`, `shares` e `account_tokens` com planos de consulta e massa sintética. Validar retenção e agendamento operacional em staging.
 
-## Resultado da Sprint 36.5
+## Registro histórico — Sprint 49D
 
-A estabilização adiciona um canal de feedback na Central de Ajuda sem criar um novo módulo de produto. Relatos passam por `/api/feedback`, com validação, corpo limitado, rate limit e entrega SMTP server-only para `FEEDBACK_EMAIL`. O diagnóstico é opcional e não inclui documentos, prompts, notas, chaves ou cookies.
+As Sprints 49A–C de refinamento visual foram validadas em conjunto na 49D, com checkpoint local desta alteração. Biblioteca tem filtros recolhíveis no mobile; Tutor tem cabeçalho compacto; Dashboard, Estudo e Provas foram simplificados sem mudança deliberada de regras. Diretriz StudyAI Clean & Functional: menos botões redundantes e poluição visual, mais conteúdo, menos cliques e identidade própria.
 
-O arquivo de backup local evoluiu para v2 e inclui somente preferências allowlisted, incluindo layout/estado do Workspace. A restauração aceita v1/v2, rejeita schema futuro, stores desconhecidos e volumes excessivos, e usa uma transação IndexedDB única para evitar estado parcial. A tela de Conta deixou de repetir duas ações equivalentes de exportação.
+A bateria integrada registrou 64 aprovações e duas falhas de cadastro em servidor de produção sem banco; os dois cenários de contas sintéticas passaram depois no servidor de desenvolvimento isolado, que registrou desconexões ECONNRESET. Typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Não há homologação externa. A intermitência do reload da Semana de Prova não foi corrigida, segue sem causa comprovada e deve ser reavaliada antes de publicação; sua aceitação provisória vale apenas para continuidade do MVP pessoal.
 
-Documentação: `docs/BETA_TESTING.md`, `docs/BETA_BACKLOG.md` e `docs/RELEASE_NOTES_BETA.md`. A cadeia local de ML foi atualizada para `@huggingface/transformers 4.3.0`; `npm audit --omit=dev` agora retorna zero vulnerabilidades, e OCR/transcrição/embeddings passaram na regressão. O acompanhamento de cenários assíncronos sob carga total permanece no backlog.
+A próxima etapa planejada é Sprint 50, mediante solicitação. Sprint 51 é Estudo Livre 2.0, Sprint 52 Laboratório 2.0 e 53–58 cobrem funcionalidades inteligentes. A associação protegida entre avaliações e tentativas no servidor permanece adiada. Preserve os experimentos S3.
 
-Validação: lint, TypeScript e build aprovados; a regressão completa então existente concluiu 115 cenários (112 diretos e 3 por retry). Na repetição sem retry, Cloud Sync e exclusão em lote passaram; a falha reproduzível de retomada pelo Dashboard foi corrigida e o cenário passou isoladamente. A cobertura Beta atual — feedback, validação da API e backup/restore v2 — passou em 3/3 sem retry. Auditoria de produção: zero vulnerabilidades em `npm audit --omit=dev`.
 
-## Base preservada da Sprint 36.1E
+## Registro histórico — Sprint 47A
 
-## Resultado da Sprint 36.1E
+A avaliação técnica da Sprint 47 foi concluída localmente, sem aprovação para publicação. Foram 47 testes aprovados, sem falhas ou retries; typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Uma amostra local em Chromium carregou seis rotas em 267–505 ms, sem equivalência com produção, e não registrou exceções de página com Service Worker permitido. A Sprint 47 não alterou código.
 
-Academy e Laboratório estão integrados à navegação desktop/mobile, Biblioteca, Workspace, Dashboard, busca global, Learning Engine e Knowledge Graph já existente. Os novos filtros usam os metadados oficiais de `documents`; a busca resolve a rota correta para Academy ou Lab e incorpora o conteúdo do exercício sem duplicar stores.
+Decisão de produto: aceitar provisoriamente o risco residual de reload da Semana de Prova exclusivamente para permitir a continuidade do desenvolvimento do MVP pessoal. A falha permanece sem causa comprovada, não está corrigida e deve ser reavaliada antes de qualquer publicação. Preservar regressões existentes, investigar imediatamente uma nova reprodução e não ocultar falhas com retries ou esperas arbitrárias.
 
-O Dashboard carrega Academy/Lab de forma assíncrona e mostra retomada de estudo, prática, conteúdo recente, pendências e revisão. Abrir um conteúdo Academy atualiza progresso em `academy`, `studies`, `documents` e Learning Engine e registra tempo de leitura. Os layouts nativos cobrem Academy + Professor + Notas, Lab + Professor + Material, PDF gerado + Quiz + Flashcards e Trilha + Mentor + Plano do dia.
+As Sprints 48–58 permanecem planejadas. Consulte [o roadmap](docs/ROADMAP_V1_2.md). Os registros seguintes são históricos.
 
-Os módulos pesados permanecem sob carregamento dinâmico; o Lab mantém sandbox local, SQL/WASM lazy e bloqueio de rede. As notas da entrega estão em `docs/RELEASE_NOTES_SPRINT_36_1.md`.
+## Estado histórico — Sprint 46E
 
-Validação em 29/09/2026: ESLint, TypeScript e build de produção aprovados; 42 páginas geradas e bundle compartilhado de 104 kB. Academy/Lab, Biblioteca e Workspace passaram na suíte focada. A regressão completa aprovou 106 cenários diretamente e 5 por retry; dois cenários antigos de Cloud Sync falharam sob a carga total e passaram isoladamente (2/2), caracterizando instabilidade de execução a acompanhar na Beta Readiness. `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas já registradas no contexto e nas release notes.
+46A, 46B e 46C estão registradas em `027e498`, `d33ae02` e `d5ade4c`. Na 46D houve 66 testes aprovados e uma falha após reload mobile da Semana de Prova. Na 46D.1 o cenário passou 10/10 vezes isoladamente e os testes vizinhos passaram 8/8. A causa da falha permanece desconhecida. Propõe-se aceitar provisoriamente o risco para o MVP pessoal e monitorá-lo na Sprint 47, sujeito a decisão. Não há correção comprovada.
 
-## Base preservada da Sprint 36.1A
+A Sprint 47 é proposta para preparação técnica de release. As Sprints 48–58 são propostas futuras. O planejamento atual e as pendências estão em [ROADMAP_V1_2.md](docs/ROADMAP_V1_2.md). Os registros antigos abaixo são históricos quando divergirem deste estado.
 
-## Resultado da Sprint 36.1A
 
-A rota `/academy` cria estudos livres sem PDF ou outro material importado. O fluxo coleta tema, matéria, nível, objetivo, duração, idioma, profundidade e estilo; valida os dados e persiste um `AcademyStudy` no IndexedDB.
+## Sprint 46A — Dashboard e progresso
 
-```text
-Formulário Academy
-  → validação tipada
-  → transação IndexedDB
-      ├─ academy: AcademyStudy
-      ├─ documents: Material Gerado por IA
-      └─ studies: StudyRecord
-  → Learning Engine: objetivo + tempo estimado + progresso inicial
-```
+O painel Meu progresso reúne estudos por disciplina, revisões agendadas, próximas avaliações e simulados locais. A correção com gabarito conferido aparece separada da autoavaliação. O Modo Prova protegido continua fora do resumo por avaliação. A busca universal e as demais melhorias mobile seguem no roadmap.
 
-O banco local avançou para a versão 3 com o store `academy`, incluído no Cloud Sync incremental. A Biblioteca reconhece a origem `ai-generated` e direciona o material de volta ao Academy, sem tentar abrir um arquivo inexistente. `AcademyWorkspaceContract` prepara a futura abertura no Workspace, mas geração de conteúdo, PDF, PPTX e Laboratório não foram implementados nesta fase.
+## Sprint 45 — Preparação para provas
 
-Validação específica inclui criação, persistência após reload, integração com Biblioteca, Study Engine, Learning Engine e viewport mobile. ESLint, TypeScript e build de produção foram aprovados. A regressão Playwright encerrou com sucesso: 108 cenários passaram diretamente e 1 cenário antigo oscilou, passou no retry e também foi aprovado isoladamente sem retry.
+A Sprint 45 está encerrada no escopo do MVP pessoal, com simulados locais e histórico por avaliação. A persistência de avaliações e o vínculo protegido ficam adiados até antes de expansão multiusuário ou ativação desse vínculo. O status da Sprint 45 guarda a proposta de schema e a validação.
 
-## Base preservada da Sprint 36
+Na 45.3, a regressão de catálogo para PDF misto passou e a tela passou a orientar a reextração manual de materiais antigos. O checkpoint depende de decisão sobre a associação protegida. A proposta mínima está no status da Sprint 45.
 
-## Resultado da Sprint 36
+A continuação 45.2 acrescenta conferência manual de gabaritos dos materiais e invalidação por alteração da questão. A associação protegida a uma avaliação continua pendente.
 
-A V1 possui agora um fluxo inicial explícito: Splash → restauração da sessão → Dashboard ou Landing. A Landing oferece login, cadastro com confirmação e validação em tempo real, modo offline, tema e apresentação curta. O onboarding coleta contexto acadêmico, objetivo e preferências e mantém o fluxo compatível com conta ou uso local.
+A continuação 45.1 acrescenta simulados locais dos materiais e histórico por avaliação. O histórico de estudos aparece com rótulo próprio. Consulte os critérios pendentes no status da sprint.
 
-Importação detecta duplicados por caminho ou conteúdo usando fingerprint incremental de baixa memória e exige escolher substituir, ignorar ou criar cópia. O progresso exibe as etapas reais do pipeline. Biblioteca e organização preservam curso/semestre do onboarding, inferem instituição/professor quando o documento permite e oferecem filtros por uso, revisão, data, OCR, transcrição e ferramentas ainda não geradas.
+A Semana de Prova já reúne vínculos da Biblioteca, agenda por data, prática de questões extraídas e atalhos para Tutor e revisão por disciplina. A Sprint 45 ainda tem critérios de aceite pendentes. Consulte [estado e limitações](docs/SPRINT_45_STATUS.md).
 
-```text
-Landing / sessão offline
-  → Onboarding
-  → Importação + conflito de duplicados
-  → Extração/OCR/transcrição
-  → Study + Knowledge Graph + índice
-  → Biblioteca / busca universal / Workspace
-  → Dashboard / Conta / Beta Readiness
-```
+## Sprint 44B — Revisão por disciplina
 
-A busca universal consulta conteúdo extraído, OCR, transcrições, metadados, capítulos, subtópicos, salas e comentários. O Dashboard pode restaurar o último Workspace, aplicar outro layout ou criar um novo estado. Conta ganhou exportação/importação estruturada, revogação de todas as sessões e exclusão confirmada; o servidor remove a conta por cascade e os objetos S3 associados. O Compose não aceita mais secrets padrão.
+Abra **Estudo → Revisão por disciplina**. O fluxo reúne materiais e resultados por tema, permite autoavaliação e agenda a próxima revisão local. O Tutor recebe um rascunho contextual pronto para editar. [Modelo, validação e limites](docs/SPRINT_44B_STATUS.md).
 
-Validação final: ESLint, TypeScript e build de produção aprovados; 38 páginas estáticas foram geradas e todas as rotas dinâmicas compilaram. A suíte Playwright aprovou 107/107 cenários em 14,9 minutos, cobrindo também primeiro acesso, conflito de duplicados, Beta Readiness e regressão completa. O carregamento do Whisper ganhou timeout estruturado para nunca manter uma importação indefinidamente em processamento.
+## Sprint 44A — Estudar matéria completa
 
-## Base preservada da Sprint 35
+A Biblioteca abre a seleção de materiais no Tutor. A conversa guarda a disciplina, a seleção confirmada e as fontes recuperadas. Consulte [status, validação e limites](docs/SPRINT_44A_STATUS.md).
 
-## Resultado da Sprint 35
+## Sprint 43B — OCR e revisão de exercícios
 
-O Tutor ganhou um modo `Professor` adaptativo sem criar um novo provider ou pipeline. A interface permite selecionar nível (Iniciante, Intermediário, Avançado, Técnico ou Resumido) e método (aula tradicional, passo a passo, analogias, exemplos, perguntas e respostas, socrático ou revisão rápida). Preferências leves são persistidas localmente.
+Trabalho local sobre `d3e575d`. A Biblioteca reutiliza a revisão por página, com prévia determinística das questões, indicação de símbolos a conferir e rascunho confirmado para o Tutor. Consulte [o status da Sprint 43B](docs/SPRINT_43B_STATUS.md) para validação e limites. A Sprint 44A ainda não foi iniciada.
 
-O Professor oferece aula guiada, plano de aula, fluxograma e mapa mental em Mermaid, linha do tempo condicionada à existência de evidência, exercícios variados, comparação e seis formatos de resumo. Cada request carrega um contrato tipado e validado; `TeacherPromptBuilder` centraliza as instruções e exige correção com resposta, justificativa, conceito, fonte e revisão. A seleção de texto do PDF publica apenas o trecho, página, capítulo e nome do material para `Explicar este trecho`.
+## Estado atual — Sprint 43 (10 de novembro de 2026)
 
-```text
-Professor / seleção de PDF
-  → useTeacher
-  → RetrievalPipeline (chunks + Knowledge Graph)
-  → PromptBuilder + ContextBuilder
-  → AIService → ProviderManager/cache → provider selecionado
-  → conversa persistida do Tutor
-```
+A Sprint 42/42.1 está registrada no checkpoint local `de698e4`. Sobre esse HEAD, a Sprint 43 implementou o **AI Smart Routing** no fluxo do Tutor, ainda sem commit e sem homologação externa. O roteador recebe uma tarefa tipada, usa classificação determinística sem segunda chamada de IA, estima tokens, aplica limite de saída por categoria e filtra candidatos por disponibilidade conhecida, capacidade, janela de contexto e quota. O desempate é estável; sem preço confiável, a eficiência considera apenas impacto verificável da credencial: execução local, BYOK e quota compartilhada, nessa ordem.
 
-`TutorContextService` também inclui capítulos e continuidade do Mentor, além do perfil do Learning Engine. Ações amplas recuperam o contexto do estudo; dúvidas específicas usam a busca da pergunta ou do trecho. Nenhum arquivo físico chega ao Route Handler ou ao provider.
+O modo manual continua preservando provider e modelo escolhidos. O modo automático agora pode ser habilitado explicitamente em Configurações e está integrado somente ao Tutor. Quota compartilhada desconhecida nunca é tratada como ilimitada. Se nenhum candidato for elegível, o fluxo falha de forma explicável; não troca provider para esconder o erro. Falha após a escolha inicial continua usando o mecanismo da 41H: oferta de alternativa, consentimento explícito, nova verificação de quota, uma única alternativa e nenhuma terceira tentativa. Resposta parcial não é reenviada.
 
-Validação final: ESLint, TypeScript e build de produção aprovados; 36 páginas geradas e 104/104 testes Playwright aprovados em 12,1 minutos. A cobertura específica inclui contrato pedagógico, contexto recuperado, seleção de PDF e viewport mobile.
+O Tutor mostra provider/modelo efetivos, escolha manual ou automática, motivo, limite de saída e tokens registrados ou estimados. Quando a compressão existente remove histórico ou chunks, a resposta informa que o contexto foi reduzido aos trechos mais relevantes. Respostas idênticas voltaram a aproveitar cache também com modelo explícito; a chave inclui proprietário, provider, modelo e fingerprint da credencial para não cruzar contas.
 
-## Base preservada da Sprint 33.5
+Validação atual: matriz consolidada de Sprint 43 + AI Core + providers + fallback + quotas + Tutor **58/58**, sem falhos ou ignorados; os testes específicos da Sprint 43 representam **13/13** desse total. `npm run typecheck` passou; `npm run lint` passou com 0 erros e 50 avisos preexistentes; `npm run build` passou e gerou 48 páginas. `git diff --check` será repetido no fechamento. Não houve chamada paga, provider real, PostgreSQL/S3 externo, migration, alteração de `.env` ou produção.
 
-## Resultado da Sprint 33.5
+Estado Git desta fotografia: branch `v1.1-development`, HEAD base `de698e46d0b42d5e3cf1e67d92e5d61e055e6abc`, branch local 33 commits à frente da referência remota conhecida. As alterações da Sprint 43 estão no working tree e não foram commitadas. Os experimentos S3, `package.json`, `package-lock.json`, gerador de segredos e auditoria experimental permanecem preservados e fora do escopo. Consulte `docs/SPRINT_43_STATUS.md` para arquitetura, arquivos, evidências e limitações.
 
-O StudyAI recebeu uma modernização transversal sem alterar regras de negócio. Tokens semânticos, superfícies, sombras, movimento, primitives e estados de loading foram unificados. A aplicação suporta Claro, Escuro, AMOLED e Sistema; escala de fonte, alto contraste e redução manual de movimento são persistidos junto às preferências de experiência.
+## Estado definitivo da Sprint 41 — registro histórico
 
-Dashboard prioriza a retomada do estudo e reduz métricas no modo Simples. Biblioteca possui Grade, Lista e Compacta persistidas sobre o mesmo card. Tutor ganhou contexto recolhível, hierarquia mais clara, Enter/Shift+Enter e ações de copiar, continuar, regenerar e explicar de outra forma. Workspace mantém multipainel no desktop, mostra uma ferramenta ativa no mobile, recolhe a navegação de matérias e preserva layout, tamanho, scroll e sessão.
+**Encerrada localmente com ressalvas; não homologada em produção.** 41G e 41H foram implementadas e validadas localmente; 41I.A–E concluídas localmente, com checkpoint final `652ac65`. Na 41J.1, instrumentação concluída e 3 testes focados aprovados; na 41J.2, 1 teste existente de persistência aprovado. Total 41J: **4 testes focados aprovados**, sem dupla contagem. Os 107 testes da 41I são evidência histórica e não foram repetidos. Matriz Playwright completa e homologação externa pendentes. Suporte avançado a múltiplas contas despriorizado para uso pessoal atual. Naquela fotografia, a Sprint 42 ainda não havia sido iniciada.
 
-O contrato visual está documentado em `docs/DESIGN_SYSTEM.md`. A suíte inclui cenários para preferências acessíveis, AMOLED, visualização da Biblioteca e alvos mobile, além da regressão existente.
+Atualizado em **9 de novembro de 2026** a partir do Git, do código e dos testes locais. Esta é a fotografia atual; relatórios anteriores devem ser tratados como histórico.
 
-Validação final: `npm run lint`, `npm run typecheck` e `npm run build` aprovados; 36 unidades estáticas foram geradas e as rotas dinâmicas compiladas, com bundle compartilhado de 104 kB. Os 98 testes Playwright passaram em 11,2 minutos, incluindo 360, 390, 768, 1024, 1366, 1440 e 2560 px.
+## Sprint 41J.1 — diagnóstico do runner
 
-## Resultado da Sprint 33
+A ausência prolongada de saída do Playwright foi explicada por warm-up serial de 22 rotas (48,7–54,8 s observados) combinado à condensação da saída pelo `rtk`; usando `rtk proxy`, os marcos apareceram. `tests/global-setup.ts` agora loga timestamp, duração, rota, status e erro/timeout sem dados sensíveis. Três testes focados da 41J.1 e o fluxo sintético offline→online→backup/restore da 41J.2 passaram. Typecheck, lint (0 erros/67 avisos), build e diff-check passaram. Recomenda-se encerramento local da Sprint 41 com ressalvas; produção continua sem homologação. Ver [SPRINT_41J_1_DIAGNOSTIC.md](docs/SPRINT_41J_1_DIAGNOSTIC.md).
 
-O StudyAI possui agora a área `/salas`, com grupos de estudo e turmas. Pessoas entram por convites com validade e limite de uso, recebem um dos quatro papéis e colaboram sobre materiais, notas, flashcards, quizzes, Workspace e planos. Recursos são versionados, edições concorrentes retornam conflito, versões anteriores podem ser restauradas, comentários aceitam respostas e a presença é atualizada sem bloquear a interface.
+## Sprint 41I.E — interface e continuidade da Semana de Prova
 
-O backend foi isolado em `src/server/collaboration`: `CollaborationService`, `WorkspaceShareService`, `PermissionsService`, `PresenceService`, `CommentService` e `ClassroomService`. PostgreSQL recebeu tabelas específicas; sem banco, testes e desenvolvimento usam memória do processo. Consulte `docs/COLABORACAO.md`.
+A Sprint 41I.E está **IMPLEMENTADA, VALIDADA E COMMITADA** no checkpoint `652ac65`, sem homologação em produção. A experiência de `/provas` cobre criação e edição de prova, assuntos e prioridades, seleção/desvinculação de estudo, associação e remoção de materiais, plano diário, progresso real e retomada após reload.
 
-Os testes da Sprint cobrem duas contas na mesma sala, convite, recursos, comentários, presença, conflito otimista, bloqueio de Leitor, transferência de administração e viewport de 360 px. A execução final aprovou lint, TypeScript, build de produção e os 95 testes Playwright em 10,5 minutos.
+Problemas comprovados e correções:
 
-## Base preservada da Sprint 32.5
+- datas `YYYY-MM-DD` eram interpretadas como UTC e podiam aparecer no dia anterior; parsing, formatação e contagem agora usam o dia civil local;
+- não existia edição dos metadados e assuntos da prova; o formulário existente foi reutilizado para edição sem perder estudo ou materiais vinculados;
+- Tutor, Flashcards, Quiz e Modo Prova perdiam a origem; os links agora carregam apenas `origem=provas` e o `examId`, e o retorno fixo seleciona novamente a prova autorizada da sessão;
+- `studyId` inválido já não autorizava acesso, mas produzia uma mensagem genérica; agora há estado explícito e retorno seguro, sem renderizar o Workspace solicitado;
+- falha de carregamento do progresso podia manter loading indefinido; o hook encerra o loading com mensagem redigida após validar usuário e geração;
+- limpeza autorizada de material removido era silenciosa; a interface informa a remoção e preservação dos demais dados;
+- labels, botões por ícone, remoção de assunto e linhas clicáveis de material receberam nomes/semântica de teclado; os controles de assunto empilham no mobile e o primeiro campo recebe foco ao abrir o formulário.
 
-Auditoria documentada em `docs/AUDITORIA_SPRINT_32_5.md`, com inventário em `docs/INVENTARIO_PROJETO.md`, arquitetura e fluxos em `docs/ARQUITETURA_E_FLUXOS.md`, e backlog em `docs/BACKLOG_SPRINT_32_5.md`.
+A navegação não aceita URL de retorno arbitrária: `/estudo` só monta retorno quando a origem é exatamente `provas`, sempre para `/provas?prova=<id>`. A página de destino resolve o ID somente contra o armazenamento já escopado para a identidade atual; um ID de outra conta cai na primeira prova autorizada ou no estado vazio. O Modo Prova, gabarito, fallback consentido, quotas e schemas não foram alterados.
 
-Foram corrigidos três problemas: exclusão remota agora também limpa o binário OPFS e referências locais; reimportar um material cujo binário local desapareceu recupera o documento existente sem duplicá-lo; telemetria rejeita payload inválido ou acima de 4 KiB e limita por endereço de rede, não por identidade fornecida pelo cliente. Cobertura E2E expandida a sete viewports. Resultado final: 92 testes Playwright aprovados, além de lint, TypeScript e build aprovados.
+Evidência distinta: 41I.E **4/4**; 41I.B/B.1 **10/10**; 41I.C/D em navegador e fluxo legado **10/10**; Study Engine, Learning, Tutor/fallback, Modo Prova, isolamento, cloud sync e Cache/Service Worker **67/67**; regressão lógica 41I.D **16/16**. Total: **107 aprovados, 0 falhos, 0 ignorados**. A repetição isolada 41I.E 4/4 não foi contada novamente. Typecheck, lint, build e `git diff --check` passaram; lint manteve 67 avisos preexistentes e o build gerou 48 páginas. Nenhum serviço externo, chamada paga, migração ou credencial real foi usado.
 
-Limitações abertas: `npm audit --omit=dev` reportou quatro vulnerabilidades HIGH transitivas (advisory em `adm-zip` e `sharp`/libvips); Docker não está instalado neste ambiente, então PostgreSQL, MinIO/S3 e Compose não foram iniciados; restauração de backup não contém o payload dos binários S3; providers foram verificados por health/model discovery, sem geração real de texto. Ver backlog Sprint 32.5 antes da Sprint 33.
+Responsividade foi validada em Chromium com viewport 390 × 844 e sem overflow horizontal. Foco inicial, labels e navegação por teclado foram cobertos; não houve aparelho físico, leitor de tela real ou auditoria visual automatizada de contraste.
 
-## Base preservada da Sprint 32
+## Sprint 41I.D — progresso real da Semana de Prova
 
-O StudyAI possui agora duas camadas de experiência sobre as mesmas features: o modo Simples, padrão, expõe somente as jornadas de estudo; o modo Avançado revela grafo, diagnóstico, pipeline, métricas e controles técnicos. A alternância é imediata, persistida e sincronizada. Sidebar compactável no desktop, navegação inferior mobile, Header adaptativo, componentes mais densos e tokens de foco/hover reduzem ruído sem remover funcionalidades.
+A Sprint 41I.D está **IMPLEMENTADA, VALIDADA E REGISTRADA EM CHECKPOINT LOCAL, SEM HOMOLOGAÇÃO EM PRODUÇÃO** sobre a branch `v1.1-development`, a partir do HEAD base `fb8c619`. A Semana de Prova ganhou uma visão somente de leitura que separa progresso do conteúdo, quantidade de atividades, revisões de flashcards e desempenho. Abrir ou recarregar a página não cria eventos nem altera o progresso do estudo.
 
-```text
-ExperienceProvider
-  → modo + densidade + consentimento
-  → AppShell adaptativo
-      ├─ Sidebar desktop
-      ├─ navegação mobile
-      ├─ busca universal / Ctrl+K
-      ├─ Central de Ajuda
-      └─ onboarding e guias contextuais
-```
+Fontes e identificadores usados:
 
-A Central de Ajuda é pesquisável e possui tutoriais para importação, Workspace, Tutor, Mentor, Flashcards, Quiz, pesquisa e Cloud. O onboarding opcional conduz o primeiro material e registra conclusão; guias contextuais aparecem somente na primeira visita. Configurações virou um hub por categorias e centraliza Interface, IA, Workspace, Notificações, Downloads, Armazenamento, Conta, Cloud e Segurança.
+- `StudyEngine`: `studyId`, `progress` e `status`; fonte canônica de conclusão do conteúdo.
+- `LearningStorage`: atividades com `id`, `studyId` e `occurredAt`; fonte de tempo e revisões registradas.
+- `QuizService`: resultados com `id`, `studyId` e `completedAt`; fonte canônica de tentativas, acertos e erros. Eventos `quiz` equivalentes do Learning Service não são contados novamente.
+- `FlashcardService`: `id`, `studyId` e `lastReviewedAt`; usado para cartões distintos revisados, sem inventar um identificador de revisão inexistente.
+- `ExamAttemptServer`: mantém tentativa e usuário, mas não persiste `examId` ou `studyId`. Por isso resultados do Modo Prova protegido não são atribuídos a uma prova específica nesta etapa.
 
-### Isolamento e arquivos grandes
+A associação exige `Exam.studyId` autorizado ou a cadeia explícita `Exam.materialIds` → `StudyRecord.materialIds`. Atividades e resultados anteriores a `Exam.createdAt` são excluídos. IDs estáveis são deduplicados, enquanto tentativas legítimas com IDs diferentes permanecem separadas. Estudo removido, data inválida ou ausência de vínculo confiável produz estado explicativo, sem correspondência inferida.
 
-Cada identidade abre um banco IndexedDB próprio (`studyai-db:user-{id}`); convidados usam `studyai-db:guest`. A troca acontece no `AuthProvider`, impedindo mistura local entre contas. No servidor, arquivos grandes são enviados ao Object Storage S3 compatível e o PostgreSQL guarda somente metadados e a chave. MinIO é usado no Compose local. Substituição e exclusão removem os objetos associados; o fallback em `BYTEA` permanece apenas para desenvolvimento sem S3.
+O carregamento assíncrono verifica usuário, geração e suspensão da sessão antes de aplicar resultados e invalida cargas antigas no cleanup. A interface reage aos eventos existentes de Learning, Quiz, Flashcards e armazenamento. O modo `offline-session` usa o mesmo cálculo, sem privilégios especiais ou leitura de outro escopo.
 
-### Produção
+Durante as regressões foi confirmada uma falha anterior no modo Prática: a integração do Modo Prova protegido havia removido da tela de resultado os insights já calculados pelo `KnowledgeEngine`. A apresentação de evolução, ponto forte/fraco e recomendação foi restaurada somente no modo Prática; tentativa protegida, payload sem gabarito e correção no servidor não foram alterados.
 
-- `Dockerfile` standalone e usuário não-root.
-- `docker-compose.yml` com aplicação, PostgreSQL, MinIO e Caddy.
-- Caddy com HTTPS automático, compressão e HSTS.
-- CI com lint, typecheck, build e Playwright; publicação opcional no GHCR.
-- `/api/health` protegido para diagnóstico detalhado e `/api/telemetry` allowlisted.
-- Web Vitals e long tasks somente após consentimento explícito.
+Evidência distinta desta etapa: testes 41I.D **18/18** (16 lógica + 2 Chromium desktop/mobile), 41I.B/B.1 **10/10** e regressões selecionadas 41I.C/Study Engine/Learning/isolamento/Modo Prova **47/47** após a autocorreção. Na primeira rodada de regressão houve **46 aprovados e 1 falho**; o caso falho passou no teste focado e a suíte Learning + Modo Prova passou **25/25**. Total distinto final: **75 aprovados, 0 falhos, 0 ignorados**. Typecheck, lint, build e `git diff --check` passaram; o lint manteve 67 avisos preexistentes. Nenhum serviço externo, IA paga, migração ou credencial real foi usado.
 
-O repositório está preparado para produção, mas domínio/DNS, certificados públicos, bucket/credenciais, SMTP, secrets e webhook de deploy precisam ser provisionados no ambiente. Docker não estava instalado no host desta Sprint; por isso a composição foi validada por contrato automatizado, não iniciada localmente. Consulte `PRODUCTION.md`.
+## Sprint 41I.C — Semana de Prova e atividades de aprendizagem
 
-### Validação da Sprint 32
+A Sprint 41I.C está **IMPLEMENTADA, VALIDADA LOCALMENTE E REGISTRADA NO CHECKPOINT `fb8c619`, SEM HOMOLOGAÇÃO EM PRODUÇÃO**. A Semana de Prova agora oferece ações funcionais para Tutor, Flashcards, Quiz e Simulado usando o `studyId` do vínculo real. O identificador persistido na prova não autoriza acesso sozinho: as ações só são habilitadas quando o estudo também existe no catálogo já escopado para a sessão atual. Vínculos removidos ou temporariamente inacessíveis são preservados e apresentados como indisponíveis.
 
-Foram adicionados seis cenários Playwright, totalizando 86: modos, Ajuda/atalho, onboarding, viewport mobile, isolamento por usuário e contratos de produção. Lint, TypeScript, build e todos os testes devem permanecer verdes antes do handoff final. A inspeção visual foi feita em 360 px e 1440 px, em tema claro/escuro e nas rotas principais.
+As rotas contextuais reutilizam o Workspace existente (`/estudo?tema=...&aba=...`). O Tutor passou a solicitar explicitamente o estudo ao `TutorContextService`, que o resolve contra `StudyEngine`; respostas assíncronas antigas e conversas em memória são invalidadas quando usuário ou geração de sessão mudam. Flashcards e Quiz continuam usando os serviços existentes, filtrados por `studyId`, sem geração automática. O link de Simulado abre o painel de Quiz diretamente em `modo=exam`, reutilizando `SecureExamClient` e os endpoints protegidos; o payload inicial continua sem `correctAnswer` ou explicações.
 
-## Estado preservado da Sprint 31
+Limite deliberado: `ExamAttemptServer` não possui vínculo persistente com o `examId`, apenas com usuário/tentativa e com o estudo usado para gerar o contexto. A 41I.C não alterou schema nem criou endpoint paralelo. A homologação com conta autenticada, PostgreSQL e providers reais permanece pendente e exige autorização separada.
 
-## Estado entregue na Sprint 31
+Evidência: suíte nova 41I.C **6/6**; regressão 41I.B.1 **10/10**; matriz Playwright selecionada de 41G/41H/Study Engine/Modo Prova/41I.C **54/54**; isolamento A → B → A desktop/mobile **2/2**. As duas intermitências conhecidas foram repetidas separadamente e passaram: cloud sync/conflito **4/4** e Cache Storage/Service Worker **1/1**. Foram **71 casos distintos aprovados**, sem falhos ou ignorados; a repetição final de 41I.C + Tutor passou **9/9** e não entra novamente nessa contagem. Typecheck, lint e build passaram; lint manteve 67 avisos preexistentes e o build gerou 48 páginas. Nenhum serviço externo, chamada paga, migração ou credencial real foi usado.
 
-O StudyAI agora possui uma camada multiplataforma isolada das features de estudo. O navegador pode instalar uma PWA com shell offline, cache segmentado, atualização automática, atalhos e recepção de materiais pelo menu Compartilhar. O Windows possui aplicativo Electron que inclui o servidor standalone do Next.js, portanto mantém Route Handlers, IndexedDB, OPFS, OCR, RAG, Workspace e Mentor sem depender de hospedagem externa.
+## Sprint 41I.B.1 — integração de estudos e materiais
 
-```text
-Web / PWA / Electron / Android / iOS
-  → DeviceManager
-  → PlatformProvider
-  → Cache + notificações + updates + entrada de arquivos
-  → aplicação existente
-  → IndexedDB / OPFS
-  → Cloud Sync incremental quando online
-```
+A Sprint 41I.B.1 está **VALIDADA LOCALMENTE E REGISTRADA NO CHECKPOINT `fb8c619`, SEM HOMOLOGAÇÃO EM PRODUÇÃO**. A integração da Semana de Prova carrega estudos e materiais reais, preserva vínculos durante carregamento incompleto ou falha da Biblioteca e remove referências órfãs somente depois de um catálogo completo, pertencente ao mesmo usuário e à mesma geração de sessão.
 
-O Electron inclui splash screen, bandeja, menu nativo, atalhos, inicialização opcional, minimizar para bandeja, seleção de pasta, associação de materiais e canal IPC isolado por preload. O instalador NSIS `StudyAI-Setup-0.4.0.exe` foi gerado localmente em `dist-desktop/`, que permanece ignorado pelo Git. Atualizações estão conectadas ao `electron-updater`, mas exigem um feed assinado antes da publicação.
+`ExamService` bloqueia leitura/gravação enquanto a sessão está suspensa, reconhece `offline-session`, normaliza IDs repetidos e evita `localStorage.setItem` redundante. `ExamWorkspace` mantém estudos inacessíveis em estado explícito, sem apagar o `studyId`. `useMaterials` e `useStudyEngine` invalidam resultados atrasados e limpam dados em memória na troca de escopo; atualizações concorrentes do Study Engine são serializadas para não perder progresso. `ProvasClient` não executa uma segunda carga redundante.
 
-Os projetos Capacitor foram criados em `android/` e `ios/`. Android recebe arquivos por `SEND`, `SEND_MULTIPLE` e `VIEW`; iOS registra os tipos de documentos e abertura no próprio local. Ambos reutilizam a aplicação implantada definida por `CAPACITOR_SERVER_URL`, o cache local, IndexedDB e o Cloud Sync. Notificações locais funcionam por Capacitor; notificações de revisão também são monitoradas na PWA/Desktop enquanto a aplicação está ativa.
+O `errno -4094` foi identificado no registro histórico do comando exato `node -e "const fs = require('fs'); console.log(fs.readdirSync('node_modules/.bin'))"`: Node 24.18.0 falhou em `node:fs:1570`, `binding.readdir`, com `code: UNKNOWN`, `syscall: scandir` e caminho `D:\studyai\node_modules\.bin`. O mesmo ambiente também registrou `UNKNOWN/-4094` em `open/read`, indicando falha intermitente da camada de filesystem do Node no volume D:, não ausência de permissão. ACLs permitem leitura/modificação, D: está NTFS/Healthy, TEMP está acessível, não havia Next/Playwright concorrente e o comando passou na reprodução atual. A alternativa segura foi execução sequencial por `npx tsx`/Playwright, sem desativar proteções do Windows.
 
-### Serviços de plataforma
+O teste novo continha 18 bytes NUL finais e falhava no `esbuild` antes de executar cenários; o arquivo foi regravado em UTF-8 normal. Resultado final: 10/10 casos 41I.B.1 passaram. A matriz Playwright terminou com 70 aprovados, 2 falhos e 6 ignorados; as duas falhas intermitentes (conflito de sync e navegação do Service Worker durante Cache Storage) passaram sem alteração na repetição focada, 2/2. Typecheck e build passaram; lint teve 0 erros e 67 avisos preexistentes; `git diff --check` passou. Nenhum serviço externo, credencial real ou migração foi usado.
 
-- `DeviceManager`: identifica plataforma, sistema e fator de forma usados também na lista de dispositivos cloud.
-- `PWAService`: instalação, service worker, atualização e consumo de arquivos compartilhados.
-- `DesktopManager`: fachada do preload Electron para preferências nativas.
-- `MobileBridge`: URLs, compartilhamento e leitura de arquivos Capacitor.
-- `CacheManager`: diagnóstico, persistência e limpeza segura dos caches temporários.
-- `NotificationService`: notificações Web, Electron e Capacitor e lembretes de revisão.
-- `UpdateManager`: verificação uniforme de atualização PWA/Desktop.
+## Sprint 41H.1 — regressões do AI Core
 
-### Validação específica
+A Sprint 41H.1 está **VALIDADA LOCALMENTE, NÃO COMMITADA E NÃO HOMOLOGADA COM PROVIDERS REAIS**. As três regressões tinham origem no escopo da sessão offline introduzido pelo isolamento 41G: preferências privadas eram corretamente removidas da área ativa, mas o modo offline não possuía proprietário explícito para restaurá-las; além disso, o modo avançado dependia da identidade ativa e ficava oculto. A ausência do health do Ollama era apresentação, não contrato da API. O timeout do dashboard era o Playwright aguardando um botão avançado que não havia sido renderizado, não timeout do provider.
 
-ESLint, TypeScript e build de produção foram aprovados. A suíte possui 80 cenários Playwright; os cinco novos validam manifest/share target, service worker, preferências persistidas, empacotamento Electron e contratos Android/iOS. A PWA foi validada em produção: Biblioteca abriu offline com status 200 e service worker controlador. O servidor incluído no pacote Desktop respondeu HTTP 200 e o instalador Windows foi gerado. O projeto Android compilou com o JBR 21 do Android Studio e produziu `android/app/build/outputs/apk/debug/app-debug.apk`. O projeto iOS está sincronizado, mas sua compilação e assinatura exigem macOS/Xcode e uma conta Apple.
+O modo offline agora usa a identidade local explícita `offline-session`, armazenada separadamente das contas. Preferências offline sobrevivem ao reload, mas um usuário autenticado não restaura esses dados. Nenhum dado legado sem proprietário é reivindicado automaticamente. O fallback consentido da 41H não foi alterado.
 
-O `npm audit --omit=dev` ainda informa quatro vulnerabilidades altas transitivas em `adm-zip` e `sharp`, trazidas pela cadeia `@huggingface/transformers`/`onnxruntime-node`. Elas não foram corrigidas automaticamente nesta Sprint para evitar uma atualização destrutiva do pipeline local de embeddings; devem ser tratadas em uma atualização isolada com regressão completa de OCR/RAG.
+## Sprint 41H — fallback consentido
 
-## Estado entregue na Sprint 30
+A Sprint 41H está **IMPLEMENTADA LOCALMENTE NO NÚCLEO DE IA E NO TUTOR, NÃO COMMITADA E NÃO HOMOLOGADA COM SERVIÇOS REAIS**. Falhas recuperáveis do provedor primário agora geram uma oferta segura, sem chamar alternativa. O usuário vê provedor, modelo e impacto de consumo, pode autorizar exatamente uma alternativa ou cancelar mantendo mensagem e conversa. A tentativa autorizada é vinculada à requisição e ao usuário, passa novamente pela política de quota e possui idempotência em memória por cinco minutos. Respostas parciais são preservadas e nunca reenviadas automaticamente.
 
-O StudyAI agora possui conta e sincronização cloud sem substituir a arquitetura offline-first. IndexedDB e OPFS continuam atendendo todas as features imediatamente; após autenticação, um sincronizador em background replica somente registros alterados, tombstones e binários cujo hash mudou.
+O escopo deliberado desta etapa é o Tutor e o gerenciador central. Academy, flashcards, quiz, resumo, Lab, diagramas e áudio continuam sem troca automática entre provedores e ainda não possuem a interface de consentimento. A idempotência não é durável entre instâncias serverless; para garantia global será necessário armazenamento compartilhado, sem migração nesta etapa.
 
-```text
-IndexedDB / OPFS
-  → manifesto + fila offline
-  → Route Handlers protegidos
-  → SyncService / ConflictResolver
-  → PostgreSQL
-  → cursor incremental
-  → IndexedDB / OPFS sob demanda
-```
+## Fechamento local da Sprint 41G.3D
 
-Cadastro, login, logout, verificação, recuperação, alteração de senha/email, sessão persistente e renovação automática estão disponíveis. O perfil sincroniza nome, foto, idioma, tema e preferências; Workspace, Mentor, Learning Engine, Knowledge Graph, estudos, notas, resumos, flashcards, quizzes e histórico percorrem o mesmo contrato de sync. A página `/conta` centraliza dispositivos, último sync, espaço enviado, backups, conflitos, compartilhamentos, segurança e histórico.
+A Sprint 41G.3D está **CONCLUÍDA LOCALMENTE E REGISTRADA NO COMMIT `03f163b`, SEM HOMOLOGAÇÃO EM PRODUÇÃO**. O PostgreSQL 18 local foi identificado por loopback (`127.0.0.1:5432`), banco descartável `studyai_41g2c_test`, somente duas contas sintéticas conhecidas e nenhuma tentativa de prova antes da execução. Os 6 testes de integração passaram e deixaram `exam_attempts` vazio. Nenhum banco foi criado, removido ou migrado.
 
-### Serviços cloud
+Cache Storage passou em Chromium real: a troca A → B preservou conteúdo público, não apresentou dados privados de A pela aplicação, manteve caches privados escopados e não armazenou respostas de `/auth`, `/sync`, `/profile`, `/backup`, `/share` ou `/api`. Uma limpeza intencionalmente ausente no logout não expôs o cache de A à conta B; a limpeza pela interface removeu apenas o cache privado da conta ativa. Um script executado na mesma origem ainda consegue enumerar Cache Storage, portanto nomes por usuário evitam uso acidental, mas não formam fronteira contra XSS.
 
-- `AuthService`: credenciais, sessões curtas, refresh rotativo, verificação e recuperação.
-- `CloudDatabase`: fachada única para PostgreSQL e fallback em memória de desenvolvimento.
-- `SyncService`: push/pull incremental e restauração de snapshots.
-- `ConflictResolver`: valida versão-base e impede sobrescrita silenciosa.
-- `CloudSyncManager`: hashes, manifesto, fila offline, compressão, pull, aplicação e uploads.
-- `CloudFileService`: upload por hash e download sob demanda para OPFS.
-- `EmailService`: envio SMTP de verificação e recuperação.
+A regressão mobile passou em Chromium com viewport **simulado** de 390 × 844, cobrindo login/logout, A → B → A, tema global, navegação, Biblioteca, sincronização, reload e ausência do marcador privado de A em B. Não houve teste em aparelho físico.
 
-### Segurança
+Resultado final sem duplicar casos: **90 testes distintos aprovados** — 69 lógicos/mockados, 6 PostgreSQL reais locais, 4 Storage em navegador, 4 cloud sync, 4 Workspace/Modo Prova, 1 A → B → A desktop, 1 Cache Storage e 1 mobile. Houve intermitências no runner combinado: cadastro preso na inicialização, sync após restore ainda marcado como ativo e conflito não renderizado; os casos passaram isoladamente em servidor fresco. Isso permanece risco de estabilidade do harness.
 
-Senhas usam `scrypt`; refresh tokens e tokens de conta ficam somente como hash; JWTs expiram rapidamente e são renovados em cookies `HttpOnly`, `SameSite=Strict`. Mutações exigem CSRF, endpoints sensíveis possuem rate limit, uploads e sync possuem limites, e o middleware aplica CSP com nonce, HSTS em produção, `nosniff`, bloqueio de framing e políticas de navegador. Nenhuma credencial do banco ou token de sessão é exposta às features.
+## Estado Git
 
-### Operação
+- Projeto: `D:\studyai`.
+- Branch: `v1.1-development`.
+- HEAD base: `de698e46d0b42d5e3cf1e67d92e5d61e055e6abc`, checkpoint local das Sprints 42/42.1.
+- A branch local aparece **33 commits à frente** de `origin/v1.1-development`. Não houve `fetch`, portanto isso não confirma o estado atual do GitHub.
+- Nenhum arquivo está staged. Nenhum commit foi criado na Sprint 43.
 
-Produção exige `DATABASE_URL` e `AUTH_SECRET`. SMTP é obrigatório em produção para os fluxos de verificação e recuperação. Sem PostgreSQL, o modo de desenvolvimento usa memória e informa claramente que os dados cloud são voláteis. O schema está em `src/server/database/schema.sql` e é inicializado idempotentemente pela conexão server-only.
+Alterações rastreadas preservadas:
 
-### Validação específica
+- `package.json` e `package-lock.json` — dependência do presigner S3.
+- `src/features/sync/CloudFileService.ts`, `src/server/cloud/CloudDatabase.ts` e `src/server/storage/ObjectStorage.ts` — upload direto experimental.
+- Núcleo de IA, quota, rota, configurações e interface do Tutor — implementação não commitada da Sprint 43, detalhada em `docs/SPRINT_43_STATUS.md`.
+- `tests/ai-core.spec.ts` — regressão atualizada para o modo automático agora autorizado.
 
-Os cenários da Sprint 30 cobrem conta e recuperação, persistência da sessão, fila offline, sincronização incremental, backup, compartilhamento, arquivo binário e conflito entre dois contextos de navegador. ESLint e TypeScript passaram sem erros, o build de produção foi aprovado e os 75 testes Playwright passaram.
+Arquivos não rastreados preservados:
 
-## Estado entregue na Sprint 29
+- `scripts/generate-vercel-secret.ps1`.
+- `src/app/api/files/[id]/direct/route.ts`.
+- `tests/deploy-security.spec.ts`.
+- `tests/direct-upload.spec.ts`.
+- `docs/PROJECT_AUDIT_2026-11-05.md`.
+- `src/features/ai/AIRouter.ts`, `src/server/ai/AIRoutingService.ts`, `tests/sprint43-ai-routing.spec.ts` e `docs/SPRINT_43_STATUS.md` pertencem à Sprint 43.
 
-O Workspace possui um novo modo `Mentor`, sem substituir o Tutor. O Tutor continua atendendo perguntas livres por meio do AI Core; o Mentor coordena sessões guiadas com base em evidências do Learning Engine, Knowledge Graph, flashcards, quizzes e histórico real do tema.
+## Arquitetura confirmada
 
-```text
-Study selecionado
-  → MentorService
-  → Learning Engine + Knowledge Graph + Flashcards + Quiz
-  → SessionEngine
-  → SocraticEngine + RecommendationEngine + GoalManager
-  → MentorStorage / StorageManager / IndexedDB
-  → painel Mentor no Workspace
-```
+O produto usa Next.js 15, React 19 e TypeScript. A interface chama Route Handlers internos; integrações de IA passam por `AIService` e `ProviderManager`. Autenticação própria usa cookies HTTP-only, CSRF e `AUTH_SECRET`. Persistência local combina IndexedDB por escopo de conta, OPFS por usuário, `localStorage` e Cache Storage. Sincronização usa `CloudSyncManager`, APIs autenticadas e PostgreSQL; arquivos podem usar S3 compatível.
 
-Cada sessão cria um plano adaptativo com leitura, explicação, revisão e prática conforme a necessidade. O nível Iniciante, Intermediário ou Avançado altera a formulação das perguntas. Respostas recebem resultado, justificativa, orientação de melhoria e localização para revisão; uma resposta insuficiente interrompe a progressão e gera uma pergunta de acompanhamento antes de avançar. A explicação adicional reutiliza o `TutorService` e o `RetrievalPipeline`, mantendo o mesmo AI Core, provider selecionado e isolamento de arquivos físicos.
+O código possui modo em memória quando PostgreSQL não está configurado. Migração de banco é comando explícito (`npm run db:migrate`); o código normal não executa DDL automaticamente. O estado atual de Vercel, Supabase, Railway, PostgreSQL e S3 não foi consultado nesta auditoria.
 
-Metas de prova, trabalho, revisão e tempo de estudo são persistidas. Recomendações e próximas revisões são calculadas em `requestIdleCallback`, com fallback assíncrono, sem bloquear a interface. A memória mostra sessões concluídas por tema e a motivação só usa resultados reais da sessão.
+## Funcionalidades verificadas no código
 
-### Serviços do Mentor
+- Conta: cadastro, login, refresh, logout, verificação, recuperação, troca de email/senha, sessões e exclusão.
+- Biblioteca/importação: PDF, documentos, imagens, áudio/vídeo, OCR/transcrição, IndexedDB/OPFS e busca.
+- Estudo: Tutor, Professor, Mentor, notas, resumos, flashcards, quiz, Lab, IA Quality e Academy/Studio.
+- Academy: material de estudo, trilha e projeto prático; parser estruturado, persistência e exportação PDF/PPTX. Geração real por provedor não foi validada nesta auditoria.
+- Semana de Prova: criação local, assuntos, prioridades, plano por dias, progresso manual, materiais e estudo vinculados; ações contextuais abrem Tutor, Flashcards, Quiz e Modo Prova para o estudo autorizado.
+- Modo Prova protegido: tentativa vinculada ao usuário, payload inicial sem gabarito, correção transacional no servidor e retomada. O modo prática continua local e contém gabarito no navegador por definição.
+- Central de Ajuda: categorias expansíveis, busca, guia Academy, rolagem e navegação por teclado.
 
-- `MentorService`: fachada que recarrega todas as evidências antes de coordenar a ação.
-- `SessionEngine`: plano, estado e progressão da sessão guiada.
-- `SocraticEngine`: perguntas adaptativas e avaliação explicável.
-- `RecommendationEngine`: revisões e próximos passos em background.
-- `GoalManager`: criação, atualização, conclusão e exclusão de metas.
-- `MentorStorage`: persistência versionada exclusivamente via `StorageManager`.
+## Situação das Sprints 40 e 41
 
-### Validação
+- Sprint 40: **CONCLUÍDA LOCALMENTE**, sem validação de IA real. Melhorou seleção de modelo, erros de providers e ajuda.
+- Sprint 41 inicial: **CONCLUÍDA LOCALMENTE** nos commits `0215035`, `f6bcb58` e `19cb815`.
+- Sprint 41F: **PARCIALMENTE IMPLEMENTADA**. O fallback silencioso entre providers foi suspenso e a ajuda avançou; fallback consentido, limites econômicos e modelo efetivo ainda não foram concluídos.
+- Sprint 41G.1B: **CONCLUÍDA LOCALMENTE** nos commits `9553c72`, `861bd0b` e `1d08d83`; não prova isolamento contra scripts da mesma origem nem múltiplas abas reais.
+- Sprint 41G.2B: **CONCLUÍDA LOCALMENTE** nos commits `e156dd1`, `9678bed` e `5e65e58`.
+- Sprint 41G.2C: **CONCLUÍDA LOCALMENTE** em `8dd7a75`, com PostgreSQL local descartável em 4/11 e repetição segura de 6/6 casos em 6–7/11.
+- Sprint 41G.3A: **VALIDADA LOCALMENTE** após importar o tipo ausente e corrigir o mock de `StorageManager`.
+- Sprints 41G.3B e 41G.3C: **CONCLUÍDAS LOCALMENTE**, com testes de módulo aprovados nesta auditoria, mas sem teste negativo completo entre duas contas reais.
+- Sprint 41G.3D: **CONCLUÍDA LOCALMENTE E COMMITADA** em `03f163b`. Produção e aparelho físico não foram validados.
+- Sprint 41H: **IMPLEMENTADA E VALIDADA LOCALMENTE NO NÚCLEO/TUTOR**; demais fluxos de IA e serviços reais permanecem pendentes.
+- Sprint 41H.1: **VALIDADA LOCALMENTE**; as três regressões do AI Core foram resolvidas sem alterar o fallback.
+- Sprint 41 geral: **NÃO CONCLUÍDA**.
 
-ESLint e TypeScript aprovados, build de produção aprovado e 72 testes Playwright aprovados. Os novos cenários cobrem sessão socrática, erro e nova explicação, memória, metas, recomendações e persistência após refresh.
+## Testes executados em 6–8/11/2026
 
-## Contexto preservado da Sprint 28
-
-O ambiente de Estudo deixou de ser uma sequência de ferramentas isoladas e passou a ser um Workspace multipainel. Material, Tutor, resumos, flashcards, quiz, notas, mapa de conhecimento e estatísticas podem permanecer abertos simultaneamente, com redimensionamento por ponteiro ou teclado, minimizar, maximizar, fechar, criar instâncias adicionais e restaurar o estado após reabrir o navegador.
-
-```text
-StudyWorkspace
-  → WorkspaceCanvas
-  → WorkspaceManager
-  → LayoutManager + PanelManager
-  → WorkspaceStorage (estado leve versionado)
-  → painéis lazy / ferramentas existentes
-  → SessionTracker / Learning Engine
-```
-
-Layouts nativos (`Leitura`, `Revisão`, `Exercícios`, `Tutor` e `Planejamento`) convivem com layouts personalizados. A navegação lateral usa a hierarquia Curso → Semestre → Matéria → Tema → Arquivo. O Tutor mantém a conversa ativa por instância de painel; notas mantêm a seleção por painel; listas extensas de materiais são virtualizadas; componentes ocultos não são montados.
-
-O PDF Pro mantém zoom, página, capítulo e favoritos e adiciona marca-texto colorido, comentários, desenhos, links internos e histórico de páginas. As notas usam links Wiki para notas, materiais, capítulos e conceitos. O Mapa de Conhecimento expõe progresso e dificuldade do Learning Engine. A Pesquisa Global 2.0 busca, em uma única interface, materiais, notas, resumos, flashcards, quizzes, conceitos e relações, usando snapshot curto em cache.
-
-Sessões do Workspace registram início, fim, foco, pausas, arquivos e ferramentas utilizadas no IndexedDB; ao concluir, o tempo é enviado ao Learning Engine. Apenas preferências leves de layout, dimensões, scroll, abas abertas e anotações de visualização ficam no `localStorage`, conforme o contrato do Storage V2.
-
-### Serviços do Workspace
-
-- `WorkspaceManager`: fachada para carregar, salvar, abrir ferramentas e aplicar layouts.
-- `LayoutManager`: layouts padrão e personalizados.
-- `PanelManager`: criação, remoção, redimensionamento, minimizar e maximizar.
-- `WorkspaceStorage`: persistência versionada do estado leve por estudo.
-- `WorkspaceState`: fábrica e contratos iniciais.
-- `SessionTracker`: sessões persistentes e integração com o Learning Engine.
-
-## Contexto preservado da Sprint 27
-
-O StudyAI passa a transformar cada conteúdo extraído em uma estrutura de conhecimento persistente. O novo módulo `src/features/semantic` identifica conceitos, definições, entidades, palavras-chave, termos técnicos, siglas, fórmulas, tecnologias, pessoas, organizações, exemplos e observações. Relações explícitas e por coocorrência formam um grafo navegável por documento e Study.
-
-O pipeline agora executa `semantic` entre `study` e `chunks`. Os chunks deixam de usar apenas janelas arbitrárias e preservam definições, listas, tabelas, fórmulas, exemplos e blocos relacionados. O grafo é armazenado no object store `knowledge` do IndexedDB v2. `sourceHash` e `parserVersion` permitem reutilizar resultados inalterados e reprocessar somente o material modificado.
-
-```text
-Documento normalizado
-  → SemanticParser
-  → ConceptExtractor + RelationExtractor
-  → KnowledgeGraphBuilder
-  → KnowledgeStorage / IndexedDB
-  → SemanticChunkService
-  → embeddings + RAG
-  → Tutor / Biblioteca / Dashboard / Busca / Learning Engine
-```
-
-O Tutor expande a pergunta com aliases, sinônimos, siglas e conceitos relacionados antes do ranking híbrido, e recebe um bloco explícito de conhecimento no PromptBuilder. A Biblioteca mostra conceitos, relações e grau de estrutura; o Dashboard resume conceitos aprendidos, dominados, esquecidos e relações; o Learning Engine recomenda pré-requisitos; e o Workspace possui a aba clicável `Mapa de Conhecimento`.
-
-### Serviços semânticos
-
-- `SemanticParser`: converte seções extraídas em blocos semânticos com proveniência.
-- `ConceptExtractor`: extrai e deduplica conceitos com ids estáveis.
-- `RelationExtractor`: cria relações tipadas com evidência e peso.
-- `KnowledgeGraphBuilder`: monta estatísticas, chunks e o grafo versionado.
-- `KnowledgeStorage` / `SemanticStorage`: persistência única via `StorageManager`.
-- `SemanticSearchService`: busca por nome, descrição, palavra-chave, sinônimo, sigla e relações.
-- `KnowledgeService`: processamento incremental e reaproveitamento por hash.
-- `LearningKnowledgeBridge`: recomenda pré-requisitos para temas difíceis ou esquecidos.
-
-## Contexto preservado da Sprint 26
-
-A Sprint 26 adiciona o primeiro Learning Engine do StudyAI sem remover o fluxo existente. Toda leitura, conversa, revisão de flashcard, resultado de quiz, resumo e nota alimenta um perfil local persistido. O Dashboard passa a mostrar plano do dia, revisões, tempo, maior dificuldade, maior progresso, último estudo, streak, calor de estudo, retenção e Knowledge Score por tema.
-
-O conhecimento é calculado com evidências reais de quiz, flashcards, tempo, frequência e recência. O motor de prioridade explica a classificação com erros, dias sem revisão, cartões vencidos e domínio estimado. Flashcards usam SM-2 e persistem próxima revisão, intervalo, facilidade e repetições, mantendo o contrato preparado para FSRS. O Tutor recebe conhecimento, confiança, domínio e prioridade antes de montar o prompt e adapta a didática sem acessar arquivos físicos.
-
-```text
-Atividade real
-  → LearningService
-  → LearningStorage / IndexedDB metadata
-  → KnowledgeEngine
-  → StudyPriorityEngine
-  → Plano diário / Dashboard / Tutor / Revisões
-```
-
-### Serviços do Learning Engine
-
-- `LearningService`: entrada única dos eventos e fila serializada em background.
-- `LearningStorage`: perfil versionado no IndexedDB.
-- `LearningCalculator`: streak, plano diário, calor de estudo e estatísticas.
-- `KnowledgeEngine`: Knowledge Score, domínio, dificuldade e insights de quiz.
-- `StudyPriorityEngine`: prioridade e motivos por tema.
-- `ReviewScheduler`: SM-2 e fronteira futura para FSRS.
-
-A Sprint 25.2 conclui as pendências da 25.1. O AI Core agora possui compressão de histórico, top 3 chunks deduplicados, contagem interna de tokens, cache LRU, retry exponencial do Gemini e proteção da janela de contexto dos providers OpenAI-compatible. Tutor e providers transmitem respostas progressivamente por NDJSON, com SSE/NDJSON normalizados no servidor.
-
-O Tutor renderiza Markdown, GFM, tabelas, checklists, código, links, imagens e matemática KaTeX. A altura é fixa e somente a conversa rola, com acompanhamento automático da última mensagem. PDF.js, Tutor, Flashcards, Quiz, Markdown, OCR e Whisper são carregados somente quando necessários.
-
-Os arquivos originais são persistidos no OPFS quando disponível. O leitor oferece Texto/PDF, restaura o binário após reload, mantém estado quando a re-seleção é necessária e possui miniaturas lazy, índice, marcadores e Ctrl+F com contagem, navegação e destaque.
-
-O pipeline não ocupa mais o Dashboard: status, logs, tempo, OCR, chunks, embeddings e uso de IA ficam no drawer “Detalhes da ingestão”. Resumos e organização usam autosave; soltar um arquivo na área de nova estrutura permite criar curso, semestre, matéria e tema no mesmo fluxo.
-
-O Workspace preserva os atalhos das áreas `Material`, `IA`, `Mapa de Conhecimento`, `Flashcards`, `Quiz` e `Notas`, agora como entradas para painéis independentes. Todo o estado leve continua restaurado após refresh ou reabertura: layout, painéis, arquivo, PDF, capítulo, marcadores, flashcard, quiz e nota.
-
-A Biblioteca ganhou ações rápidas, seleção múltipla, favoritos, tags, movimentação e exclusão em lote com confirmação. A tela Organizar aceita drag and drop entre temas e também oferece seleção múltipla. Notas são salvas automaticamente, sem botão de salvar.
-
-O diagnóstico de IA mostra status, modelo, endpoint, latência, tempo médio e último erro de Gemini, Ollama, OpenRouter e Groq, com teste de conexão individual. O modo manual agora respeita estritamente o provider escolhido; fallback existe somente no modo automático.
-
-Após cada extração bem-sucedida, o StudyAI agora analisa o conteúdo normalizado e cria ou enriquece automaticamente toda a estrutura de estudo. Disciplina, tema, subtemas, capítulos, palavras-chave, idioma, número de páginas, quantidade de palavras, prévia e tempo de leitura são persistidos no mesmo fluxo, sem IA externa e sem exigir organização manual.
-
-Todo conteúdo pesado continua no IndexedDB `studyai-db` v1 por meio da fachada assíncrona `StorageManager`. A Sprint 25 não alterou o modelo de armazenamento nem criou novas dependências.
-
-```text
-Feature / Hook
-  → Service de domínio
-  → StorageManager
-  → transação IndexedDB
-  → object store
-```
-
-Na inicialização, `StorageBootstrap` executa a migração legada. Todos os registros são gravados atomicamente e as chaves antigas só são removidas depois do commit. Em erro, o IndexedDB realiza rollback, o legado permanece intacto e a interface apresenta um aviso recuperável.
-
-O StudyAI utiliza exclusivamente dados criados pelo usuário. A importação cria o registro oficial, infere matéria e tema, cria ou reutiliza um Study, executa a extração e atualiza Biblioteca, Organização e Dashboard sem depender de uma organização manual posterior.
-
-A camada de IA agora é centralizada em `src/features/ai`. Tutor, resumo, flashcards e quiz não conhecem Gemini nem acessam o Retrieval Service diretamente.
-
-A ingestão agora processa cada documento por etapas observáveis. PDF.js é sempre consultado primeiro e o OCR é executado somente quando nenhuma camada de texto foi encontrada. Todo texto passa por normalização antes de chunks e embeddings. DOCX preserva títulos, parágrafos, listas, tabelas, cabeçalhos, rodapés e notas; PPTX preserva slides e notas; TXT detecta encoding; áudio e vídeo registram transcrição, timestamps e capítulos quando o runtime local consegue decodificá-los.
-
-```text
-Documento
-  → Extração / OCR ou Whisper quando necessário
-  → Normalização
-  → StudyAnalyzer
-  → SubjectDetector / TopicDetector / KeywordExtractor / ReadingTimeCalculator
-  → StudyGeneratorService
-  → Material e Study enriquecidos
-  → Chunks do texto normalizado
-  → Embeddings compactados
-  → Índice local
-```
-
-Cada registro de conteúdo possui status por etapa e logs. Falhas incluem motivo, arquivo, etapa, stack simplificada e ação sugerida. Dashboard, Biblioteca e Tutor consomem os metadados analisados; a organização manual continua sendo a fonte oficial quando diverge da detecção.
-
-## Smart Study Generator
-
-- `StudyAnalyzer.ts`: coordena a análise determinística sobre texto e seções normalizados.
-- `SubjectDetector.ts`: classifica disciplinas por vocabulário e aplica fallback explícito.
-- `TopicDetector.ts`: identifica título, tema, subtemas e capítulos/seções estruturais.
-- `KeywordExtractor.ts`: calcula palavras-chave por frequência com normalização e stop words.
-- `ReadingTimeCalculator.ts`: calcula palavras e leitura estimada a 200 palavras por minuto.
-- `StudyGeneratorService.ts`: atualiza material e Study Engine e produz os logs da geração.
-
-Para materiais avulsos, a análise substitui a classificação provisória criada antes da extração. Para caminhos organizados com matéria e tema, a estrutura de pastas é preservada. Se o usuário mover o arquivo depois, a organização escolhida permanece oficial e os metadados da análise são transportados ao novo Study.
-
-PDFs da Estácio reconhecem `OBJETIVOS`, `INTRODUÇÃO`, `UNIDADE`, `CAPÍTULO`, `SEÇÃO`, `ATIVIDADES`, `EXERCÍCIOS`, `CONCLUSÃO` e `REFERÊNCIAS`. PDFs comuns, resultados de OCR, DOCX, PPTX e TXT usam o mesmo contrato de saída. Falta de título, disciplina ou capítulos gera um Study básico em vez de interromper a importação.
-
-```text
-Feature cliente
-  → RetrievalPipeline
-  → AIClient
-  → Route Handler
-  → PromptBuilder / ContextBuilder
-  → AIService
-  → ProviderManager
-  → ProviderRegistry / HealthService / LatencyService
-  → AIProvider
-  → GeminiProvider | OllamaProvider | OpenRouterProvider | GroqProvider
-```
-
-## AI Core
-
-- `AIProvider.ts`: contrato compartilhado de requests, responses e providers.
-- `AIService.ts`: registro e resolução central no servidor.
-- `AIClient.ts`: fronteira única entre features cliente e rotas internas.
-- `AISettings.ts`: provider e modelo selecionados, com migração da preferência anterior e persistência no navegador.
-- `PromptBuilder.ts`: prompts de Tutor, resumo, flashcards e quiz.
-- `ContextBuilder.ts`: contexto do Study e trechos recuperados com limite de tamanho.
-- `RetrievalPipeline.ts`: única entrada das features de IA para o RAG local.
-- `AIErrors.ts`: erros e normalização HTTP independentes do provider.
-- `ProviderRegistry.ts`: catálogo server-only dos providers.
-- `HealthService.ts`: health agregado e cacheado para todos os providers.
-- `LatencyService.ts`: medição compartilhada de latência.
-- `ProviderManager.ts`: seleção manual/automática, fallback, logs e métricas.
-
-Gemini, Ollama, OpenRouter e Groq são providers funcionais quando suas respectivas configurações estão disponíveis. A página de Configurações lista health, endpoint, último erro, latência, tempo médio, modelo, memória, versão e última verificação, além de testar cada conexão separadamente.
-
-No modo manual, somente o provider selecionado é usado. No modo automático, o Manager seleciona o provider online de menor latência e uma falha inicia a cadeia Ollama → Gemini → Groq → OpenRouter. Se todos falharem, a interface recebe um erro normalizado e preserva a pergunta do usuário.
-
-```text
-Configurações / Feature
-  → AIClient
-  → Route Handler interno
-  → AIService
-  → OllamaProvider
-  → GET /api/tags | GET /api/version | POST /api/chat
-```
-
-O `OllamaProvider` usa `http://localhost:11434` por padrão ou `OLLAMA_URL` quando configurado. O chat recebe uma mensagem de sistema, o histórico e o prompt contextual já montado pelo AI Core. Respostas completas e streams NDJSON são normalizados no mesmo `AIResponse`.
-
-```text
-File selecionado
-  → MaterialService
-  → OrganizationService.organizeImported
-  → StudyEngine
-  → ExtractionPipeline
-  → ContentStorage
-  → ChunkStorage
-  → EmbeddingStorage
-  → Biblioteca / Dashboard / Workspace / Tutor
-```
-
-## Fonte oficial dos materiais
-
-- `documents` persiste metadados, caminho relativo, progresso, status e organização no IndexedDB.
-- `MaterialRuntimeStore` mantém o `File` e a URL de objeto apenas durante a sessão atual.
-- `ContentStorage`, `ChunkStorage` e `EmbeddingStorage` persistem os dados derivados.
-- Não existem seeds de Biblioteca, Organização, Dashboard, Workspace ou Tutor.
-
-## Organização automática e Study Engine
-
-Antes da extração, `OrganizationService.organizeImported`:
-
-1. normaliza o caminho relativo do arquivo;
-2. infere matéria e tema pelas pastas ou pelo nome do arquivo;
-3. reutiliza o Study de materiais no mesmo destino;
-4. cria um Study quando ainda não existe;
-5. entrega o `studyId` à extração, aos chunks e aos embeddings.
-
-Ao mover manualmente um material, `OrganizationService`:
-
-1. define curso, semestre, matéria e tema;
-2. reutiliza ou cria um `studyId`;
-3. atualiza conteúdo, chunks e embeddings;
-4. cria ou atualiza o registro no object store `studies`;
-5. preserva notas, resumos, flashcards e quizzes se o estudo anterior deixar de existir.
-
-Renomear atualiza o nome do material e a proveniência do conteúdo. Excluir remove o material e seus dados derivados.
-
-## Consumo de contexto
-
-- Tutor: estudo atual, notas, resumo, histórico e chunks recuperados.
-- Resumos: exigem contexto e chunks do estudo.
-- Flashcards: exigem chunks reais vinculados ao `studyId`.
-- Quiz: exige chunks reais vinculados ao `studyId`.
-- Notas: recebem automaticamente o `studyId` do Workspace aberto.
-
-Os Route Handlers recebem somente objetos estruturados. Nenhum arquivo físico é enviado ao Gemini ou ao Ollama.
-
-## Dashboard, Biblioteca e Tutor
-
-- A Biblioteca mostra somente arquivos importados, com tipo, tamanho, data, caminho relativo, progresso, status, disciplina, tema, capítulos, palavras-chave e tempo de leitura.
-- Todos os filtros pesquisam somente o registro persistido dos arquivos importados.
-- O Dashboard mostra arquivos, estudos, progresso médio, flashcards, quizzes, materiais analisados, temas criados, capítulos identificados, tempo total de leitura, extrações, embeddings e atividade semanal a partir das persistências reais.
-- O Tutor apresenta tema, disciplina, prévia, palavras-chave, subtemas e quantidade de capítulos antes da primeira pergunta.
-- Flashcards e Quiz ficam desabilitados até existir conteúdo textual estruturado; nenhuma geração é disparada automaticamente.
-- Estados vazios orientam a primeira importação sem criar conteúdo artificial.
-
-## Persistência
-
-| Banco / store | Conteúdo |
+| Verificação | Resultado |
 | --- | --- |
-| `studyai-db/documents` | Materiais importados e organização. |
-| `studyai-db/contents` | Texto, estrutura, metadados e pipeline. |
-| `studyai-db/chunks` | Chunks por arquivo e estudo. |
-| `studyai-db/embeddings` | Índice semântico local V2 compactado. |
-| `studyai-db/studies` | Estudos derivados dos materiais. |
-| `studyai-db/notes`, `summaries`, `flashcards` | Recursos por estudo. |
-| `studyai-db/quizzes` | Questões e resultados. |
-| `studyai-db/transcriptions`, `ocr` | Dados pesados de mídia e OCR. |
-| `studyai-db/metadata` | Migração, status do índice e conversas. |
-| `localStorage/studyai:ai-settings`, `studyai-theme` | Apenas preferências leves. |
+| `npm run typecheck` | Aprovado. |
+| `npm run lint` | Aprovado: 0 erros, 68 avisos preexistentes fora do escopo. |
+| `npm run build` | Aprovado; 48 páginas geradas. O erro de fontes KaTeX não reapareceu. |
+| Sessão, prova protegida e isolamento 41G | 69 aprovados, 0 falhos. |
+| PostgreSQL local descartável | 6 aprovados, 0 falhos, 0 ignorados; estado inicial e final sem tentativas persistidas. |
+| IA, quotas, DDL, upload direto e segurança de deploy | 27 aprovados; 4 casos de navegador foram executados no runner incorreto e repetidos separadamente. |
+| Armazenamento em navegador | 4 aprovados, 0 falhos. |
+| Workspace, Academy e Ajuda em navegador | 8 aprovados, 0 falhos. |
+| 41G.3D focado | 10 aprovados, 0 falhos; conjunto 41G.3A/3D/preferências: 23 aprovados. |
+| Navegador A → B → A | 1 aprovado: duas contas sintéticas, duas abas, reload, preferências globais e API cross-user. |
+| Cloud sync em navegador | 4 aprovados: sessão, restore, conflito, arquivo, exclusão e OPFS escopado. |
+| Cache Storage em Chromium | 1 aprovado: escopo privado, conteúdo público, APIs autenticadas excluídas e falha de limpeza segura. |
+| Mobile simulado 390 × 844 | 1 aprovado: conta, tema, navegação, Biblioteca, sync, reload e isolamento A → B → A. |
+| Sprint 41H/41H.1 — lógica/mock | 55 aprovados, 0 falhos: fallback, quota, providers e regressões de sessão/isolamento, incluindo offline. |
+| Sprint 41H — Tutor em Chromium | 3 aprovados, 0 falhos: consentimento desktop, cancelamento mobile e quota insuficiente. |
+| Regressão Tutor existente | 5 aprovados, 0 falhos. |
+| Regressão AI Core existente | 3 aprovados, 0 falhos: persistência, health do Ollama e dashboard. |
+| Isolamento desktop/mobile | 2 aprovados, 0 falhos: A → B → A, múltiplas abas, API cruzada e viewport móvel. |
 
-A rota interna `/storage` exibe banco, versão, contagens, espaço estimado e última migração. A API do Storage suporta upserts, lotes, transações e paginação.
+Não foram usados serviços pagos, credenciais externas, PostgreSQL/S3 de produção ou IA real.
 
-## Limites atuais
+## Riscos e bloqueios
 
-- O binário original é persistido no OPFS quando suportado. Com conta, um binário ausente é baixado sob demanda; sem conta e sem OPFS, a re-seleção continua disponível sem perder dados derivados ou estado do Workspace.
-- A primeira transcrição depende do download do modelo Whisper; indisponibilidade de rede é registrada como erro do arquivo sem interromper os demais.
-- O histórico do Tutor é local ao navegador.
-- O Ollama depende de um serviço local em execução e de pelo menos um modelo instalado.
-- O processamento de materiais permanece local; banco remoto e sincronização armazenam dados já estruturados e binários do usuário, sem mover OCR, embeddings ou RAG para o servidor.
+1. Homologar disponibilidade, catálogos de modelos e comportamento do roteamento com providers reais somente em etapa autorizada; os testes atuais usam mocks.
+2. Preços exatos não são comparados porque não há catálogo confiável e estável no projeto. Nenhuma economia percentual é prometida.
+3. Academy, Quiz, Flashcards, resumos, Lab, diagramas e áudio ainda usam o comportamento anterior; a migração gradual ficou para trabalho posterior.
+4. Fallback e deduplicação autorizada continuam com idempotência em memória por instância; garantia global em serverless exige armazenamento compartilhado.
+5. Multimodal permanece sem candidato elegível no transporte atual. OCR/RAG completo e Sprint 43B não foram antecipados.
+6. Manter o upload direto S3 fora de publicação até revisão própria; ele continua experimental e não faz parte da Sprint 43.
 
-## Validação
+## Próximo trabalho recomendado
 
-Os testes de tela partem de arquivos selecionados no input e aguardam a extração. A suíte cobre criação automática de Study, agrupamento por `Matéria/Tema`, associação de conteúdo/chunks/embeddings, fallback de configuração do Gemini e persistência de conversa, resumo, flashcards e quiz após reabrir a aplicação. A inferência de áudio aceita o erro operacional esperado quando o modelo ainda não está disponível no cache e a rede está indisponível.
+Revisar seletivamente o diff da **Sprint 43** e, somente mediante autorização posterior, criar um checkpoint local sem misturar os experimentos S3. Não iniciar a Sprint 43B automaticamente. A homologação de IA real continua dependente de autorização e ambiente próprios.
 
-```text
-npm run lint
+## Comandos e documentação
+
+```powershell
+git status --short
+git log -10 --oneline --decorate
 npm run typecheck
-npm run test:e2e
+npm run lint
 npm run build
+npm run test:e2e
 ```
 
-Além dos cenários de Storage V2, a suíte cobre a geração automática a partir de PDF Estácio, PDF comum, PDF OCR, DOCX e PPTX, incluindo preservação dos metadados quando um material é movido manualmente.
+Não executar `npm run db:migrate` sem banco não produtivo identificado e autorização específica. Leia:
 
-Validação final da Sprint 25: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 41 testes Playwright aprovados.
-
-Validação final da Sprint 25.1: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 47 testes Playwright aprovados. A cobertura adicional valida diagnóstico online/offline por provider, restauração do Workspace, flashcard e quiz atuais, navegação lateral, abertura direta de materiais, ações em lote e drag and drop.
-
-Validação final da Sprint 25.2: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 54 testes Playwright aprovados. Os novos cenários cobrem streaming NDJSON, Markdown/GFM/KaTeX, altura e rolagem do chat, cache de IA, compressão e métricas de tokens, persistência do PDF no OPFS, busca Ctrl+F, drawer de diagnóstico, criação de hierarquia por drag and drop e carregamento lazy do PDF.js.
-
-Validação final da Sprint 26: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 62 testes Playwright aprovados. A cobertura nova valida Knowledge Score, SM-2, prioridade explicável, plano diário, Dashboard inteligente, contexto adaptativo do Tutor, persistência do agendamento dos Flashcards e insights do Quiz.
-
-Validação final da Sprint 27: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 67 testes Playwright aprovados. A cobertura semântica valida extração de conceitos, relações, preservação de definições nos chunks, expansão de busca, pré-requisitos do Learning Engine, persistência do grafo, Biblioteca, Dashboard, Mapa de Conhecimento e contexto enviado ao Tutor.
-
-Validação final da Sprint 28: ESLint aprovado, TypeScript aprovado, build de produção aprovado e 70 testes Playwright aprovados. `tests/workspace-v2.spec.ts` cobre painéis, redimensionamento por teclado, restauração, layouts, lazy rendering, Tutor, notas Wiki, pesquisa global, sessões e PDF Pro.
-
-## Próximo passo seguro
-
-Validar ergonomia dos layouts com acervos reais extensos e diferentes densidades de tela. Uma evolução segura é mover cálculos de grafos muito grandes para Web Worker e permitir edição manual de relações, preservando os contratos do Workspace e do grafo.
+- `docs/PROJECT_AUDIT_2026-11-05.md` — auditoria completa.
+- `docs/SPRINT_41_STATUS.md` — status e evidências da Sprint 41.
+- `docs/SPRINT_41G_SECURITY_AUDIT.md` — riscos de isolamento e Modo Prova.
+- `docs/ROADMAP_V1_2.md` — roadmap reconciliado.
+- `docs/SPRINT_43_STATUS.md` — arquitetura, testes e limitações do Smart Routing.
+- `docs/NEXT_SESSION_PROMPT.md` — prompt de continuidade.

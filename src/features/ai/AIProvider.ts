@@ -6,6 +6,38 @@ export const aiSelectionModes = ["manual", "automatic"] as const;
 
 export type AISelectionMode = (typeof aiSelectionModes)[number];
 
+export const aiTaskCategories = [
+  "simple_conversation",
+  "educational_explanation",
+  "math_reasoning",
+  "flashcard_generation",
+  "question_generation",
+  "correction_evaluation",
+  "long_material_analysis",
+  "multimodal_input",
+] as const;
+
+export type AITaskCategory = (typeof aiTaskCategories)[number];
+
+export type AICapability = "text" | "structured_text" | "long_context" | "multimodal";
+
+export type AITaskDescription = {
+  category: AITaskCategory;
+  requiredCapabilities: readonly AICapability[];
+  estimatedInputTokens: number;
+  maxOutputTokens: number;
+};
+
+export type AIRoutingDecision = {
+  provider: AIProviderId;
+  model?: string;
+  selection: "manual" | "automatic";
+  reason: string;
+  estimatedInputTokens: number;
+  maxOutputTokens: number;
+  credential: "local" | "byok" | "shared_quota";
+};
+
 export type AIMessage = {
   role: "assistant" | "user";
   content: string;
@@ -19,6 +51,7 @@ export type AIRequest = {
   stream?: boolean;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  apiKey?: string;
 };
 
 export type AIResponse = {
@@ -38,6 +71,7 @@ export type AIResponse = {
     fallbackUsed: boolean;
     latencyMs: number;
     cached?: boolean;
+    routing?: AIRoutingDecision;
   };
 };
 
@@ -69,10 +103,41 @@ export type AIProviderStatus = {
 
 export type AIModelPreferences = Partial<Record<AIProviderId, string>>;
 
+export type AIFallbackCost = "local" | "byok" | "shared_quota";
+
+export type AIFallbackAlternative = {
+  provider: AIProviderId;
+  model: string;
+  cost: AIFallbackCost;
+  notice: string;
+};
+
+export type AIFallbackConsent = {
+  requestId: string;
+  originalProvider: AIProviderId;
+  provider: AIProviderId;
+  model: string;
+};
+
+export type AIFallbackOffer = {
+  requestId: string;
+  primaryProvider: AIProviderId;
+  primaryModel?: string;
+  alternatives: AIFallbackAlternative[];
+};
+
 export type AIManagerRequest = AIRequest & {
   provider?: AIProviderId;
   mode?: AISelectionMode;
   models?: AIModelPreferences;
+  apiKeys?: Partial<Record<AIProviderId, string>>;
+  requestId?: string;
+  requestOwner?: string;
+  fallbackPolicy?: "consent";
+  fallbackConsent?: AIFallbackConsent;
+  task?: AITaskDescription;
+  routingPolicy?: "smart";
+  routingDecision?: AIRoutingDecision;
 };
 
 export type AIProviderLog = {
@@ -107,7 +172,7 @@ export interface AIProvider {
   readonly available: boolean;
   generate(request: AIRequest): Promise<AIResponse>;
   stream?(request: AIRequest): AsyncGenerator<AIStreamEvent>;
-  inspect?(signal?: AbortSignal): Promise<AIProviderStatus>;
+  inspect?(signal?: AbortSignal, apiKey?: string): Promise<AIProviderStatus>;
 }
 
 export function isAIProviderId(value: unknown): value is AIProviderId {

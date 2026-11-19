@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { TeacherPromptBuilder } from "../src/features/teacher/TeacherPromptBuilder";
+import { isTeacherRequest } from "../src/features/teacher/teacher-validation";
 import type { TeacherRequest } from "../src/features/teacher/types";
 import { createRealStudy } from "./helpers/real-study";
 
@@ -15,13 +16,18 @@ test("instruções do Professor cobrem aula, diagramas, exercícios e correção
   const guided = TeacherPromptBuilder.instruction(baseRequest);
   const flowchart = TeacherPromptBuilder.instruction({ ...baseRequest, action: "flowchart" });
   const mindMap = TeacherPromptBuilder.instruction({ ...baseRequest, action: "mind_map" });
-  const exercise = TeacherPromptBuilder.instruction({ ...baseRequest, action: "exercise" });
+  const exerciseStage1 = TeacherPromptBuilder.instruction({ ...baseRequest, action: "exercise", exerciseStage: 1 });
+  const exerciseStage2 = TeacherPromptBuilder.instruction({ ...baseRequest, action: "exercise", exerciseStage: 2 });
 
   expect(guided).toContain("uma etapa por vez");
   expect(guided).toContain("resposta correta, justificativa, conceito relacionado, fonte utilizada e recomendação de revisão");
   expect(flowchart).toContain("Mermaid `flowchart TD`");
   expect(mindMap).toContain("Mermaid `mindmap`");
-  expect(exercise).toContain("múltipla escolha");
+  expect(exerciseStage1).toContain("múltipla escolha");
+  expect(exerciseStage1).toContain("Etapa 1 (fácil/fixação)");
+  expect(exerciseStage2).toContain("Etapa 2 (médio/aplicação)");
+  expect(isTeacherRequest({ ...baseRequest, action: "exercise", exerciseStage: 2 })).toBe(true);
+  expect(isTeacherRequest({ ...baseRequest, action: "exercise", exerciseStage: 0 })).toBe(false);
   expect(guided).toContain("Não afirme que leu arquivos físicos");
 });
 
@@ -78,6 +84,14 @@ test("modo Professor envia nível, método, contexto recuperado e trecho selecio
     page: 3,
     chapter: "Vetores",
   });
+
+  await page.getByRole("button", { name: "Exercício" }).click();
+  await expect(page.getByText("Resposta do Professor: exercise", { exact: true }).first()).toBeVisible();
+  expect(requests[2].teaching?.exerciseStage).toBe(1);
+
+  await page.getByRole("button", { name: "Exercício" }).click();
+  await expect(page.getByText("Resposta do Professor: exercise", { exact: true }).nth(1)).toBeVisible();
+  expect(requests[3].teaching?.exerciseStage).toBe(2);
 });
 
 test("modo Professor permanece utilizável no celular", async ({ page }) => {

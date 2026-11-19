@@ -1,8 +1,33 @@
-export const labLanguages = ["javascript", "typescript", "html", "css", "sql", "markdown", "mermaid", "python"] as const;
+export const labLanguages = ["javascript", "typescript", "html", "css", "sql", "markdown", "mermaid", "math", "data", "python"] as const;
 export type LabLanguage = (typeof labLanguages)[number];
 
 export type LabDifficulty = "easy" | "medium" | "hard";
 export type LabProjectStatus = "draft" | "in-progress" | "completed";
+
+export type LabGuidedStep = {
+  id: string;
+  title: string;
+  done?: boolean;
+};
+
+export type LabChartPoint = {
+  label: string;
+  x?: number;
+  y: number;
+};
+
+export type LabChartSpec = {
+  kind: "line" | "bar";
+  title?: string;
+  xLabel?: string;
+  yLabel?: string;
+  points: LabChartPoint[];
+};
+
+export type LabMetricItem = {
+  label: string;
+  value: string;
+};
 
 export type LabExercise = {
   statement: string;
@@ -12,6 +37,7 @@ export type LabExercise = {
   hints: string[];
   solution: string;
   difficulty: LabDifficulty;
+  steps?: LabGuidedStep[];
 };
 
 export type LabExecutionResult = {
@@ -21,6 +47,8 @@ export type LabExecutionResult = {
   durationMs: number;
   columns?: string[];
   rows?: Array<Array<string | number | null>>;
+  chart?: LabChartSpec;
+  metrics?: LabMetricItem[];
   createdAt: string;
 };
 
@@ -57,6 +85,9 @@ export type LabProject = {
   language: LabLanguage;
   files: Partial<Record<LabLanguage, string>>;
   studyId?: string;
+  sourceMaterialId?: string;
+  sourceMaterialName?: string;
+  generatedByAI?: boolean;
   academyStudyId?: string;
   academyContentId?: string;
   subject?: string;
@@ -80,11 +111,61 @@ export type CreateLabProjectInput = {
   title: string;
   language: LabLanguage;
   studyId?: string;
+  sourceMaterialId?: string;
+  sourceMaterialName?: string;
+  generatedByAI?: boolean;
   subject?: string;
   topic?: string;
   exercise?: Partial<LabExercise>;
   academyStudyId?: string;
   academyContentId?: string;
+};
+
+export const labChallengeModalities = ["code", "math", "data", "sql"] as const;
+export type LabChallengeModality = (typeof labChallengeModalities)[number];
+
+export const labChallengeModalityLabels: Record<LabChallengeModality, string> = {
+  code: "Código (JavaScript)",
+  math: "Matemática & Simulação",
+  data: "Dados & Gráficos",
+  sql: "SQL",
+};
+
+export type LabChallengeContextChunk = {
+  fileId: string;
+  studyId?: string;
+  sourceName: string;
+  text: string;
+};
+
+export type LabChallengeRequest = {
+  studyId?: string;
+  materialId: string;
+  materialFileId?: string;
+  materialName: string;
+  subject?: string;
+  topic?: string;
+  modality: LabChallengeModality;
+  language: LabLanguage;
+  difficulty: LabDifficulty;
+  extractedText: string;
+  chunks: LabChallengeContextChunk[];
+};
+
+export type LabGeneratedChallenge = {
+  title: string;
+  statement: string;
+  modality: LabChallengeModality;
+  language: LabLanguage;
+  difficulty: LabDifficulty;
+  starterCode: string;
+  expectedResult: string;
+  hints: string[];
+  steps: LabGuidedStep[];
+  solution: string;
+  explanation: string;
+  provider: string;
+  model: string;
 };
 
 export type LabReviewRequest = {
@@ -106,7 +187,9 @@ export const labLanguageLabels: Record<LabLanguage, string> = {
   html: "HTML",
   css: "CSS",
   sql: "SQL",
-  markdown: "Markdown",
+  markdown: "Markdown + KaTeX",
   mermaid: "Mermaid",
+  math: "Matemática & Simulação",
+  data: "Dados & Gráficos",
   python: "Python",
 };

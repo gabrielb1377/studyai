@@ -1,4 +1,4 @@
-import type { AIProviderId } from "./AIProvider";
+import type { AIFallbackOffer, AIProviderId } from "./AIProvider";
 
 export type AIErrorCode =
   | "INVALID_RESPONSE"
@@ -6,6 +6,8 @@ export type AIErrorCode =
   | "PROVIDER_ERROR"
   | "PROVIDER_UNAVAILABLE"
   | "RATE_LIMIT"
+  | "FALLBACK_CONSENT_REQUIRED"
+  | "PARTIAL_RESPONSE"
   | "TIMEOUT";
 
 export const AI_RATE_LIMIT_MESSAGE =
@@ -20,6 +22,18 @@ export class AIError extends Error {
   ) {
     super(message);
     this.name = "AIError";
+  }
+}
+
+export class AIFallbackConsentError extends AIError {
+  constructor(public readonly fallback: AIFallbackOffer) {
+    super(
+      "O provedor escolhido não respondeu. Confirme se deseja usar uma alternativa.",
+      "FALLBACK_CONSENT_REQUIRED",
+      409,
+      fallback.primaryProvider,
+    );
+    this.name = "AIFallbackConsentError";
   }
 }
 
@@ -44,9 +58,8 @@ function suggestionFor(error: AIError) {
 
 export function isAIRateLimitError(error: unknown) {
   return error instanceof AIError && (
-    error.code === "RATE_LIMIT" ||
     error.status === 429 ||
-    /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)
+    (error.status >= 500 && error.status < 600 && (error.code === "RATE_LIMIT" || /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)))
   );
 }
 
@@ -56,6 +69,18 @@ export function safeAIErrorLogMessage(error: unknown) {
 }
 
 export function normalizeAIError(error: unknown, fallbackMessage: string) {
+  if (error instanceof AIFallbackConsentError) {
+    return {
+      status: error.status,
+      body: {
+        code: error.code,
+        error: error.message,
+        provider: error.provider,
+        suggestion: "Escolha uma das alternativas exibidas ou cancele para manter sua mensagem.",
+        fallback: error.fallback,
+      },
+    };
+  }
   if (error instanceof AIError) {
     const rateLimited = isAIRateLimitError(error);
     return {

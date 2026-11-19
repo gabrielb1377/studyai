@@ -1,12 +1,102 @@
 # Contexto do Projeto — StudyAI
 
-Atualizado em 2 de outubro de 2026.
+Atualizado em 19 de outubro de 2026.
+
+## Academy Studio Pro — Exportação profissional — Sprint 37C.2
+
+O [[Academy Studio]] agora **exporta** o que edita. O documento estruturado do
+Studio é normalizado em um modelo canônico (`ExportDocumentModel` /
+`ExportDeckModel`), recebe os tokens de tema resolvidos a partir da
+`StudioCustomization` e é renderizado em **PDF profissional** (pdf-lib) ou
+**PPTX editável** (JSZip/Open XML).
+
+A pré-visualização, o PDF e o PPTX consomem **os mesmos** tokens
+(`src/features/academy/studio/export/theme.ts`): não há três configurações de
+tema paralelas. A escolha de template, cores, tipografia, espaçamento,
+orientação, margens, capa, cabeçalho/rodapé e numeração afeta realmente os
+arquivos gerados.
+
+A geração é local (navegador), não usa IA e não altera o documento-fonte. O
+artefato é salvo na Biblioteca com identificador estável por (documento,
+formato) — reexportar substitui, não duplica — e carrega o vínculo com o
+documento-fonte, permitindo reabrir, editar e exportar outra versão.
+
+O PPTX usa caixas de texto, tabelas, formas e notas do apresentador nativos:
+slides nunca são exportados como imagens. Diagramas entram como fonte
+editável, com aviso explícito.
+
+Limites: as fontes padrão do PDF cobrem Latin-1 (acentos brasileiros são
+preservados); o ambiente não possui LibreOffice para renderizar o PPTX, que
+foi validado estruturalmente.
+
+Ver `docs/RELEASE_NOTES_SPRINT_37C_2.md`.
+
+## Academy Studio Pro — Sprint 37C.1
+
+A Academy agora possui um **editor visual** para os conteúdos que ela mesma
+gera. A rota `/academy/studio` abre o conteúdo como documento ou apresentação,
+edita seções e slides, personaliza o template, exibe a prévia e salva o
+trabalho localmente.
+
+O Studio vive em `src/features/academy/studio/` e reutiliza a Academy, o AI
+Core e o Design System existentes: nenhum módulo paralelo e nenhum provider
+novo. A assistência por IA (melhorar redação, resumir, expandir, simplificar,
+criar exemplo, gerar exercício, reorganizar) passa por
+`POST /api/academy/studio/assist` (server-only) → `StudioAssistService` →
+`AIService` → `ProviderManager` → provider, com BYOK do usuário quando há
+sessão. A proposta da IA é sempre exibida antes de ser aplicada.
+
+O conteúdo original da Academy é preservado integralmente na conversão para
+estrutura editável. Documentos têm 10 tipos de seção e 6 templates; apresentações
+têm 10 layouts e 6 templates. A personalização cobre cores, tipografia,
+espaçamento, orientação, cabeçalho, rodapé, numeração, capa e sumário.
+
+A persistência usa o novo object store `studio-documents` (IndexedDB v5), com
+autosave debounced de 1,5 s, versionamento por documento e recuperação após
+reload. Nada é gravado no `localStorage` além de preferências leves do editor.
+A entidade `studio-documents` entrou no Cloud Sync incremental.
+
+O conteúdo renderizado é sanitizado antes da exibição: allowlist de tags,
+remoção de handlers, `script`, `iframe` e URLs `javascript:`/`data:` perigosas.
+
+A exportação profissional em PDF/PPTX a partir do documento editado fica para a
+Sprint 37C.2. A exportação existente da Academy não foi alterada.
+
+Ver `docs/RELEASE_NOTES_SPRINT_37C_1.md`.
+
+## Aulas narradas — Sprint 37B.2
+
+O Professor conduz aulas em etapas usando o Voice Core. A geração do plano, a
+explicação alternativa e a correção de exercício passam pelo mesmo AI Core
+(`AIService` → `ProviderManager`), sem provider paralelo. O navegador acessa a
+geração por `POST /api/teacher/audio-lesson`, rota server-only com JWT, CSRF e
+prioridade para a chave individual (BYOK) do usuário.
+
+A narração usa `TeacherNarrationService`, que converte Markdown em fala natural:
+remove marcação, URLs longas, blocos de código e fórmulas LaTeX, preservando termos
+técnicos. O texto original continua visível na tela.
+
+A sessão fica no IndexedDB (store `metadata`) com etapa atual, etapas concluídas,
+exercícios, preferências de áudio e tempo efetivo. `accumulateActiveSeconds()`
+desconta pausas, de modo que somente a narração em execução conta como tempo de
+estudo. A atividade é registrada no Learning Engine como `reading` (aula) e `quiz`
+(exercício).
+
+O reconhecimento de fala usa `SpeechRecognition` nativa, com pt-BR, en-US e es-ES.
+A transcrição é editável antes do envio. O microfone nunca é ativado
+automaticamente e nenhum áudio bruto é persistido.
+
+Integrações: "Ouvir resposta" nas mensagens do Tutor/Professor, "Ouvir página" e
+"Ouvir texto selecionado" no leitor de PDF, "Ouvir conteúdo" no visualizador da
+Academy.
+
+Ver `docs/RELEASE_NOTES_SPRINT_37B_2.md`.
 
 ## Deploy online 24h
 
 A configuração de produção foi preparada para hospedagem independente do computador local. Railway é o caminho recomendado para a Beta; Vercel/Supabase e VPS/Docker Compose permanecem documentados como alternativas em `docs/DEPLOY_ONLINE.md`.
 
-Produção exige PostgreSQL persistente e Object Storage S3 compatível. O fallback em memória/BYTEA permanece exclusivo do desenvolvimento; `/api/health` verifica conexão, schema e bucket e responde `503` quando a release não está pronta. O container aplica `npm run db:migrate` antes de iniciar, e `railway.toml` usa o mesmo endpoint como health check.
+Produção exige PostgreSQL persistente e Object Storage S3 compatível. O fallback em memória/BYTEA permanece exclusivo do desenvolvimento; `/api/health/live` é liveness HTTP independente e `/api/health` verifica conexão, schema, bucket e URL, respondendo `503` quando readiness não é atendida. O container aplica `db-migrate.mjs` antes de iniciar. A configuração local `railway.toml` usa liveness, mas seu uso remoto não foi confirmado; `.railway/railway.ts` é Railway IaC avaliada pelo CLI, não automaticamente no deploy. Ver `docs/RAILWAY_CONFIGURATION_DECISION.md`.
 
 `APP_URL` define a origem HTTPS de emails, convites e compartilhamentos. Providers continuam server-side; Gemini, OpenRouter e Groq são adequados à cloud, enquanto Ollama só é ativado em produção com `OLLAMA_URL` explícita e alcançável pelo servidor. A PWA usa a URL pública e IndexedDB/OPFS apenas como cache offline por dispositivo.
 
@@ -21,6 +111,76 @@ A Central de Ajuda oferece feedback da Beta e relato de problema. O Route Handle
 O runtime local de ML foi atualizado de forma controlada para `@huggingface/transformers 4.3.0`; a regressão cobriu OCR, transcrição, embeddings e importação. `npm audit --omit=dev` passou a reportar zero vulnerabilidades. A navegação “Continuar estudando” também foi estabilizada com navegação nativa no CTA crítico.
 
 Documentos operacionais: `docs/BETA_TESTING.md`, `docs/BETA_BACKLOG.md` e `docs/RELEASE_NOTES_BETA.md`.
+
+## BYOK — Sprint 37A
+
+A Sprint 37A implementa **Bring Your Own Key (BYOK)**: chaves de API individuais por usuário e provider.
+
+### Arquitetura
+- **Tabela `user_api_keys`** no PostgreSQL: `user_id`, `provider`, `encrypted_key`, `key_hint`, timestamps. Chave composta `(user_id, provider)`.
+- **Criptografia AES-256-GCM**: chave mestra derivada de `AUTH_SECRET` via `scrypt` com salt fixo `studyai-api-key-encryption-v1`. IV único (12 bytes aleatórios) por operação. Tag de autenticação GCM verificada na descriptografia.
+- **Isolamento estrito**: todas as operações (`list`, `get`, `set`, `delete`, `test`) exigem `userId` autenticado via JWT (`requireUser`). Usuário A nunca acessa chaves do usuário B.
+- **Rate limiting**: 10 req/min por usuário para `set` e `test` (`apikey:set:{userId}`).
+- **CSRF**: todas as mutações (`POST`, `DELETE`) exigem header `x-csrf-token` validado contra cookie `studyai_csrf`.
+
+### Fluxo de resolução de chave (ProviderManager)
+1. Requisição chega com `apiKeys: Partial<Record<AIProviderId, string>>` (carregado das chaves do usuário no banco).
+2. Para cada provider candidato: `request.apiKeys?.[providerId] ?? request.apiKey` (fallback server env).
+3. Chave do usuário tem prioridade absoluta; chave do servidor só é usada se o usuário não cadastrou a sua.
+4. Modo `automatic` continua funcionando: providers online são ordenados por latência; chaves do servidor servem como fallback compartilhado.
+
+### Providers suportados
+| Provider | Chave obrigatória? | Validação leve | Variável server env |
+| --- | --- | --- | --- |
+| Gemini | Sim | Prefixo `AIza` | `GEMINI_API_KEY` |
+| Groq | Sim | Prefixo `gsk_` | `GROQ_API_KEY` |
+| OpenRouter | Sim | Prefixo `sk-or-` | `OPENROUTER_API_KEY` |
+| Ollama | Não (URL local) | — | `OLLAMA_URL` |
+
+### Interface (Configurações → IA)
+- Painel "Chaves de API individuais" abaixo do gerenciador de IA.
+- Input `type=password`, autocomplete=off, placeholder dinâmico.
+- Botões: **Salvar** (criptografa + persiste), **Testar** (chama provider com a chave), **Remover** (DELETE).
+- Dica mascarada: `AIza••••xxxx` (primeiros 4 + últimos 4).
+- Chave completa nunca exposta em logs, respostas JSON ou DOM.
+
+### Endpoints
+- `GET /api/account/api-keys` → lista chaves do usuário (sem segredos, apenas `keyHint`).
+- `POST /api/account/api-keys` → salva chave (valida, criptografa, rate limit, CSRF).
+- `DELETE /api/account/api-keys?provider=gemini` → remove chave (CSRF).
+- `POST /api/account/api-keys/test` → testa chave (aceita chave no body OU usa salva; CSRF).
+
+### Integração AI Core
+- Rotas `/api/tutor`, `/api/tutor/summary`, `/api/tutor/flashcards`, `/api/tutor/quiz`, `/api/academy/generate`, `/api/lab/review` carregam chaves do usuário autenticado e passam via `apiKeys` para `AIService.generate/stream`.
+- `AIProvider` interface expandida: `inspect(signal, apiKey?)`, `generate(request)`, `stream(request)` — todos aceitam `apiKey` opcional.
+- `GeminiProvider`, `OpenAICompatibleProvider` (Groq, OpenRouter) implementam `apiKeyOverride`.
+- `OllamaProvider` aceita e ignora (compatibilidade de interface).
+
+### Migração PostgreSQL
+```sql
+CREATE TABLE IF NOT EXISTS user_api_keys (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  encrypted_key TEXT NOT NULL,
+  key_hint TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, provider)
+);
+```
+- Não destrutiva; `IF NOT EXISTS`.
+- `ON DELETE CASCADE` remove chaves ao excluir conta.
+- Compatível com modo memória (desenvolvimento sem Postgres).
+
+### Validação
+- ESLint, TypeScript, build: aprovados.
+- 121/121 testes Playwright aprovados (1 flaky pre-existente, passou no retry).
+- `npm audit --omit=dev`: 7 vulnerabilidades (transitivas, pré-existentes; sharp/next/katex/source-map-js).
+
+### Riscos conhecidos
+- Rotação de `AUTH_SECRET` invalida todas as chaves criptografadas existentes (documentado em Segurança).
+- Fallback compartilhado consome cota do servidor; não há quota por usuário implementada.
+- Ollama não suporta API key; usa `OLLAMA_URL` configurada no servidor.
 
 ## Integração Academy + Lab — Sprint 36.1E
 

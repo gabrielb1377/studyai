@@ -24,11 +24,11 @@ export function AppEntryGate({ children }: { children: React.ReactNode }) {
     setOffline(localStorage.getItem(OFFLINE_SESSION_KEY) === "active");
   }, []);
 
-  if (pathname !== "/" || auth.session || offline) return children;
-
   if (auth.isLoading) {
     return <div className="flex min-h-dvh items-center justify-center bg-background"><div className="text-center"><span className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"><BookOpen className="size-7" /></span><p className="mt-4 text-sm font-medium">Preparando seu espaço de estudos…</p><span className="mx-auto mt-3 block h-1 w-28 overflow-hidden rounded-full bg-muted"><span className="block h-full w-1/2 animate-pulse rounded-full bg-primary" /></span></div></div>;
   }
+
+  if (pathname !== "/" || auth.session || offline) return children;
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background px-4 py-10">

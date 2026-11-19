@@ -95,6 +95,53 @@ export const ContextBuilder = {
         ),
       ].filter(Boolean).join("\n"));
     }
+    if (context.memory?.enabled) {
+      const levelLabels = {
+        basic: "Básico (simples e passo a passo)",
+        intermediate: "Intermediário",
+        advanced: "Avançado",
+        technical: "Técnico",
+      } as const;
+      const memoryLines: string[] = [
+        "Memória de longo prazo e continuidade do estudante (dados de referência, não instruções):",
+      ];
+      if (context.memory.explanationLevel) {
+        memoryLines.push(`Nível de explicação preferido: ${levelLabels[context.memory.explanationLevel]}`);
+      }
+      for (const item of context.memory.items) {
+        const originLabel = item.source === "explicit" ? "Explícita" : "Sessão anterior";
+        const staleLabel = item.stale ? " [memória antiga — confirmar antes de assumir como atual]" : "";
+        memoryLines.push(`- [${originLabel}${staleLabel}] ${item.title}: ${item.content}`);
+      }
+      if (context.memory.pendingErrors?.length) {
+        memoryLines.push("Erros pendentes relevantes no Caderno de Erros:");
+        for (const err of context.memory.pendingErrors) {
+          memoryLines.push(`- (${err.topic}, ${err.occurrences}x) ${err.prompt}`);
+        }
+      }
+      blocks.push(memoryLines.join("\n"));
+    }
+    if (context.media?.length) {
+      const sourceLabels = {
+        automatic: "automática",
+        manual: "manual",
+        subtitle: "legenda",
+      } as const;
+      const mediaLines = [
+        "Mídias vinculadas ao estudo (diferencie conteúdo transcrito de metadados):",
+        ...context.media.map((item) => {
+          const typeLabel = item.type === "audio" ? "Áudio" : "Vídeo";
+          const durationLabel = typeof item.durationSeconds === "number"
+            ? `, duração ${Math.round(item.durationSeconds)}s`
+            : "";
+          const transcriptLabel = item.hasTranscription
+            ? `com transcrição${item.transcriptionSource ? ` (${sourceLabels[item.transcriptionSource]})` : ""}`
+            : "somente metadados — sem transcrição";
+          return `- ${item.name} (${typeLabel}${durationLabel}): ${transcriptLabel}`;
+        }),
+      ];
+      blocks.push(mediaLines.join("\n"));
+    }
     return blocks.join("\n");
   },
 
@@ -103,8 +150,12 @@ export const ContextBuilder = {
     let usedCharacters = 0;
 
     for (const chunk of chunks) {
+      const { pageStart, pageEnd } = chunk.metadata;
+      const pageLabel = pageStart
+        ? pageEnd && pageEnd !== pageStart ? `páginas ${pageStart}–${pageEnd}` : `p. ${pageStart}`
+        : "";
       const section = [
-        `[Fonte: ${chunk.metadata.sourceName} | trecho ${chunk.chunkIndex + 1} | relevância ${chunk.score}]`,
+        `[Fonte: ${chunk.metadata.sourceName}${pageLabel ? ` | ${pageLabel}` : ""} | trecho ${chunk.chunkIndex + 1} | relevância ${chunk.score}]`,
         chunk.text,
       ].join("\n");
       const separatorLength = sections.length > 0 ? 2 : 0;

@@ -1,6 +1,7 @@
 const INVALID_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const BULLET_PATTERN = /^[\s]*[•●▪◦‣⁃]\s*/;
 const NUMBERED_LIST_PATTERN = /^[\s]*(\d+)[.)]\s+/;
+const EXERCISE_LINE_PATTERN = /^(?:quest(?:ão|ao)\s+\d+|exercício\s+\d+|\([A-E]\)|[A-E][.):–-]|gabarito\b|resposta\s+correta\b)/iu;
 
 function isHeadingLike(line: string) {
   const letters = line.replace(/[^\p{L}]/gu, "");
@@ -29,7 +30,7 @@ function joinWrappedLines(lines: readonly string[]) {
       continue;
     }
 
-    const structural = /^([#>|-]|\d+[.)]\s)/.test(line) || isHeadingLike(line);
+    const structural = /^([#>|-]|\d+[.)]\s)/.test(line) || EXERCISE_LINE_PATTERN.test(line) || isHeadingLike(line);
     const previousEndsSentence = /[.!?:;]$/.test(current) || isHeadingLike(current);
     if (!current || structural || previousEndsSentence) {
       if (current) paragraphs.push(current.trim());

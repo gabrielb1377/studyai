@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { CloudDatabase } from "@/server/cloud/CloudDatabase";
+import { hasPostgres, query } from "@/server/database/Postgres";
 import { hashPassword, hashToken, randomToken, signJwt, verifyJwt, verifyPassword } from "@/server/security/Crypto";
 
 const ACCESS_SECONDS = 15 * 60;
@@ -45,6 +46,31 @@ export const AuthService = {
   },
 
   access(token?: string) { if (!token) return null; const claims = verifyJwt<AccessClaims>(token); return claims?.type === "access" ? claims : null; },
+  async isSessionActive(userId: string, sessionId: string): Promise<boolean> {
+    if (!userId || typeof sessionId !== "string" || !sessionId) return false;
+    try {
+      if (hasPostgres()) {
+        const result = await query<{ id: string }>(
+          "SELECT id FROM refresh_tokens WHERE id=$1 AND user_id=$2 AND revoked_at IS NULL AND expires_at > NOW() LIMIT 1",
+          [sessionId, userId],
+        );
+        return result.rows.length > 0;
+      }
+      const sessions = await CloudDatabase.devices(userId);
+      const nowMs = Date.now();
+      return sessions.some((item) => item.id === sessionId && Date.parse(item.expiresAt) > nowMs);
+    } catch {
+      throw new Response(JSON.stringify({ error: "Serviço temporariamente indisponível. Tente novamente em instantes." }), {
+        status: 503,
+        headers: { "content-type": "application/json" },
+      });
+    }
+  },
+  async activeAccess(token?: string): Promise<AccessClaims | null> {
+    const claims = this.access(token);
+    if (!claims || typeof claims.sessionId !== "string" || !claims.sessionId) return null;
+    return (await this.isSessionActive(claims.sub, claims.sessionId)) ? claims : null;
+  },
   async logout(refreshToken?: string) { if (!refreshToken) return; const session = await CloudDatabase.sessionByHash(hashToken(refreshToken)); if (session) await CloudDatabase.revokeSession(session.id); },
 
   async requestRecovery(email: string) { const user = await CloudDatabase.userByEmail(normalizeEmail(email)); if (!user) return {}; const token = randomToken(); await CloudDatabase.saveAccountToken(hashToken(token), user.id, "recover", new Date(Date.now() + 60 * 60 * 1000).toISOString()); return { recoveryToken: token, email: user.email }; },

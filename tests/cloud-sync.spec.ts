@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { STORAGE_DATABASE_VERSION } from "../src/lib/storage/StorageVersion";
 import { readIndexedDBStore } from "./helpers/indexed-db";
 
 const password = "StudyAI2026secure";
@@ -23,9 +24,9 @@ async function login(page: Page, email: string) {
 }
 
 async function putRecord(page: Page, store: string, value: Record<string, unknown>) {
-  await page.evaluate(async ({ store, value }) => new Promise<void>((resolve, reject) => {
+  await page.evaluate(async ({ store, value, version }) => new Promise<void>((resolve, reject) => {
     const scope = localStorage.getItem("studyai:storage-scope") || "guest";
-    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 4);
+    const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, version);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -34,7 +35,7 @@ async function putRecord(page: Page, store: string, value: Record<string, unknow
       transaction.oncomplete = () => { database.close(); resolve(); };
       transaction.onerror = () => reject(transaction.error);
     };
-  }), { store, value });
+  }), { store, value, version: STORAGE_DATABASE_VERSION });
 }
 
 async function note(page: Page, id: string, content: string) {
@@ -62,6 +63,12 @@ async function sync(page: Page) {
 
 async function expectHistory(page:Page,recordId:string){await expect.poll(async()=>{const response=await page.request.get("/sync/history");const data=await response.json() as {history:Array<{recordId:string}>};return data.history.some((item)=>item.recordId===recordId);},{timeout:15_000}).toBe(true);}
 
+async function sessionHeaders(page: Page) {
+  const response = await page.request.get("/auth/session");
+  const session = await response.json() as { user: { id: string } };
+  return { "x-studyai-session-user": session.user.id };
+}
+
 test("cadastro, sessão persistente, logout, login e recuperação funcionam", async ({ page }) => {
   const cspViolations: string[] = [];
   page.on("console", (message) => { if (message.type() === "error" && message.text().includes("Content Security Policy")) cspViolations.push(message.text()); });
@@ -75,17 +82,20 @@ test("cadastro, sessão persistente, logout, login e recuperação funcionam", a
   await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
   await login(page, email);
   await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
   await page.getByRole("button", { name: "Esqueci a senha" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Enviar instruções" }).click();
   const status = page.getByRole("status");
-  await expect(status).toContainText("instruções");
+  // A primeira requisição a /auth/recover compila a rota no `next dev`;
+  // 15 s evita flakiness de compilação sem aumentar retries da suíte.
+  await expect(status).toContainText("instruções", { timeout: 15_000 });
   const token = (await status.textContent())?.match(/Token local:\s*(\S+)/)?.[1];
   expect(token).toBeTruthy();
   await page.goto(`/conta?reset=${encodeURIComponent(token!)}`);
   await page.getByLabel("Nova senha").fill("StudyAI2027secure");
   await page.getByRole("button", { name: "Alterar senha" }).click();
-  await expect(page.getByRole("status")).toContainText("Senha alterada");
+  await expect(page.getByRole("status")).toContainText("Senha alterada", { timeout: 15_000 });
   expect(cspViolations).toEqual([]);
 });
 
@@ -128,13 +138,14 @@ test("sync incremental mantém fila offline, backup, compartilhamento e arquivo"
   await putRecord(page, "documents", { id: "cloud-file-1", name: "cloud.txt", extension: "txt", mimeType: "text/plain", type: "text", size: 13, lastModified: Date.now(), status: "ready", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
   await page.evaluate(async () => {
     const storage = navigator.storage as StorageManager & { getDirectory(): Promise<FileSystemDirectoryHandle> };
-    const root = await storage.getDirectory(); const directory = await root.getDirectoryHandle("studyai-materials", { create: true }); const handle = await directory.getFileHandle("cloud-file-1", { create: true }); const writable = await handle.createWritable(); await writable.write(new File(["conteúdo cloud"], "cloud.txt", { type: "text/plain" })); await writable.close();
+    const scope = localStorage.getItem("studyai:storage-scope") || "guest";
+    const root = await storage.getDirectory(); const base = await root.getDirectoryHandle("studyai-materials", { create: true }); const directory = await base.getDirectoryHandle(scope, { create: true }); const handle = await directory.getFileHandle("cloud-file-1", { create: true }); const writable = await handle.createWritable(); await writable.write(new File(["conteúdo cloud"], "cloud.txt", { type: "text/plain" })); await writable.close();
   });
   const uploaded = page.waitForResponse((item) => item.url().includes("/api/files/cloud-file-1") && item.request().method() === "PUT");
   await sync(page);
   const uploadResponse = await uploaded;
   expect(uploadResponse.ok(), await uploadResponse.text()).toBe(true);
-  const fileResponse = await page.request.get("/api/files/cloud-file-1");
+  const fileResponse = await page.request.get("/api/files/cloud-file-1", { headers: await sessionHeaders(page) });
   const downloaded = await fileResponse.text();
   expect(fileResponse.ok(), downloaded).toBe(true);
   expect(downloaded).toBe("conteúdo cloud");
@@ -182,8 +193,10 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
       status: "ready",
     });
     await firstPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const base = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const directory = await base.getDirectoryHandle(scope, { create: true });
       const handle = await directory.getFileHandle(id, { create: true });
       const writable = await handle.createWritable();
       await writable.write(new File(["conteúdo material"], "material-remoto.txt", { type: "text/plain" }));
@@ -194,42 +207,50 @@ test("exclusão sincronizada remove o documento e o binário OPFS do outro dispo
     await login(secondPage, email);
     await sync(secondPage);
     await expect.poll(async () => (await secondPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials", { create: false }).catch(() => null);
+      const base = await root.getDirectoryHandle("studyai-materials", { create: false }).catch(() => null);
+      const directory = await base?.getDirectoryHandle(scope, { create: false }).catch(() => null);
       return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
     }, materialId))).toBe(false);
-    const remoteFile = await secondPage.request.get(`/api/files/${materialId}`);
+    const remoteFile = await secondPage.request.get(`/api/files/${materialId}`, { headers: await sessionHeaders(secondPage) });
     expect(remoteFile.ok()).toBe(true);
     await secondPage.evaluate(async ({ id, bytes }) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const base = await root.getDirectoryHandle("studyai-materials", { create: true });
+      const directory = await base.getDirectoryHandle(scope, { create: true });
       const handle = await directory.getFileHandle(id, { create: true });
       const writable = await handle.createWritable();
       await writable.write(new Uint8Array(bytes));
       await writable.close();
     }, { id: materialId, bytes: [...new Uint8Array(await remoteFile.body())] });
     const cachedBeforeDelete = await secondPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials");
+      const base = await root.getDirectoryHandle("studyai-materials");
+      const directory = await base.getDirectoryHandle(scope);
       return directory.getFileHandle(id).then(() => true).catch(() => false);
     }, materialId);
     expect(cachedBeforeDelete).toBe(true);
 
     const csrf = await firstPage.evaluate(() => document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith("studyai_csrf="))?.split("=").slice(1).join("=") ?? "");
-    const deletedFile = await firstPage.request.delete(`/api/files/${materialId}`, { headers: { "x-csrf-token": csrf } });
+    const deletedFile = await firstPage.request.delete(`/api/files/${materialId}`, { headers: { "x-csrf-token": csrf, ...await sessionHeaders(firstPage) } });
     expect(deletedFile.ok()).toBe(true);
-    await firstPage.evaluate(async ({ id }) => {
+    await firstPage.evaluate(async ({ id, version }) => {
       const scope = localStorage.getItem("studyai:storage-scope") || "guest";
-      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, 4);
+      const request = indexedDB.open(scope === "guest" ? "studyai-db" : `studyai-db:${scope}`, version);
       const database = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
       await new Promise<void>((resolve, reject) => { const transaction = database.transaction("documents", "readwrite"); transaction.objectStore("documents").delete(id); transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); });
       database.close();
-    }, { id: materialId });
+    }, { id: materialId, version: STORAGE_DATABASE_VERSION });
     await sync(firstPage);
     await sync(secondPage);
     const cachedAfterDelete = await secondPage.evaluate(async (id) => {
+      const scope = localStorage.getItem("studyai:storage-scope") || "guest";
       const root = await navigator.storage.getDirectory();
-      const directory = await root.getDirectoryHandle("studyai-materials").catch(() => null);
+      const base = await root.getDirectoryHandle("studyai-materials").catch(() => null);
+      const directory = await base?.getDirectoryHandle(scope).catch(() => null);
       return directory?.getFileHandle(id).then(() => true).catch(() => false) ?? false;
     }, materialId);
     expect(cachedAfterDelete).toBe(false);

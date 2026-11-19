@@ -19,8 +19,8 @@ export function EmptyState({
         <Icon className="size-7" strokeWidth={1.5} aria-hidden="true" />
       </div>
       <div className="relative">
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
+        <h2 className="type-section-title">{title}</h2>
+        <p className="mx-auto mt-3 max-w-sm type-supporting">
           {description}
         </p>
       </div>

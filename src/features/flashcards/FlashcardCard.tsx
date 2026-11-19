@@ -27,7 +27,7 @@ export function FlashcardCard({
   card: Flashcard;
   isAnswerVisible: boolean;
   onShowAnswer: () => void;
-  onReview: (wasCorrect: boolean) => void;
+  onReview: (rating: "errei" | "dificil" | "acertei") => void;
 }) {
   return (
     <Card className="min-h-70 justify-between gap-6 p-6 shadow-none sm:p-8">
@@ -45,10 +45,10 @@ export function FlashcardCard({
       </div>
       {isAnswerVisible ? (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" onClick={() => onReview(false)}>
+          <Button type="button" variant="outline" onClick={() => onReview("errei")}>
             Errei
           </Button>
-          <Button type="button" onClick={() => onReview(true)}>
+          <Button type="button" onClick={() => onReview("acertei")}>
             Acertei
           </Button>
         </div>

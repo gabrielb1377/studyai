@@ -24,4 +24,8 @@ export const MaterialRuntimeStore = {
     URL.revokeObjectURL(existing.source);
     runtimeMaterials.delete(materialId);
   },
+
+  clear() {
+    for (const materialId of runtimeMaterials.keys()) this.remove(materialId);
+  },
 };

@@ -14,10 +14,11 @@ type MemoryState = {
   backups: Backup[];
   shares: Share[];
   files: Map<string, { userId: string; id: string; name: string; mimeType: string; hash: string; sizeBytes: number; content: Buffer; storageProvider: "memory"; updatedAt: string }>;
+  apiKeys: Map<string, { userId: string; provider: string; encryptedKey: string; keyHint: string; createdAt: string; updatedAt: string }>;
 };
 
 const serverGlobal = globalThis as typeof globalThis & { __studyAiCloudMemory?: MemoryState };
-const memory: MemoryState = serverGlobal.__studyAiCloudMemory ??= { users: new Map(), profiles: new Map(), sessions: new Map(), accountTokens: new Map(), records: new Map(), logs: [], backups: [], shares: [], files: new Map() };
+const memory: MemoryState = serverGlobal.__studyAiCloudMemory ??= { users: new Map(), profiles: new Map(), sessions: new Map(), accountTokens: new Map(), records: new Map(), logs: [], backups: [], shares: [], files: new Map(), apiKeys: new Map() };
 const recordKey = (userId: string, entity: string, recordId: string) => `${userId}:${entity}:${recordId}`;
 const now = () => new Date().toISOString();
 
@@ -145,6 +146,35 @@ export const CloudDatabase = {
     const storageKey=result.rows[0]?.storage_key;
     if(storageKey)await ObjectStorage.delete(storageKey);
   },
+  async saveApiKey(userId: string, provider: string, encryptedKey: string, keyHint: string) {
+    const timestamp = new Date().toISOString();
+    const key = `${userId}:${provider}`;
+    if (!hasPostgres()) {
+      const existing = memory.apiKeys.get(key);
+      memory.apiKeys.set(key, { userId, provider, encryptedKey, keyHint, createdAt: existing?.createdAt ?? timestamp, updatedAt: timestamp });
+      return;
+    }
+    await query(
+      "INSERT INTO user_api_keys (user_id,provider,encrypted_key,key_hint,created_at,updated_at) VALUES ($1,$2,$3,$4,NOW(),NOW()) ON CONFLICT (user_id,provider) DO UPDATE SET encrypted_key=EXCLUDED.encrypted_key,key_hint=EXCLUDED.key_hint,updated_at=NOW()",
+      [userId, provider, encryptedKey, keyHint],
+    );
+  },
+  async apiKey(userId: string, provider: string) {
+    if (!hasPostgres()) return memory.apiKeys.get(`${userId}:${provider}`);
+    const result = await query<Record<string, unknown>>("SELECT * FROM user_api_keys WHERE user_id=$1 AND provider=$2", [userId, provider]);
+    const row = result.rows[0];
+    if (!row) return undefined;
+    return { userId, provider, encryptedKey: String(row.encrypted_key), keyHint: String(row.key_hint), createdAt: new Date(String(row.created_at)).toISOString(), updatedAt: new Date(String(row.updated_at)).toISOString() };
+  },
+  async apiKeys(userId: string) {
+    if (!hasPostgres()) return [...memory.apiKeys.values()].filter((item) => item.userId === userId);
+    const result = await query<Record<string, unknown>>("SELECT * FROM user_api_keys WHERE user_id=$1 ORDER BY provider", [userId]);
+    return result.rows.map((row) => ({ userId, provider: String(row.provider), encryptedKey: String(row.encrypted_key), keyHint: String(row.key_hint), createdAt: new Date(String(row.created_at)).toISOString(), updatedAt: new Date(String(row.updated_at)).toISOString() }));
+  },
+  async deleteApiKey(userId: string, provider: string) {
+    if (!hasPostgres()) { memory.apiKeys.delete(`${userId}:${provider}`); return; }
+    await query("DELETE FROM user_api_keys WHERE user_id=$1 AND provider=$2", [userId, provider]);
+  },
   async deleteAccount(userId: string) {
     if (!hasPostgres()) {
       memory.users.delete(userId); memory.profiles.delete(userId);
@@ -155,6 +185,7 @@ export const CloudDatabase = {
       memory.backups = memory.backups.filter((item) => item.userId !== userId);
       memory.shares = memory.shares.filter((item) => item.userId !== userId);
       for (const [key, file] of memory.files) if (file.userId === userId) memory.files.delete(key);
+      for (const [key, item] of memory.apiKeys) if (item.userId === userId) memory.apiKeys.delete(key);
       return;
     }
     const files = await query<{ storage_key: string | null }>("SELECT storage_key FROM files WHERE user_id=$1 AND storage_key IS NOT NULL", [userId]);

@@ -1,16 +1,143 @@
 import "server-only";
 
+import { isIP } from "node:net";
+
+import { RateLimitService, type RateLimitStatus } from "./RateLimitService";
+
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
-export function rateLimit(key: string, limit = 20, windowMs = 60_000) {
+export type RateLimitDecision = RateLimitStatus & {
+  /** `true` quando o backend persistente está indisponível e a política é negar. */
+  unavailable?: true;
+};
+
+function inMemoryRateLimit(key: string, limit = 20, windowMs = 60_000): RateLimitDecision {
   const timestamp = Date.now();
   const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= timestamp) { buckets.set(key, { count: 1, resetAt: timestamp + windowMs }); return { allowed: true, remaining: limit - 1 }; }
+  if (!bucket || bucket.resetAt <= timestamp) {
+    const resetAt = timestamp + windowMs;
+    buckets.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: limit - 1, limit, resetAt: new Date(resetAt).toISOString() };
+  }
   bucket.count += 1;
-  return { allowed: bucket.count <= limit, remaining: Math.max(0, limit - bucket.count), retryAfter: Math.ceil((bucket.resetAt - timestamp) / 1000) };
+  return {
+    allowed: bucket.count <= limit,
+    remaining: Math.max(0, limit - bucket.count),
+    limit,
+    resetAt: new Date(bucket.resetAt).toISOString(),
+    retryAfter: Math.ceil((bucket.resetAt - timestamp) / 1000),
+  };
 }
+
+export async function rateLimit(key: string, limit = 20, windowMs = 60_000) {
+  try {
+    return await RateLimitService.checkAndConsume(key, { limit, windowMs });
+  } catch {
+    // Fail-open deliberado apenas para endpoints não críticos (sync,
+    // colaboração, telemetria, feedback). O fallback em memória é local à
+    // instância e não substitui a proteção distribuída.
+    return inMemoryRateLimit(key, limit, windowMs);
+  }
+}
+
+/**
+ * Rate limit para endpoints críticos de segurança (login, cadastro,
+ * recuperação de senha e gerenciamento de API keys).
+ *
+ * Em produção, se o backend persistente estiver indisponível, a requisição é
+ * negada (503) em vez de cair no contador em memória — que permitiria bypass
+ * distribuído durante uma indisponibilidade do PostgreSQL.
+ *
+ * Em desenvolvimento sem DATABASE_URL o comportamento é preservado (o próprio
+ * `RateLimitService` libera a requisição); com DATABASE_URL configurada e
+ * falha de conexão, usa-se o fallback em memória local explicitamente.
+ */
+export async function rateLimitStrict(
+  key: string,
+  limit = 20,
+  windowMs = 60_000
+): Promise<RateLimitDecision> {
+  try {
+    return await RateLimitService.checkAndConsume(key, { limit, windowMs });
+  } catch {
+    if (process.env.NODE_ENV === "production") {
+      return {
+        allowed: false,
+        remaining: 0,
+        limit,
+        resetAt: new Date(Date.now() + windowMs).toISOString(),
+        retryAfter: Math.ceil(windowMs / 1000),
+        unavailable: true,
+      };
+    }
+    return inMemoryRateLimit(key, limit, windowMs);
+  }
+}
+
+function ipLiteral(value: string | null | undefined) {
+  const candidate = value?.trim();
+  if (!candidate || candidate.includes("%")) return undefined;
+  const version = isIP(candidate);
+  if (version === 4) return candidate;
+  if (version === 6) return new URL(`http://[${candidate}]`).hostname.slice(1, -1);
+  return undefined;
+}
+
+function firstIpLiteral(value: string | null | undefined) {
+  return ipLiteral(value?.split(",")[0]);
+}
+
+/**
+ * Em `X-Forwarded-For`, cada proxy acrescenta o endereço de quem o chamou ao
+ * FINAL da lista; as entradas à esquerda são controladas pelo cliente. Por
+ * isso o endereço confiável é o que está `TRUSTED_PROXY_HOPS` posições a
+ * partir da direita (padrão: 1 proxy confiável na frente da aplicação).
+ */
+function trustedProxyHops() {
+  const value = process.env.TRUSTED_PROXY_HOPS ?? "1";
+  if (!/^[1-9][0-9]*$/.test(value)) return undefined;
+  const hops = Number(value);
+  return Number.isSafeInteger(hops) ? hops : undefined;
+}
+
+function trustedForwardedFor(value: string | null | undefined) {
+  const hops = trustedProxyHops();
+  if (!value || hops === undefined) return undefined;
+  const entries = value.split(",");
+  if (entries.length < hops) return undefined;
+  const trustedSuffix = entries.slice(-hops).map(ipLiteral);
+  return trustedSuffix.every(Boolean) ? trustedSuffix[0] : undefined;
+}
+
+export type ClientAddressSource = "vercel" | "trusted-proxy" | "none";
+
+/**
+ * Indica de onde o endereço do cliente é obtido. Em produção, `"none"`
+ * significa que todos os limites por IP compartilham a mesma chave global
+ * (`"local"`), e a readiness em `/api/health` reporta configuração incompleta.
+ */
+export function clientAddressSource(): ClientAddressSource {
+  if (process.env.VERCEL) return "vercel";
+  if (process.env.TRUST_PROXY_HEADERS === "true" && trustedProxyHops() !== undefined) return "trusted-proxy";
+  return "none";
+}
+
+let warnedMissingSource = false;
 
 export function requestAddress(request: Request) {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "local";
+  const source = clientAddressSource();
+  if (source === "vercel") {
+    return firstIpLiteral(request.headers.get("x-vercel-forwarded-for")) ?? "local";
+  }
+  if (source === "trusted-proxy") {
+    return trustedForwardedFor(request.headers.get("x-forwarded-for")) ?? "local";
+  }
+  if (process.env.NODE_ENV === "production" && !warnedMissingSource) {
+    warnedMissingSource = true;
+    console.error(
+      "[RateLimit] Nenhuma fonte confiável de IP configurada (VERCEL ou TRUST_PROXY_HEADERS=true). " +
+        "Todos os limites por IP compartilham uma única chave global.",
+    );
+  }
+  return "local";
 }
-

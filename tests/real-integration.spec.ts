@@ -133,7 +133,7 @@ test("fluxo real persiste Tutor, resumo, flashcards e quiz após reabrir a aplic
   await page.getByRole("region", { name: "Flashcards" }).getByRole("button", { name: "Criar flashcards" }).click();
   await expect(page.getByText("Qual é o conteúdo?", { exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Quiz" }).click();
-  await page.getByRole("region", { name: "Quiz" }).getByRole("button", { name: "Criar quiz" }).click();
+  await page.getByRole("region", { name: "Simulado & Quiz Explicado" }).getByRole("button", { name: "Gerar primeiro simulado" }).click();
   await expect(page.getByText("Questão real 1", { exact: true })).toBeVisible();
 
   const reopened = await page.context().newPage();

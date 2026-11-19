@@ -1,3 +1,5 @@
+import type { MediaTranscriptionSource, TranscriptionSegment } from "@/features/extraction/ExtractionTypes";
+
 export type StudyMaterialType = "pdf" | "video" | "audio" | "text" | "image" | "document";
 
 export type StudyMaterial = {
@@ -8,6 +10,11 @@ export type StudyMaterial = {
   size: number;
   source?: string;
   textContent?: string;
+  fileType?: string;
+  duration?: number;
+  transcriptionPerformed?: boolean;
+  transcriptionSource?: MediaTranscriptionSource;
+  transcriptionSegments?: TranscriptionSegment[];
   chapters?: Array<{
     id: string;
     title: string;
@@ -15,5 +22,6 @@ export type StudyMaterial = {
     slide?: number;
   }>;
   persistentBinary?: boolean;
+  binaryStorageId?: string;
   lastModified?: number;
 };

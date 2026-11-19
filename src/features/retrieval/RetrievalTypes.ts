@@ -19,6 +19,8 @@ export type ChunkMetadata = {
   relationIds?: string[];
   chapter?: string;
   section?: string;
+  pageStart?: number;
+  pageEnd?: number;
 };
 
 export type ContentChunk = {

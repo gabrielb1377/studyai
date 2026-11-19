@@ -16,8 +16,8 @@ export async function importTextMaterial(
   await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible();
 }
 
-export async function createRealStudy(page: Page) {
-  await importTextMaterial(page);
+export async function createRealStudy(page: Page, content?: string) {
+  await importTextMaterial(page, undefined, content);
   await page.goto("/organizar");
   await page.getByRole("button", { name: "Ações para fundamentos.txt" }).click();
   await page.getByRole("menuitem", { name: "Mover" }).click();

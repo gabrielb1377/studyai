@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 export type ExperienceMode = "simple" | "advanced";
 export type FontScale = "small" | "default" | "large" | "extra-large";
@@ -25,7 +26,7 @@ export type ExperiencePreferences = {
   dismissedGuides: string[];
 };
 
-const STORAGE_KEY = "studyai:experience-settings";
+const STORAGE_KEY_PREFIX = "studyai:experience-settings:";
 const EVENT = "studyai:experience-settings-changed";
 const defaults: ExperiencePreferences = {
   mode: "simple",
@@ -39,19 +40,33 @@ const defaults: ExperiencePreferences = {
   dismissedGuides: [],
 };
 
+function storageKey(userId: string) {
+  return `${STORAGE_KEY_PREFIX}${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function currentUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  const session = SessionOperationManager.current();
+  return session.userId ?? null;
+}
+
 let cache: ExperiencePreferences = defaults;
 let serializedCache = "";
+let cachedUserId: string | null = null;
 
 function read() {
-  if (typeof localStorage === "undefined") return defaults;
-  const serialized = localStorage.getItem(STORAGE_KEY) ?? "";
-  if (serialized === serializedCache) return cache;
+  if (typeof window === "undefined") return defaults;
+  const userId = currentUserId();
+  if (!userId) return defaults;
+  const serialized = localStorage.getItem(storageKey(userId)) ?? "";
+  if (serialized === serializedCache && cachedUserId === userId) return cache;
   try {
     cache = { ...defaults, ...JSON.parse(serialized) as Partial<ExperiencePreferences> };
   } catch {
     cache = defaults;
   }
   serializedCache = serialized;
+  cachedUserId = userId;
   return cache;
 }
 
@@ -62,12 +77,21 @@ function emit() {
 
 export const ExperiencePreferencesService = {
   get: read,
+  invalidate() {
+    cache = defaults;
+    serializedCache = "";
+    cachedUserId = null;
+    if (typeof window !== "undefined") emit();
+  },
   update(changes: Partial<ExperiencePreferences>) {
+    const userId = currentUserId();
+    if (!userId) return defaults;
     const next = { ...read(), ...changes };
     const serialized = JSON.stringify(next);
-    localStorage.setItem(STORAGE_KEY, serialized);
+    localStorage.setItem(storageKey(userId), serialized);
     cache = next;
     serializedCache = serialized;
+    cachedUserId = userId;
     emit();
     return next;
   },

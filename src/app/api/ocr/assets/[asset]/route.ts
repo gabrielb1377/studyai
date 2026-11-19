@@ -37,6 +37,9 @@ export async function GET(
       headers: {
         "Cache-Control": "public, max-age=31536000, immutable",
         "Content-Type": definition.type,
+        ...(asset === "worker" && {
+          "Content-Security-Policy": "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'",
+        }),
       },
     });
   } catch {

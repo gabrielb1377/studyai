@@ -88,14 +88,33 @@ export const QuizService = {
     };
   },
 
-  async requestGeneration({ studyId, title, subject }: { studyId: string; title: string; subject: string }) {
+  async requestGeneration({
+    studyId,
+    title,
+    subject,
+    count,
+    difficulty,
+  }: {
+    studyId: string;
+    title: string;
+    subject: string;
+    count?: number;
+    difficulty?: QuizDifficulty;
+  }) {
     const chunks = (await RetrievalPipeline.forStudy(studyId)).chunks;
     if (chunks.length === 0) {
       throw new Error("Este estudo ainda não possui conteúdo real extraído para gerar um quiz.");
     }
     const data = await AIClient.request<{ questions?: GeneratedQuestion[] }>(
       "/api/tutor/quiz",
-      { studyId, title, subject, chunks },
+      {
+        studyId,
+        title,
+        subject,
+        chunks,
+        ...(count !== undefined ? { count } : {}),
+        ...(difficulty !== undefined ? { difficulty } : {}),
+      },
       "Não foi possível criar o quiz agora.",
     );
     if (!data.questions) throw new Error("O provider retornou questões inválidas.");
