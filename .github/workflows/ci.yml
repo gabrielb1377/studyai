@@ -13,6 +13,10 @@ concurrency:
   group: quality-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # CI runs on CPU-only hosts; ONNX Runtime bundles its CPU provider.
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 jobs:
   quality:
     runs-on: ubuntu-latest
