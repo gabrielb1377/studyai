@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { test } from "@playwright/test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -110,28 +110,28 @@ function build(input: {
   });
 }
 
-describe("Sprint 41I.D — consolidação de progresso real", () => {
-  it("1. mantém não iniciado quando não há progresso nem atividades", () => {
+test.describe("Sprint 41I.D — consolidação de progresso real", () => {
+  test("1. mantém não iniciado quando não há progresso nem atividades", () => {
     const result = build();
     assert.equal(result.state, "not_started");
     assert.equal(result.activitiesCompleted, 0);
     assert.equal(result.performance, null);
   });
 
-  it("2. separa progresso parcial do desempenho", () => {
+  test("2. separa progresso parcial do desempenho", () => {
     const result = build({ studies: [study({ progress: 45, status: "in_progress" })] });
     assert.equal(result.state, "in_progress");
     assert.equal(result.studyProgress, 45);
     assert.equal(result.performance, null);
   });
 
-  it("3. conta atividades concluídas por ID estável", () => {
+  test("3. conta atividades concluídas por ID estável", () => {
     const result = build({ profile: profile([activity("read-1", "reading"), activity("tutor-1", "tutor")]) });
     assert.equal(result.activitiesCompleted, 2);
     assert.equal(result.studyMinutes, 20);
   });
 
-  it("4. consolida acertos e erros do QuizService sem usar nota como progresso", () => {
+  test("4. consolida acertos e erros do QuizService sem usar nota como progresso", () => {
     const result = build({ quizzes: [quiz("quiz-1", { correctAnswers: 3, wrongAnswers: 1, score: 75 })] });
     assert.equal(result.quizAttempts, 1);
     assert.equal(result.correctAnswers, 3);
@@ -140,7 +140,7 @@ describe("Sprint 41I.D — consolidação de progresso real", () => {
     assert.equal(result.studyProgress, 0);
   });
 
-  it("5. conta revisões de flashcards pelos eventos e cartões distintos pelo serviço", () => {
+  test("5. conta revisões de flashcards pelos eventos e cartões distintos pelo serviço", () => {
     const result = build({
       profile: profile([activity("review-1", "flashcard", { correctAnswers: 1 }), activity("review-2", "flashcard", { wrongAnswers: 1 })]),
       flashcards: [card("card-1"), card("card-1")],
@@ -149,54 +149,54 @@ describe("Sprint 41I.D — consolidação de progresso real", () => {
     assert.equal(result.reviewedCards, 1);
   });
 
-  it("6. não associa simulados protegidos sem examId/studyId persistido", () => {
+  test("6. não associa simulados protegidos sem examId/studyId persistido", () => {
     assert.equal(build().protectedExamResultsIncluded, false);
   });
 
-  it("7. recusa atividades quando a prova não possui marco temporal confiável", () => {
+  test("7. recusa atividades quando a prova não possui marco temporal confiável", () => {
     const result = build({ exam: exam({ createdAt: "data-inválida" }), profile: profile([activity("read-1", "reading")]) });
     assert.equal(result.canAssociateDatedActivities, false);
     assert.equal(result.activitiesCompleted, 0);
   });
 
-  it("8. reload produz a mesma consolidação sem registrar novamente", () => {
+  test("8. reload produz a mesma consolidação sem registrar novamente", () => {
     const input = { profile: profile([activity("read-1", "reading")]), quizzes: [quiz("quiz-1")] };
     assert.deepEqual(build(input), build(input));
   });
 
-  it("9. preserva duas tentativas legítimas com IDs diferentes", () => {
+  test("9. preserva duas tentativas legítimas com IDs diferentes", () => {
     assert.equal(build({ quizzes: [quiz("quiz-1"), quiz("quiz-2")] }).quizAttempts, 2);
   });
 
-  it("10. deduplica resultado repetido com o mesmo ID", () => {
+  test("10. deduplica resultado repetido com o mesmo ID", () => {
     assert.equal(build({ quizzes: [quiz("quiz-1"), quiz("quiz-1")] }).quizAttempts, 1);
   });
 
-  it("11. estudo removido resulta em dados insuficientes", () => {
+  test("11. estudo removido resulta em dados insuficientes", () => {
     const result = build({ studies: [] });
     assert.equal(result.state, "insufficient_data");
     assert.equal(result.activitiesCompleted, 0);
   });
 
-  it("12. não mistura perfis sintéticos de contas diferentes", () => {
+  test("12. não mistura perfis sintéticos de contas diferentes", () => {
     const accountA = build({ profile: profile([activity("private-a", "reading")]) });
     const accountB = build({ profile: profile([]) });
     assert.equal(accountA.activitiesCompleted, 1);
     assert.equal(accountB.activitiesCompleted, 0);
   });
 
-  it("13. funciona no escopo offline sem tratamento privilegiado de dados", () => {
+  test("13. funciona no escopo offline sem tratamento privilegiado de dados", () => {
     const result = build({ profile: profile([activity("offline-1", "reading")]) });
     assert.equal(result.activitiesCompleted, 1);
   });
 
-  it("14. associa estudo por material explicitamente vinculado", () => {
+  test("14. associa estudo por material explicitamente vinculado", () => {
     const materialStudy = study({ studyId: "study-material", materialIds: ["material-linked"] });
     const matches = resolveExamStudies(exam({ studyId: undefined, materialIds: ["material-linked"] }), [materialStudy]);
     assert.deepEqual(matches.map((item) => item.studyId), ["study-material"]);
   });
 
-  it("15. exclui resultados anteriores à criação da prova", () => {
+  test("15. exclui resultados anteriores à criação da prova", () => {
     const result = build({
       profile: profile([activity("old", "reading", { occurredAt: before })]),
       quizzes: [quiz("old-quiz", { completedAt: before })],
@@ -206,7 +206,7 @@ describe("Sprint 41I.D — consolidação de progresso real", () => {
     assert.equal(result.reviewedCards, 0);
   });
 
-  it("16. o hook exige identidade e geração atuais antes de aplicar carga assíncrona", () => {
+  test("16. o hook exige identidade e geração atuais antes de aplicar carga assíncrona", () => {
     const source = readFileSync(path.join(process.cwd(), "src/features/exam/useExamProgress.ts"), "utf8");
     assert.match(source, /current\.userId !== session\.userId/);
     assert.match(source, /current\.generation !== session\.generation/);

@@ -104,7 +104,8 @@ test("Tutor processa streaming NDJSON e renderiza Markdown, GFM, matemática e m
   await expect(conversation.getByRole("table")).toBeVisible();
   await expect(conversation.getByText("const vetor = [1, 2];", { exact: true })).toBeVisible();
   await expect(conversation.locator(".katex")).toBeVisible();
-  await expect(conversation).toContainText("Prompt 120");
+  await expect(conversation).toContainText("Enviados 120");
+  await expect(conversation).toContainText("Recebidos 45");
   await expect(conversation).toContainText("Contexto 70");
   await expect(conversation).toContainText("Chunks 30");
   await expect(conversation).toContainText("cache");
@@ -171,7 +172,7 @@ test("pdf.js permanece lazy até um PDF ser realmente processado", async ({ page
   const before = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
   expect(before.some((name) => name.includes("pdf.worker"))).toBe(false);
   await page.goto("/importar");
-  await page.getByLabel("Selecionar arquivos do dispositivo").setInputFiles({ name: "lazy.pdf", mimeType: "application/pdf", buffer: createTextPdf(["Lazy PDF"]) });
+  await page.getByLabel("Selecionar arquivos do dispositivo").setInputFiles({ name: "lazy.pdf", mimeType: "application/pdf", buffer: createTextPdf(["Vetores armazenam dados em ordem e usam indices.", "Esta pagina tem texto nativo e dispensa reconhecimento de imagem."]) });
   await page.getByRole("button", { name: "Importar", exact: true }).click();
   // The first lazy PDF.js worker startup can outlast the default 5-second
   // assertion window on a cold dev server.

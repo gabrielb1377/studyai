@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { test } from "@playwright/test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -68,11 +68,15 @@ function loadExamService(session: SessionState): ExamServiceApi {
       if (id === "@/features/account/SessionOperationManager") {
         return { SessionOperationManager: { current: () => ({ ...session }) } };
       }
+      if (id === "@/features/learning/adaptive/AdaptiveAssessmentEngine") {
+        return { AdaptiveAssessmentEngine: {} };
+      }
       throw new Error(`Dependência inesperada: ${id}`);
     },
     localStorage: localStorageMock,
     window: windowMock,
     Event,
+    crypto,
     Date,
     JSON,
     Math,
@@ -95,8 +99,8 @@ function examInput(overrides: Partial<ExamInput> = {}): ExamInput {
   };
 }
 
-describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
-  it("1. cria prova com materiais e estudo vinculados", () => {
+test.describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
+  test("1. cria prova com materiais e estudo vinculados", () => {
     resetStorage();
     const session = { userId: "user-a", generation: 1, suspended: false };
     const service = loadExamService(session);
@@ -105,7 +109,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.equal(exam.studyId, "study-1");
   });
 
-  it("2. preserva vínculos após save e reload", () => {
+  test("2. preserva vínculos após save e reload", () => {
     resetStorage();
     const service = loadExamService({ userId: "user-a", generation: 1, suspended: false });
     service.save([service.create(examInput({ materialIds: ["mat-1"], studyId: "study-x" }))]);
@@ -115,7 +119,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.equal(reloaded[0].studyId, "study-x");
   });
 
-  it("3. isola a troca A → B → A", () => {
+  test("3. isola a troca A → B → A", () => {
     resetStorage();
     const session: SessionState = { userId: "user-a", generation: 1, suspended: false };
     const service = loadExamService(session);
@@ -129,7 +133,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.deepEqual(plain(service.load()[0].materialIds), ["mat-a"]);
   });
 
-  it("4. remove referência somente após catálogo completo confirmar exclusão", () => {
+  test("4. remove referência somente após catálogo completo confirmar exclusão", () => {
     resetStorage();
     const session = { userId: "user-a", generation: 1, suspended: false };
     const service = loadExamService(session);
@@ -141,7 +145,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.deepEqual(plain(service.load()[0].materialIds), ["mat-ok"]);
   });
 
-  it("5. usa identidade offline-session sem acessar a conta autenticada", () => {
+  test("5. usa identidade offline-session sem acessar a conta autenticada", () => {
     resetStorage();
     const session: SessionState = { userId: "user-a", generation: 1, suspended: false };
     const service = loadExamService(session);
@@ -156,7 +160,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.deepEqual(plain(service.load()[0].materialIds), ["mat-a"]);
   });
 
-  it("6. persiste edição de vínculos", () => {
+  test("6. persiste edição de vínculos", () => {
     resetStorage();
     const service = loadExamService({ userId: "user-a", generation: 1, suspended: false });
     const exam = service.create(examInput({ materialIds: ["mat-1"] }));
@@ -167,7 +171,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.deepEqual(plain(service.load()[0].materialIds), ["mat-2"]);
   });
 
-  it("7. preserva vínculos quando a Biblioteca falha ou ainda está carregando", () => {
+  test("7. preserva vínculos quando a Biblioteca falha ou ainda está carregando", () => {
     resetStorage();
     const service = loadExamService({ userId: "user-a", generation: 1, suspended: false });
     service.save([service.create(examInput({ materialIds: ["mat-1"] }))]);
@@ -179,7 +183,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.deepEqual(plain(service.load()[0].materialIds), ["mat-1"]);
   });
 
-  it("8. ignora resultado atrasado após troca de conta", () => {
+  test("8. ignora resultado atrasado após troca de conta", () => {
     resetStorage();
     const session: SessionState = { userId: "user-a", generation: 1, suspended: false };
     const service = loadExamService(session);
@@ -199,7 +203,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.deepEqual(plain(service.load()[0].materialIds), ["mat-a"]);
   });
 
-  it("9. preserva studyId quando o estudo fica excluído ou inacessível", () => {
+  test("9. preserva studyId quando o estudo fica excluído ou inacessível", () => {
     resetStorage();
     const service = loadExamService({ userId: "user-a", generation: 1, suspended: false });
     service.save([service.create(examInput({ studyId: "study-excluido", materialIds: ["mat-1"] }))]);
@@ -209,7 +213,7 @@ describe("Integração de estudos e materiais — Sprint 41I.B.1", () => {
     assert.equal(service.load()[0].studyId, "study-excluido");
   });
 
-  it("10. normaliza IDs duplicados e evita gravação redundante", () => {
+  test("10. normaliza IDs duplicados e evita gravação redundante", () => {
     resetStorage();
     const service = loadExamService({ userId: "user-a", generation: 1, suspended: false });
     const exam = service.create(examInput({ materialIds: ["mat-1", "mat-1", "mat-2"] }));

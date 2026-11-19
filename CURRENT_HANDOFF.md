@@ -2,36 +2,23 @@
 
 ## Estado atual — fechamento da V1.2 (19/11/2026)
 
-Esta é a única seção de estado vigente. Tudo abaixo dela é registro histórico. Se o Git divergir deste texto, o Git prevalece.
+Este é o estado vigente. Diagnósticos anteriores neste arquivo são históricos. As Sprints funcionais 41–58 estão no Git. Esta etapa é o hardening e a homologação da V1.2.
 
-**Git (observado em 19/11/2026):** branch `v1.1-development`, local à frente de `origin/v1.1-development` (sem push; confirme a contagem com `git status -sb`). `main` está em `7e3d89b` (03/10/2026), cerca de 100 commits atrás, e é a branch que o Railway publica. O experimento de upload direto S3 está na branch local `exp/s3-direct-upload` (`7b7be19`), fora da `v1.1-development`. O working tree ficou limpo após o saneamento.
+- Branch de trabalho: `v1.1-development`. Base desta auditoria: `6426a8e`, também na referência remota consultada. `main` segue em `7e3d89b`. A branch local `exp/s3-direct-upload` continua em `7b7be19`, fora do release.
+- As execuções GitHub Actions `44614142623` e `44614131350` passaram por lint, typecheck e build. Ambas cancelaram no Playwright perto do limite de 30 minutos e registraram falhas antes do cancelamento. O workflow local separa qualidade, PostgreSQL descartável e quatro shards de E2E sem retries. O tempo e a cobertura efetiva da nova CI precisam ser confirmados.
+- A validação local de proxy ignora `X-Real-IP` no modo genérico e aceita apenas a parte validada de `X-Forwarded-For` conforme a topologia configurada. Configuração inválida usa a chave compartilhada de fallback. Validar em staging o isolamento da origem, a cadeia de proxies e o cabeçalho efetivamente fornecido antes de habilitar a confiança.
+- A limpeza dos rate limits tem piso fixo de duas horas, que também é o máximo de janela aceito pelo serviço para PostgreSQL. O teste descartável PostgreSQL 18 validou manutenção das janelas ativas, limpeza concorrente e preservação dos agregados diários. A limpeza segue sem agendamento.
+- No Railway, o Dockerfile usa `/api/health/live` para liveness e a configuração de promoção usa `/api/health` para readiness. O container só inicia o servidor. Prepare schema e valide readiness antes da promoção. A infraestrutura consultada só apresentou ambiente de produção.
+- Consulta somente leitura ao Supabase `studyai-v1` confirmou PostgreSQL 17.11, 31 tabelas públicas com RLS habilitada e nenhuma política pública cadastrada. As estimativas de linhas não substituem inventário definitivo antes de uma migração. O schema do repositório tem 32 tabelas e inclui `exam_attempts`, ausente no ambiente consultado. A migração versionada 0001 inclui RLS e exige aplicação separada e autorizada, primeiro em staging. Confirme a role usada pela aplicação e que contas do Data API não leem gabaritos. Aferir também deriva de colunas, constraints e índices antes da promoção.
+- **NO-GO para lançamento.** Faltam CI verde e homologação integrada com PostgreSQL 17, S3, SMTP, proxy e provedores autorizados, além de restauração de backup. O reload intermitente da Semana de Prova permanece em observação.
 
-**Funcionalidades:** as Sprints 48–58 foram implementadas e commitadas entre 13 e 16/11/2026 (design system, simplificação das telas, Studio/Estudo Livre 2.0, Laboratório 2.0, planejamento, aprendizagem personalizada e memória, Tutor avançado, avaliações adaptativas, multimodal e voz, foco/metas e offline). Os commits de 53, 54 e 55 se descrevem como "foundation". Há specs `sprint48*`–`sprint58*`. Nenhuma dessas sprints tem homologação externa, e esta atualização não executou suas specs.
+### Pendências do fechamento
 
-**Hardening após a Sprint 58:** `d7e156b` (auth, sessões e arquivos), `8ae7cb9` (compartilhamento, quotas de IA, colaboração), `0e2f06e` (guarda de atualização do Service Worker durante provas e falhas de gravação de provas), `1de72ab` (corridas assíncronas em Tutor, conta e salas), `f33b6e7` (delimitadores contra prompt injection), `0eca205` e `c956096` (limpeza de `rate_limits`/`usage_quotas` preservando janelas ativas) e `eef4c9c` (IP do cliente via proxy confiável: `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS`; readiness `degraded` em produção sem fonte de IP). `AGENTS.md` passou a ser versionado em `545f6ac`.
-
-**Validação registrada em 19/11/2026:** `tsc` do código-fonte com 0 erros; ESLint com 0 erros e 44 avisos (`no-unused-vars`); `npm audit --omit=dev` com 4 vulnerabilidades baixas (KaTeX); testes focados R-04 e 3E com 5 aprovados e 1 ignorado (3E-PG exige PostgreSQL local descartável). Build e suíte Playwright completa **não** foram executados. Os arquivos gerados em `.next/types` ainda referenciam a rota `direct/` removida e fazem o `npm run typecheck` padrão acusar 3 erros até o próximo `npm run dev` ou `npm run build`.
-
-**Fase atual:** fechamento da V1.2, sem novas funcionalidades. A auditoria de 19/11 deu NO-GO para lançamento público e CONDITIONAL GO para uso pessoal/beta fechado.
-
-### Pendências do fechamento, em ordem
-1. ~~Sanear o Git~~ (feito em 19/11) e ~~atualizar documentos de estado~~ (este texto).
-2. ~~Configurar CI em `v1.1-development` e `retries: 0`~~ (configurado em 19/11): `ci.yml` roda em push para `main`/`develop`/`v1.1-development`, em PRs e manualmente; `playwright.config.ts` tem `retries: 0` e relatório HTML em CI. **Ainda não executado no GitHub**: a primeira execução depende de push autorizado. A suíte lista 490 testes em 98 arquivos; o limite de 30 min do job não foi medido. Spec instável vai para quarentena explícita (`test.fixme` com motivo), nunca para retry.
-3. Configurar no Railway `TRUST_PROXY_HEADERS=true` e confirmar em staging o comportamento de `X-Real-IP` e `X-Forwarded-For` (código pronto em `eef4c9c`; ambiente não verificado).
-4. Quotas: IA por tokens com orçamento global, email verificado para usar a quota compartilhada, e limite de armazenamento por usuário (arquivos e backups).
-5. Atomicidade: rotação de refresh token com detecção de reuso; sync com controle otimista no SQL; restore de backup em transação.
-6. Banco: migrações versionadas fora do `CMD` do container, índices por `user_id` (`refresh_tokens`, `backups`, `shares`, `account_tokens`), limpeza operacional agendada (hoje `OperationalCleanup` não tem chamador).
-7. Escolher uma plataforma de deploy e alinhar o healthcheck (`railway.toml` usa `/api/health/live`, `.railway/railway.ts` usa `/api/health`).
-8. Staging com Supabase e S3 reais: smoke de cadastro (SMTP), login, sync, upload, Tutor, Modo Prova e backup/restore.
-9. Intermitência após reload da Semana de Prova: reproduzir com `retries: 0` ou encerrar com evidência. O `0e2f06e` adicionou guarda de atualização durante provas; não há prova de que isso resolva o problema.
-10. Verificar backup/PITR do Supabase e testar um restore.
-11. PR de release `v1.1-development` → `main`, revisado e com aprovação explícita.
-
-### Riscos conhecidos
-- Comportamento do proxy do Railway não verificado; sem a configuração do item 3, todos os limites por IP compartilham uma chave e a readiness responde 503.
-- Custo de IA medido por requisições (500/dia e 20/min por usuário), não por tokens.
-- Experimento S3: a rota `direct/` não valida sessão ativa nem conteúdo do arquivo.
-- Supabase, Railway, SMTP e providers reais não foram consultados.
+1. Confirmar a CI do PR #1 após sincronização autorizada. Corrigir falhas restantes com os logs e relatórios dos shards. Preservar os testes existentes.
+2. Preparar staging separado com conta e dados sintéticos, banco e bucket próprios. Validar readiness, arquivo, autenticação, sincronização, colaboração, Modo Prova e backup/restore. Documentar snapshots e procedimento de rollback antes de mexer em produção.
+3. Quotas: o fluxo compartilhado ainda consome por requisição. O campo de tokens é gravado com zero pelos caminhos de consumo examinados. Projetar reserva e reconciliação por tentativa, teto global, separação BYOK/local e verificação de email na fronteira do uso da chave compartilhada. Arquivos e backups ainda precisam de orçamento agregado e controle concorrente.
+4. Atomicidade: refresh ainda lê e revoga antes de criar a próxima sessão. Sync resolve conflito antes do upsert no SQL. Restore grava registros um a um. Fechar essas janelas com contratos explícitos e testes de concorrência e rollback no PostgreSQL real.
+5. Investigar índices não cobertos por chaves atuais em `refresh_tokens`, `backups`, `shares` e `account_tokens` com planos de consulta e massa sintética. Validar retenção e agendamento operacional em staging.
 
 ## Registro histórico — Sprint 49D
 

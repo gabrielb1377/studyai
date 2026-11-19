@@ -16,6 +16,15 @@ function loadTutorContextService(studies: readonly StudyRecord[]) {
   }).outputText;
   const compiled = { exports: {} as Record<string, unknown> };
   const dependencies: Record<string, unknown> = {
+    "@/features/learning/errors/ErrorNotebookStorage": {
+      ErrorNotebookStorage: { load: async () => [], reconcileWithStudies: () => [] },
+    },
+    "@/features/learning/memory/LongTermMemoryStorage": {
+      LongTermMemoryStorage: { load: async () => ({ entries: [] }), reconcileWithStudies: () => [] },
+    },
+    "@/features/learning/memory/MemoryRetrievalEngine": {
+      MemoryRetrievalEngine: { selectForTutor: () => undefined },
+    },
     "@/features/notes/NotesService": { NotesService: { load: async () => [] } },
     "@/features/study/services/StudyEngine": { StudyEngine: { load: async () => [...studies] } },
     "@/features/summaries/services/SummaryStorage": { SummaryStorage: { load: async () => [] } },

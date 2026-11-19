@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
@@ -217,11 +217,8 @@ test.describe("Auditoria de isolamento — Sprint 41G.3A", () => {
     expect(source).toContain("requireCsrf");
   });
 
-  test("Rota de arquivo direto exige proprietário da sessão", async () => {
-    const source = readFileSync(path.join(process.cwd(), "src/app/api/files/[id]/direct/route.ts"), "utf8");
-    expect(source).toContain("requireSessionOwner");
-    expect(source).toContain("requireUser");
-    expect(source).toContain("requireCsrf");
+  test("Rota experimental de upload direto fica fora da aplicação", () => {
+    expect(existsSync(path.join(process.cwd(), "src/app/api/files/[id]/direct"))).toBe(false);
   });
 
   test("Rota de prova protegida exige proprietário da sessão", async () => {
