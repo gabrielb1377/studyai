@@ -10,7 +10,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
-  retries: process.env.CI ? 2 : 1,
+  // Sem retries: uma falha intermitente precisa aparecer, não ser absorvida.
+  // Spec instável vai para quarentena explícita (`test.fixme` com motivo).
+  retries: 0,
+  // Em CI, o relatório HTML alimenta o artefato `playwright-report/` do workflow.
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL: origin,
     browserName: "chromium",

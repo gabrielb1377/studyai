@@ -16,7 +16,7 @@ Esta é a única seção de estado vigente. Tudo abaixo dela é registro histór
 
 ### Pendências do fechamento, em ordem
 1. ~~Sanear o Git~~ (feito em 19/11) e ~~atualizar documentos de estado~~ (este texto).
-2. Rodar a CI em `v1.1-development` e em PRs; usar `retries: 0` no Playwright, com quarentena explícita de specs instáveis.
+2. ~~Configurar CI em `v1.1-development` e `retries: 0`~~ (configurado em 19/11): `ci.yml` roda em push para `main`/`develop`/`v1.1-development`, em PRs e manualmente; `playwright.config.ts` tem `retries: 0` e relatório HTML em CI. **Ainda não executado no GitHub**: a primeira execução depende de push autorizado. A suíte lista 490 testes em 98 arquivos; o limite de 30 min do job não foi medido. Spec instável vai para quarentena explícita (`test.fixme` com motivo), nunca para retry.
 3. Configurar no Railway `TRUST_PROXY_HEADERS=true` e confirmar em staging o comportamento de `X-Real-IP` e `X-Forwarded-For` (código pronto em `eef4c9c`; ambiente não verificado).
 4. Quotas: IA por tokens com orçamento global, email verificado para usar a quota compartilhada, e limite de armazenamento por usuário (arquivos e backups).
 5. Atomicidade: rotação de refresh token com detecção de reuso; sync com controle otimista no SQL; restore de backup em transação.
