@@ -196,13 +196,25 @@ test("3C: criação sequencial de salas mantém a última sala selecionada e bac
   const nameInput = page.getByLabel("Nome da nova sala");
   const createBtn = page.getByRole("button", { name: "Criar", exact: true });
 
-  await nameInput.fill("Sala Estabilidade Alpha");
-  await createBtn.click();
-  await expect(page.getByRole("heading", { name: "Sala Estabilidade Alpha" })).toBeVisible();
+  async function createRoom(name: string) {
+    await nameInput.fill(name);
+    const created = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === "/api/collaboration/rooms" &&
+      response.request().method() === "POST");
+    const opened = page.waitForResponse(async (response) => {
+      if (!/^\/api\/collaboration\/rooms\/[^/]+$/.test(new URL(response.url()).pathname) ||
+          response.request().method() !== "GET") return false;
+      const { room } = await (await created).json();
+      return new URL(response.url()).pathname.endsWith("/" + room.id);
+    });
+    await createBtn.click();
+    expect((await created).status()).toBe(201);
+    expect((await opened).status()).toBe(200);
+    await expect(page.getByRole("heading", { name })).toBeVisible();
+  }
 
-  await nameInput.fill("Sala Estabilidade Beta");
-  await createBtn.click();
-  await expect(page.getByRole("heading", { name: "Sala Estabilidade Beta" })).toBeVisible();
+  await createRoom("Sala Estabilidade Alpha");
+  await createRoom("Sala Estabilidade Beta");
 });
 
 test("3D: Quiz, Flashcards, Simulado e Academy isolam payloads adversariais em UNTRUSTED_MATERIAL_DATA", () => {
