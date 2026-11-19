@@ -219,4 +219,27 @@ export const QuotaService = {
       tokens: Number(row.tokens),
     }));
   },
+
+  /**
+   * Remove apenas baldes por minuto expirados (minute_bucket > 0) antigos,
+   * preservando integralmente o histórico diário consolidado (minute_bucket = 0)
+   * e registros recentes/ativos (mínimo 2 dias de retenção).
+   */
+  async cleanupExpired(retainMinuteDays = 7): Promise<number> {
+    const hasPg = await hasPostgresAsync();
+    if (!hasPg) return 0;
+
+    const safeDays = Math.min(365, Math.max(2, Math.trunc(retainMinuteDays)));
+    try {
+      const result = await query(
+        `DELETE FROM usage_quotas
+         WHERE minute_bucket > 0
+           AND date < CURRENT_DATE - ($1::int * INTERVAL '1 day')`,
+        [safeDays]
+      );
+      return result.rowCount ?? 0;
+    } catch {
+      return 0;
+    }
+  },
 };

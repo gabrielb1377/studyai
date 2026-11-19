@@ -1,6 +1,6 @@
 import "server-only";
 
-import { query, hasPostgres } from "@/server/database/Postgres";
+import { query } from "@/server/database/Postgres";
 
 export type RateLimitStatus = {
   allowed: boolean;
@@ -111,11 +111,13 @@ export const RateLimitService = {
     const hasPg = await hasPostgresAsync();
     if (!hasPg) return 0;
 
-    const cutoffBucket = getWindowBucket(maxAgeMs);
+    // created_at evita comparar window_bucket de janelas diferentes (1m vs 15m vs 24h)
+    // e preserva integralmente baldes recentes/ativos (mínimo 60s).
+    const safeMaxAgeMs = Math.max(60_000, Math.trunc(maxAgeMs));
     try {
       const result = await query(
-        `DELETE FROM rate_limits WHERE window_bucket < $1`,
-        [cutoffBucket]
+        `DELETE FROM rate_limits WHERE created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,
+        [safeMaxAgeMs]
       );
       return result.rowCount ?? 0;
     } catch {
