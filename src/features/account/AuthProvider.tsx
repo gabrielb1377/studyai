@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AuthClient } from "./AuthClient";
 import type { AccountSession } from "./types";
 import { StorageManager } from "@/lib/storage/StorageManager";
+import { ExperiencePreferencesService } from "@/features/preferences/ExperiencePreferences";
 import { SessionOperationManager } from "./SessionOperationManager";
 import { SessionLocalData } from "./SessionLocalData";
 
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionRef.current = result.session;
         setSession(result.session);
         SessionOperationManager.activate(nextOwner);
+        ExperiencePreferencesService.invalidate();
         if (announce) localStorage.setItem(SESSION_CHANGE_KEY, crypto.randomUUID());
         return result.value;
       } catch (error) {

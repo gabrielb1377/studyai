@@ -70,7 +70,6 @@ export const SessionLocalData = {
       for (const [key, value] of Object.entries(record.value)) if (isPrivateSessionKey(key)) localStorage.setItem(key, value);
     }
     localStorage.setItem(ACTIVE_OWNER_KEY, userId);
-    ExperiencePreferencesService.invalidate();
   },
 
   offlineOwnerHint() {
