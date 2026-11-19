@@ -11,6 +11,7 @@ import { hasStructuredStudyContent } from "@/features/study/services/StudyEngine
 import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
 import { ConnectivityService, isLikelyNetworkError } from "@/features/platform/ConnectivityService";
 import { useConnectivity } from "@/features/platform/useConnectivity";
+import { useUpdateGuard } from "@/features/platform/UpdateSafety";
 import type { ExamAttemptRecord, ExamAttemptResult } from "@/types/exam";
 import type { StudyRecord } from "@/types/study-engine";
 import { SecureExamClient, type SecureExamConfig } from "./SecureExamClient";
@@ -51,6 +52,8 @@ export function SecureExamPanel({ study }: { study: StudyRecord }) {
   const [isResuming, setIsResuming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(!stored.attemptId);
+
+  useUpdateGuard(Boolean(attempt && !result), "secure-exam", "Simulado protegido");
 
   useEffect(() => {
     const userId = session?.user.id;

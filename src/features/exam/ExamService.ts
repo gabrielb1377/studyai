@@ -113,14 +113,26 @@ export const ExamService = {
     }
   },
 
-  save(exams: readonly Exam[]) {
-    if (typeof window === "undefined") return;
+  save(exams: readonly Exam[]): boolean {
+    if (typeof window === "undefined") return false;
     const userId = currentUserId();
-    if (!userId) return;
+    if (!userId) return false;
     const serialized = JSON.stringify(exams.map(normalizeExam));
-    if (localStorage.getItem(storageKey(userId)) === serialized) return;
-    localStorage.setItem(storageKey(userId), serialized);
-    window.dispatchEvent(new Event(EXAM_UPDATED_EVENT));
+    try {
+      if (localStorage.getItem(storageKey(userId)) === serialized) return true;
+      localStorage.setItem(storageKey(userId), serialized);
+      window.dispatchEvent(new Event(EXAM_UPDATED_EVENT));
+      return true;
+    } catch (error) {
+      const isQuota = error instanceof DOMException && error.name === "QuotaExceededError";
+      const message = isQuota
+        ? "O armazenamento local está cheio. Não foi possível salvar os dados da prova."
+        : "Não foi possível salvar os dados da prova no armazenamento local.";
+      window.dispatchEvent(new CustomEvent("studyai:storage-error", {
+        detail: { code: isQuota ? "FULL" : "UNKNOWN", message },
+      }));
+      return false;
+    }
   },
 
   create(data: Omit<Exam, "id" | "createdAt" | "updatedAt">, now = new Date().toISOString()): Exam {

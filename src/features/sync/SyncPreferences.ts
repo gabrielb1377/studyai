@@ -26,7 +26,14 @@ export function syncPreferences(storage: Storage) {
 
 export function applySyncPreferences(storage: Storage, data: unknown) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return;
+  let examsUpdated = false;
   for (const [key, value] of Object.entries(data)) {
-    if (isSyncPreferenceKey(key) && typeof value === "string") storage.setItem(key, value);
+    if (isSyncPreferenceKey(key) && typeof value === "string") {
+      storage.setItem(key, value);
+      if (key.startsWith("studyai:exams")) examsUpdated = true;
+    }
+  }
+  if (examsUpdated && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("studyai:exams-updated"));
   }
 }

@@ -15,6 +15,7 @@ import { WorkspacePanelContent } from "./WorkspacePanelContent";
 import { WorkspacePanelFrame } from "./WorkspacePanelFrame";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
 import { WorkspacePersistence, type WorkspaceTab } from "@/features/study/services/WorkspacePersistence";
+import { useUpdateGuard } from "@/features/platform/UpdateSafety";
 import { WorkspaceState } from "../services/WorkspaceState";
 
 const tabToPanel: Record<WorkspaceTab, WorkspacePanelType> = {
@@ -137,6 +138,7 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
   const isFocusModeActive = Boolean(
     session.session?.focusMode && session.session.status !== "completed" && session.session.status !== "cancelled",
   );
+  useUpdateGuard(isFocusModeActive, "focus-session", "Modo Foco");
 
   useEffect(() => {
     onFocusModeChange?.(isFocusModeActive);

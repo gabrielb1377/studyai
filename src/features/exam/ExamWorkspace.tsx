@@ -9,12 +9,14 @@ import { Card } from "@/components/ui/card";
 import { Feedback } from "@/components/ui/feedback";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { daysUntilExam, ExamService, formatExamDate } from "./ExamService";
+import { daysUntilExam, EXAM_UPDATED_EVENT, ExamService, formatExamDate } from "./ExamService";
 import type { Exam, ExamSubject, ExamPriority } from "@/types/exam";
 import type { StudyRecord } from "@/types/study-engine";
 import type { Material } from "@/types/material";
 import { useMaterials } from "@/hooks/useMaterials";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { STORAGE_ERROR_EVENT, STORAGE_UPDATED_EVENT } from "@/lib/storage/StorageManager";
+import { useUpdateGuard } from "@/features/platform/UpdateSafety";
 import { examLearningHref, resolveExamStudy, type ExamLearningAction } from "./ExamLearningNavigation";
 import { useExamProgress } from "./useExamProgress";
 import { disciplineKey, materialKind } from "@/features/tutor/services/DisciplineContext";
@@ -54,10 +56,13 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
   const [isCreating, setIsCreating] = useState(false);
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [materialNotice, setMaterialNotice] = useState<string>();
+  const [storageError, setStorageError] = useState<string>();
   const [practiceMaterial, setPracticeMaterial] = useState<{ examId: string; materialId: string }>();
   const [extracted, setExtracted] = useState<ExtractedContent[]>([]);
   const [reviews, setReviews] = useState<TopicReview[]>([]);
   const [catalogError, setCatalogError] = useState(false);
+
+  useUpdateGuard(Boolean(isCreating || practiceMaterial), "exam-workspace", "Semana de Prova");
 
   useEffect(() => {
     let revision = 0;
@@ -97,15 +102,39 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
   }
 
   useEffect(() => {
-    const loaded = ExamService.load();
-    setExams(loaded);
-    setSelectedExamId((current) => {
-      if (requestedExamId && loaded.some((exam) => exam.id === requestedExamId)) return requestedExamId;
-      return loaded.some((exam) => exam.id === current) ? current : loaded[0]?.id ?? null;
-    });
+    const syncFromStorage = () => {
+      const loaded = ExamService.load();
+      setExams(loaded);
+      setSelectedExamId((current) => {
+        if (requestedExamId && loaded.some((exam) => exam.id === requestedExamId)) return requestedExamId;
+        return loaded.some((exam) => exam.id === current) ? current : loaded[0]?.id ?? null;
+      });
+    };
+
+    syncFromStorage();
     setIsCreating(false);
     setEditingExamId(null);
     setMaterialNotice(undefined);
+    setStorageError(undefined);
+
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (!event.key || event.key.startsWith("studyai:exams:")) syncFromStorage();
+    };
+    const handleStorageError = (event: Event) => {
+      const detail = event instanceof CustomEvent ? event.detail as { message?: string } | undefined : undefined;
+      if (detail?.message) setStorageError(detail.message);
+    };
+
+    window.addEventListener(EXAM_UPDATED_EVENT, syncFromStorage);
+    window.addEventListener(STORAGE_UPDATED_EVENT, syncFromStorage);
+    window.addEventListener(STORAGE_ERROR_EVENT, handleStorageError);
+    window.addEventListener("storage", handleStorageEvent);
+    return () => {
+      window.removeEventListener(EXAM_UPDATED_EVENT, syncFromStorage);
+      window.removeEventListener(STORAGE_UPDATED_EVENT, syncFromStorage);
+      window.removeEventListener(STORAGE_ERROR_EVENT, handleStorageError);
+      window.removeEventListener("storage", handleStorageEvent);
+    };
   }, [requestedExamId, sessionOwner]);
 
   useEffect(() => {
@@ -196,6 +225,16 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     setIsCreating(true);
   };
 
+  const persistExams = (next: Exam[]): boolean => {
+    if (!ExamService.save(next)) {
+      setStorageError("Não foi possível salvar os dados da prova no armazenamento local. Libere espaço no navegador e tente novamente.");
+      return false;
+    }
+    setStorageError(undefined);
+    setExams(next);
+    return true;
+  };
+
   const handleSaveExam = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !discipline.trim() || !examDate || subjects.length === 0) return;
@@ -213,8 +252,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
         subjects,
         updatedAt: new Date().toISOString(),
       } : exam);
-      ExamService.save(next);
-      setExams(next);
+      if (!persistExams(next)) return;
       setSelectedExamId(editingExamId);
       resetExamForm();
       return;
@@ -231,8 +269,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       studyId: undefined,
     });
     const next = [newExam, ...exams];
-    ExamService.save(next);
-    setExams(next);
+    if (!persistExams(next)) return;
     setSelectedExamId(newExam.id);
     resetExamForm();
   };
@@ -245,8 +282,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       if (e.id !== selectedExamId) return e;
       return { ...e, materialIds: [...e.materialIds, materialId], updatedAt: new Date().toISOString() };
     });
-    ExamService.save(nextExams);
-    setExams(nextExams);
+    if (!persistExams(nextExams)) return;
     setMaterialNotice(undefined);
   };
 
@@ -257,8 +293,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       if (e.id !== selectedExamId) return e;
       return { ...e, materialIds: e.materialIds.filter((id) => id !== materialId), updatedAt: new Date().toISOString() };
     });
-    ExamService.save(nextExams);
-    setExams(nextExams);
+    if (!persistExams(nextExams)) return;
     setMaterialNotice(undefined);
   };
 
@@ -275,8 +310,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       const materialIds = allowedIds ? Array.from(new Set([...e.materialIds, ...allowedIds])) : e.materialIds;
       return { ...e, studyId, materialIds, updatedAt: new Date().toISOString() };
     });
-    ExamService.save(nextExams);
-    setExams(nextExams);
+    persistExams(nextExams);
   };
 
   const addSubject = () => {
@@ -295,14 +329,12 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       const updatedSubjects = exam.subjects.map((s) => s.id === subjectId ? { ...s, completed: !s.completed } : s);
       return { ...exam, subjects: updatedSubjects, updatedAt: new Date().toISOString() };
     });
-    ExamService.save(next);
-    setExams(next);
+    persistExams(next);
   };
 
   const deleteExam = (id: string) => {
     const next = exams.filter((e) => e.id !== id);
-    ExamService.save(next);
-    setExams(next);
+    if (!persistExams(next)) return;
     if (selectedExamId === id) {
       setSelectedExamId(next[0]?.id ?? null);
     }
@@ -342,8 +374,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       if (!exists && previous.some((item) => item.disciplineKey === exam.disciplineKey && !item.completedAt)) return exam;
       return { ...exam, materialAttempts: exists ? previous.map((item) => item.id === attempt.id ? attempt : item) : [attempt, ...previous] };
     });
-    ExamService.save(next);
-    setExams(next);
+    persistExams(next);
   }
   const activePractice = practiceMaterial?.examId === selectedExam?.id
     ? linkedMaterials.find(({ id }) => id === practiceMaterial?.materialId) : undefined;
@@ -356,8 +387,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       const totals = exam.practiceTotals ?? { correct: 0, wrong: 0, reviewed: 0 };
       return { ...exam, practiceTotals: { ...totals, [assessment]: totals[assessment] + 1 }, updatedAt: new Date().toISOString() };
     });
-    ExamService.save(next);
-    setExams(next);
+    persistExams(next);
   }
 
   function moveSubject(index: number, offset: number) {
@@ -369,8 +399,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
     const next = exams.map((exam) => exam.id === selectedExam.id
       ? { ...exam, subjects: nextSubjects, manualOrder: true, updatedAt: new Date().toISOString() }
       : exam);
-    ExamService.save(next);
-    setExams(next);
+    persistExams(next);
   }
 
   const daysLeft = selectedExam ? daysUntilExam(selectedExam.examDate) ?? 0 : 0;
@@ -387,6 +416,10 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
         </div>
         <Button type="button" onClick={openCreateExam}><Plus className="size-4 mr-2" />Nova Prova</Button>
       </div>
+
+      {storageError && (
+        <Feedback variant="error" role="alert">{storageError}</Feedback>
+      )}
 
       {isCreating && (
         <Card className="p-6 border-primary/30 bg-card shadow-sm space-y-4">

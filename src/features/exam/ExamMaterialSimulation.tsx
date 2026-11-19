@@ -8,6 +8,7 @@ import { ExamService } from "./ExamService";
 import { confirmedChoice, questionRevision } from "./ExamAnswerKey";
 import { ErrorNotebookStorage, ERROR_NOTEBOOK_UPDATED_EVENT } from "@/features/learning/errors/ErrorNotebookStorage";
 import type { ErrorNotebookEntry } from "@/features/learning/errors/types";
+import { useUpdateGuard } from "@/features/platform/UpdateSafety";
 
 export function ExamMaterialSimulation({ exam, catalog, save }: {
   exam: Exam;
@@ -39,6 +40,7 @@ export function ExamMaterialSimulation({ exam, catalog, save }: {
   }, []);
 
   const active = attempts.find((item) => !item.completedAt);
+  useUpdateGuard(Boolean(active), "exam-simulation", "Simulado em andamento");
   const attempt = active ?? attempts.find((item) => item.id === selected) ?? attempts[0];
   const [count, setCount] = useState(5);
   const limit = Math.min(30, catalog.length);
