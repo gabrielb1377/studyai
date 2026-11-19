@@ -40,7 +40,10 @@ test("fluxo integrado 51D ponta a ponta: criação manual, template, capítulos,
   await page.getByRole("textbox", { name: "Tema", exact: true }).fill("Arquitetura de Computadores");
   await page.getByRole("textbox", { name: "Matéria", exact: true }).fill("Hardware");
   await page.getByRole("button", { name: "Criar estudo", exact: true }).click();
-  await page.getByRole("link", { name: "Editar no Studio" }).click();
+  await Promise.all([
+    page.waitForURL(/\/academy\/studio\?estudo=/),
+    page.getByRole("link", { name: "Editar no Studio" }).click(),
+  ]);
   expect(aiAcademyCalled).toBe(false);
 
   const editor = page.locator('section[aria-label="Editor"]');

@@ -93,7 +93,7 @@ test("restaura flashcard e questão atuais", async ({ page }) => {
   await expect(page.getByText("Cartão 2", { exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Quiz" }).click();
-  await page.getByRole("button", { name: "Criar quiz" }).click();
+  await page.getByRole("button", { name: "Gerar primeiro simulado" }).click();
   await page.getByRole("button", { name: "A. A" }).click();
   await page.getByRole("button", { name: "Próxima" }).click();
   await expect(page.getByText("Questão persistida 2", { exact: true })).toBeVisible();
