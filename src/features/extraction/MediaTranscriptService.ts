@@ -80,6 +80,7 @@ export const MediaTranscriptService = {
       },
     };
 
+    await ContentStorage.upsert(updatedRecord);
     let chunks = ChunkService.createChunks(updatedRecord);
     try {
       const knowledge = await KnowledgeService.process(updatedRecord);

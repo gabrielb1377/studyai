@@ -240,9 +240,9 @@ appConcurrencyDescribe("Cenários 5–7: concorrência real da aplicação (Post
 test.describe("Quota por credencial efetiva - política real", () => {
   test("modo automático com BYOK parcial exige quota; manual com BYOK não exige", () => {
     const geminiByok = { gemini: "AIza-test" };
-    // Automático percorre ollama/gemini/groq/openrouter; groq/openrouter sem
-    // BYOK exigem a quota compartilhada antes da cadeia de fallback.
-    expect(needsSharedQuota(providersToCheckFor("automatic", undefined), geminiByok)).toBe(true);
+    // Automático sem BYOK do provider primário ou com fallback consentido para groq sem BYOK exige quota compartilhada.
+    expect(needsSharedQuota(providersToCheckFor("automatic", undefined), {})).toBe(true);
+    expect(needsSharedQuota(providersToCheckFor("automatic", "gemini", "groq"), geminiByok)).toBe(true);
     // Manual Gemini com BYOK não usa credencial compartilhada.
     expect(needsSharedQuota(providersToCheckFor("manual", "gemini"), geminiByok)).toBe(false);
     // Manual Groq sem BYOK usa credencial compartilhada e exige quota.

@@ -117,6 +117,7 @@ test("Cache Storage real mantém dados públicos, isola caches privados e nunca 
 
   await page.goto("/conta");
   await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
   await login(page, emailA);
   await page.evaluate((userId) => {
     localStorage.setItem(`studyai:experience-settings:${userId.replace(/[^a-zA-Z0-9_-]/g, "_")}`, JSON.stringify({ mode: "advanced" }));

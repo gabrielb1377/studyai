@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/features/account/AuthProvider";
 import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import type { TutorStudyContext } from "@/types/tutor-context";
@@ -11,16 +11,30 @@ import { TutorContextService } from "../services/TutorContextService";
 export function useTutorContext(studyId?: string) {
   const auth = useAuth();
   const [context, setContext] = useState<TutorStudyContext | null>(null);
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     let active = true;
+    const version = ++requestVersion.current;
     const session = SessionOperationManager.current();
     setContext(null);
-    if (auth.isLoading || session.suspended || !session.userId) return () => { active = false; };
+    if (auth.isLoading || session.suspended || !session.userId) {
+      return () => {
+        active = false;
+        requestVersion.current += 1;
+      };
+    }
     const reload = async () => {
+      const currentVersion = ++requestVersion.current;
       const next = await TutorContextService.loadCurrent(studyId);
       const current = SessionOperationManager.current();
-      if (active && !current.suspended && current.userId === session.userId && current.generation === session.generation) {
+      if (
+        active &&
+        currentVersion === requestVersion.current &&
+        !current.suspended &&
+        current.userId === session.userId &&
+        current.generation === session.generation
+      ) {
         setContext(next);
       }
     };
@@ -36,6 +50,7 @@ export function useTutorContext(studyId?: string) {
 
     return () => {
       active = false;
+      requestVersion.current = Math.max(requestVersion.current, version) + 1;
       window.removeEventListener("studyai:study-updated", handleReload);
       window.removeEventListener("studyai:notes-updated", handleReload);
       window.removeEventListener("studyai:summaries-updated", handleReload);

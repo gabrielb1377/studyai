@@ -82,6 +82,7 @@ test("cadastro, sessão persistente, logout, login e recuperação funcionam", a
   await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
   await login(page, email);
   await page.getByRole("button", { name: "Sair", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Conta StudyAI" })).toBeVisible();
   await page.getByRole("button", { name: "Esqueci a senha" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Enviar instruções" }).click();
