@@ -10,6 +10,17 @@ export type RateLimitStatus = {
   retryAfter?: number;
 };
 
+export const MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS = 60 * 60 * 1000;
+export const DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS = 24 * 60 * 60 * 1000;
+
+let maxObservedWindowMs = MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS;
+
+function observeWindowMs(windowMs: number) {
+  if (Number.isFinite(windowMs) && windowMs > maxObservedWindowMs) {
+    maxObservedWindowMs = Math.trunc(windowMs);
+  }
+}
+
 function getWindowBucket(windowMs: number): number {
   return Math.floor(Date.now() / windowMs);
 }
@@ -32,6 +43,7 @@ export const RateLimitService = {
       windowMs: number;
     }
   ): Promise<RateLimitStatus> {
+    observeWindowMs(options.windowMs);
     const windowBucket = getWindowBucket(options.windowMs);
     const windowEnd = getWindowEnd(options.windowMs);
 
@@ -79,6 +91,7 @@ export const RateLimitService = {
   },
 
   async getStatus(key: string, options: { limit: number; windowMs: number }): Promise<RateLimitStatus> {
+    observeWindowMs(options.windowMs);
     const windowBucket = getWindowBucket(options.windowMs);
     const windowEnd = getWindowEnd(options.windowMs);
 
@@ -107,13 +120,18 @@ export const RateLimitService = {
     }
   },
 
-  async cleanup(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
+  async cleanup(maxAgeMs = DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS): Promise<number> {
     const hasPg = await hasPostgresAsync();
     if (!hasPg) return 0;
 
-    // created_at evita comparar window_bucket de janelas diferentes (1m vs 15m vs 24h)
-    // e preserva integralmente baldes recentes/ativos (mínimo 60s).
-    const safeMaxAgeMs = Math.max(60_000, Math.trunc(maxAgeMs));
+    // O piso mínimo nunca pode ser menor que a maior janela suportada (1h por padrão,
+    // ou maior caso alguma rota registre windowMs superior), garantindo que um balde
+    // ainda dentro de sua janela ativa [window_start, window_end) jamais seja removido.
+    const minSafeAgeMs = Math.max(MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS, maxObservedWindowMs);
+    const requestedAgeMs = Number.isFinite(maxAgeMs)
+      ? Math.trunc(maxAgeMs)
+      : DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS;
+    const safeMaxAgeMs = Math.max(minSafeAgeMs, requestedAgeMs);
     try {
       const result = await query(
         `DELETE FROM rate_limits WHERE created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,

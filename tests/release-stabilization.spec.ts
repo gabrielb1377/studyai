@@ -281,14 +281,34 @@ test("3D: Quiz, Flashcards, Simulado e Academy isolam payloads adversariais em U
   }
 });
 
-test("3E: limpeza de rate_limits e usage_quotas expira apenas registros antigos preservando dados diários e ativos", async () => {
+test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m, 15m, 1h+) e dados diários", async () => {
+  const nowMs = Date.now();
+  const simulatedRateRows = [
+    { key: "telemetry:u1", windowBucket: Math.floor(nowMs / 60_000), count: 5, createdAtMs: nowMs - 20_000 }, // 1m ativa (20s atrás)
+    { key: "beta-feedback:ip", windowBucket: Math.floor(nowMs / (10 * 60_000)), count: 2, createdAtMs: nowMs - 5 * 60_000 }, // 10m ativa (5m atrás)
+    { key: "login:ip", windowBucket: Math.floor(nowMs / (15 * 60_000)), count: 4, createdAtMs: nowMs - 12 * 60_000 }, // 15m ativa (12m atrás)
+    { key: "file:u1", windowBucket: Math.floor(nowMs / (60 * 60_000)), count: 10, createdAtMs: nowMs - 45 * 60_000 }, // 1h ativa (45m atrás)
+    { key: "file:u1-old", windowBucket: Math.floor((nowMs - 2 * 3_600_000) / (60 * 60_000)), count: 30, createdAtMs: nowMs - 2 * 3_600_000 }, // 1h expirada (2h atrás)
+  ];
+
   const executedQueries: Array<{ sql: string; params: unknown[] }> = [];
   const pgMock = {
     hasPostgres: async () => true,
     query: async (sql: string, params: unknown[]) => {
       executedQueries.push({ sql, params });
-      if (sql.includes("DELETE FROM rate_limits")) return { rowCount: 4, rows: [] };
+      if (sql.includes("DELETE FROM rate_limits")) {
+        const cutoffMs = nowMs - Number(params[0]);
+        const before = simulatedRateRows.length;
+        for (let i = simulatedRateRows.length - 1; i >= 0; i -= 1) {
+          if (simulatedRateRows[i].createdAtMs < cutoffMs) simulatedRateRows.splice(i, 1);
+        }
+        return { rowCount: before - simulatedRateRows.length, rows: [] };
+      }
       if (sql.includes("DELETE FROM usage_quotas")) return { rowCount: 9, rows: [] };
+      if (sql.includes("SELECT COALESCE(count, 0) as used FROM rate_limits")) {
+        const match = simulatedRateRows.find((r) => r.key === params[0] && r.windowBucket === params[1]);
+        return { rowCount: match ? 1 : 0, rows: match ? [{ used: match.count }] : [] };
+      }
       return { rowCount: 0, rows: [] };
     },
   };
@@ -306,7 +326,10 @@ test("3E: limpeza de rate_limits e usage_quotas expira apenas registros antigos 
   });
 
   const { RateLimitService } = rateLimitModule as {
-    RateLimitService: { cleanup: (maxAgeMs?: number) => Promise<number> };
+    RateLimitService: {
+      cleanup: (maxAgeMs?: number) => Promise<number>;
+      getStatus: (key: string, options: { limit: number; windowMs: number }) => Promise<{ allowed: boolean; remaining: number }>;
+    };
   };
   const { QuotaService } = quotaModule as {
     QuotaService: { cleanupExpired: (retainDays?: number) => Promise<number> };
@@ -315,16 +338,35 @@ test("3E: limpeza de rate_limits e usage_quotas expira apenas registros antigos 
     OperationalCleanup: { run: (opts?: { rateLimitMaxAgeMs?: number; quotaMinuteRetainDays?: number }) => Promise<{ executed: boolean; rateLimitsRemoved: number; quotaMinuteBucketsRemoved: number }> };
   };
 
-  const result = await OperationalCleanup.run({ rateLimitMaxAgeMs: 1_000, quotaMinuteRetainDays: 1 });
+  // Mesmo solicitando 1_000 ms ou 60_000 ms, o piso mínimo de 1h (3_600_000 ms) protege
+  // integralmente as janelas ativas de 1m, 10m, 15m e 1h, removendo apenas a de 2h atrás.
+  const result = await OperationalCleanup.run({ rateLimitMaxAgeMs: 60_000, quotaMinuteRetainDays: 1 });
   expect(result).toEqual({
     executed: true,
-    rateLimitsRemoved: 4,
+    rateLimitsRemoved: 1,
     quotaMinuteBucketsRemoved: 9,
   });
+  expect(simulatedRateRows.map((r) => r.key)).toEqual([
+    "telemetry:u1",
+    "beta-feedback:ip",
+    "login:ip",
+    "file:u1",
+  ]);
+
+  // Chamada repetida imediata é idempotente (0 linhas removidas) e mantém contadores ativos.
+  expect(await RateLimitService.cleanup(1_000)).toBe(0);
+  const activeHourStatus = await RateLimitService.getStatus("file:u1", { limit: 30, windowMs: 60 * 60_000 });
+  expect(activeHourStatus.remaining).toBe(20);
 
   const rateDelete = executedQueries.find((q) => q.sql.includes("DELETE FROM rate_limits"));
   expect(rateDelete?.sql).toContain("created_at < NOW()");
-  expect(rateDelete?.params[0]).toBe(60_000);
+  expect(rateDelete?.params[0]).toBe(3_600_000);
+
+  // Se uma janela maior (ex.: 2h = 7_200_000 ms) for observada, o piso sobe dinamicamente.
+  await RateLimitService.getStatus("custom:2h", { limit: 5, windowMs: 2 * 60 * 60_000 });
+  await RateLimitService.cleanup(60_000);
+  const dynamicDelete = executedQueries.filter((q) => q.sql.includes("DELETE FROM rate_limits")).at(-1);
+  expect(dynamicDelete?.params[0]).toBe(7_200_000);
 
   const quotaDelete = executedQueries.find((q) => q.sql.includes("DELETE FROM usage_quotas"));
   expect(quotaDelete?.sql).toContain("minute_bucket > 0");
@@ -346,6 +388,117 @@ test("3E: limpeza de rate_limits e usage_quotas expira apenas registros antigos 
     quotaMinuteBucketsRemoved: 0,
   });
 
-  void RateLimitService;
   void QuotaService;
+});
+
+function isDisposableLocalPgAvailable(): boolean {
+  const connectionString = process.env.DATABASE_URL?.trim();
+  if (!connectionString || process.env.NODE_ENV === "production" || process.env.STUDYAI_ALLOW_LOCAL_DB_TESTS !== "1") return false;
+  try {
+    const url = new URL(connectionString);
+    const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+    const databaseName = url.pathname.slice(1);
+    return isLoopback && /(?:^|[-_])(test|testing|ci|scratch|disposable)(?:$|[-_])/i.test(databaseName);
+  } catch {
+    return false;
+  }
+}
+
+test("3E-PG: PostgreSQL real valida schema (32 tabelas), retenção de janelas ativas de rate limit (1m/15m/1h) e limpeza de usage_quotas", async () => {
+  test.skip(!isDisposableLocalPgAvailable(), "Requer PostgreSQL local descartável com DATABASE_URL e STUDYAI_ALLOW_LOCAL_DB_TESTS=1.");
+  const { Pool } = testRequire("pg") as typeof import("pg");
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2, ssl: false });
+
+  try {
+    const schema = readFileSync(path.join(process.cwd(), "src/server/database/schema.sql"), "utf8");
+    await pool.query(schema);
+
+    const tablesRes = await pool.query<{ tablename: string }>(
+      "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename"
+    );
+    expect(tablesRes.rows.length).toBeGreaterThanOrEqual(32);
+    const tableNames = new Set(tablesRes.rows.map((r) => r.tablename));
+    for (const required of ["users", "files", "sync_records", "study_rooms", "rate_limits", "usage_quotas", "exam_attempts"]) {
+      expect(tableNames.has(required)).toBe(true);
+    }
+
+    const pgAdapter = {
+      hasPostgres: () => true,
+      query: (text: string, values?: unknown[]) => pool.query(text, values),
+    };
+    const rateLimitModule = loadServerModule("src/server/security/RateLimitService.ts", {
+      "@/server/database/Postgres": pgAdapter,
+    });
+    const quotaModule = loadServerModule("src/server/ai/QuotaService.ts", {
+      "@/server/database/Postgres": pgAdapter,
+    });
+    const { RateLimitService } = rateLimitModule as {
+      RateLimitService: {
+        checkAndConsume: (key: string, options: { limit: number; windowMs: number }) => Promise<{ allowed: boolean; remaining: number }>;
+        getStatus: (key: string, options: { limit: number; windowMs: number }) => Promise<{ allowed: boolean; remaining: number }>;
+        cleanup: (maxAgeMs?: number) => Promise<number>;
+      };
+    };
+    const { QuotaService } = quotaModule as {
+      QuotaService: {
+        checkAndConsume: (userId: string, options: { provider: string; useSharedKeys: boolean }) => Promise<{ allowed: boolean }>;
+        cleanupExpired: (retainDays?: number) => Promise<number>;
+      };
+    };
+
+    const prefix = `pg3e:${Date.now()}`;
+    await pool.query("DELETE FROM rate_limits WHERE key LIKE $1", [`${prefix}%`]);
+
+    const b1m = Math.floor(Date.now() / 60_000);
+    const b15m = Math.floor(Date.now() / (15 * 60_000));
+    const b1h = Math.floor(Date.now() / (60 * 60_000));
+
+    await pool.query(
+      `INSERT INTO rate_limits (key, window_bucket, count, created_at) VALUES
+       ($1, $2, 3, NOW() - INTERVAL '20 seconds'),
+       ($3, $4, 4, NOW() - INTERVAL '10 minutes'),
+       ($5, $6, 12, NOW() - INTERVAL '45 minutes'),
+       ($7, $8, 30, NOW() - INTERVAL '2 hours')`,
+      [`${prefix}:1m`, b1m, `${prefix}:15m`, b15m, `${prefix}:1h`, b1h, `${prefix}:1h-expired`, b1h - 2]
+    );
+
+    const removed = await RateLimitService.cleanup(60_000);
+    expect(removed).toBeGreaterThanOrEqual(1);
+    expect(await RateLimitService.cleanup(60_000)).toBe(0);
+
+    const remainingKeys = await pool.query<{ key: string }>(
+      "SELECT key FROM rate_limits WHERE key LIKE $1 ORDER BY key",
+      [`${prefix}%`]
+    );
+    expect(remainingKeys.rows.map((r) => r.key)).toEqual([
+      `${prefix}:15m`,
+      `${prefix}:1h`,
+      `${prefix}:1m`,
+    ]);
+    expect((await RateLimitService.getStatus(`${prefix}:1h`, { limit: 30, windowMs: 60 * 60_000 })).remaining).toBe(18);
+
+    const userId = `pg3e_user_${Date.now()}`;
+    await pool.query("INSERT INTO users (id, email, password_hash) VALUES ($1, $2, 'hash')", [userId, `${userId}@example.test`]);
+    await pool.query(
+      `INSERT INTO usage_quotas (user_id, date, minute_bucket, requests_count, tokens_count) VALUES
+       ($1, CURRENT_DATE - INTERVAL '30 days', 0, 42, 1000),
+       ($1, CURRENT_DATE - INTERVAL '10 days', 12345, 5, 100),
+       ($1, CURRENT_DATE, 99999, 2, 50)`,
+      [userId]
+    );
+
+    const removedQuotas = await QuotaService.cleanupExpired(1);
+    expect(removedQuotas).toBeGreaterThanOrEqual(1);
+
+    const remainingQuotas = await pool.query<{ minute_bucket: number }>(
+      "SELECT minute_bucket FROM usage_quotas WHERE user_id = $1 ORDER BY minute_bucket",
+      [userId]
+    );
+    expect(remainingQuotas.rows.map((r) => Number(r.minute_bucket))).toEqual([0, 99999]);
+
+    await pool.query("DELETE FROM rate_limits WHERE key LIKE $1", [`${prefix}%`]);
+    await pool.query("DELETE FROM users WHERE id = $1", [userId]);
+  } finally {
+    await pool.end();
+  }
 });
