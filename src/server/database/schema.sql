@@ -265,3 +265,5 @@ CREATE TABLE IF NOT EXISTS exam_attempts (
   completed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS exam_attempts_user_status ON exam_attempts(user_id, status);
+-- Protected answers are available only to the server database role.
+ALTER TABLE exam_attempts ENABLE ROW LEVEL SECURITY;

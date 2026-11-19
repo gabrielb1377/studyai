@@ -10,24 +10,23 @@ export type RateLimitStatus = {
   retryAfter?: number;
 };
 
-export const MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS = 60 * 60 * 1000;
+export const MAX_RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS = 24 * 60 * 60 * 1000;
 
-let maxObservedWindowMs = MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS;
-
-function observeWindowMs(windowMs: number) {
-  if (Number.isFinite(windowMs) && windowMs > maxObservedWindowMs) {
-    maxObservedWindowMs = Math.trunc(windowMs);
+// The same bound applies to writers and cleanup in every process.
+function assertSupportedWindow(windowMs: number) {
+  if (!Number.isSafeInteger(windowMs) || windowMs < 1 || windowMs > MAX_RATE_LIMIT_WINDOW_MS) {
+    throw new RangeError("Unsupported rate limit window");
   }
 }
 
-function getWindowBucket(windowMs: number): number {
-  return Math.floor(Date.now() / windowMs);
+function getWindowBucket(windowMs: number, now = Date.now()): number {
+  return Math.floor(now / windowMs);
 }
 
 function getWindowEnd(windowMs: number): string {
   const now = Date.now();
-  const nextWindow = new Date(Math.ceil(now / windowMs) * windowMs);
+  const nextWindow = new Date((getWindowBucket(windowMs, now) + 1) * windowMs);
   return nextWindow.toISOString();
 }
 
@@ -43,7 +42,7 @@ export const RateLimitService = {
       windowMs: number;
     }
   ): Promise<RateLimitStatus> {
-    observeWindowMs(options.windowMs);
+    assertSupportedWindow(options.windowMs);
     const windowBucket = getWindowBucket(options.windowMs);
     const windowEnd = getWindowEnd(options.windowMs);
 
@@ -91,7 +90,7 @@ export const RateLimitService = {
   },
 
   async getStatus(key: string, options: { limit: number; windowMs: number }): Promise<RateLimitStatus> {
-    observeWindowMs(options.windowMs);
+    assertSupportedWindow(options.windowMs);
     const windowBucket = getWindowBucket(options.windowMs);
     const windowEnd = getWindowEnd(options.windowMs);
 
@@ -124,14 +123,10 @@ export const RateLimitService = {
     const hasPg = await hasPostgresAsync();
     if (!hasPg) return 0;
 
-    // O piso mínimo nunca pode ser menor que a maior janela suportada (1h por padrão,
-    // ou maior caso alguma rota registre windowMs superior), garantindo que um balde
-    // ainda dentro de sua janela ativa [window_start, window_end) jamais seja removido.
-    const minSafeAgeMs = Math.max(MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS, maxObservedWindowMs);
     const requestedAgeMs = Number.isFinite(maxAgeMs)
       ? Math.trunc(maxAgeMs)
       : DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS;
-    const safeMaxAgeMs = Math.max(minSafeAgeMs, requestedAgeMs);
+    const safeMaxAgeMs = Math.max(MAX_RATE_LIMIT_WINDOW_MS, requestedAgeMs);
     try {
       const result = await query(
         `DELETE FROM rate_limits WHERE created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,

@@ -41,7 +41,7 @@ export async function postgresHealth() {
   const startedAt = performance.now();
   try {
     const result = await postgresPool().query<{ schema_ready: boolean }>(
-      "SELECT to_regclass('public.users') IS NOT NULL AS schema_ready",
+      "SELECT NOT EXISTS (SELECT 1 FROM unnest(ARRAY['users', 'refresh_tokens', 'sync_records', 'files', 'backups', 'usage_quotas', 'rate_limits', 'exam_attempts']) AS required(name) WHERE to_regclass('public.' || required.name) IS NULL) AS schema_ready",
     );
     return {
       available: true,

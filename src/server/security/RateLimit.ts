@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isIP } from "node:net";
+
 import { RateLimitService, type RateLimitStatus } from "./RateLimitService";
 
 const buckets = new Map<string, { count: number; resetAt: number }>();
@@ -74,7 +76,11 @@ export async function rateLimitStrict(
 
 function ipLiteral(value: string | null | undefined) {
   const candidate = value?.trim();
-  return candidate && /^[a-fA-F0-9:.]{3,45}$/.test(candidate) ? candidate : undefined;
+  if (!candidate || candidate.includes("%")) return undefined;
+  const version = isIP(candidate);
+  if (version === 4) return candidate;
+  if (version === 6) return new URL(`http://[${candidate}]`).hostname.slice(1, -1);
+  return undefined;
 }
 
 function firstIpLiteral(value: string | null | undefined) {
@@ -87,13 +93,20 @@ function firstIpLiteral(value: string | null | undefined) {
  * isso o endereço confiável é o que está `TRUSTED_PROXY_HOPS` posições a
  * partir da direita (padrão: 1 proxy confiável na frente da aplicação).
  */
+function trustedProxyHops() {
+  const value = process.env.TRUSTED_PROXY_HOPS ?? "1";
+  if (!/^[1-9][0-9]*$/.test(value)) return undefined;
+  const hops = Number(value);
+  return Number.isSafeInteger(hops) ? hops : undefined;
+}
+
 function trustedForwardedFor(value: string | null | undefined) {
-  if (!value) return undefined;
-  const entries = value.split(",").map((item) => item.trim()).filter(Boolean);
-  const configuredHops = Number(process.env.TRUSTED_PROXY_HOPS ?? 1);
-  const hops = Number.isSafeInteger(configuredHops) && configuredHops >= 1 ? configuredHops : 1;
+  const hops = trustedProxyHops();
+  if (!value || hops === undefined) return undefined;
+  const entries = value.split(",");
   if (entries.length < hops) return undefined;
-  return ipLiteral(entries[entries.length - hops]);
+  const trustedSuffix = entries.slice(-hops).map(ipLiteral);
+  return trustedSuffix.every(Boolean) ? trustedSuffix[0] : undefined;
 }
 
 export type ClientAddressSource = "vercel" | "trusted-proxy" | "none";
@@ -105,7 +118,7 @@ export type ClientAddressSource = "vercel" | "trusted-proxy" | "none";
  */
 export function clientAddressSource(): ClientAddressSource {
   if (process.env.VERCEL) return "vercel";
-  if (process.env.TRUST_PROXY_HEADERS === "true") return "trusted-proxy";
+  if (process.env.TRUST_PROXY_HEADERS === "true" && trustedProxyHops() !== undefined) return "trusted-proxy";
   return "none";
 }
 
@@ -117,11 +130,7 @@ export function requestAddress(request: Request) {
     return firstIpLiteral(request.headers.get("x-vercel-forwarded-for")) ?? "local";
   }
   if (source === "trusted-proxy") {
-    return (
-      ipLiteral(request.headers.get("x-real-ip")) ??
-      trustedForwardedFor(request.headers.get("x-forwarded-for")) ??
-      "local"
-    );
+    return trustedForwardedFor(request.headers.get("x-forwarded-for")) ?? "local";
   }
   if (process.env.NODE_ENV === "production" && !warnedMissingSource) {
     warnedMissingSource = true;

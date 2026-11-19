@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
@@ -500,7 +501,7 @@ test.describe("RH-2A — R-04 Rate limiting consistente e deviceId", () => {
     const warnings: unknown[][] = [];
     const rlNoProxy = loadModule(
       "src/server/security/RateLimit.ts",
-      { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
+      { "server-only": {}, "node:net": { isIP }, "./RateLimitService": { RateLimitService: {} } },
       { process: { env: { NODE_ENV: "production" } }, console: { error: (...args: unknown[]) => warnings.push(args) } },
     ) as { requestAddress: (r: Request) => string };
 
@@ -515,16 +516,16 @@ test.describe("RH-2A — R-04 Rate limiting consistente e deviceId", () => {
 
     const rlTrustedProxy = loadModule(
       "src/server/security/RateLimit.ts",
-      { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
+      { "server-only": {}, "node:net": { isIP }, "./RateLimitService": { RateLimitService: {} } },
       { process: { env: { NODE_ENV: "production", TRUST_PROXY_HEADERS: "true" } } },
     ) as { requestAddress: (r: Request) => string };
-    expect(rlTrustedProxy.requestAddress(spoofed)).toBe("5.6.7.8");
+    expect(rlTrustedProxy.requestAddress(spoofed)).toBe("1.2.3.4");
   });
 
   test("requestAddress usa a entrada de X-Forwarded-For acrescentada pelo proxy confiável, não a do cliente", () => {
     const load = (env: Record<string, string>) => loadModule(
       "src/server/security/RateLimit.ts",
-      { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
+      { "server-only": {}, "node:net": { isIP }, "./RateLimitService": { RateLimitService: {} } },
       { process: { env: { NODE_ENV: "production", TRUST_PROXY_HEADERS: "true", ...env } } },
     ) as { requestAddress: (r: Request) => string };
     const forwarded = (value: string) => new Request("https://studyai.invalid/auth/login", {
@@ -542,13 +543,17 @@ test.describe("RH-2A — R-04 Rate limiting consistente e deviceId", () => {
     expect(twoHops.requestAddress(forwarded("10.0.0.2"))).toBe("local");
 
     const invalidHops = load({ TRUSTED_PROXY_HOPS: "0" });
-    expect(invalidHops.requestAddress(forwarded("1.1.1.1, 203.0.113.7"))).toBe("203.0.113.7");
+    expect(invalidHops.requestAddress(forwarded("1.1.1.1, 203.0.113.7"))).toBe("local");
+    expect(twoHops.requestAddress(forwarded("203.0.113.7,,10.0.0.2"))).toBe("local");
+    expect(oneHop.requestAddress(forwarded("999.999.999.999"))).toBe("local");
+    expect(oneHop.requestAddress(forwarded("2001:0DB8:0000::1"))).toBe("2001:db8::1");
+    expect(oneHop.requestAddress(new Request("https://studyai.invalid"))).toBe("local");
   });
 
   test("clientAddressSource indica configuração ausente em produção sem proxy confiável", () => {
     const load = (env: Record<string, string>) => loadModule(
       "src/server/security/RateLimit.ts",
-      { "server-only": {}, "./RateLimitService": { RateLimitService: {} } },
+      { "server-only": {}, "node:net": { isIP }, "./RateLimitService": { RateLimitService: {} } },
       { process: { env }, console: { error: () => undefined } },
     ) as { clientAddressSource: () => string };
     expect(load({ NODE_ENV: "production" }).clientAddressSource()).toBe("none");

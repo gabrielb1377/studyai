@@ -288,7 +288,7 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
     { key: "beta-feedback:ip", windowBucket: Math.floor(nowMs / (10 * 60_000)), count: 2, createdAtMs: nowMs - 5 * 60_000 }, // 10m ativa (5m atrás)
     { key: "login:ip", windowBucket: Math.floor(nowMs / (15 * 60_000)), count: 4, createdAtMs: nowMs - 12 * 60_000 }, // 15m ativa (12m atrás)
     { key: "file:u1", windowBucket: Math.floor(nowMs / (60 * 60_000)), count: 10, createdAtMs: nowMs - 45 * 60_000 }, // 1h ativa (45m atrás)
-    { key: "file:u1-old", windowBucket: Math.floor((nowMs - 2 * 3_600_000) / (60 * 60_000)), count: 30, createdAtMs: nowMs - 2 * 3_600_000 }, // 1h expirada (2h atrás)
+    { key: "file:u1-old", windowBucket: Math.floor((nowMs - 3 * 3_600_000) / (60 * 60_000)), count: 30, createdAtMs: nowMs - 3 * 3_600_000 }, // 1h expirada (3h atrás)
   ];
 
   const executedQueries: Array<{ sql: string; params: unknown[] }> = [];
@@ -338,8 +338,8 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
     OperationalCleanup: { run: (opts?: { rateLimitMaxAgeMs?: number; quotaMinuteRetainDays?: number }) => Promise<{ executed: boolean; rateLimitsRemoved: number; quotaMinuteBucketsRemoved: number }> };
   };
 
-  // Mesmo solicitando 1_000 ms ou 60_000 ms, o piso mínimo de 1h (3_600_000 ms) protege
-  // integralmente as janelas ativas de 1m, 10m, 15m e 1h, removendo apenas a de 2h atrás.
+  // Mesmo solicitando 1_000 ms ou 60_000 ms, o piso mínimo de 2h (7_200_000 ms) protege
+  // integralmente as janelas ativas de 1m, 10m, 15m e 1h, removendo apenas a de 3h atrás.
   const result = await OperationalCleanup.run({ rateLimitMaxAgeMs: 60_000, quotaMinuteRetainDays: 1 });
   expect(result).toEqual({
     executed: true,
@@ -360,13 +360,10 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
 
   const rateDelete = executedQueries.find((q) => q.sql.includes("DELETE FROM rate_limits"));
   expect(rateDelete?.sql).toContain("created_at < NOW()");
-  expect(rateDelete?.params[0]).toBe(3_600_000);
+  expect(rateDelete?.params[0]).toBe(7_200_000);
 
-  // Se uma janela maior (ex.: 2h = 7_200_000 ms) for observada, o piso sobe dinamicamente.
-  await RateLimitService.getStatus("custom:2h", { limit: 5, windowMs: 2 * 60 * 60_000 });
-  await RateLimitService.cleanup(60_000);
-  const dynamicDelete = executedQueries.filter((q) => q.sql.includes("DELETE FROM rate_limits")).at(-1);
-  expect(dynamicDelete?.params[0]).toBe(7_200_000);
+  await expect(Promise.resolve(RateLimitService.getStatus("invalid-window", { limit: 5, windowMs: 3 * 60 * 60_000 })))
+    .rejects.toThrow("Unsupported rate limit window");
 
   const quotaDelete = executedQueries.find((q) => q.sql.includes("DELETE FROM usage_quotas"));
   expect(quotaDelete?.sql).toContain("minute_bucket > 0");
@@ -422,6 +419,11 @@ test("3E-PG: PostgreSQL real valida schema (32 tabelas), retenção de janelas a
       expect(tableNames.has(required)).toBe(true);
     }
 
+    const { rows: [examTable] } = await pool.query<{ relrowsecurity: boolean }>(
+      "SELECT relrowsecurity FROM pg_class WHERE oid = 'public.exam_attempts'::regclass"
+    );
+    expect(examTable.relrowsecurity).toBe(true);
+
     const pgAdapter = {
       hasPostgres: () => true,
       query: (text: string, values?: unknown[]) => pool.query(text, values),
@@ -458,12 +460,17 @@ test("3E-PG: PostgreSQL real valida schema (32 tabelas), retenção de janelas a
        ($1, $2, 3, NOW() - INTERVAL '20 seconds'),
        ($3, $4, 4, NOW() - INTERVAL '10 minutes'),
        ($5, $6, 12, NOW() - INTERVAL '45 minutes'),
-       ($7, $8, 30, NOW() - INTERVAL '2 hours')`,
+       ($7, $8, 30, NOW() - INTERVAL '3 hours')`,
       [`${prefix}:1m`, b1m, `${prefix}:15m`, b15m, `${prefix}:1h`, b1h, `${prefix}:1h-expired`, b1h - 2]
     );
 
-    const removed = await RateLimitService.cleanup(60_000);
-    expect(removed).toBeGreaterThanOrEqual(1);
+    const [firstRemoved, secondRemoved, consumed] = await Promise.all([
+      RateLimitService.cleanup(60_000),
+      RateLimitService.cleanup(60_000),
+      RateLimitService.checkAndConsume(`${prefix}:1h`, { limit: 30, windowMs: 60 * 60_000 }),
+    ]);
+    expect(firstRemoved + secondRemoved).toBe(1);
+    expect(consumed.remaining).toBe(17);
     expect(await RateLimitService.cleanup(60_000)).toBe(0);
 
     const remainingKeys = await pool.query<{ key: string }>(
@@ -475,7 +482,7 @@ test("3E-PG: PostgreSQL real valida schema (32 tabelas), retenção de janelas a
       `${prefix}:1h`,
       `${prefix}:1m`,
     ]);
-    expect((await RateLimitService.getStatus(`${prefix}:1h`, { limit: 30, windowMs: 60 * 60_000 })).remaining).toBe(18);
+    expect((await RateLimitService.getStatus(`${prefix}:1h`, { limit: 30, windowMs: 60 * 60_000 })).remaining).toBe(17);
 
     const userId = `pg3e_user_${Date.now()}`;
     await pool.query("INSERT INTO users (id, email, password_hash) VALUES ($1, $2, 'hash')", [userId, `${userId}@example.test`]);
