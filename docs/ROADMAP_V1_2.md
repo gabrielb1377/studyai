@@ -1,6 +1,10 @@
 # StudyAI — roadmap reconciliado V1.2
 
-## Atualização — Sprint 49D
+## Situação em 19/11/2026
+
+As Sprints 41–58 da tabela abaixo estão implementadas e commitadas na `v1.1-development` (48–58 entre 13 e 16/11/2026; 53, 54 e 55 como fundação). Nenhuma tem homologação externa. A fase atual é o **fechamento da V1.2**, sem novas sprints de funcionalidade. O estado vigente e a lista ordenada de pendências estão somente em [CURRENT_HANDOFF.md](../CURRENT_HANDOFF.md#estado-atual--fechamento-da-v12-19112026); este arquivo não repete esse estado. Funcionalidades futuras pertencem a V1.3 ou posterior.
+
+## Registro histórico — Sprint 49D
 
 As etapas 49A–C foram integradas e validadas localmente na 49D. O desenvolvimento segue a diretriz StudyAI Clean & Functional: menos botões redundantes e poluição visual, mais conteúdo, menos cliques e identidade própria. A próxima etapa planejada é a Sprint 50; 51 permanece Estudo Livre 2.0, 52 Laboratório 2.0 e 53–58 funcionalidades inteligentes. Nenhuma aprovação de publicação decorre desta validação. O risco de reload da Semana de Prova permanece sem causa comprovada e deve ser reavaliado antes do release.
 

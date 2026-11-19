@@ -1,6 +1,24 @@
 # Prompt reutilizável — próxima sessão
 
-## Estado atual — Sprint 49D
+## Prompt atual (19/11/2026)
+
+```text
+Continue o StudyAI em D:\studyai, branch v1.1-development. Leia AGENTS.md e
+a seção "Estado atual" no topo de CURRENT_HANDOFF.md; ela é a única fonte de
+estado documental, e o Git prevalece se houver divergência. Confirme
+git status -sb e git log --oneline -10 antes de agir.
+
+Fase: fechamento da V1.2, sem novas funcionalidades. Execute somente o item
+de pendência solicitado, com testes focados e retries 0. O experimento S3 está
+na branch exp/s3-direct-upload e não deve ser integrado sem revisão e
+autorização. Não faça commit, push, merge, rebase, deploy, migration ou
+alteração de .env sem autorização explícita. Ao concluir, reescreva a seção
+"Estado atual" do handoff e entregue o relatório da seção 5 do AGENTS.md.
+```
+
+Os textos abaixo são registros históricos.
+
+## Registro histórico — Sprint 49D
 
 Consulte o handoff e confirme o Git. As etapas 49A–C foram validadas conjuntamente na 49D. Diretriz StudyAI Clean & Functional: menos botões redundantes e poluição visual, mais conteúdo, menos cliques e identidade própria. Bateria: 64 aprovados e duas falhas de cadastro em servidor de produção sem banco; ambos os cenários passaram em ambiente de desenvolvimento isolado, com registros ECONNRESET no servidor. Typecheck e build passaram; lint teve zero erros e 50 avisos preexistentes. Sem homologação externa.
 

@@ -1,6 +1,39 @@
-# Handoff atual — StudyAI V1.1
+# Handoff atual — StudyAI V1.2
 
-## Estado atual — Sprint 49D
+## Estado atual — fechamento da V1.2 (19/11/2026)
+
+Esta é a única seção de estado vigente. Tudo abaixo dela é registro histórico. Se o Git divergir deste texto, o Git prevalece.
+
+**Git (observado em 19/11/2026):** branch `v1.1-development`, local à frente de `origin/v1.1-development` (sem push; confirme a contagem com `git status -sb`). `main` está em `7e3d89b` (03/10/2026), cerca de 100 commits atrás, e é a branch que o Railway publica. O experimento de upload direto S3 está na branch local `exp/s3-direct-upload` (`7b7be19`), fora da `v1.1-development`. O working tree ficou limpo após o saneamento.
+
+**Funcionalidades:** as Sprints 48–58 foram implementadas e commitadas entre 13 e 16/11/2026 (design system, simplificação das telas, Studio/Estudo Livre 2.0, Laboratório 2.0, planejamento, aprendizagem personalizada e memória, Tutor avançado, avaliações adaptativas, multimodal e voz, foco/metas e offline). Os commits de 53, 54 e 55 se descrevem como "foundation". Há specs `sprint48*`–`sprint58*`. Nenhuma dessas sprints tem homologação externa, e esta atualização não executou suas specs.
+
+**Hardening após a Sprint 58:** `d7e156b` (auth, sessões e arquivos), `8ae7cb9` (compartilhamento, quotas de IA, colaboração), `0e2f06e` (guarda de atualização do Service Worker durante provas e falhas de gravação de provas), `1de72ab` (corridas assíncronas em Tutor, conta e salas), `f33b6e7` (delimitadores contra prompt injection), `0eca205` e `c956096` (limpeza de `rate_limits`/`usage_quotas` preservando janelas ativas) e `eef4c9c` (IP do cliente via proxy confiável: `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS`; readiness `degraded` em produção sem fonte de IP). `AGENTS.md` passou a ser versionado em `545f6ac`.
+
+**Validação registrada em 19/11/2026:** `tsc` do código-fonte com 0 erros; ESLint com 0 erros e 44 avisos (`no-unused-vars`); `npm audit --omit=dev` com 4 vulnerabilidades baixas (KaTeX); testes focados R-04 e 3E com 5 aprovados e 1 ignorado (3E-PG exige PostgreSQL local descartável). Build e suíte Playwright completa **não** foram executados. Os arquivos gerados em `.next/types` ainda referenciam a rota `direct/` removida e fazem o `npm run typecheck` padrão acusar 3 erros até o próximo `npm run dev` ou `npm run build`.
+
+**Fase atual:** fechamento da V1.2, sem novas funcionalidades. A auditoria de 19/11 deu NO-GO para lançamento público e CONDITIONAL GO para uso pessoal/beta fechado.
+
+### Pendências do fechamento, em ordem
+1. ~~Sanear o Git~~ (feito em 19/11) e ~~atualizar documentos de estado~~ (este texto).
+2. Rodar a CI em `v1.1-development` e em PRs; usar `retries: 0` no Playwright, com quarentena explícita de specs instáveis.
+3. Configurar no Railway `TRUST_PROXY_HEADERS=true` e confirmar em staging o comportamento de `X-Real-IP` e `X-Forwarded-For` (código pronto em `eef4c9c`; ambiente não verificado).
+4. Quotas: IA por tokens com orçamento global, email verificado para usar a quota compartilhada, e limite de armazenamento por usuário (arquivos e backups).
+5. Atomicidade: rotação de refresh token com detecção de reuso; sync com controle otimista no SQL; restore de backup em transação.
+6. Banco: migrações versionadas fora do `CMD` do container, índices por `user_id` (`refresh_tokens`, `backups`, `shares`, `account_tokens`), limpeza operacional agendada (hoje `OperationalCleanup` não tem chamador).
+7. Escolher uma plataforma de deploy e alinhar o healthcheck (`railway.toml` usa `/api/health/live`, `.railway/railway.ts` usa `/api/health`).
+8. Staging com Supabase e S3 reais: smoke de cadastro (SMTP), login, sync, upload, Tutor, Modo Prova e backup/restore.
+9. Intermitência após reload da Semana de Prova: reproduzir com `retries: 0` ou encerrar com evidência. O `0e2f06e` adicionou guarda de atualização durante provas; não há prova de que isso resolva o problema.
+10. Verificar backup/PITR do Supabase e testar um restore.
+11. PR de release `v1.1-development` → `main`, revisado e com aprovação explícita.
+
+### Riscos conhecidos
+- Comportamento do proxy do Railway não verificado; sem a configuração do item 3, todos os limites por IP compartilham uma chave e a readiness responde 503.
+- Custo de IA medido por requisições (500/dia e 20/min por usuário), não por tokens.
+- Experimento S3: a rota `direct/` não valida sessão ativa nem conteúdo do arquivo.
+- Supabase, Railway, SMTP e providers reais não foram consultados.
+
+## Registro histórico — Sprint 49D
 
 As Sprints 49A–C de refinamento visual foram validadas em conjunto na 49D, com checkpoint local desta alteração. Biblioteca tem filtros recolhíveis no mobile; Tutor tem cabeçalho compacto; Dashboard, Estudo e Provas foram simplificados sem mudança deliberada de regras. Diretriz StudyAI Clean & Functional: menos botões redundantes e poluição visual, mais conteúdo, menos cliques e identidade própria.
 
