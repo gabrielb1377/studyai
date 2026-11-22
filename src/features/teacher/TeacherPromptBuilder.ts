@@ -42,7 +42,11 @@ const methodInstructions: Record<TeacherRequest["method"], string> = {
 };
 
 export const TeacherPromptBuilder = {
-  instruction(request: TeacherRequest) {
+  /**
+   * `omitSelection` deixa o trecho selecionado de fora: quem monta o prompt
+   * final (PromptBuilder) o inclui dentro do bloco de dados não confiáveis.
+   */
+  instruction(request: TeacherRequest, options: { omitSelection?: boolean } = {}) {
     const blocks = [
       "Modo Professor ativo.",
       `Nível solicitado: ${teacherLevelLabels[request.level]}. ${levelInstructions[request.level]}`,
@@ -67,7 +71,7 @@ export const TeacherPromptBuilder = {
     if (request.action === "audio_lesson") {
       blocks.push(`Preferências de áudio: voz "${request.voice ?? "padrão"}", velocidade ${request.rate}x, reprodução automática ${request.autoplay ? "ligada" : "desligada"}.`);
     }
-    if (request.selection) {
+    if (request.selection && !options.omitSelection) {
       const location = [
         request.selection.sourceName,
         request.selection.page ? `página ${request.selection.page}` : undefined,

@@ -32,6 +32,23 @@ export function wrapUntrustedMaterialData(blocks: readonly string[]) {
   return ["<UNTRUSTED_MATERIAL_DATA>", content, "</UNTRUSTED_MATERIAL_DATA>"].join("\n");
 }
 
+const SELECTION_LABEL_MAX = 200;
+
+/** Rótulo de origem em linha única e limitado: nome e capítulo vêm do documento. */
+function selectionLabel(value: string | undefined) {
+  return value?.replace(/\s+/g, " ").trim().slice(0, SELECTION_LABEL_MAX) || undefined;
+}
+
+/** Trecho selecionado do material: conteúdo de documento, tratado como dado não confiável. */
+function selectionBlock(selection: NonNullable<TeacherRequest["selection"]>) {
+  const location = [
+    selectionLabel(selection.sourceName),
+    selection.page ? `página ${selection.page}` : undefined,
+    selectionLabel(selection.chapter),
+  ].filter(Boolean).join(" · ");
+  return `Trecho selecionado${location ? ` (${location})` : ""}:\n${selection.text}`;
+}
+
 export const PromptBuilder = {
   contextual({ question, history, studyContext, chunks = [], teaching }: ContextualPromptInput) {
     const compressed = ContextCompressor.compress(history, chunks);
@@ -56,7 +73,10 @@ export const PromptBuilder = {
       "Para áudios e vídeos, distinga explicitamente entre: (1) conteúdo efetivamente transcrito nos trechos recuperados, (2) metadados da mídia (nome, tipo, duração) e (3) conhecimento complementar da IA. Nunca afirme ter ouvido o áudio ou assistido ao vídeo quando houver apenas metadados ou transcrição parcial.",
     ];
     if (teaching) {
-      sections.push("", "Diretrizes pedagógicas:", TeacherPromptBuilder.instruction(teaching));
+      sections.push("", "Diretrizes pedagógicas:", TeacherPromptBuilder.instruction(teaching, { omitSelection: true }));
+      if (teaching.selection) {
+        sections.push("", wrapUntrustedMaterialData([selectionBlock(teaching.selection)]));
+      }
     }
     if (studyContext) {
       sections.push("", wrapUntrustedMaterialData([`Contexto do estudo:\n${ContextBuilder.fromStudy(studyContext)}`]));

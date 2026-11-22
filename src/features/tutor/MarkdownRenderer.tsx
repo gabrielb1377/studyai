@@ -5,9 +5,17 @@ import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import type { ComponentPropsWithoutRef } from "react";
+import { blockedImageLabel, isLocalImageSource } from "./markdown-image";
 
 function MarkdownImage({ src, alt }: ComponentPropsWithoutRef<"img">) {
   if (!src) return null;
+  if (typeof src !== "string" || !isLocalImageSource(src)) {
+    return (
+      <span role="note" className="block rounded-xl border border-dashed bg-background p-2 text-xs text-muted-foreground">
+        {blockedImageLabel(alt)}
+      </span>
+    );
+  }
   return (
     <span className="block overflow-hidden rounded-xl border bg-background p-2">
       {/* eslint-disable-next-line @next/next/no-img-element */}
