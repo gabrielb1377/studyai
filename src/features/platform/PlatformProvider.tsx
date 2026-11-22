@@ -18,12 +18,17 @@ export function PlatformProvider() {
   useEffect(() => {
     const install = (event: Event) => { event.preventDefault(); PWAService.registerInstallPrompt(event); };
     let reloading = false;
+    let hadController = Boolean(navigator.serviceWorker?.controller);
     // Nunca força skipWaiting nem recarrega durante simulado, foco, edição ou sem ação explícita do usuário.
     const update = () => { UpdateSafety.markUpdateAvailable(); };
     const controllerChanged = () => {
       if (!reloading && UpdateSafety.consumeApprovedReload()) {
         reloading = true;
         window.location.reload();
+        return;
+      }
+      if (!hadController) {
+        hadController = true;
         return;
       }
       UpdateSafety.markReloadPending();
@@ -52,7 +57,7 @@ export function PlatformProvider() {
     <aside
       role="status"
       aria-live="polite"
-      className="fixed right-4 bottom-4 z-50 max-w-sm rounded-xl border bg-card p-4 text-card-foreground shadow-lg"
+      className="fixed right-4 bottom-24 z-50 left-4 max-w-sm rounded-xl border bg-card p-4 text-card-foreground shadow-lg sm:left-auto lg:bottom-4"
     >
       <div className="flex items-start gap-3">
         <RefreshCw className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />

@@ -134,6 +134,7 @@ test("permite escolher Capítulo de apostila ou Documento em branco a partir da 
   await page.getByRole("textbox", { name: "Tema", exact: true }).fill(" Normalização de Bancos de Dados ");
   await page.getByRole("textbox", { name: "Matéria", exact: true }).fill("Banco de Dados");
   await page.getByRole("button", { name: "Criar estudo", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Normalização de Bancos de Dados" })).toBeVisible();
 
   await page.goto("/academy/studio");
   await page.getByLabel("Template pedagógico para Normalização de Bancos de Dados").selectOption("textbook-chapter");
