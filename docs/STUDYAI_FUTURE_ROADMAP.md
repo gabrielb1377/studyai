@@ -6,10 +6,10 @@
 
 | Tema | Vigente | Este plano | Conflito e decisão |
 |---|---|---|---|
-| Fechamento V1.2 | Pendências 1–5 do handoff (CI, staging, quotas, atomicidade, índices) e NO-GO | Pré-requisito, inalterado | Nenhum. As ondas abaixo só começam após GO ou autorização explícita |
-| Cinco lotes de encerramento | **Não estão definidos em nenhum arquivo do repositório** (busca por "Lote" sem resultado). A mensagem citou "Lote 1" e "Lote 3" | Usei as cinco pendências do handoff como proxy | **Confirmar o mapeamento.** Não alterei nada que pareça pertencer a esses lotes |
+| Fechamento V1.2 | Cinco lotes do handoff: Lote 1 (estabilização da CI, com o PS-1a incluído) em validação; Lotes 2–5 pendentes; NO-GO para lançamento | Pré-requisito, inalterado | Nenhum. As ondas abaixo só começam após GO ou autorização explícita |
+| Cinco lotes de encerramento | O `CURRENT_HANDOFF.md` (`698fad8`) agora descreve o **Lote 1** e lista os Lotes 2–5 só por tema (contrato PostgreSQL e atomicidade; quotas, tokens e BYOK; S3, SMTP, proxy e observabilidade; homologação em staging e rollback). Os achados `SA-01` a `SA-06` citados ali **não estão definidos em nenhum documento versionado** | Segui o handoff como fonte | Pendente de definição formal dos limites de cada lote em documento versionado |
 | Decisões de produto do Lote 3 (e-mail verificado para IA compartilhada, 1.024 MB de arquivos, 200 MB de backups) | Citadas apenas na mensagem do usuário; o handoff descreve só "projetar reserva e orçamento" | Respeitadas; nenhuma implementada aqui | O motor e as ferramentas assumem essas regras na fronteira da quota |
-| Correções de segurança de prompt | Não constam | Itens PS-1 e PS-2 abaixo | **Conflito:** o fechamento da V1.2 proíbe funcionalidade nova, mas isto é correção. Recomendo o dono decidir se entram no fechamento |
+| Correções de segurança de prompt | O **PS-1a** foi aprovado como parte do fechamento e está commitado localmente em `7e7a157`, sem push | PS-1a concluído; PS-1b e PS-2 abaixo continuam fora do fechamento | Conflito resolvido para o PS-1a: correção de segurança, não funcionalidade. PS-1b e PS-2 seguem para depois do GO |
 | Sugestões de V1.3 da auditoria de 19/11 (SRS unificado, painel de uso de IA, acessibilidade auditada, vínculo prova↔tentativa) | Propostas, não aprovadas | Absorvidas: acessibilidade em QU; painel de uso após contabilização real; vínculo prova↔tentativa continua adiado | Nenhum |
 | Numeração | Sprints 41–58 usadas | Novas a partir de 59, com prefixos de trilha | Nenhum |
 | Skills do AI-RULES | `studyai-workflow` em duas cópias (biblioteca e `.agents/skills/`) | Definir a fonte única antes de ampliar | Pendente de decisão |
@@ -38,13 +38,15 @@ Quality Upgrade e Segurança de prompt podem andar em paralelo (arquivos diferen
 Convenção de esforço e modelo: **BALANCED** com Sonnet para sprints de interface; **DEEP** com Opus para qualquer sprint que toque quota, auth, prompt de segurança ou ferramentas (AGENTS.md §7). Tokens: estimativa de contexto de skills por sessão (12–21 mil em DEEP, heurística do roteador), sem contar leitura de código. Os valores por sprint abaixo são estimativas de planejamento, não medições.
 
 ### Onda 1
-**PS-1 — Delimitador único e system prompt por provedor**
-- Objetivo: fechar as lacunas de injeção. Escopo: montador único de dados não confiáveis; cobrir `teaching.selection.text`, Lab, Studio assist, Diagram assist, áudio e juiz; `systemInstruction` (Gemini) e mensagem `system` (compatíveis OpenAI).
+**PS-1a — Concluído e commitado localmente em `7e7a157` (parte do fechamento da V1.2, sem push):** imagem Markdown remota bloqueada no `MarkdownRenderer` e trecho selecionado do Professor dentro do delimitador, com rótulos limitados. Evidência: 34/34 (spec `ps1a-prompt-injection.spec.ts` com 10 de lógica e 1 de navegador, mais regressões de Tutor, Professor, Mentor e Lab), sem retries e sem provedor real. É um controle estrutural, não uma proteção absoluta. Detalhes e limitações em `STUDYAI_INTELLIGENCE_ENGINE.md` §2 e no handoff.
+
+**PS-1b — Pendente: delimitador único e system prompt por provedor** (o restante do antigo PS-1)
+- Objetivo: fechar as lacunas de injeção que o PS-1a não cobriu. Escopo: montador único de dados não confiáveis; cobrir Lab, Studio assist, Diagram assist, áudio e juiz (o `teaching.selection.text` já foi tratado no PS-1a); `systemInstruction` (Gemini) e mensagem `system` (compatíveis OpenAI); reavaliar a CSP `img-src` depois de confirmar que nenhum uso legítimo de imagem `https` depende dela (o sanitizador do Studio as aceita).
 - AI-RULES: `security-and-hardening`, `fp-check`, `differential-review`. Reuso: `PromptBuilder`, `TeacherPromptBuilder`. Arquivos prováveis: `features/ai/PromptBuilder.ts`, `teacher/TeacherPromptBuilder.ts`, `lab/services/LabPromptBuilder.ts`, `academy/studio/StudioAssistService.ts`, `diagrams/DiagramAssistService.ts`, `ai/providers/*`.
 - Aceite: nenhuma entrada do aluno/material fora do bloco delimitado (teste por builder); teste de injeção no trecho selecionado e no Lab não altera a nota. Testes: specs de `ai-core`, `teacher`, `lab` + novos casos. Riscos: mudar o comportamento de respostas; mitigar com paridade. Modelo: Opus/DEEP. Tokens: ≈15 mil. Rollback: reverter o commit; sem dados.
 
 **PS-2 — Unificar o caminho de quota e CSRF**
-- Objetivo: eliminar a rota morta e o CSRF condicional. Escopo: remover ou fundir `withQuotaEnforcement`; exigir CSRF em `diagrams/generate`. Arquivos: `server/ai/QuotaMiddleware.ts`, `app/api/diagrams/generate/route.ts`. Aceite: um único caminho; testes de quota existentes passam. Riscos: coincide com o item 3 do fechamento; **fazer junto ou depois dele**. Modelo: Opus/DEEP. Rollback: reverter.
+- Objetivo: eliminar a rota morta de quota. Escopo: remover ou fundir `withQuotaEnforcement` (sem chamadores). **Correção de 22/11:** o "CSRF condicional em `diagrams/generate`" era falso positivo, pois `withAIQuota` já exige CSRF (`QuotaMiddleware.ts:224`); só resta, opcionalmente, remover o `if` redundante da rota. Arquivos: `server/ai/QuotaMiddleware.ts`, `app/api/diagrams/generate/route.ts`. Aceite: um único caminho; testes de quota existentes passam. Riscos: coincide com o item 3 do fechamento; **fazer junto ou depois dele**. Modelo: Opus/DEEP. Rollback: reverter.
 
 **QU-1 a QU-5** — ver `STUDYAI_QUALITY_UPGRADE.md` (estados e erros; tipografia e escala; acessibilidade verificável; navegação mobile; telas grandes). Modelo: Sonnet/BALANCED. Tokens: ≈8–12 mil por sprint. Rollback: commits pequenos por tela.
 
@@ -71,7 +73,7 @@ Sem sprints detalhadas. Pré-condições: modelo de permissões de ferramentas, 
 
 | Item | Valor | Risco | Custo | Prioridade |
 |---|---|---|---|---|
-| PS-1 (injeção e system prompt) | Alto (segurança) | Baixo | Baixo | **1** |
+| PS-1b (system prompt e delimitador nos demais fluxos; PS-1a já concluído) | Médio (preventivo) | Baixo | Baixo | **1** |
 | QU-1, QU-3 (estados, acessibilidade verificável) | Alto | Baixo | Médio | 2 |
 | IE-1/IE-2 (registro e pilotos) | Alto | Médio | Médio | 3 |
 | IE-3 (tokens reais) | Alto (controle de custo) | Médio | Médio | 3, depende do fechamento |

@@ -37,6 +37,7 @@ A avaliação técnica da Sprint 47 foi concluída localmente, sem aprovação p
 - A falha de reload da Semana de Prova permanece pendente antes do release. Preservar regressões existentes e investigar imediatamente nova ocorrência, com trace, estado e etapas. Não ocultar falhas com retries ou esperas arbitrárias.
 - Aparelhos físicos e leitores de tela exigem validação futura. Critério: percorrer navegação, foco e fluxos principais nos dispositivos disponíveis, registrando resultados.
 - Os experimentos S3 permanecem fora dos checkpoints funcionais. Sua integração depende de revisão de segurança e testes com infraestrutura apropriada.
+- Segurança de prompt: o **PS-1a** (imagem Markdown remota bloqueada e trecho selecionado do Professor dentro do delimitador) faz parte do fechamento e está commitado localmente em `7e7a157`, sem push e sem validação de CI. É um controle estrutural, não uma proteção absoluta contra injeção. O **PS-1b** (system prompt por provedor, delimitador em Lab, Studio, diagramas, áudio e juiz de qualidade, e revisão da CSP `img-src`) continua pendente e **fora** do fechamento. Estado e evidências no handoff; planejamento em [STUDYAI_FUTURE_ROADMAP.md](STUDYAI_FUTURE_ROADMAP.md).
 
 ## Registro histórico — fotografia de 6 de novembro de 2026
 

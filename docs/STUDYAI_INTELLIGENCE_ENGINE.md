@@ -18,13 +18,21 @@
 | Prompt injection | Delimitador `<UNTRUSTED_MATERIAL_DATA>` só em PromptBuilder, AcademyPromptBuilder e LabChallengeService | grep |
 
 ## 2. Lacunas de segurança de prompt (corrigir antes de qualquer skill nova)
-1. `teaching.selection.text` (trecho do PDF) entra nas "Diretrizes pedagógicas" **fora** do delimitador (`TeacherPromptBuilder.ts:~74`). Verificado.
-2. `LabPromptBuilder`, `StudioAssistService`, `DiagramAssistService`, `TeacherAudioLessonService` e `llm-judge` não usam o delimitador (relatado por subagente; confirmar arquivo a arquivo). No Lab a saída é uma nota em JSON, então uma injeção pode manipular o resultado.
-3. A regra de segurança está na mensagem do usuário, sem system prompt, em Gemini e provedores OpenAI-compatíveis.
-4. Duas rotas de quota coexistem: `withAIQuota` (usada) e `withQuotaEnforcement` (sem chamadores; verificado). Risco de divergência futura.
-5. `diagrams/generate` exige CSRF só quando há cookie (relatado; confirmar).
 
-Estes itens são **correções**, não funcionalidades. Proponho avaliar promovê-los ao fechamento da V1.2 (ver conflito no roadmap).
+Estado em 22/11/2026. O **PS-1a** foi aprovado como parte do fechamento da V1.2 e está commitado localmente em `7e7a157` (sem push). Ele reduz dois riscos estruturais; **não** é uma proteção absoluta contra injeção de prompt: a obediência do modelo a texto hostil é probabilística e não foi testada com provedor real.
+
+| # | Lacuna | Estado |
+|---|---|---|
+| 1 | `teaching.selection.text` (trecho do PDF) entrava nas "Diretrizes pedagógicas" **fora** do delimitador, e `sourceName`/`chapter` não tinham limite | **Tratada no PS-1a** (`7e7a157`): o trecho vai dentro de `<UNTRUSTED_MATERIAL_DATA>`, rótulos em linha única com até 200 caracteres, validação com limite de 500 |
+| 1b | Imagens Markdown remotas na resposta eram carregadas pelo navegador sem clique, o que permitia levar dados do contexto na URL (`MarkdownRenderer.tsx`; Tutor, Lab e Mentor) | **Tratada no PS-1a**: imagem remota vira texto alternativo; validada no navegador (nenhuma requisição ao host externo). O `react-markdown` 10.1.0 já descarta `data:` e `blob:` por padrão (comportamento preexistente), então a lista permitida de `data:image` e `blob:` é uma segunda camada |
+| 2 | `LabPromptBuilder` (`:20,23,24`), `StudioAssistService` (`:50-58`), `DiagramAssistService` (`:63-67`), `TeacherAudioLessonService` (`:68`) e `llm-judge` (`:32-39`) não usam o delimitador. Confirmado por leitura dos cinco arquivos. No Lab a saída é uma nota em JSON, então uma injeção pode manipular o resultado do próprio aluno | **Pendente (PS-1b)**; melhoria preventiva, pois nesses fluxos o autor do texto é em geral o próprio aluno |
+| 3 | A regra de segurança está na mensagem do usuário, sem system prompt, em Gemini e provedores OpenAI-compatíveis (só o Ollama tem) | **Pendente (PS-1b)** |
+| 4 | Duas rotas de quota coexistem: `withAIQuota` (usada) e `withQuotaEnforcement` (sem chamadores; verificado). Risco de divergência futura | **Pendente (PS-2)**, junto do item de quotas do fechamento |
+| 5 | ~~`diagrams/generate` exige CSRF só quando há cookie~~ | **Falso positivo, refutado.** A rota só exporta `POST` e retorna `withAIQuota(...)`, que chama `requireCsrf` incondicionalmente (`QuotaMiddleware.ts:224`) antes de executar o handler (`:279`); o teste `sprint42-security-quota.spec.ts:116` fixa a ordem `["csrf","user"]`. O `if` com `studyai_csrf=` dentro do handler (`route.ts:16`) é redundante, sem efeito de segurança; removê-lo é limpeza opcional |
+
+Limitações remanescentes do PS-1a: links Markdown com dados na URL continuam possíveis (exigem clique); a CSP mantém `img-src https:` (o sanitizador do Studio aceita imagens `https`); blocos Mermaid não foram auditados; o conteúdo da seleção dentro do bloco delimitado continua sem filtragem. Os testes do PS-1a são estruturais (delimitação e bloqueio do canal de imagem) e não medem resistência de modelo.
+
+Os itens 2 a 4 são **correções**, não funcionalidades, e **não** fazem parte do fechamento da V1.2.
 
 ## 3. Arquitetura proposta
 
