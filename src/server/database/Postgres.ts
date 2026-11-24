@@ -18,6 +18,13 @@ export function hasPostgres(options: { allowMissing?: boolean } = {}) {
   return configured;
 }
 
+function parsePoolSize(raw: string | undefined, fallback = 10): number {
+  const trimmed = raw?.trim();
+  if (!trimmed || !/^[1-9][0-9]*$/.test(trimmed)) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : fallback;
+}
+
 export function postgresPool() {
   const connectionString = process.env.DATABASE_URL?.trim();
   if (!connectionString) throw new Error("DATABASE_URL não foi configurada.");
@@ -32,10 +39,9 @@ export function postgresPool() {
   const caCert = process.env.DATABASE_CA_CERT?.trim();
   const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
 
-  state.connectionString = connectionString;
-  state.pool = new Pool({
+  const pool = new Pool({
     connectionString,
-    max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
+    max: parsePoolSize(process.env.DATABASE_POOL_SIZE, 10),
     ssl: process.env.DATABASE_SSL === "false"
       ? false
       : process.env.NODE_ENV === "production" || process.env.DATABASE_SSL === "true" || caCert
@@ -47,6 +53,21 @@ export function postgresPool() {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
   });
+  // Evita encerramento do processo Node por erro assíncrono em cliente ocioso
+  // (ex.: reinício do PostgreSQL ou timeout de pooler como Supabase/Railway).
+  pool.on("error", (error) => {
+    const classification = classifyPostgresError(error);
+    console.error("[PostgreSQL Pool Error]", {
+      category: classification.category,
+      code: classification.code,
+      name: classification.name,
+      message: classification.messageSummary,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  state.connectionString = connectionString;
+  state.pool = pool;
   return state.pool;
 }
 
@@ -142,29 +163,37 @@ function inspectDatabaseUrl() {
   };
 }
 
+function sanitizeErrorText(raw: string): string {
+  const redacted = raw
+    .replace(/postgres:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/postgresql:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/password=[^\s&]+/gi, "password=[REDACTED]")
+    .replace(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, "[IP]");
+  return redacted.length > 200 ? redacted.slice(0, 200) + "..." : redacted;
+}
+
 function classifyPostgresError(error: unknown): {
   category: string;
   code?: string;
   name?: string;
   messageSummary: string;
 } {
-  if (!(error instanceof Error)) {
+  const isErrorLike =
+    error instanceof Error ||
+    (typeof error === "object" && error !== null && "message" in error && typeof (error as { message?: unknown }).message === "string");
+  if (!isErrorLike) {
     return {
       category: "unknown",
-      messageSummary: String(error ?? "Unknown error"),
+      messageSummary: sanitizeErrorText(String(error ?? "Unknown error")),
     };
   }
 
-  const err = error as Error & { code?: string; errno?: string | number; syscall?: string };
+  const err = error as { message: string; code?: string; errno?: string | number; syscall?: string; name?: string };
   const code = err.code ?? (err.errno ? String(err.errno) : undefined);
-  const name = err.name;
+  const name = typeof err.name === "string" ? err.name : undefined;
   const message = err.message.toLowerCase();
 
-  const sanitizedMessage = err.message
-    .replace(/postgres:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
-    .replace(/postgresql:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
-    .replace(/password=[^\s&]+/gi, "password=[REDACTED]")
-    .replace(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, "[IP]");
+  const sanitizedMessage = sanitizeErrorText(err.message);
 
   let category = "connection";
 
@@ -205,7 +234,7 @@ function classifyPostgresError(error: unknown): {
     message.includes("tls") ||
     message.includes("certificate") ||
     message.includes("self signed") ||
-    name.includes("TLSSocket")
+    Boolean(name?.includes("TLSSocket"))
   ) {
     category = "tls_ssl";
   }
@@ -224,16 +253,21 @@ export async function query<T extends QueryResultRow>(text: string, values: unkn
 
 export async function transaction<T>(operation: (client: PoolClient) => Promise<T>) {
   const client = await postgresPool().connect();
+  let releaseError: Error | undefined;
   try {
     await client.query("BEGIN");
     const result = await operation(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      releaseError = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
+    }
     throw error;
   } finally {
-    client.release();
+    client.release(releaseError);
   }
 }
 

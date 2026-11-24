@@ -10,7 +10,11 @@ const PASSWORD = "StudyAI2026secure";
 const uniqueEmail = (label: string) =>
   `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
-function loadServerModule(file: string, dependencies: Record<string, unknown> = {}) {
+function loadServerModule(
+  file: string,
+  dependencies: Record<string, unknown> = {},
+  globals: Record<string, unknown> = {},
+) {
   const source = readFileSync(path.join(process.cwd(), file), "utf8");
   const js = ts.transpileModule(source, {
     compilerOptions: {
@@ -36,6 +40,7 @@ function loadServerModule(file: string, dependencies: Record<string, unknown> = 
       performance,
       process: { env: { NODE_ENV: "test" } },
       console,
+      ...globals,
     }),
   );
   return compiled.exports;
@@ -587,4 +592,124 @@ test("3E-PG: PostgreSQL real valida schema (32 tabelas), retenção de janelas a
   } finally {
     await pool.end();
   }
+});
+
+test("3F: Postgres pool singleton, error listener, pool size e rollback seguro", async () => {
+  const createdPools: Array<{
+    options: Record<string, unknown>;
+    listeners: Map<string, Array<(...args: unknown[]) => void>>;
+    ended: boolean;
+    connectQueue: Array<{
+      query: (sql: string) => Promise<unknown>;
+      release: (err?: unknown) => void;
+    }>;
+  }> = [];
+
+  class FakePool {
+    options: Record<string, unknown>;
+    listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+    ended = false;
+    connectQueue: Array<{
+      query: (sql: string) => Promise<unknown>;
+      release: (err?: unknown) => void;
+    }> = [];
+
+    constructor(options: Record<string, unknown>) {
+      this.options = options;
+      createdPools.push(this);
+    }
+    on(event: string, fn: (...args: unknown[]) => void) {
+      const list = this.listeners.get(event) ?? [];
+      list.push(fn);
+      this.listeners.set(event, list);
+      return this;
+    }
+    emit(event: string, ...args: unknown[]) {
+      const list = this.listeners.get(event) ?? [];
+      if (event === "error" && list.length === 0) {
+        throw args[0];
+      }
+      for (const fn of list) fn(...args);
+    }
+    async end() {
+      this.ended = true;
+    }
+    async connect() {
+      const next = this.connectQueue.shift();
+      if (!next) throw new Error("NO_FAKE_CLIENT");
+      return next;
+    }
+  }
+
+  const loggedErrors: unknown[][] = [];
+  const env: Record<string, string | undefined> = {
+    NODE_ENV: "production",
+    DATABASE_URL: "postgresql://user:pass@db-a.internal:5432/studyai",
+    DATABASE_POOL_SIZE: "",
+  };
+
+  const mod = loadServerModule("src/server/database/Postgres.ts", {
+    "server-only": {},
+    pg: { Pool: FakePool },
+  }, {
+    process: { env },
+    console: { error: (...args: unknown[]) => loggedErrors.push(args) },
+  }) as {
+    postgresPool: () => FakePool;
+    transaction: <T>(op: (client: { query: (sql: string) => Promise<unknown> }) => Promise<T>) => Promise<T>;
+  };
+
+  // 1) Singleton compartilhado + fallback seguro para DATABASE_POOL_SIZE vazio
+  const poolA1 = mod.postgresPool();
+  const poolA2 = mod.postgresPool();
+  expect(poolA1).toBe(poolA2);
+  expect(createdPools).toHaveLength(1);
+  expect(poolA1.options.max).toBe(10);
+
+  // 2) Listener de erro em cliente ocioso evita crash e redige URL/senha
+  expect(() => poolA1.emit("error", new Error("Connection reset on postgresql://user:secret@10.0.0.5:5432/db"))).not.toThrow();
+  expect(loggedErrors.length).toBe(1);
+  expect(JSON.stringify(loggedErrors[0])).not.toContain("secret");
+  expect(JSON.stringify(loggedErrors[0])).toContain("[REDACTED_URL]");
+
+  // 3) Mudança de DATABASE_URL encerra pool anterior e respeita DATABASE_POOL_SIZE válido
+  env.DATABASE_URL = "postgresql://user:pass@db-b.internal:5432/studyai";
+  env.DATABASE_POOL_SIZE = "5";
+  const poolB = mod.postgresPool();
+  expect(poolB).not.toBe(poolA1);
+  expect(poolA1.ended).toBe(true);
+  expect(poolB.options.max).toBe(5);
+
+  // 4) DATABASE_POOL_SIZE inválido ("0", "-3", "abc") cai no fallback 10
+  for (const invalid of ["0", "-3", "abc"]) {
+    env.DATABASE_URL = `postgresql://user:pass@db-${invalid}.internal:5432/studyai`;
+    env.DATABASE_POOL_SIZE = invalid;
+    expect(mod.postgresPool().options.max).toBe(10);
+  }
+
+  // 5) transaction() preserva erro original e descarta conexão quebrada se ROLLBACK falhar
+  const releaseArgs: unknown[] = [];
+  const rollbackErr = new Error("socket closed during rollback");
+  const rootErr = new Error("original domain failure");
+  const currentPool = mod.postgresPool();
+  currentPool.connectQueue.push({
+    query: async (sql: string) => {
+      if (sql === "ROLLBACK") throw rollbackErr;
+      return { rows: [] };
+    },
+    release: (err?: unknown) => {
+      releaseArgs.push(err);
+    },
+  });
+
+  let caught: unknown;
+  try {
+    await mod.transaction(async () => {
+      throw rootErr;
+    });
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBe(rootErr);
+  expect(releaseArgs).toEqual([rollbackErr]);
 });

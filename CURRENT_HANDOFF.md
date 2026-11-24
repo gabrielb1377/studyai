@@ -1,30 +1,32 @@
 # Handoff atual — StudyAI V1.2
 
-## Estado atual — Fechamento Técnico e Estabilização da V1.2 (24/11/2026)
+## Estado atual — Release Readiness Gate V1.2 (24/11/2026)
 
-Este é o estado vigente. Diagnósticos anteriores neste arquivo são históricos. As Sprints 41–58, os pacotes RH-2A/RH-2B e os pacotes de fechamento da V1.2 estão integrados e validados na branch `v1.1-development`.
+Este é o estado vigente após revisão técnica independente do fechamento da V1.2. Diagnósticos anteriores neste arquivo são históricos. As Sprints 41–58, RH-2A/RH-2B, PS-1a e correções de estabilização estão na branch `v1.1-development`.
 
-- **Git & Branches**:
-  - Branch ativa: `v1.1-development` (sincronizada com `origin/v1.1-development`).
-  - Commits de fechamento da V1.2 na linha principal: `0e2f06e` (SW e persistência de provas), `1de72ab` (concorrência assíncrona), `f33b6e7` (segurança de prompts IA), `0eca205` (limpeza operacional de quotas/rate-limit), `c956096` (retenção de janelas ativas `1m`–`1h+` no `RateLimitService.cleanup()`), `bd41ebd` (documentação de fechamento), `c62da52` (singleton de `Pool` do PostgreSQL em `globalThis.__studyAIPostgres` para evitar exaustão de `max_connections` entre route bundles do Next.js) e commit final de validação PostgreSQL/concorrência.
-  - Experimento S3 preservado fora da linha de release na branch local `exp/s3-direct-upload` (`7b7be19`), sem merge em `v1.1-development`.
-  - `main` permanece em `7e3d89b` (aguardando PR de release aprovado).
-- **Segurança, Concorrência e Persistência verificadas**:
-  - **RateLimitService (`src/server/security/RateLimitService.ts`)**: `MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS = 3_600_000` (1h) combinado com `maxObservedWindowMs` preserva todas as janelas ativas (`1m`, `10m`, `15m`, `1h` e `2h`) durante `cleanup()`.
-  - **Postgres Pool (`src/server/database/Postgres.ts`)**: `Pool` compartilhado em `globalThis.__studyAIPostgres` por `connectionString`, eliminando erro `53300` (`503 Serviço temporariamente indisponível`) sob múltiplas rotas App Router concorrentes.
-  - **Service Worker, Provas, Concorrência Assíncrona e Prompts IA**: fluxos validados sem regressão (`0e2f06e`, `1de72ab`, `f33b6e7`, `7e7a157`).
-- **Validação Real com PostgreSQL 18.4 e Multi-Instância (`--retries=0`)**:
-  - `node scripts/db-migrate.mjs`: **PASS** (32 tabelas criadas/atualizadas em `public`).
-  - `node scripts/verify-concurrency.mjs --migrate`: **7/7 PASS** (Cenários A–G: corrida de refresh token, revogação, sync otimista, salas/membros, revisões colaborativas, quota atômica e rate limit concorrente em 2 pools).
-  - `node scripts/verify-app-concurrency.mjs` e `tests/concurrency.spec.ts`: **10/10 PASS, 0 skipped, 0 failed** (incluindo Cenários 5, 6, 7 e E1–E3/F/F2 com 2 instâncias standalone Next.js + PostgreSQL real).
-  - `tests/exam-attempt-integration.spec.ts`: **6/6 PASS, 0 skipped, 0 failed** (criação, retomada após reload, correção server-side, idempotência, bloqueio de duplicata concorrente e isolamento cross-user).
-  - `tests/release-stabilization.spec.ts`: **6/6 PASS, 0 skipped, 0 failed** (`3A`–`3D`, `3E` e `3E-PG` cobrindo schema de 32 tabelas, revogação de sessão em `refresh_tokens`, isolamento cross-user em `sync_records`, `shares` privados e `study_rooms`/`room_members`, `RateLimitService.cleanup()` e `QuotaService.cleanupExpired()`).
-  - `tests/cloud-sync.spec.ts` (**4/4 PASS**) e `tests/collaboration.spec.ts` (**4/4 PASS**) contra PostgreSQL real.
-  - Gates estáticos: `npm run typecheck` (**0 erros**), `npm run lint` (**0 erros**, 44 warnings preexistentes), `npm run build` (**PASS**) e `git diff --check` (**PASS**).
-- **Schema Local vs Supabase Remoto (`studyai-v1` / `kxemrsejcckgqcqbgycy`)**:
-  - `src/server/database/schema.sql` define **32 tabelas** em `public` (incluindo `exam_attempts` da Sprint 41G.2A e colunas `visibility`/`access_level` em `shares`).
-  - O projeto Supabase remoto possui **31 tabelas** com RLS ativo (pendente apenas a criação de `exam_attempts` via `npm run db:migrate` no momento do corte de produção/staging com `DATABASE_URL` do Supabase).
-- **Status de Lançamento**: **CONDITIONAL GO** — código, segurança, persistência e suítes PostgreSQL/multi-instância 100% aprovados; para o corte final em produção restam apenas: (1) executar `npm run db:migrate` no Supabase `studyai-v1` para criar a 32ª tabela (`exam_attempts`) e confirmar política de RLS/conexão do role da aplicação; (2) configurar variáveis reais de ambiente (`DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TRUST_PROXY_HEADERS` e chaves de IA/S3/SMTP) no ambiente de deploy antes do merge da PR #1 para `main`.
+- **Git, PR #1 & CI remota**:
+  - Branch ativa: `v1.1-development`; `main` em `7e3d89b` (sem branch protection: `protected=false`, origem do deploy em `.github/workflows/deploy.yml` e `.railway/railway.ts`).
+  - Experimento S3 preservado intacto em `exp/s3-direct-upload` (`7b7be19`), fora da `v1.1-development`.
+  - [PR #1](https://github.com/gabrielb1377/studyai/pull/1) aberto (`v1.1-development` → `main`), `mergeable=true`, `mergeable_state=clean`.
+  - **CI remota em `9ac52e0`**: Push Run #45 (`45411864690`) e PR Run #46 (`45411877801`) **6/6 jobs verdes** (`quality`, `postgres` com PostgreSQL 17, e `e2e` 1–4 = **516 passed, 11 skipped, 0 failed**: shard 1 `125p/10s`, shard 2 `131p/1s`, shard 3 `133p/0s`, shard 4 `127p/0s`). Confirmado que os 11 testes de `tests/ps1a-prompt-injection.spec.ts` pertencem ao shard 2/4 e passaram na CI.
+- **Autocorreções cirúrgicas do Release Readiness Gate**:
+  - `src/server/database/Postgres.ts`: adicionado listener `pool.on("error")` (evita crash do processo Node em queda de cliente ocioso de pooler), validação `parsePoolSize()` para `DATABASE_POOL_SIZE`, redação de URL/senha/IP em `classifyPostgresError()` mesmo para erros não-`Error`/cross-realm, e `ROLLBACK` protegido em `transaction()` com `client.release(releaseError)`.
+  - `scripts/db-migrate.mjs`: alinhado suporte a `DATABASE_SSL=true` e `DATABASE_CA_CERT` com `Postgres.ts`.
+  - `tests/release-stabilization.spec.ts`: adicionado teste `3F` cobrindo singleton de pool, listener de erro com redação, fallback de `DATABASE_POOL_SIZE` e `transaction()` com falha no `ROLLBACK`.
+- **Correções factuais sobre o estado anterior**:
+  - `RateLimitService.ts` usa `MAX_RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000` (2h) com `assertSupportedWindow()` em todos os processos (desde `ea77e1b`), não `MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS`.
+  - As variáveis reais de segredo no código são `AUTH_SECRET` e `API_KEYS_ENCRYPTION_KEY` (não `JWT_SECRET`/`ENCRYPTION_KEY`).
+- **Reconciliação dos Lotes 1–5 e `SA-01`..`SA-06`**:
+  - **Lote 1 (CI + Semana de Prova + PS-1a)**: **Concluído e validado** na CI (6/6 verdes, `retries: 0`).
+  - **Lote 2 (PostgreSQL/Atomicidade)**: **Parcialmente concluído** — suítes PostgreSQL/multi-instância aprovadas localmente (37/37 em PG 18.4 descartável em `9ac52e0`), `Dockerfile` sem `db-migrate` no `CMD` (`ea77e1b`), mas permanecem pendentes: rotação atômica com detecção de reuso em `AuthService.refresh()`, lock otimista SQL em `SyncService.push()`/`CollaborationDatabase.saveResource()`, `SyncService.restore()` em transação única, chamador/agendador para `OperationalCleanup.run()` e índices por `user_id` (`refresh_tokens`, `backups`, `shares`, `account_tokens`).
+  - **Lote 3 (Quotas/Tokens/BYOK + `SA-01`..`SA-06`)**: **Parcialmente concluído** — quota por requisição (500/dia, 20/min) e BYOK funcionam, mas `tokens_count` segue gravando `0`, sem orçamento global por tokens, sem exigência de `email_verified_at` para IA compartilhada, sem cotas de armazenamento (1.024 MB arquivos / 200 MB backups), `withQuotaEnforcement` morto permanece e `SA-01`..`SA-06` **não possuem definição recuperável** em nenhum documento versionado.
+  - **Lote 4 (S3/SMTP/Proxy/Observabilidade)**: **Parcialmente concluído** — código de proxy pronto (`eef4c9c`/`ea77e1b`), mas **não configurado no Railway**; S3 não revalidado após ajuste de credencial; `SMTP_*` ausente no Railway; `railway.toml` tem sunset em `2026-12-01` e `.railway/railway.ts` omite variáveis críticas (`API_KEYS_ENCRYPTION_KEY`, `TRUST_PROXY_HEADERS`, chaves IA e SMTP).
+  - **Lote 5 (Staging/Backup/Rollback)**: **Pendente** — nenhuma homologação em staging com DB/S3/SMTP reais nem ensaio de backup/restore no banco alvo. `PS-1b` preservado no backlog pós-V1.2.
+- **Auditoria somente leitura — Infraestrutura & Banco**:
+  - **Railway (`production`)**: `studyai-web` está `● Failed`; `Postgres` está `○ Offline`; `DATABASE_URL` aponta para `postgres.railway.internal:5432/railway` (divergente do Supabase `studyai-v1` com 31/32 tabelas); `TRUST_PROXY_HEADERS` está ausente (causaria HTTP **503** imediato no healthcheck `/api/health`); `DATABASE_SSL_REJECT_UNAUTHORIZED=false`; `SMTP_*` ausente.
+  - **Schema (`schema.sql` vs `main` `7e3d89b`)**: diff 100% aditivo e idempotente (`user_api_keys`, `usage_quotas`, `rate_limits`, `exam_attempts` + RLS). Pode ser aplicado antes do deploy sem quebrar `main`, mas o role/RLS do banco alvo (Supabase vs Railway Postgres) precisa ser auditado em modo leitura antes da migration.
+  - **Dependências (`npm audit --omit=dev`)**: 1 vulnerabilidade `moderate` em `next` (`15.5.28`) e 4 `low` (`katex`/math).
+- **Parecer do Release Readiness Gate**: **NO-GO para lançamento público imediato**. Próximo passo exato: (1) decidir banco oficial de produção (Supabase `studyai-v1` vs Railway Postgres), regularizar `Postgres`/`studyai-web`, configurar `TRUST_PROXY_HEADERS=true` (confirmando `TRUSTED_PROXY_HOPS`) e `SMTP_*` no Railway, e executar preflight somente leitura no banco escolhido; (2) decidir explicitamente o escopo obrigatório restante dos Lotes 2–3 (ou aceitação formal de risco para beta fechado) e concluir homologação + backup/restore em staging (Lote 5) antes de autorizar o merge da PR #1 para `main`.
 
 ## Registro histórico — Lote 1 e PS-1a (22/11/2026)
 
