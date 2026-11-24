@@ -334,6 +334,16 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
       }
       return { rowCount: 0, rows: [] };
     },
+    transaction: async <T>(op: (client: { query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number; rows: Array<Record<string, unknown>> }> }) => Promise<T>) => {
+      return op({
+        query: async (sql: string, params: unknown[] = []) => {
+          if (sql.includes("pg_try_advisory_xact_lock")) {
+            return { rowCount: 1, rows: [{ locked: true }] };
+          }
+          return pgMock.query(sql, params);
+        },
+      });
+    },
   };
 
   const rateLimitModule = loadServerModule("src/server/security/RateLimitService.ts", {
@@ -358,16 +368,17 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
     QuotaService: { cleanupExpired: (retainDays?: number) => Promise<number> };
   };
   const { OperationalCleanup } = cleanupModule as {
-    OperationalCleanup: { run: (opts?: { rateLimitMaxAgeMs?: number; quotaMinuteRetainDays?: number }) => Promise<{ executed: boolean; rateLimitsRemoved: number; quotaMinuteBucketsRemoved: number }> };
+    OperationalCleanup: { run: (opts?: { rateLimitMaxAgeMs?: number; quotaMinuteRetainDays?: number; batchLimit?: number }) => Promise<{ executed: boolean; rateLimitsRemoved: number; quotaMinuteBucketsRemoved: number; skippedReason?: string; batchLimit?: number }> };
   };
 
   // Mesmo solicitando 1_000 ms ou 60_000 ms, o piso mínimo de 2h (7_200_000 ms) protege
   // integralmente as janelas ativas de 1m, 10m, 15m e 1h, removendo apenas a de 3h atrás.
   const result = await OperationalCleanup.run({ rateLimitMaxAgeMs: 60_000, quotaMinuteRetainDays: 1 });
-  expect(result).toEqual({
+  expect(result).toMatchObject({
     executed: true,
     rateLimitsRemoved: 1,
     quotaMinuteBucketsRemoved: 9,
+    batchLimit: 10_000,
   });
   expect(simulatedRateRows.map((r) => r.key)).toEqual([
     "telemetry:u1",
@@ -384,6 +395,7 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
   const rateDelete = executedQueries.find((q) => q.sql.includes("DELETE FROM rate_limits"));
   expect(rateDelete?.sql).toContain("created_at < NOW()");
   expect(rateDelete?.params[0]).toBe(7_200_000);
+  expect(rateDelete?.params[1]).toBe(10_000);
 
   await expect(Promise.resolve(RateLimitService.getStatus("invalid-window", { limit: 5, windowMs: 3 * 60 * 60_000 })))
     .rejects.toThrow("Unsupported rate limit window");
@@ -392,20 +404,22 @@ test("3E: limpeza de rate_limits e usage_quotas preserva janelas ativas (1m, 10m
   expect(quotaDelete?.sql).toContain("minute_bucket > 0");
   expect(quotaDelete?.sql).toContain("CURRENT_DATE");
   expect(quotaDelete?.params[0]).toBe(2);
+  expect(quotaDelete?.params[1]).toBe(10_000);
 
   // Sem PostgreSQL deve encerrar idempotentemente sem erro
-  const disabledPgMock = { hasPostgres: async () => false, query: async () => ({ rowCount: 0, rows: [] }) };
+  const disabledPgMock = { hasPostgres: async () => false, query: async () => ({ rowCount: 0, rows: [] }), transaction: async () => { throw new Error("should not run"); } };
   const disabledCleanup = loadServerModule("src/server/database/OperationalCleanup.ts", {
     "@/server/database/Postgres": disabledPgMock,
     "@/server/security/RateLimitService": { RateLimitService: { cleanup: async () => 0 } },
     "@/server/ai/QuotaService": { QuotaService: { cleanupExpired: async () => 0 } },
   }) as typeof cleanupModule & {
-    OperationalCleanup: { run: () => Promise<{ executed: boolean; rateLimitsRemoved: number; quotaMinuteBucketsRemoved: number }> };
+    OperationalCleanup: { run: () => Promise<{ executed: boolean; rateLimitsRemoved: number; quotaMinuteBucketsRemoved: number; skippedReason?: string }> };
   };
-  expect(await disabledCleanup.OperationalCleanup.run()).toEqual({
+  expect(await disabledCleanup.OperationalCleanup.run()).toMatchObject({
     executed: false,
     rateLimitsRemoved: 0,
     quotaMinuteBucketsRemoved: 0,
+    skippedReason: "postgres_unavailable",
   });
 
   void QuotaService;

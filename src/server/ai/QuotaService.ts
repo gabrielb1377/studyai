@@ -1,7 +1,10 @@
+import type { PoolClient } from "pg";
 import { query } from "@/server/database/Postgres";
 
 const DAILY_LIMIT = 500;
 const MINUTE_LIMIT = 20;
+const DEFAULT_QUOTA_CLEANUP_BATCH_LIMIT = 10_000;
+const MAX_QUOTA_CLEANUP_BATCH_LIMIT = 50_000;
 
 export type QuotaStatus = {
   allowed: boolean;
@@ -225,18 +228,29 @@ export const QuotaService = {
    * preservando integralmente o histórico diário consolidado (minute_bucket = 0)
    * e registros recentes/ativos (mínimo 2 dias de retenção).
    */
-  async cleanupExpired(retainMinuteDays = 7): Promise<number> {
+  async cleanupExpired(
+    retainMinuteDays = 7,
+    options?: { batchLimit?: number; client?: PoolClient },
+  ): Promise<number> {
     const hasPg = await hasPostgresAsync();
     if (!hasPg) return 0;
 
     const safeDays = Math.min(365, Math.max(2, Math.trunc(retainMinuteDays)));
+    const requestedBatch = Number.isFinite(options?.batchLimit)
+      ? Math.trunc(options!.batchLimit!)
+      : DEFAULT_QUOTA_CLEANUP_BATCH_LIMIT;
+    const safeBatchLimit = Math.min(MAX_QUOTA_CLEANUP_BATCH_LIMIT, Math.max(100, requestedBatch));
     try {
-      const result = await query(
-        `DELETE FROM usage_quotas
-         WHERE minute_bucket > 0
-           AND date < CURRENT_DATE - ($1::int * INTERVAL '1 day')`,
-        [safeDays]
-      );
+      const sql = `DELETE FROM usage_quotas
+         WHERE ctid IN (
+           SELECT ctid FROM usage_quotas
+           WHERE minute_bucket > 0
+             AND date < CURRENT_DATE - ($1::int * INTERVAL '1 day')
+           LIMIT $2
+         )`;
+      const result = options?.client
+        ? await options.client.query(sql, [safeDays, safeBatchLimit])
+        : await query(sql, [safeDays, safeBatchLimit]);
       return result.rowCount ?? 0;
     } catch {
       return 0;

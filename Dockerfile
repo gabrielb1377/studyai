@@ -22,6 +22,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/src/server/database/schema.sql ./src/server/database/schema.sql
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/run-operational-cleanup.mjs ./scripts/run-operational-cleanup.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 USER nextjs
 EXPOSE 3000

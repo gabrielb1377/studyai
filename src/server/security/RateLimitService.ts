@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { PoolClient } from "pg";
 import { query } from "@/server/database/Postgres";
 
 export type RateLimitStatus = {
@@ -12,6 +13,8 @@ export type RateLimitStatus = {
 
 export const MAX_RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_CLEANUP_BATCH_LIMIT = 10_000;
+export const MAX_CLEANUP_BATCH_LIMIT = 50_000;
 
 // The same bound applies to writers and cleanup in every process.
 function assertSupportedWindow(windowMs: number) {
@@ -119,7 +122,10 @@ export const RateLimitService = {
     }
   },
 
-  async cleanup(maxAgeMs = DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS): Promise<number> {
+  async cleanup(
+    maxAgeMs = DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS,
+    options?: { batchLimit?: number; client?: PoolClient },
+  ): Promise<number> {
     const hasPg = await hasPostgresAsync();
     if (!hasPg) return 0;
 
@@ -127,11 +133,20 @@ export const RateLimitService = {
       ? Math.trunc(maxAgeMs)
       : DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS;
     const safeMaxAgeMs = Math.max(MAX_RATE_LIMIT_WINDOW_MS, requestedAgeMs);
+    const requestedBatch = Number.isFinite(options?.batchLimit)
+      ? Math.trunc(options!.batchLimit!)
+      : DEFAULT_CLEANUP_BATCH_LIMIT;
+    const safeBatchLimit = Math.min(MAX_CLEANUP_BATCH_LIMIT, Math.max(100, requestedBatch));
     try {
-      const result = await query(
-        `DELETE FROM rate_limits WHERE created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,
-        [safeMaxAgeMs]
-      );
+      const sql = `DELETE FROM rate_limits
+        WHERE ctid IN (
+          SELECT ctid FROM rate_limits
+          WHERE created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
+          LIMIT $2
+        )`;
+      const result = options?.client
+        ? await options.client.query(sql, [safeMaxAgeMs, safeBatchLimit])
+        : await query(sql, [safeMaxAgeMs, safeBatchLimit]);
       return result.rowCount ?? 0;
     } catch {
       return 0;
