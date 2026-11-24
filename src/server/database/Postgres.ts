@@ -1,7 +1,14 @@
 import "server-only";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
-let pool: Pool | undefined;
+type GlobalPostgresState = {
+  pool?: Pool;
+  connectionString?: string;
+};
+
+const globalPostgres = globalThis as typeof globalThis & {
+  __studyAIPostgres?: GlobalPostgresState;
+};
 
 export function hasPostgres(options: { allowMissing?: boolean } = {}) {
   const configured = Boolean(process.env.DATABASE_URL?.trim());
@@ -12,12 +19,22 @@ export function hasPostgres(options: { allowMissing?: boolean } = {}) {
 }
 
 export function postgresPool() {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não foi configurada.");
+  const connectionString = process.env.DATABASE_URL?.trim();
+  if (!connectionString) throw new Error("DATABASE_URL não foi configurada.");
+  const state = (globalPostgres.__studyAIPostgres ??= {});
+  if (state.pool && state.connectionString === connectionString) {
+    return state.pool;
+  }
+  if (state.pool && state.connectionString !== connectionString) {
+    void state.pool.end().catch(() => undefined);
+    state.pool = undefined;
+  }
   const caCert = process.env.DATABASE_CA_CERT?.trim();
   const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
 
-  pool ??= new Pool({
-    connectionString: process.env.DATABASE_URL,
+  state.connectionString = connectionString;
+  state.pool = new Pool({
+    connectionString,
     max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
     ssl: process.env.DATABASE_SSL === "false"
       ? false
@@ -30,7 +47,7 @@ export function postgresPool() {
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
   });
-  return pool;
+  return state.pool;
 }
 
 export async function postgresHealth() {
