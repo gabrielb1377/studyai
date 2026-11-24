@@ -36,8 +36,15 @@ export function postgresPool() {
     void state.pool.end().catch(() => undefined);
     state.pool = undefined;
   }
-  const caCert = process.env.DATABASE_CA_CERT?.trim();
+  const rawCaCert = process.env.DATABASE_CA_CERT?.trim();
+  const caCert = rawCaCert ? rawCaCert.replace(/\\n/g, "\n") : undefined;
   const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+  if (process.env.NODE_ENV === "production" && !rejectUnauthorized) {
+    console.warn(
+      "[PostgreSQL TLS] DATABASE_SSL_REJECT_UNAUTHORIZED=false está ativo em produção. " +
+        "Configure DATABASE_CA_CERT ou TLS válido e reative a verificação de certificado.",
+    );
+  }
 
   const pool = new Pool({
     connectionString,
@@ -81,12 +88,13 @@ export async function postgresHealth() {
   const startedAt = performance.now();
   try {
     const result = await postgresPool().query<{ schema_ready: boolean }>(
-      "SELECT NOT EXISTS (SELECT 1 FROM unnest(ARRAY['users', 'refresh_tokens', 'sync_records', 'files', 'backups', 'usage_quotas', 'rate_limits', 'exam_attempts']) AS required(name) WHERE to_regclass('public.' || required.name) IS NULL) AS schema_ready",
+      "SELECT NOT EXISTS (SELECT 1 FROM unnest(ARRAY['users', 'refresh_tokens', 'sync_records', 'files', 'backups', 'usage_quotas', 'rate_limits', 'exam_attempts', 'ai_global_daily_budgets', 'ai_token_reservations', 'storage_reservations']) AS required(name) WHERE to_regclass('public.' || required.name) IS NULL) AS schema_ready",
     );
     return {
       available: true,
       configured: true,
       schemaReady: Boolean(result.rows[0]?.schema_ready),
+      tlsVerificationEnabled: process.env.DATABASE_SSL !== "false" && process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
       mode: "postgres" as const,
       latencyMs: Math.round(performance.now() - startedAt),
     };

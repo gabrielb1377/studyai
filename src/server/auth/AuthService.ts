@@ -108,6 +108,19 @@ export const AuthService = {
   async requestRecovery(email: string) { const user = await CloudDatabase.userByEmail(normalizeEmail(email)); if (!user) return {}; const token = randomToken(); await CloudDatabase.saveAccountToken(hashToken(token), user.id, "recover", new Date(Date.now() + 60 * 60 * 1000).toISOString()); return { recoveryToken: token, email: user.email }; },
   async resetPassword(token: string, password: string) { if (!validPassword(password)) throw new Error("A senha deve ter ao menos 10 caracteres, uma letra e um número."); const userId = await CloudDatabase.consumeAccountToken(hashToken(token), "recover"); if (!userId) throw new Error("Link inválido ou expirado."); await CloudDatabase.updateUser(userId, { passwordHash: await hashPassword(password) }); await CloudDatabase.revokeUserSessions(userId); },
   async verifyEmail(token: string) { const userId = await CloudDatabase.consumeAccountToken(hashToken(token), "verify"); if (!userId) throw new Error("Link inválido ou expirado."); await CloudDatabase.updateUser(userId, { verified: true }); },
+  async resendVerification(userId: string) {
+    const user = await CloudDatabase.userById(userId);
+    if (!user) throw new Error("Conta não encontrada.");
+    if (user.emailVerifiedAt) return { alreadyVerified: true as const };
+    const verificationToken = randomToken();
+    await CloudDatabase.saveAccountToken(
+      hashToken(verificationToken),
+      user.id,
+      "verify",
+      new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    );
+    return { alreadyVerified: false as const, email: user.email, verificationToken };
+  },
   async changePassword(userId: string, current: string, password: string) { const user = await CloudDatabase.userById(userId); if (!user || !(await verifyPassword(current, user.passwordHash))) throw new Error("Senha atual incorreta."); if (!validPassword(password)) throw new Error("A nova senha não atende aos requisitos."); await CloudDatabase.updateUser(userId, { passwordHash: await hashPassword(password) }); await CloudDatabase.revokeUserSessions(userId); },
   async changeEmail(userId: string, password: string, email: string) { const user = await CloudDatabase.userById(userId); if (!user || !(await verifyPassword(password, user.passwordHash))) throw new Error("Senha incorreta."); const normalized=normalizeEmail(email);if(!/^\S+@\S+\.\S+$/.test(normalized))throw new Error("Informe um email válido.");await CloudDatabase.updateUser(userId, { email:normalized,unverify:true });const token=randomToken();await CloudDatabase.saveAccountToken(hashToken(token),userId,"verify",new Date(Date.now()+24*60*60*1000).toISOString());return{email:normalized,verificationToken:token}; },
 };

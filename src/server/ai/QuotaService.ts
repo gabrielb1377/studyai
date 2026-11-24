@@ -698,9 +698,10 @@ export const QuotaService = {
     const hasPg = await hasPostgresAsync();
     if (!hasPg) {
       const res = localReservations.get(reservationId);
-      if (!res || res.status !== "reserved") {
+      if (!res || (res.status !== "reserved" && res.status !== "expired")) {
         return { reconciled: false, alreadySettled: true, chargedTokens: 0, releasedTokens: 0, usageSource: "unknown", status: "reconciled" };
       }
+      const wasReserved = res.status === "reserved";
       const resolved = resolveSettlementCharge(res.reservedTokens, settlement, options?.inputEstimate);
       res.status = resolved.status;
       res.usageSource = resolved.usageSource;
@@ -711,16 +712,20 @@ export const QuotaService = {
 
       const userCounter = localQuota.get(res.userId);
       if (userCounter && userCounter.date === res.usageDate) {
-        userCounter.tokensReserved = Math.max(0, userCounter.tokensReserved - res.reservedTokens);
+        if (wasReserved) {
+          userCounter.tokensReserved = Math.max(0, userCounter.tokensReserved - res.reservedTokens);
+        }
         userCounter.tokensUsed += resolved.chargedTokens;
       }
       const globalBudget = getLocalGlobalBudget(res.usageDate);
-      globalBudget.reservedTokens = Math.max(0, globalBudget.reservedTokens - res.reservedTokens);
+      if (wasReserved) {
+        globalBudget.reservedTokens = Math.max(0, globalBudget.reservedTokens - res.reservedTokens);
+      }
       globalBudget.consumedTokens += resolved.chargedTokens;
       return {
         reconciled: true,
         chargedTokens: resolved.chargedTokens,
-        releasedTokens: Math.max(0, res.reservedTokens - resolved.chargedTokens),
+        releasedTokens: wasReserved ? Math.max(0, res.reservedTokens - resolved.chargedTokens) : 0,
         usageSource: resolved.usageSource,
         status: resolved.status,
       };
@@ -738,11 +743,13 @@ export const QuotaService = {
         [reservationId],
       );
       const row = locked.rows[0];
-      if (!row || row.status !== "reserved") {
+      if (!row || (row.status !== "reserved" && row.status !== "expired")) {
         return { reconciled: false, alreadySettled: true, chargedTokens: 0, releasedTokens: 0, usageSource: "unknown", status: "reconciled" };
       }
 
+      const wasReserved = row.status === "reserved";
       const reservedTokens = Number(row.reserved_tokens);
+      const releaseFromReserved = wasReserved ? reservedTokens : 0;
       const resolved = resolveSettlementCharge(reservedTokens, settlement, options?.inputEstimate);
 
       await client.query(
@@ -754,7 +761,7 @@ export const QuotaService = {
              usage_source = $6,
              model = COALESCE($7, model),
              reconciled_at = NOW()
-         WHERE id = $1 AND status = 'reserved'`,
+         WHERE id = $1 AND status IN ('reserved', 'expired')`,
         [
           reservationId,
           resolved.status,
@@ -772,7 +779,7 @@ export const QuotaService = {
              tokens_count = tokens_count + $4,
              updated_at = NOW()
          WHERE user_id = $1 AND date = $2::date AND minute_bucket = 0`,
-        [row.user_id, row.usage_date, reservedTokens, resolved.chargedTokens],
+        [row.user_id, row.usage_date, releaseFromReserved, resolved.chargedTokens],
       );
 
       await client.query(
@@ -781,13 +788,13 @@ export const QuotaService = {
              consumed_tokens = consumed_tokens + $3,
              updated_at = NOW()
          WHERE date = $1::date`,
-        [row.usage_date, reservedTokens, resolved.chargedTokens],
+        [row.usage_date, releaseFromReserved, resolved.chargedTokens],
       );
 
       return {
         reconciled: true,
         chargedTokens: resolved.chargedTokens,
-        releasedTokens: Math.max(0, reservedTokens - resolved.chargedTokens),
+        releasedTokens: wasReserved ? Math.max(0, reservedTokens - resolved.chargedTokens) : 0,
         usageSource: resolved.usageSource,
         status: resolved.status,
       };

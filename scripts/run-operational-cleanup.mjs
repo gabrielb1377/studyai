@@ -16,7 +16,8 @@ if (!connectionString) {
   process.exit(1);
 }
 
-const caCert = process.env.DATABASE_CA_CERT?.trim();
+const rawCaCert = process.env.DATABASE_CA_CERT?.trim();
+const caCert = rawCaCert ? rawCaCert.replace(/\\n/g, "\n") : undefined;
 const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
 const ssl = process.env.DATABASE_SSL === "false"
   ? false
