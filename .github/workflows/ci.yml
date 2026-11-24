@@ -68,6 +68,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://studyai_test:local-ci-only@127.0.0.1:5432/studyai_test
           STUDYAI_ALLOW_LOCAL_DB_TESTS: "1"
+      - run: npm run test:e2e -- -c playwright.41g1b.config.ts tests/lote4-infrastructure-readiness.spec.ts
+        env:
+          DATABASE_URL: postgresql://studyai_test:local-ci-only@127.0.0.1:5432/studyai_test
+          STUDYAI_ALLOW_LOCAL_DB_TESTS: "1"
 
   e2e:
     runs-on: ubuntu-latest
