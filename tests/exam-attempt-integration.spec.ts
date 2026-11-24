@@ -61,12 +61,12 @@ const QUESTIONS = [
 
 async function ensureUsers(pool: Pool) {
   await pool.query(
-    "INSERT INTO users (id, name, email, passwordhash) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
-    [USER_A, "Usuário Integração A", "integration-a@local", "x"],
+    "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+    [USER_A, "integration-a@local", "x"],
   );
   await pool.query(
-    "INSERT INTO users (id, name, email, passwordhash) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING",
-    [USER_B, "Usuário Integração B", "integration-b@local", "x"],
+    "INSERT INTO users (id, email, password_hash) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+    [USER_B, "integration-b@local", "x"],
   );
 }
 

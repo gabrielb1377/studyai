@@ -1,25 +1,35 @@
 # Handoff atual — StudyAI V1.2
 
-## Estado atual — Lote 1 de fechamento da V1.2 (22/11/2026)
+## Estado atual — Fechamento Técnico e Estabilização da V1.2 (24/11/2026)
 
-Este é o estado vigente. Diagnósticos anteriores neste arquivo são históricos. As Sprints 41–58 estão no Git; segue em curso a estabilização da V1.2 em cinco lotes.
+Este é o estado vigente. Diagnósticos anteriores neste arquivo são históricos. As Sprints 41–58, os pacotes RH-2A/RH-2B e os pacotes de fechamento da V1.2 estão integrados e validados na branch `v1.1-development`.
 
-- **Git & PR #1**: `origin/v1.1-development` em `ecff7fa`; HEAD local em `7e7a157`, com 3 commits ainda não enviados: `71674b9` (documentos de planejamento), `698fad8` (Lote 1) e `7e7a157` (PS-1a). `main` em `7e3d89b`; `exp/s3-direct-upload` em `7b7be19` intocada. [PR #1](https://github.com/gabrielb1377/studyai/pull/1) aberto (`mergeable: true`, `mergeable_state: "unstable"`).
-- **CI remoto (ref `ecff7fa`)**:
-  - PR Run #42 (`44632527645`): **6/6 jobs verdes** (`quality`, `postgres`, `e2e` 1–4 = **505 passed, 11 skipped, 0 failed**).
-  - Push Run #41 (`44632517286`): falhou no shard 4 (`126 passed, 1 failed`) em `tests/sprint51c2-conflict.spec.ts:5:5` (timeout 5000ms em `expect(a).toBeVisible()` pós-clique em `"Editar no Studio"`).
-- **Diagnóstico & correções do Lote 1**:
-  - `tests/sprint51c2-conflict.spec.ts`: aguardava editor antes de concluir navegação `/academy/studio?estudo=` e falhava em `next dev` por colisão estrita de `getByRole("alert")` com `#__next-route-announcer__`. Corrigido com `waitForURL` + filtro de mensagem de conflito (5/5 sem retries em `next dev` e `next start`).
-  - `src/features/platform/PlatformProvider.tsx`: no primeiro carregamento em produção (`NODE_ENV=production`), `clients.claim()` do `sw.js` disparava `controllerchange` sem controller prévio (`hadController=false`), exibindo banner `"Atualização do StudyAI disponível"` em `bottom-4 right-4 z-50` sobre o atalho `Provas` da `MobileNavigation` (falha reproduzida em `sprint46c-mobile.spec.ts` em `next start`). Corrigido ignorando `controllerchange` inicial sem controller prévio e reposicionando o banner (`bottom-24 lg:bottom-4`).
-  - `tests/sprint51a-manual-studio.spec.ts`: corrida entre `"Criar estudo"` e `goto("/academy/studio")` antes da confirmação da escrita no IndexedDB em produção (`0 estudos disponíveis`). Corrigido aguardando o heading do estudo criado antes da navegação.
-- **Semana de Prova (reload desktop + mobile)**: `sprint41i-d`, `sprint41i-e` e `sprint45` aprovaram **60/60** (`--repeat-each=5 --retries=0`) tanto em `next dev` quanto em `next start`; `release-stabilization.spec.ts` `3A:` e `3B:` aprovaram **5/5** cada em `next start`; `sprint46c-mobile` aprovou **6/6** em `next start`. Regressões Studio/storage/navegação (`28/28`) aprovadas em `next start`.
-- **Auditoria dos 11 testes skipped nos shards E2E da CI**:
-  1. `tests/concurrency.spec.ts` (4 — Cenários 5, 6, 7 e E/F): requer `CONCURRENCY_DATABASE_URL` + `STUDYAI_STANDALONE_DIR` (staging/standalone + Postgres).
-  2. `tests/exam-attempt-integration.spec.ts` (6 — criação, retomada, correção, idempotência, concorrência e isolamento cross-user): requer PostgreSQL local não-produtivo (`isNonProdPostgresAvailable()`).
-  3. `tests/release-stabilization.spec.ts` (`3E-PG`, 1 no shard `e2e`): executado e aprovado no job dedicado `postgres` da CI com PostgreSQL 17.
-- **PS-1a, segurança de prompt (commitado localmente em `7e7a157`, sem push e sem CI)**: o `MarkdownRenderer` deixa de carregar imagens remotas (mostra o texto alternativo) e o trecho selecionado do Professor passa a ir dentro de `<UNTRUSTED_MATERIAL_DATA>`, com origem e capítulo em uma linha de até 200 caracteres (validação: 500). Validação local, sem retries e sem provedor real: **34/34** (spec nova `tests/ps1a-prompt-injection.spec.ts`, com 10 testes de lógica e 1 de navegador que confirma zero requisições a host externo e texto alternativo visível, mais regressões de Tutor, Professor, Mentor e Lab); `tsc`, ESLint e `git diff --check` sem problemas. O `react-markdown` 10.1.0 já descarta `data:` e `blob:` por padrão (comportamento preexistente, sem regressão), então a lista permitida de `data:image` e `blob:` é uma segunda camada. **Limites:** os testes são estruturais (delimitação e bloqueio do canal) e não medem a resistência de um modelo a injeção, que é probabilística e nunca foi testada com provedor real. Riscos residuais: links Markdown com dados na URL (exigem clique), CSP com `img-src https:` mantida (o sanitizador do Studio aceita imagens `https`), blocos Mermaid não auditados e conteúdo da seleção sem filtragem dentro do bloco. **PS-1b, pendente e fora do fechamento:** system prompt por provedor (hoje só o Ollama tem) e delimitador em Lab, assistente do Studio, diagramas, aula em áudio e juiz de qualidade. Correção documental: o "CSRF condicional em `diagrams/generate`" era falso positivo, pois `withAIQuota` exige CSRF antes do handler (`QuotaMiddleware.ts:224`); detalhes em `docs/STUDYAI_INTELLIGENCE_ENGINE.md` §2.
-- **Próximo passo**: push autorizado de `v1.1-development` (os 3 commits acima) para executar a CI nas quatro partições, o que também valida o teste de navegador do PS-1a, e então fechar a validação do Lote 1. Sem push não há evidência de CI para `698fad8` nem para `7e7a157`.
-- **Pendências & status**: **NO-GO para lançamento**. Sem staging homologado. Seguem pendentes após push/CI do Lote 1 os Lotes 2–5: contrato real PostgreSQL/atomicidade, quotas/tokens/BYOK e achados `SA-01`..`SA-06`, S3/SMTP/proxy/observabilidade, e homologação em staging + rollback.
+- **Git & Branches**:
+  - Branch ativa: `v1.1-development` (sincronizada com `origin/v1.1-development`).
+  - Commits de fechamento da V1.2 na linha principal: `0e2f06e` (SW e persistência de provas), `1de72ab` (concorrência assíncrona), `f33b6e7` (segurança de prompts IA), `0eca205` (limpeza operacional de quotas/rate-limit), `c956096` (retenção de janelas ativas `1m`–`1h+` no `RateLimitService.cleanup()`), `bd41ebd` (documentação de fechamento), `c62da52` (singleton de `Pool` do PostgreSQL em `globalThis.__studyAIPostgres` para evitar exaustão de `max_connections` entre route bundles do Next.js) e commit final de validação PostgreSQL/concorrência.
+  - Experimento S3 preservado fora da linha de release na branch local `exp/s3-direct-upload` (`7b7be19`), sem merge em `v1.1-development`.
+  - `main` permanece em `7e3d89b` (aguardando PR de release aprovado).
+- **Segurança, Concorrência e Persistência verificadas**:
+  - **RateLimitService (`src/server/security/RateLimitService.ts`)**: `MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS = 3_600_000` (1h) combinado com `maxObservedWindowMs` preserva todas as janelas ativas (`1m`, `10m`, `15m`, `1h` e `2h`) durante `cleanup()`.
+  - **Postgres Pool (`src/server/database/Postgres.ts`)**: `Pool` compartilhado em `globalThis.__studyAIPostgres` por `connectionString`, eliminando erro `53300` (`503 Serviço temporariamente indisponível`) sob múltiplas rotas App Router concorrentes.
+  - **Service Worker, Provas, Concorrência Assíncrona e Prompts IA**: fluxos validados sem regressão (`0e2f06e`, `1de72ab`, `f33b6e7`, `7e7a157`).
+- **Validação Real com PostgreSQL 18.4 e Multi-Instância (`--retries=0`)**:
+  - `node scripts/db-migrate.mjs`: **PASS** (32 tabelas criadas/atualizadas em `public`).
+  - `node scripts/verify-concurrency.mjs --migrate`: **7/7 PASS** (Cenários A–G: corrida de refresh token, revogação, sync otimista, salas/membros, revisões colaborativas, quota atômica e rate limit concorrente em 2 pools).
+  - `node scripts/verify-app-concurrency.mjs` e `tests/concurrency.spec.ts`: **10/10 PASS, 0 skipped, 0 failed** (incluindo Cenários 5, 6, 7 e E1–E3/F/F2 com 2 instâncias standalone Next.js + PostgreSQL real).
+  - `tests/exam-attempt-integration.spec.ts`: **6/6 PASS, 0 skipped, 0 failed** (criação, retomada após reload, correção server-side, idempotência, bloqueio de duplicata concorrente e isolamento cross-user).
+  - `tests/release-stabilization.spec.ts`: **6/6 PASS, 0 skipped, 0 failed** (`3A`–`3D`, `3E` e `3E-PG` cobrindo schema de 32 tabelas, revogação de sessão em `refresh_tokens`, isolamento cross-user em `sync_records`, `shares` privados e `study_rooms`/`room_members`, `RateLimitService.cleanup()` e `QuotaService.cleanupExpired()`).
+  - `tests/cloud-sync.spec.ts` (**4/4 PASS**) e `tests/collaboration.spec.ts` (**4/4 PASS**) contra PostgreSQL real.
+  - Gates estáticos: `npm run typecheck` (**0 erros**), `npm run lint` (**0 erros**, 44 warnings preexistentes), `npm run build` (**PASS**) e `git diff --check` (**PASS**).
+- **Schema Local vs Supabase Remoto (`studyai-v1` / `kxemrsejcckgqcqbgycy`)**:
+  - `src/server/database/schema.sql` define **32 tabelas** em `public` (incluindo `exam_attempts` da Sprint 41G.2A e colunas `visibility`/`access_level` em `shares`).
+  - O projeto Supabase remoto possui **31 tabelas** com RLS ativo (pendente apenas a criação de `exam_attempts` via `npm run db:migrate` no momento do corte de produção/staging com `DATABASE_URL` do Supabase).
+- **Status de Lançamento**: **CONDITIONAL GO** — código, segurança, persistência e suítes PostgreSQL/multi-instância 100% aprovados; para o corte final em produção restam apenas: (1) executar `npm run db:migrate` no Supabase `studyai-v1` para criar a 32ª tabela (`exam_attempts`) e confirmar política de RLS/conexão do role da aplicação; (2) configurar variáveis reais de ambiente (`DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `TRUST_PROXY_HEADERS` e chaves de IA/S3/SMTP) no ambiente de deploy antes do merge da PR #1 para `main`.
+
+## Registro histórico — Lote 1 e PS-1a (22/11/2026)
+
+- **Lote 1 (`698fad8`)**: corrigiu `tests/sprint51c2-conflict.spec.ts` (`waitForURL` + filtro de alerta), `src/features/platform/PlatformProvider.tsx` (ignorar `controllerchange` inicial sem controller prévio e reposicionar banner `bottom-24 lg:bottom-4`) e `tests/sprint51a-manual-studio.spec.ts` (aguardar heading antes de navegar). Reload desktop/mobile da Semana de Prova aprovou 60/60 (`--repeat-each=5 --retries=0`).
+- **PS-1a (`7e7a157`)**: `MarkdownRenderer` bloqueia imagens remotas (exibe `alt`) e o trecho selecionado do Professor usa `<UNTRUSTED_MATERIAL_DATA>` com limite de metadados. Limites conhecidos registrados em `docs/STUDYAI_INTELLIGENCE_ENGINE.md` §2.
 
 ## Registro histórico — Sprint 49D
 

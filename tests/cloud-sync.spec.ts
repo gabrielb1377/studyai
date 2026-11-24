@@ -5,7 +5,18 @@ import { readIndexedDBStore } from "./helpers/indexed-db";
 const password = "StudyAI2026secure";
 const uniqueEmail = (label: string) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
+import { Pool } from "pg";
+
+async function resetLocalRegisterRateLimit() {
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url || !/^postgres(?:ql)?:\/\/[^@]+@(?:127\.0\.0\.1|localhost):/i.test(url)) return;
+  const pool = new Pool({ connectionString: url, max: 1, ssl: false });
+  await pool.query("DELETE FROM rate_limits WHERE key LIKE 'register:%' OR key LIKE 'recover:%'").catch(() => undefined);
+  await pool.end().catch(() => undefined);
+}
+
 async function register(page: Page, email: string) {
+  await resetLocalRegisterRateLimit();
   await page.goto("/conta");
   await page.getByRole("button", { name: "Criar conta" }).click();
   await page.getByLabel("Nome").fill("Pessoa de Teste");
@@ -74,7 +85,8 @@ test("cadastro, sessão persistente, logout, login e recuperação funcionam", a
   page.on("console", (message) => { if (message.type() === "error" && message.text().includes("Content Security Policy")) cspViolations.push(message.text()); });
   const email = uniqueEmail("account");
   await register(page, email);
-  await expect(page.getByText(/Modo de desenvolvimento/)).toBeVisible();
+  if (process.env.DATABASE_URL?.trim()) await expect(page.getByText(/Modo de desenvolvimento/)).toHaveCount(0);
+  else await expect(page.getByText(/Modo de desenvolvimento/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
 

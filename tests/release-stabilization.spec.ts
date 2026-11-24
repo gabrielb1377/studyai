@@ -187,6 +187,12 @@ test("3B: ExamService trata QuotaExceededError sem perder dados e SyncPreference
 });
 
 test("3C: criação sequencial de salas mantém a última sala selecionada e backup atualiza estado em Conta", async ({ page }) => {
+  if (isDisposableLocalPgAvailable()) {
+    const { Pool } = testRequire("pg") as typeof import("pg");
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: false });
+    await pool.query("DELETE FROM rate_limits WHERE key LIKE 'register:%'").catch(() => undefined);
+    await pool.end().catch(() => undefined);
+  }
   await registerAccount(page, uniqueEmail("race3c"));
 
   await page.getByRole("button", { name: "Criar backup agora" }).click();
@@ -515,8 +521,69 @@ test("3E-PG: PostgreSQL real valida schema (32 tabelas), retenção de janelas a
     );
     expect(remainingQuotas.rows.map((r) => Number(r.minute_bucket))).toEqual([0, 99999]);
 
+    // Validação integrada em PostgreSQL real: Auth/Sessões, Sync, Share privado e Colaboração
+    const userB = `${userId}_b`;
+    await pool.query("INSERT INTO users (id, email, password_hash) VALUES ($1, $2, 'hash')", [userB, `${userB}@example.test`]);
+
+    const sessionId = `sess_${Date.now()}`;
+    await pool.query(
+      `INSERT INTO refresh_tokens (id, user_id, token_hash, device_id, device_name, expires_at)
+       VALUES ($1, $2, $3, 'dev-1', 'Chrome', NOW() + INTERVAL '7 days')`,
+      [sessionId, userId, `hash_${sessionId}`]
+    );
+    const activeCheck = await pool.query(
+      "SELECT id FROM refresh_tokens WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > NOW()",
+      [sessionId, userId]
+    );
+    expect(activeCheck.rowCount).toBe(1);
+
+    await pool.query("UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = $1 AND user_id = $2", [sessionId, userId]);
+    const revokedCheck = await pool.query(
+      "SELECT id FROM refresh_tokens WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL AND expires_at > NOW()",
+      [sessionId, userId]
+    );
+    expect(revokedCheck.rowCount).toBe(0);
+
+    await pool.query(
+      `INSERT INTO sync_records (user_id, entity, record_id, payload, version, hash, updated_at, device_id)
+       VALUES ($1, 'notes', 'note-pg-1', '{"title":"Segredo PG"}', 1, 'h1', NOW(), 'dev-1')`,
+      [userId]
+    );
+    const crossUserSync = await pool.query(
+      "SELECT record_id FROM sync_records WHERE user_id = $1 AND record_id = 'note-pg-1'",
+      [userB]
+    );
+    expect(crossUserSync.rowCount).toBe(0);
+
+    const shareId = `share_${Date.now()}`;
+    await pool.query(
+      `INSERT INTO shares (id, user_id, token, entity, record_id, visibility, access_level)
+       VALUES ($1, $2, $3, 'notes', 'note-pg-1', 'private', 'read')`,
+      [shareId, userId, `tok_${shareId}`]
+    );
+    const shareRow = await pool.query<{ user_id: string; visibility: string; access_level: string }>(
+      "SELECT user_id, visibility, access_level FROM shares WHERE id = $1",
+      [shareId]
+    );
+    expect(shareRow.rows[0]).toEqual({ user_id: userId, visibility: "private", access_level: "read" });
+
+    const roomId = `room_${Date.now()}`;
+    await pool.query(
+      "INSERT INTO study_rooms (id, name, description, kind, owner_id) VALUES ($1, 'Sala PG', '', 'study', $2)",
+      [roomId, userId]
+    );
+    await pool.query(
+      "INSERT INTO room_members (room_id, user_id, role) VALUES ($1, $2, 'admin')",
+      [roomId, userId]
+    );
+    const nonMemberCheck = await pool.query(
+      "SELECT role FROM room_members WHERE room_id = $1 AND user_id = $2",
+      [roomId, userB]
+    );
+    expect(nonMemberCheck.rowCount).toBe(0);
+
     await pool.query("DELETE FROM rate_limits WHERE key LIKE $1", [`${prefix}%`]);
-    await pool.query("DELETE FROM users WHERE id = $1", [userId]);
+    await pool.query("DELETE FROM users WHERE id IN ($1, $2)", [userId, userB]);
   } finally {
     await pool.end();
   }
