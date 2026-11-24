@@ -62,6 +62,51 @@ type MemoryState = {
 export const REFRESH_REUSE_GRACE_MS = 10_000;
 export const MAX_RESTORE_RECORDS = 10_000;
 export const MAX_RESTORE_BYTES = 50 * 1024 * 1024;
+// Convenção binária MiB (1 MiB = 1.048.576 bytes), alinhada com MAX_FILE_BYTES e MAX_RESTORE_BYTES.
+const MIB_BYTES = 1024 * 1024;
+export const DEFAULT_FILES_QUOTA_BYTES = 1024 * MIB_BYTES;
+export const DEFAULT_BACKUPS_QUOTA_BYTES = 200 * MIB_BYTES;
+const DEFAULT_STORAGE_RESERVATION_TTL_MS = 5 * 60_000;
+
+function parsePositiveIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw || !/^[0-9]+$/.test(raw)) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function getStorageQuotaLimits() {
+  return {
+    filesQuotaBytes: parsePositiveIntEnv("STORAGE_FILES_QUOTA_BYTES", DEFAULT_FILES_QUOTA_BYTES, 1, 100 * 1024 * MIB_BYTES),
+    backupsQuotaBytes: parsePositiveIntEnv("STORAGE_BACKUPS_QUOTA_BYTES", DEFAULT_BACKUPS_QUOTA_BYTES, 1, 100 * 1024 * MIB_BYTES),
+    reservationTtlMs: parsePositiveIntEnv("STORAGE_RESERVATION_TTL_MS", DEFAULT_STORAGE_RESERVATION_TTL_MS, 5_000, 30 * 60_000),
+  };
+}
+
+function storageQuotaErrorResponse(input: {
+  kind: "files" | "backups";
+  usedBytes: number;
+  limitBytes: number;
+  requestedBytes: number;
+}): Response {
+  const label = input.kind === "files" ? "arquivos" : "backups";
+  const limitMb = (input.limitBytes / MIB_BYTES).toFixed(input.limitBytes >= 100 * MIB_BYTES ? 0 : 1);
+  return new Response(
+    JSON.stringify({
+      code: "STORAGE_QUOTA_EXCEEDED",
+      kind: input.kind,
+      usedBytes: input.usedBytes,
+      limitBytes: input.limitBytes,
+      requestedBytes: input.requestedBytes,
+      error: `Cota de armazenamento de ${label} (${limitMb} MB) atingida. Remova itens antigos para liberar espaço.`,
+    }),
+    {
+      status: 413,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    },
+  );
+}
 
 export type RotateSessionResult =
   | {
@@ -571,7 +616,107 @@ export const CloudDatabase = {
   async history(userId:string){if(!hasPostgres())return memory.logs.filter((item)=>item.userId===userId).slice(-100).reverse().map((item)=>({sequence:item.sequence,entity:item.entity,recordId:item.recordId,operation:item.operation,deviceId:item.deviceId,createdAt:item.updatedAt}));const result=await query<Record<string,unknown>>("SELECT sequence,entity,record_id,operation,device_id,created_at FROM sync_logs WHERE user_id=$1 ORDER BY sequence DESC LIMIT 100",[userId]);return result.rows.map((row)=>({sequence:Number(row.sequence),entity:String(row.entity),recordId:String(row.record_id),operation:String(row.operation),deviceId:String(row.device_id),createdAt:new Date(String(row.created_at)).toISOString()}));},
   async allRecords(userId: string) { if (!hasPostgres()) return [...memory.records.values()].filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1", [userId]); return result.rows.map((row) => rowRecord(userId, row)); },
 
-  async createBackup(userId: string) { const payload = await this.allRecords(userId); const backup = { id: randomUUID(), userId, payload, sizeBytes: Buffer.byteLength(JSON.stringify(payload)), createdAt: now() } satisfies Backup; if (!hasPostgres()) memory.backups.unshift(backup); else await query("INSERT INTO backups (id,user_id,payload,size_bytes,created_at) VALUES ($1,$2,$3,$4,$5)", [backup.id,userId,JSON.stringify(payload),backup.sizeBytes,backup.createdAt]); return backup; },
+  async createBackup(userId: string) {
+    const limits = getStorageQuotaLimits();
+    if (!hasPostgres()) {
+      const payload = await this.allRecords(userId);
+      const serialized = JSON.stringify(payload);
+      const sizeBytes = Buffer.byteLength(serialized, "utf8");
+      const usedBytes = memory.backups
+        .filter((item) => item.userId === userId)
+        .reduce((sum, item) => sum + item.sizeBytes, 0);
+      if (usedBytes + sizeBytes > limits.backupsQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "backups",
+          usedBytes,
+          limitBytes: limits.backupsQuotaBytes,
+          requestedBytes: sizeBytes,
+        });
+      }
+      const backup = { id: randomUUID(), userId, payload, sizeBytes, createdAt: now() } satisfies Backup;
+      memory.backups.unshift(backup);
+      return backup;
+    }
+
+    return transaction(async (client) => {
+      // Lock no registro do usuário serializa criações simultâneas de backup entre instâncias.
+      await client.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId]);
+      await client.query(
+        "UPDATE storage_reservations SET status='expired', updated_at=NOW() WHERE user_id=$1 AND kind='backups' AND status='reserved' AND expires_at <= NOW()",
+        [userId],
+      );
+      const recordsResult = await client.query<Record<string, unknown>>(
+        "SELECT * FROM sync_records WHERE user_id=$1",
+        [userId],
+      );
+      const payload = recordsResult.rows.map((row) => rowRecord(userId, row));
+      const serialized = JSON.stringify(payload);
+      const sizeBytes = Buffer.byteLength(serialized, "utf8");
+
+      const [existingSum, pendingSum] = await Promise.all([
+        client.query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM backups WHERE user_id=$1", [userId]),
+        client.query<{ total: string }>(
+          "SELECT COALESCE(SUM(reserved_bytes), 0)::text AS total FROM storage_reservations WHERE user_id=$1 AND kind='backups' AND status='reserved' AND expires_at > NOW()",
+          [userId],
+        ),
+      ]);
+      const usedBytes = Number(existingSum.rows[0]?.total ?? 0);
+      const reservedBytes = Number(pendingSum.rows[0]?.total ?? 0);
+      if (usedBytes + reservedBytes + sizeBytes > limits.backupsQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "backups",
+          usedBytes: usedBytes + reservedBytes,
+          limitBytes: limits.backupsQuotaBytes,
+          requestedBytes: sizeBytes,
+        });
+      }
+
+      const backup = { id: randomUUID(), userId, payload, sizeBytes, createdAt: now() } satisfies Backup;
+      await client.query(
+        "INSERT INTO backups (id,user_id,payload,size_bytes,created_at) VALUES ($1,$2,$3,$4,$5)",
+        [backup.id, userId, serialized, backup.sizeBytes, backup.createdAt],
+      );
+      return backup;
+    });
+  },
+  async storageUsage(userId: string) {
+    const limits = getStorageQuotaLimits();
+    if (!hasPostgres()) {
+      let filesUsed = 0;
+      for (const file of memory.files.values()) {
+        if (file.userId === userId) filesUsed += file.sizeBytes;
+      }
+      const backupsUsed = memory.backups
+        .filter((item) => item.userId === userId)
+        .reduce((sum, item) => sum + item.sizeBytes, 0);
+      return {
+        files: { usedBytes: filesUsed, reservedBytes: 0, limitBytes: limits.filesQuotaBytes },
+        backups: { usedBytes: backupsUsed, reservedBytes: 0, limitBytes: limits.backupsQuotaBytes },
+      };
+    }
+
+    const [filesRes, backupsRes, pendingRes] = await Promise.all([
+      query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM files WHERE user_id=$1", [userId]),
+      query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM backups WHERE user_id=$1", [userId]),
+      query<{ kind: string; total: string }>(
+        "SELECT kind, COALESCE(SUM(reserved_bytes), 0)::text AS total FROM storage_reservations WHERE user_id=$1 AND status='reserved' AND expires_at > NOW() GROUP BY kind",
+        [userId],
+      ),
+    ]);
+    const pendingByKind = new Map(pendingRes.rows.map((r) => [r.kind, Number(r.total)]));
+    return {
+      files: {
+        usedBytes: Number(filesRes.rows[0]?.total ?? 0),
+        reservedBytes: pendingByKind.get("files") ?? 0,
+        limitBytes: limits.filesQuotaBytes,
+      },
+      backups: {
+        usedBytes: Number(backupsRes.rows[0]?.total ?? 0),
+        reservedBytes: pendingByKind.get("backups") ?? 0,
+        limitBytes: limits.backupsQuotaBytes,
+      },
+    };
+  },
   async backups(userId: string) { if (!hasPostgres()) return memory.backups.filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM backups WHERE user_id=$1 ORDER BY created_at DESC", [userId]); return result.rows.map((row) => ({ id:String(row.id),userId,payload:row.payload as CloudRecord[],sizeBytes:Number(row.size_bytes),createdAt:new Date(String(row.created_at)).toISOString() })); },
   async backup(userId: string, id: string) {
     if (!hasPostgres()) return memory.backups.find((item) => item.userId === userId && item.id === id);
@@ -670,21 +815,147 @@ export const CloudDatabase = {
   async revokeShare(userId:string,id:string){if(!hasPostgres()){const index=memory.shares.findIndex((item)=>item.userId===userId&&item.id===id);if(index>=0)memory.shares[index]={...memory.shares[index],revokedAt:now()};return;}await query("UPDATE shares SET revoked_at=NOW() WHERE user_id=$1 AND id=$2",[userId,id]);},
   async shareByToken(token: string) { const share = hasPostgres() ? (await query<Record<string,unknown>>("SELECT * FROM shares WHERE token=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>NOW())",[token])).rows[0] : memory.shares.find((item)=>item.token===token&&!item.revokedAt&&(!item.expiresAt||new Date(item.expiresAt)>new Date())); if(!share)return; const normalized = hasPostgres()?{id:String((share as Record<string,unknown>).id),userId:String((share as Record<string,unknown>).user_id),token,entity:String((share as Record<string,unknown>).entity) as SyncEntity,recordId:String((share as Record<string,unknown>).record_id),visibility:String((share as Record<string,unknown>).visibility??"public") as Share["visibility"],accessLevel:String((share as Record<string,unknown>).access_level??"read") as Share["accessLevel"],createdAt:new Date(String((share as Record<string,unknown>).created_at)).toISOString()}:share as Share; return { share: normalized, record: await this.record(normalized.userId,normalized.entity,normalized.recordId) }; },
 
-  async saveFile(userId:string,id:string,name:string,mimeType:string,hash:string,content:Buffer){
-    const timestamp=now();
-    if(!hasPostgres()){
-      const item={userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,storageProvider:"memory" as const,updatedAt:timestamp};
-      memory.files.set(`${userId}:${id}`,item);
+  /**
+   * Salva um arquivo com validação de tamanho real (`content.byteLength`) e cota acumulada
+   * por conta protegida contra uploads concorrentes via `storage_reservations`.
+   *
+   * Arquitetura PostgreSQL + S3 (NÃO são uma transação atômica única):
+   * 1) Transação PG reserva o delta de bytes sob lock do usuário.
+   * 2) Upload para S3 ocorre fora da transação PG; em falha do S3, a reserva é liberada imediatamente.
+   * 3) Transação PG grava metadados em `files` e marca a reserva como `committed`; em falha após
+   *    upload S3 bem-sucedido, executa compensação best-effort removendo o objeto S3 órfão e liberando a reserva.
+   * 4) Objeto S3 substituído é removido em best-effort após o commit no banco.
+   */
+  async saveFile(userId: string, id: string, name: string, mimeType: string, hash: string, content: Buffer) {
+    const timestamp = now();
+    const actualBytes = content.byteLength;
+    const limits = getStorageQuotaLimits();
+
+    if (!hasPostgres()) {
+      const existing = memory.files.get(`${userId}:${id}`);
+      const existingSize = existing?.sizeBytes ?? 0;
+      let totalUsed = 0;
+      for (const item of memory.files.values()) {
+        if (item.userId === userId) totalUsed += item.sizeBytes;
+      }
+      const projectedTotal = totalUsed - existingSize + actualBytes;
+      // Contas legadas já acima da cota podem substituir por arquivo menor/igual sem exclusão automática.
+      if (actualBytes > existingSize && projectedTotal > limits.filesQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "files",
+          usedBytes: totalUsed,
+          limitBytes: limits.filesQuotaBytes,
+          requestedBytes: actualBytes,
+        });
+      }
+      const item = { userId, id, name, mimeType, hash, sizeBytes: actualBytes, content, storageProvider: "memory" as const, updatedAt: timestamp };
+      memory.files.set(`${userId}:${id}`, item);
       return item;
     }
-    const previous=await query<{storage_key:string|null}>("SELECT storage_key FROM files WHERE user_id=$1 AND id=$2",[userId,id]);
-    const previousStorageKey=previous.rows[0]?.storage_key??undefined;
-    const storageProvider=ObjectStorage.mode();
-    const storageKey=storageProvider==="s3"?ObjectStorage.key(userId,id,hash):undefined;
-    if(storageKey)await ObjectStorage.put(storageKey,content,mimeType,{userId,materialId:id,hash});
-    await query("INSERT INTO files (id,user_id,name,mime_type,hash,size_bytes,content,storage_key,storage_provider) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (user_id,id) DO UPDATE SET name=EXCLUDED.name,mime_type=EXCLUDED.mime_type,hash=EXCLUDED.hash,size_bytes=EXCLUDED.size_bytes,content=EXCLUDED.content,storage_key=EXCLUDED.storage_key,storage_provider=EXCLUDED.storage_provider,updated_at=NOW()",[id,userId,name,mimeType,hash,content.byteLength,storageProvider==="database"?content:null,storageKey??null,storageProvider]);
-    if(previousStorageKey&&previousStorageKey!==storageKey&&storageProvider==="s3")await ObjectStorage.delete(previousStorageKey);
-    return {userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,storageProvider,storageKey,updatedAt:timestamp};
+
+    // Fase 1: reserva atômica no PostgreSQL
+    const reservationId = randomUUID();
+    const { previousStorageKey } = await transaction(async (client) => {
+      await client.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId]);
+      await client.query(
+        "UPDATE storage_reservations SET status='expired', updated_at=NOW() WHERE user_id=$1 AND kind='files' AND status='reserved' AND expires_at <= NOW()",
+        [userId],
+      );
+      const existingRes = await client.query<{ size_bytes: string; storage_key: string | null }>(
+        "SELECT size_bytes::text, storage_key FROM files WHERE user_id=$1 AND id=$2",
+        [userId, id],
+      );
+      const existingSize = Number(existingRes.rows[0]?.size_bytes ?? 0);
+      const prevKey = existingRes.rows[0]?.storage_key ?? undefined;
+
+      const [sumFiles, sumPending] = await Promise.all([
+        client.query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM files WHERE user_id=$1", [userId]),
+        client.query<{ total: string }>(
+          "SELECT COALESCE(SUM(reserved_bytes), 0)::text AS total FROM storage_reservations WHERE user_id=$1 AND kind='files' AND status='reserved' AND expires_at > NOW()",
+          [userId],
+        ),
+      ]);
+      const existingTotal = Number(sumFiles.rows[0]?.total ?? 0);
+      const pendingReserved = Number(sumPending.rows[0]?.total ?? 0);
+      const deltaBytes = Math.max(0, actualBytes - existingSize);
+      const projectedTotal = existingTotal - existingSize + pendingReserved + actualBytes;
+
+      if (deltaBytes > 0 && projectedTotal > limits.filesQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "files",
+          usedBytes: existingTotal + pendingReserved,
+          limitBytes: limits.filesQuotaBytes,
+          requestedBytes: actualBytes,
+        });
+      }
+
+      await client.query(
+        `INSERT INTO storage_reservations (id, user_id, kind, resource_id, reserved_bytes, status, expires_at)
+         VALUES ($1, $2, 'files', $3, $4, 'reserved', NOW() + ($5::bigint * INTERVAL '1 millisecond'))`,
+        [reservationId, userId, id, deltaBytes, limits.reservationTtlMs],
+      );
+      return { previousStorageKey: prevKey };
+    });
+
+    const releaseReservation = async () => {
+      await query(
+        "UPDATE storage_reservations SET status='released', updated_at=NOW() WHERE id=$1 AND status='reserved'",
+        [reservationId],
+      ).catch(() => undefined);
+    };
+
+    const storageProvider = ObjectStorage.mode();
+    const storageKey = storageProvider === "s3" ? ObjectStorage.key(userId, id, hash) : undefined;
+
+    // Fase 2: upload externo S3 (fora da transação PG)
+    let uploadedNewS3Object = false;
+    if (storageKey) {
+      try {
+        await ObjectStorage.put(storageKey, content, mimeType, { userId, materialId: id, hash });
+        uploadedNewS3Object = true;
+      } catch (error) {
+        await releaseReservation();
+        throw error;
+      }
+    }
+
+    // Fase 3: commit de metadados + confirmação da reserva em transação PG
+    try {
+      await transaction(async (client) => {
+        await client.query(
+          `INSERT INTO files (id,user_id,name,mime_type,hash,size_bytes,content,storage_key,storage_provider)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (user_id,id) DO UPDATE
+           SET name=EXCLUDED.name,mime_type=EXCLUDED.mime_type,hash=EXCLUDED.hash,size_bytes=EXCLUDED.size_bytes,content=EXCLUDED.content,storage_key=EXCLUDED.storage_key,storage_provider=EXCLUDED.storage_provider,updated_at=NOW()`,
+          [id, userId, name, mimeType, hash, actualBytes, storageProvider === "database" ? content : null, storageKey ?? null, storageProvider],
+        );
+        await client.query(
+          "UPDATE storage_reservations SET status='committed', updated_at=NOW() WHERE id=$1 AND status='reserved'",
+          [reservationId],
+        );
+      });
+    } catch (error) {
+      await releaseReservation();
+      if (uploadedNewS3Object && storageKey && storageKey !== previousStorageKey) {
+        await ObjectStorage.delete(storageKey).catch(() => {
+          console.error("[Storage] Compensação S3 falhou após erro no PostgreSQL (objeto pode requerer limpeza posterior).", {
+            timestamp: new Date().toISOString(),
+          });
+        });
+      }
+      throw error;
+    }
+
+    // Fase 4: limpeza best-effort do objeto S3 substituído
+    if (previousStorageKey && previousStorageKey !== storageKey && storageProvider === "s3") {
+      await ObjectStorage.delete(previousStorageKey).catch(() => {
+        console.warn("[Storage] Limpeza do objeto S3 substituído falhou (sem impacto na gravação confirmada).", {
+          timestamp: new Date().toISOString(),
+        });
+      });
+    }
+
+    return { userId, id, name, mimeType, hash, sizeBytes: actualBytes, content, storageProvider, storageKey, updatedAt: timestamp };
   },
   async file(userId:string,id:string){
     if(!hasPostgres())return memory.files.get(`${userId}:${id}`);

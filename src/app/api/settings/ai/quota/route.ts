@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireActiveSession, requireUser } from "@/server/auth/http";
 import { QuotaService } from "@/server/ai/QuotaService";
 import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { CloudDatabase } from "@/server/cloud/CloudDatabase";
 import { aiProviderIds } from "@/features/ai/AIProvider";
 
 export const runtime = "nodejs";
@@ -13,10 +14,14 @@ export async function GET(request: Request) {
     await requireActiveSession(request, user);
     const userId = user.sub;
 
-    // Get quota info from QuotaService
-    const quotaInfo = await QuotaService.getQuotaInfo(userId);
+    const [quotaInfo, emailVerified, sharedAvailable, usageStats, storage] = await Promise.all([
+      QuotaService.getQuotaInfo(userId),
+      QuotaService.isEmailVerified(userId),
+      QuotaService.isSharedAIAvailable(),
+      QuotaService.getUsageStats(userId, 30),
+      CloudDatabase.storageUsage(userId),
+    ]);
 
-    // Check user's BYOK keys to determine mode
     const userApiKeys: Record<string, string> = {};
     for (const provider of aiProviderIds) {
       const key = await ApiKeyService.getDecrypted(userId, provider);
@@ -26,34 +31,35 @@ export async function GET(request: Request) {
     const hasAnyBYOK = Object.keys(userApiKeys).length > 0;
     const mode = hasAnyBYOK ? "byok" : "shared";
 
-    // Get usage stats for the last 30 days
-    const usageStats = await QuotaService.getUsageStats(userId, 30);
-
-    // Calculate daily usage percentage
     const dailyUsagePercent = quotaInfo.daily.limit > 0
       ? Math.round((quotaInfo.daily.used / quotaInfo.daily.limit) * 100)
       : 0;
-
-    // Calculate minute usage percentage
     const minuteUsagePercent = quotaInfo.minute.limit > 0
       ? Math.round((quotaInfo.minute.used / quotaInfo.minute.limit) * 100)
       : 0;
+    const tokenUsed = quotaInfo.tokens?.used ?? 0;
+    const tokenReserved = quotaInfo.tokens?.reserved ?? 0;
+    const tokenLimit = quotaInfo.tokens?.limit ?? 0;
+    const tokenUsagePercent = tokenLimit > 0
+      ? Math.min(100, Math.round(((tokenUsed + tokenReserved) / tokenLimit) * 100))
+      : 0;
 
-    // Determine warning status
     let warning: "none" | "approaching" | "critical" = "none";
-    if (dailyUsagePercent >= 90 || minuteUsagePercent >= 90) {
+    if (dailyUsagePercent >= 90 || minuteUsagePercent >= 90 || tokenUsagePercent >= 90) {
       warning = "critical";
-    } else if (dailyUsagePercent >= 75 || minuteUsagePercent >= 75) {
+    } else if (dailyUsagePercent >= 75 || minuteUsagePercent >= 75 || tokenUsagePercent >= 75) {
       warning = "approaching";
     }
 
-    // Get next reset times
     const dailyReset = new Date();
     dailyReset.setHours(24, 0, 0, 0);
     const minuteReset = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
 
+    // Não expõe números internos do orçamento global — apenas estado booleano de disponibilidade.
     return NextResponse.json({
       mode,
+      emailVerified,
+      sharedAvailable,
       daily: {
         used: quotaInfo.daily.used,
         limit: quotaInfo.daily.limit,
@@ -68,6 +74,17 @@ export async function GET(request: Request) {
         percent: minuteUsagePercent,
         resetAt: minuteReset.toISOString(),
       },
+      tokens: quotaInfo.tokens
+        ? {
+            used: quotaInfo.tokens.used,
+            reserved: quotaInfo.tokens.reserved,
+            limit: quotaInfo.tokens.limit,
+            remaining: quotaInfo.tokens.remaining,
+            percent: tokenUsagePercent,
+            resetAt: quotaInfo.tokens.resetAt,
+          }
+        : undefined,
+      storage,
       warning,
       usageStats,
       hasAnyBYOK,

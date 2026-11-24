@@ -28,6 +28,10 @@ function formatMemory(bytes?: number) {
 
 interface QuotaData {
   mode: "byok" | "shared";
+  emailVerified?: boolean;
+  sharedAvailable?: boolean;
+  tokens?: { used: number; reserved: number; limit: number; remaining: number; percent: number; resetAt: string };
+  storage?: { files: { usedBytes: number; reservedBytes: number; limitBytes: number }; backups: { usedBytes: number; reservedBytes: number; limitBytes: number } };
   daily: { used: number; limit: number; remaining: number; percent: number; resetAt: string };
   minute: { used: number; limit: number; remaining: number; percent: number; resetAt: string };
   warning: "none" | "approaching" | "critical";
@@ -309,6 +313,48 @@ export function AISettingsPanel({ advanced = true }: { advanced?: boolean }) {
                   </p>
                 </div>
               </div>
+
+              {quotaData.emailVerified === false && !quotaData.hasAnyBYOK && (
+                <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200 flex items-start gap-2">
+                  <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">E-mail pendente de verificação</p>
+                    <p className="text-xs text-muted-foreground">
+                      Confirme seu e-mail em Conta para liberar a IA compartilhada ou configure sua própria chave (BYOK) abaixo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {quotaData.sharedAvailable === false && !quotaData.hasAnyBYOK && (
+                <div role="alert" className="rounded-lg border bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+                  <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">IA compartilhada temporariamente indisponível</p>
+                    <p className="text-xs text-muted-foreground">
+                      Tente novamente mais tarde ou configure sua própria chave de API (BYOK) para continuar sem interrupções.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {quotaData.tokens && (
+                <div className="space-y-2 rounded-lg border bg-muted/15 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Tokens Diários (IA Compartilhada)</p>
+                      <p className="text-sm font-medium">
+                        {quotaData.tokens.used.toLocaleString("pt-BR")} / {quotaData.tokens.limit.toLocaleString("pt-BR")}
+                      </p>
+                    </div>
+                    <Badge variant="outline">{quotaData.tokens.percent}%</Badge>
+                  </div>
+                  <Progress value={quotaData.tokens.percent} className="h-2" />
+                  <p className="text-xs text-muted-foreground">
+                    Restam {quotaData.tokens.remaining.toLocaleString("pt-BR")} tokens hoje · Reset à meia-noite UTC
+                  </p>
+                </div>
+              )}
 
               {quotaData.warning !== "none" && (
                 <div className="rounded-lg border bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">

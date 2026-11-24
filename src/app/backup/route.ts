@@ -7,7 +7,10 @@ export async function GET(request: Request) {
   try {
     const user = requireUser(request);
     await requireActiveSession(request, user);
-    const backups = await CloudDatabase.backups(user.sub);
+    const [backups, storage] = await Promise.all([
+      CloudDatabase.backups(user.sub),
+      CloudDatabase.storageUsage(user.sub),
+    ]);
     return NextResponse.json({
       backups: backups.map((item) => ({
         id: item.id,
@@ -15,6 +18,7 @@ export async function GET(request: Request) {
         sizeBytes: item.sizeBytes,
         createdAt: item.createdAt,
       })),
+      storage,
     });
   } catch (error) {
     return apiError(error);
