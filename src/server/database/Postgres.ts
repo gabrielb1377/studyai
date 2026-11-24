@@ -55,16 +55,18 @@ export function postgresPool() {
   });
   // Evita encerramento do processo Node por erro assíncrono em cliente ocioso
   // (ex.: reinício do PostgreSQL ou timeout de pooler como Supabase/Railway).
-  pool.on("error", (error) => {
-    const classification = classifyPostgresError(error);
-    console.error("[PostgreSQL Pool Error]", {
-      category: classification.category,
-      code: classification.code,
-      name: classification.name,
-      message: classification.messageSummary,
-      timestamp: new Date().toISOString(),
+  if (typeof pool.on === "function") {
+    pool.on("error", (error) => {
+      const classification = classifyPostgresError(error);
+      console.error("[PostgreSQL Pool Error]", {
+        category: classification.category,
+        code: classification.code,
+        name: classification.name,
+        message: classification.messageSummary,
+        timestamp: new Date().toISOString(),
+      });
     });
-  });
+  }
 
   state.connectionString = connectionString;
   state.pool = pool;
