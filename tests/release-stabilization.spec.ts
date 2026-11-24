@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { testClientHeaders } from "./helpers/test-client-ip";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -47,6 +48,7 @@ function loadServerModule(
 }
 
 async function registerAccount(page: Page, email: string) {
+  await page.context().setExtraHTTPHeaders(testClientHeaders(`release-stab:${email}`));
   await page.goto("/conta");
   await page.getByRole("button", { name: "Criar conta" }).click();
   await page.getByLabel("Nome").fill("Estudante Estabilizacao");
@@ -192,16 +194,12 @@ test("3B: ExamService trata QuotaExceededError sem perder dados e SyncPreference
 });
 
 test("3C: criação sequencial de salas mantém a última sala selecionada e backup atualiza estado em Conta", async ({ page }) => {
-  if (isDisposableLocalPgAvailable()) {
-    const { Pool } = testRequire("pg") as typeof import("pg");
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, ssl: false });
-    await pool.query("DELETE FROM rate_limits WHERE key LIKE 'register:%'").catch(() => undefined);
-    await pool.end().catch(() => undefined);
-  }
   await registerAccount(page, uniqueEmail("race3c"));
 
   await page.getByRole("button", { name: "Criar backup agora" }).click();
-  await expect(page.getByText(/\d+\s*(B|KB|MB)/)).toBeVisible();
+  const restoreButton = page.getByRole("button", { name: "Restaurar" }).first();
+  await expect(restoreButton).toBeVisible();
+  await expect(restoreButton.locator("..")).toContainText(/\d+(\.\d+)?\s*(B|KB|MB)/);
 
   await page.goto("/salas");
   const nameInput = page.getByLabel("Nome da nova sala");

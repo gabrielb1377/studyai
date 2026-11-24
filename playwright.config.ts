@@ -33,5 +33,10 @@ export default defineConfig({
     url: origin,
     reuseExistingServer: !process.env.PLAYWRIGHT_PORT,
     timeout: 120_000,
+    env: {
+      ...process.env,
+      TRUST_PROXY_HEADERS: process.env.TRUST_PROXY_HEADERS ?? "true",
+      TRUSTED_PROXY_HOPS: process.env.TRUSTED_PROXY_HOPS ?? "1",
+    },
   },
 });

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import { testClientHeaders } from "./helpers/test-client-ip";
 
 const testRequire = createRequire(__filename);
 const PASSWORD = "StudyAI2026secure";
@@ -88,6 +89,7 @@ async function createUserSession(
   deviceName = "Chromium Test",
 ) {
   const registerRes = await request.post("/auth/register", {
+    headers: testClientHeaders(`rh2a:${email}`),
     data: { name: "Pessoa Teste", email, password: PASSWORD, deviceId, deviceName },
   });
   expect(registerRes.status()).toBe(201);

@@ -3,18 +3,10 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 const password = "StudyAI2026secure";
 const uniqueEmail = (label: string) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
-import { Pool } from "pg";
-
-async function resetLocalRegisterRateLimit() {
-  const url = process.env.DATABASE_URL?.trim();
-  if (!url || !/^postgres(?:ql)?:\/\/[^@]+@(?:127\.0\.0\.1|localhost):/i.test(url)) return;
-  const pool = new Pool({ connectionString: url, max: 1, ssl: false });
-  await pool.query("DELETE FROM rate_limits WHERE key LIKE 'register:%'").catch(() => undefined);
-  await pool.end().catch(() => undefined);
-}
+import { testClientHeaders } from "./helpers/test-client-ip";
 
 async function register(page: Page, label: string, name: string) {
-  await resetLocalRegisterRateLimit();
+  await page.context().setExtraHTTPHeaders(testClientHeaders(`collab:${label}:${name}:${Date.now()}`));
   await page.goto("/conta");
   await page.getByRole("button", { name: "Criar conta" }).click();
   await page.getByLabel("Nome").fill(name);

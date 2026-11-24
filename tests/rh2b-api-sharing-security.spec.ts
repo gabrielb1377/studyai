@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
+import { testClientHeaders } from "./helpers/test-client-ip";
 
 const testRequire = createRequire(__filename);
 const PASSWORD = "StudyAI2026secure";
@@ -69,6 +70,7 @@ function parseCookiePair(setCookieHeaders: string[], name: string): string | und
 
 async function createUserSession(request: APIRequestContext, email: string) {
   const registerRes = await request.post("/auth/register", {
+    headers: testClientHeaders(`rh2b:${email}`),
     data: {
       name: "Pessoa Teste",
       email,

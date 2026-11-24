@@ -77,8 +77,17 @@ export function useWeeklyGoals() {
       void reload();
     };
     const handleStorage = (event: Event) => {
-      const detail = (event as CustomEvent<{ store?: string; scopeChanged?: boolean }>).detail;
-      if (!detail || detail.scopeChanged || detail.store === "metadata") {
+      const detail = (event as CustomEvent<{ store?: string; key?: unknown; scopeChanged?: boolean }>).detail;
+      if (!detail || detail.scopeChanged) {
+        void reload();
+        return;
+      }
+      if (detail.store !== "metadata") return;
+      if (
+        detail.key === undefined ||
+        detail.key === "weekly-goal-v1" ||
+        (typeof detail.key === "string" && detail.key.startsWith("workspace-session:"))
+      ) {
         void reload();
       }
     };
