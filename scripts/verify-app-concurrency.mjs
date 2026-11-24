@@ -325,7 +325,7 @@ async function seed() {
   await pool.query("DELETE FROM rate_limits WHERE key=$1", [rateLimitKey]);
 
   await pool.query(
-    "INSERT INTO users (id,email,password_hash) VALUES ($1,$2,'x')",
+    "INSERT INTO users (id,email,password_hash,email_verified_at) VALUES ($1,$2,'x',NOW())",
     [userId, userEmail],
   );
   await pool.query(
