@@ -6,6 +6,9 @@ export type AIErrorCode =
   | "PROVIDER_ERROR"
   | "PROVIDER_UNAVAILABLE"
   | "RATE_LIMIT"
+  | "QUOTA_EXCEEDED"
+  | "EMAIL_NOT_VERIFIED"
+  | "SHARED_AI_UNAVAILABLE"
   | "FALLBACK_CONSENT_REQUIRED"
   | "PARTIAL_RESPONSE"
   | "TIMEOUT";
@@ -38,6 +41,15 @@ export class AIFallbackConsentError extends AIError {
 }
 
 function suggestionFor(error: AIError) {
+  if (error.code === "EMAIL_NOT_VERIFIED") {
+    return "Verifique seu e-mail em Conta para liberar a IA compartilhada ou configure sua própria chave (BYOK) em Configurações > IA.";
+  }
+  if (error.code === "QUOTA_EXCEEDED") {
+    return "Aguarde a renovação da cota ou configure sua própria chave (BYOK) em Configurações > IA.";
+  }
+  if (error.code === "SHARED_AI_UNAVAILABLE") {
+    return "A IA compartilhada está temporariamente indisponível. Tente novamente mais tarde ou configure sua chave própria (BYOK) em Configurações > IA.";
+  }
   if (error.code === "MISSING_API_KEY") {
     return "Abra Configurações > IA, configure o provider e reinicie o servidor após alterar o arquivo .env.local.";
   }
@@ -82,7 +94,7 @@ export function normalizeAIError(error: unknown, fallbackMessage: string) {
     };
   }
   if (error instanceof AIError) {
-    const rateLimited = isAIRateLimitError(error);
+    const rateLimited = isAIRateLimitError(error) && error.code !== "QUOTA_EXCEEDED";
     return {
       status: rateLimited ? 429 : error.status,
       body: {

@@ -52,6 +52,22 @@ function boundedMessages(history: readonly AIMessage[], message: string, context
   return { messages: [...boundedHistory, { role: "user" as const, content: boundedMessage }], maxTokens: outputReserve };
 }
 
+function normalizeOpenAIUsage(raw: ChatResponse["usage"]): AIResponse["usage"] {
+  if (!raw) return undefined;
+  const inputTokens = typeof raw.prompt_tokens === "number" && Number.isFinite(raw.prompt_tokens) && raw.prompt_tokens >= 0
+    ? Math.trunc(raw.prompt_tokens)
+    : undefined;
+  const outputTokens = typeof raw.completion_tokens === "number" && Number.isFinite(raw.completion_tokens) && raw.completion_tokens >= 0
+    ? Math.trunc(raw.completion_tokens)
+    : undefined;
+  const rawTotal = typeof raw.total_tokens === "number" && Number.isFinite(raw.total_tokens) && raw.total_tokens >= 0
+    ? Math.trunc(raw.total_tokens)
+    : undefined;
+  const totalTokens = rawTotal ?? (inputTokens !== undefined && outputTokens !== undefined ? inputTokens + outputTokens : undefined);
+  if (inputTokens === undefined && outputTokens === undefined && totalTokens === undefined) return undefined;
+  return { inputTokens, outputTokens, totalTokens, source: "provider" };
+}
+
 export function createOpenAICompatibleProvider({
   id,
   name,
@@ -87,9 +103,20 @@ export function createOpenAICompatibleProvider({
         return { provider: id, available: false, latencyMs: 0, models: [], endpoint, error: error instanceof Error ? error.message : `${name} indisponível.` };
       }
     },
-    async generate({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): Promise<AIResponse> {
-      const key = (apiKeyOverride?.trim() || apiKey()?.trim());
-      if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
+    async generate({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride, strictByok }): Promise<AIResponse> {
+      const key = strictByok
+        ? apiKeyOverride?.trim()
+        : (apiKeyOverride?.trim() || apiKey()?.trim());
+      if (!key) {
+        throw new AIError(
+          strictByok
+            ? `Sua chave pessoal (BYOK) do ${name} não está disponível. Confira Configurações → IA.`
+            : `Configure ${id.toUpperCase()}_API_KEY em .env.local.`,
+          "MISSING_API_KEY",
+          503,
+          id,
+        );
+      }
       try {
         const requestSignal = withRequestTimeout(signal, timeoutMs);
         const models = await listModels(key, requestSignal);
@@ -113,19 +140,26 @@ export function createOpenAICompatibleProvider({
           provider: id,
           model: data?.model ?? selectedModel,
           text,
-          usage: {
-            inputTokens: data?.usage?.prompt_tokens,
-            outputTokens: data?.usage?.completion_tokens,
-            totalTokens: data?.usage?.total_tokens,
-          },
+          usage: normalizeOpenAIUsage(data?.usage),
         };
       } catch (error) {
         throw providerConnectionError(error, id, name);
       }
     },
-    async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): AsyncGenerator<AIStreamEvent> {
-      const key = (apiKeyOverride?.trim() || apiKey()?.trim());
-      if (!key) throw new AIError(`Configure ${id.toUpperCase()}_API_KEY em .env.local.`, "MISSING_API_KEY", 503, id);
+    async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride, strictByok }): AsyncGenerator<AIStreamEvent> {
+      const key = strictByok
+        ? apiKeyOverride?.trim()
+        : (apiKeyOverride?.trim() || apiKey()?.trim());
+      if (!key) {
+        throw new AIError(
+          strictByok
+            ? `Sua chave pessoal (BYOK) do ${name} não está disponível. Confira Configurações → IA.`
+            : `Configure ${id.toUpperCase()}_API_KEY em .env.local.`,
+          "MISSING_API_KEY",
+          503,
+          id,
+        );
+      }
       try {
         const requestSignal = withRequestTimeout(signal, timeoutMs);
         const models = await listModels(key, requestSignal);
@@ -170,11 +204,13 @@ export function createOpenAICompatibleProvider({
               text += delta;
               yield { type: "delta", text: delta };
             }
-            if (data.usage) {
+            const chunkUsage = normalizeOpenAIUsage(data.usage);
+            if (chunkUsage) {
               usage = {
-                inputTokens: data.usage.prompt_tokens,
-                outputTokens: data.usage.completion_tokens,
-                totalTokens: data.usage.total_tokens,
+                inputTokens: chunkUsage.inputTokens ?? usage?.inputTokens,
+                outputTokens: chunkUsage.outputTokens ?? usage?.outputTokens,
+                totalTokens: chunkUsage.totalTokens ?? usage?.totalTokens,
+                source: "provider",
               };
             }
           }

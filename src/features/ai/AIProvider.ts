@@ -43,6 +43,23 @@ export type AIMessage = {
   content: string;
 };
 
+export type AIUsageSource = "provider" | "estimated" | "unknown";
+
+export type AIUsageSettlement = {
+  outcome: "completed" | "cached" | "failed" | "cancelled";
+  provider: AIProviderId;
+  model?: string;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    source?: AIUsageSource;
+  };
+  emittedOutput?: boolean;
+  emittedText?: string;
+  providerContacted?: boolean;
+};
+
 export type AIRequest = {
   history: readonly AIMessage[];
   message: string;
@@ -52,6 +69,8 @@ export type AIRequest = {
   maxOutputTokens?: number;
   timeoutMs?: number;
   apiKey?: string;
+  /** Quando true, o provedor nunca recorre à chave compartilhada do servidor. */
+  strictByok?: boolean;
 };
 
 export type AIResponse = {
@@ -62,6 +81,7 @@ export type AIResponse = {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    source?: AIUsageSource;
     contextTokens?: number;
     historyTokens?: number;
     chunkTokens?: number;
@@ -133,6 +153,9 @@ export type AIManagerRequest = AIRequest & {
   apiKeys?: Partial<Record<AIProviderId, string>>;
   requestId?: string;
   requestOwner?: string;
+  credentialOrigin?: "shared" | "byok" | "local";
+  emailVerified?: boolean;
+  onSettlement?: (settlement: AIUsageSettlement) => Promise<void> | void;
   fallbackPolicy?: "consent";
   fallbackConsent?: AIFallbackConsent;
   task?: AITaskDescription;

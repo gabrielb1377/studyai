@@ -40,6 +40,15 @@ export function needsSharedQuota(
     .some((provider) => !userApiKeys[provider as AIProviderId]);
 }
 
+export function resolveCredentialOrigin(
+  providers: readonly string[],
+  userApiKeys: Partial<Record<AIProviderId, string>>,
+): "local" | "byok" | "shared" {
+  const remote = providers.filter((provider) => !KEYLESS_PROVIDERS.includes(provider));
+  if (remote.length === 0) return "local";
+  return remote.every((provider) => Boolean(userApiKeys[provider as AIProviderId])) ? "byok" : "shared";
+}
+
 export function quotaRateLimitHeaders(quota: QuotaInfo): Record<string, string> {
   return {
     "X-RateLimit-Limit": String(quota.daily.limit),
@@ -52,7 +61,14 @@ export function quotaRateLimitHeaders(quota: QuotaInfo): Record<string, string> 
 }
 
 export function quotaExceededMessage(status: Pick<QuotaStatus, "blockedBy">): string {
-  return status.blockedBy === "minute"
-    ? "Limite de IA compartilhada por minuto atingido. Aguarde o tempo indicado antes de tentar novamente."
-    : "Cota diária de IA compartilhada esgotada. Configure sua própria chave de API (BYOK) em Configurações → IA para continuar.";
+  if (status.blockedBy === "minute") {
+    return "Limite de IA compartilhada por minuto atingido. Aguarde o tempo indicado antes de tentar novamente.";
+  }
+  if (status.blockedBy === "user_tokens") {
+    return "Cota diária de tokens da IA compartilhada esgotada. Configure sua própria chave de API (BYOK) em Configurações → IA para continuar.";
+  }
+  if (status.blockedBy === "global_budget") {
+    return "A IA compartilhada está temporariamente indisponível devido à alta demanda. Tente novamente mais tarde ou configure sua própria chave (BYOK) em Configurações → IA.";
+  }
+  return "Cota diária de IA compartilhada esgotada. Configure sua própria chave de API (BYOK) em Configurações → IA para continuar.";
 }

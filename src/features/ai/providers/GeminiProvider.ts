@@ -106,6 +106,22 @@ async function modelCandidates(apiKey: string, model: string | undefined, signal
   return candidates.sort((left, right) => Number(right.name === lastWorkingModel) - Number(left.name === lastWorkingModel));
 }
 
+function normalizeGeminiUsage(metadata: GeminiResponse["usageMetadata"]): AIResponse["usage"] {
+  if (!metadata) return undefined;
+  const inputTokens = typeof metadata.promptTokenCount === "number" && Number.isFinite(metadata.promptTokenCount) && metadata.promptTokenCount >= 0
+    ? Math.trunc(metadata.promptTokenCount)
+    : undefined;
+  const outputTokens = typeof metadata.candidatesTokenCount === "number" && Number.isFinite(metadata.candidatesTokenCount) && metadata.candidatesTokenCount >= 0
+    ? Math.trunc(metadata.candidatesTokenCount)
+    : undefined;
+  const rawTotal = typeof metadata.totalTokenCount === "number" && Number.isFinite(metadata.totalTokenCount) && metadata.totalTokenCount >= 0
+    ? Math.trunc(metadata.totalTokenCount)
+    : undefined;
+  const totalTokens = rawTotal ?? (inputTokens !== undefined && outputTokens !== undefined ? inputTokens + outputTokens : undefined);
+  if (inputTokens === undefined && outputTokens === undefined && totalTokens === undefined) return undefined;
+  return { inputTokens, outputTokens, totalTokens, source: "provider" };
+}
+
 export const GeminiProvider: AIProvider = {
   id: "gemini",
   name: "Gemini",
@@ -154,11 +170,15 @@ export const GeminiProvider: AIProvider = {
     }
   },
 
-  async generate({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): Promise<AIResponse> {
-    const apiKey = (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
+  async generate({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride, strictByok }): Promise<AIResponse> {
+    const apiKey = strictByok
+      ? apiKeyOverride?.trim()
+      : (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
     if (!apiKey) {
       throw new AIError(
-        "Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.",
+        strictByok
+          ? "Sua chave pessoal (BYOK) do Gemini não está disponível. Confira Configurações → IA."
+          : "Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.",
         "MISSING_API_KEY",
         503,
         this.id,
@@ -219,11 +239,7 @@ export const GeminiProvider: AIProvider = {
         provider: this.id,
         model: activeModel.name,
         text,
-        usage: {
-          inputTokens: data?.usageMetadata?.promptTokenCount,
-          outputTokens: data?.usageMetadata?.candidatesTokenCount,
-          totalTokens: data?.usageMetadata?.totalTokenCount,
-        },
+        usage: normalizeGeminiUsage(data?.usageMetadata),
       };
     } catch (error) {
       if (error instanceof AIError) throw error;
@@ -241,9 +257,20 @@ export const GeminiProvider: AIProvider = {
     }
   },
 
-  async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride }): AsyncGenerator<AIStreamEvent> {
-    const apiKey = (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
-    if (!apiKey) throw new AIError("Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.", "MISSING_API_KEY", 503, this.id);
+  async *stream({ history, message, model, signal, maxOutputTokens, timeoutMs, apiKey: apiKeyOverride, strictByok }): AsyncGenerator<AIStreamEvent> {
+    const apiKey = strictByok
+      ? apiKeyOverride?.trim()
+      : (apiKeyOverride?.trim() || process.env.GEMINI_API_KEY?.trim());
+    if (!apiKey) {
+      throw new AIError(
+        strictByok
+          ? "Sua chave pessoal (BYOK) do Gemini não está disponível. Confira Configurações → IA."
+          : "Configure GEMINI_API_KEY em .env.local para utilizar o Tutor IA.",
+        "MISSING_API_KEY",
+        503,
+        this.id,
+      );
+    }
     const timeoutController = new AbortController();
     const timeout = setTimeout(() => timeoutController.abort(), timeoutMs ?? REQUEST_TIMEOUT_MS);
     const requestSignal = signal ? AbortSignal.any([signal, timeoutController.signal]) : timeoutController.signal;
@@ -286,11 +313,15 @@ export const GeminiProvider: AIProvider = {
             text += delta;
             yield { type: "delta", text: delta };
           }
-          usage = {
-            inputTokens: data.usageMetadata?.promptTokenCount ?? usage?.inputTokens,
-            outputTokens: data.usageMetadata?.candidatesTokenCount ?? usage?.outputTokens,
-            totalTokens: data.usageMetadata?.totalTokenCount ?? usage?.totalTokens,
-          };
+          const chunkUsage = normalizeGeminiUsage(data.usageMetadata);
+          if (chunkUsage) {
+            usage = {
+              inputTokens: chunkUsage.inputTokens ?? usage?.inputTokens,
+              outputTokens: chunkUsage.outputTokens ?? usage?.outputTokens,
+              totalTokens: chunkUsage.totalTokens ?? usage?.totalTokens,
+              source: "provider",
+            };
+          }
         }
       }
       if (!text.trim()) throw new AIError("O Gemini retornou uma resposta vazia.", "INVALID_RESPONSE", 502, this.id);

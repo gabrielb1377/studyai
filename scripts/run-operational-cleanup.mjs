@@ -75,6 +75,63 @@ try {
          )`,
         [safeMaxAgeMs, safeBatchLimit],
       );
+      const expiredAi = await client.query(
+        `UPDATE ai_token_reservations
+         SET status = 'expired', reconciled_at = NOW()
+         WHERE id IN (
+           SELECT id FROM ai_token_reservations
+           WHERE status = 'reserved' AND expires_at <= NOW()
+           LIMIT $1
+           FOR UPDATE SKIP LOCKED
+         )
+         RETURNING user_id, usage_date::text AS usage_date, reserved_tokens::text AS reserved_tokens`,
+        [safeBatchLimit],
+      ).catch(() => ({ rows: [], rowCount: 0 }));
+      for (const row of expiredAi.rows) {
+        const tokens = Number(row.reserved_tokens);
+        if (tokens > 0) {
+          await client.query(
+            `UPDATE ai_global_daily_budgets
+             SET reserved_tokens = GREATEST(0, reserved_tokens - $2), updated_at = NOW()
+             WHERE date = $1::date`,
+            [row.usage_date, tokens],
+          );
+          await client.query(
+            `UPDATE usage_quotas
+             SET reserved_tokens = GREATEST(0, reserved_tokens - $3), updated_at = NOW()
+             WHERE user_id = $1 AND date = $2::date AND minute_bucket = 0`,
+            [row.user_id, row.usage_date, tokens],
+          );
+        }
+      }
+      await client.query(
+        `UPDATE storage_reservations
+         SET status = 'expired', updated_at = NOW()
+         WHERE id IN (
+           SELECT id FROM storage_reservations
+           WHERE status = 'reserved' AND expires_at <= NOW()
+           LIMIT $1
+         )`,
+        [safeBatchLimit],
+      ).catch(() => undefined);
+      await client.query(
+        `DELETE FROM storage_reservations
+         WHERE ctid IN (
+           SELECT ctid FROM storage_reservations
+           WHERE status <> 'reserved' AND updated_at < NOW() - INTERVAL '7 days'
+           LIMIT $1
+         )`,
+        [safeBatchLimit],
+      ).catch(() => undefined);
+      await client.query(
+        `DELETE FROM ai_token_reservations
+         WHERE ctid IN (
+           SELECT ctid FROM ai_token_reservations
+           WHERE status <> 'reserved' AND created_at < NOW() - INTERVAL '30 days'
+           LIMIT $1
+         )`,
+        [safeBatchLimit],
+      ).catch(() => undefined);
       const quotas = await client.query(
         `DELETE FROM usage_quotas
          WHERE ctid IN (

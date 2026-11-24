@@ -1,7 +1,8 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { QuotaService, type QuotaStatus } from "./QuotaService";
+import { estimateReservationTokens, QuotaService, type QuotaStatus } from "./QuotaService";
 import { jsonBody, requireActiveSession, requireCsrf, requireUser } from "@/server/auth/http";
 import {
   aiProviderIds,
@@ -9,6 +10,7 @@ import {
   type AIProviderId,
   type AIRoutingDecision,
   type AITaskDescription,
+  type AIUsageSettlement,
 } from "@/features/ai/AIProvider";
 import { ApiKeyService } from "./ApiKeyService";
 import { AIError } from "@/features/ai/AIErrors";
@@ -16,7 +18,13 @@ import type { TutorStudyContext } from "@/types/tutor-context";
 import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-validation";
 import { isRetrievedChunk } from "@/features/retrieval/retrieval-validation";
 import type { RetrievedChunk } from "@/features/retrieval/RetrievalTypes";
-import { needsSharedQuota, providersToCheckFor, quotaExceededMessage, quotaRateLimitHeaders } from "./quota-policy";
+import {
+  needsSharedQuota,
+  providersToCheckFor,
+  quotaExceededMessage,
+  quotaRateLimitHeaders,
+  resolveCredentialOrigin,
+} from "./quota-policy";
 import { AIRoutingService } from "./AIRoutingService";
 
 export interface QuotaAwareAIRequest {
@@ -28,6 +36,10 @@ export interface QuotaAwareAIRequest {
   provider?: AIProviderId;
   stream?: boolean;
   apiKeys: Partial<Record<AIProviderId, string>> | undefined;
+  strictByok?: boolean;
+  credentialOrigin?: "shared" | "byok" | "local";
+  emailVerified?: boolean;
+  onSettlement?: (settlement: AIUsageSettlement) => Promise<void> | void;
   requestId?: string;
   requestOwner?: string;
   fallbackPolicy?: "consent";
@@ -38,15 +50,32 @@ export interface QuotaAwareAIRequest {
 }
 
 const quotaRuntime = globalThis as typeof globalThis & {
-  __studyAIFallbackQuotaAttempts?: Map<string, { expiresAt: number; promise: ReturnType<typeof QuotaService.checkAndConsume> }>;
+  __studyAIFallbackQuotaAttempts?: Map<string, { expiresAt: number; promise: Promise<QuotaStatus> }>;
 };
 const fallbackQuotaAttempts = quotaRuntime.__studyAIFallbackQuotaAttempts ?? new Map();
 quotaRuntime.__studyAIFallbackQuotaAttempts = fallbackQuotaAttempts;
 
-function consumeSharedQuota(userId: string, body: { requestId?: string; fallbackConsent?: AIFallbackConsent }) {
+function consumeSharedQuota(
+  userId: string,
+  body: { requestId?: string; fallbackConsent?: AIFallbackConsent },
+  reservation: { provider: string; model?: string; reserveTokens: number },
+): Promise<QuotaStatus> {
+  const execute = () => {
+    if (typeof QuotaService.reserveSharedBudget === "function") {
+      return QuotaService.reserveSharedBudget(userId, {
+        provider: reservation.provider,
+        model: reservation.model,
+        requestId: body.requestId,
+        reserveTokens: reservation.reserveTokens,
+        useSharedKeys: true,
+      });
+    }
+    return QuotaService.checkAndConsume(userId, { provider: "shared", useSharedKeys: true });
+  };
+
   const consent = body.fallbackConsent;
   if (!body.requestId || !consent || consent.requestId !== body.requestId) {
-    return QuotaService.checkAndConsume(userId, { provider: "shared", useSharedKeys: true });
+    return execute();
   }
   const now = Date.now();
   for (const [key, attempt] of fallbackQuotaAttempts) {
@@ -55,7 +84,7 @@ function consumeSharedQuota(userId: string, body: { requestId?: string; fallback
   const key = `${userId}:${body.requestId}:${consent.provider}`;
   const existing = fallbackQuotaAttempts.get(key);
   if (existing) return existing.promise;
-  const promise = QuotaService.checkAndConsume(userId, { provider: "shared", useSharedKeys: true });
+  const promise = execute();
   fallbackQuotaAttempts.set(key, { expiresAt: now + 5 * 60_000, promise });
   return promise;
 }
@@ -67,13 +96,26 @@ function attachQuotaHeaders(response: Response, status: QuotaStatus) {
   return response;
 }
 
-function quotaExceededResponse(status: QuotaStatus) {
+function quotaBlockedResponse(status: QuotaStatus) {
   const headers = quotaRateLimitHeaders(status.quota);
   if (status.retryAfter !== undefined) headers["Retry-After"] = String(status.retryAfter);
+  if (status.blockedBy === "global_budget") {
+    // Nunca expor números internos do orçamento global ao cliente.
+    return NextResponse.json(
+      {
+        code: "SHARED_AI_UNAVAILABLE",
+        error: quotaExceededMessage(status),
+        suggestion: "Tente novamente mais tarde ou configure sua própria chave de API (BYOK) em Configurações → IA.",
+        blockedBy: "global_budget",
+      },
+      { status: 503, headers: { "cache-control": "no-store", ...(status.retryAfter ? { "Retry-After": String(status.retryAfter) } : {}) } },
+    );
+  }
   return NextResponse.json(
     {
       code: "QUOTA_EXCEEDED",
       error: quotaExceededMessage(status),
+      suggestion: "Aguarde a renovação da cota ou configure sua própria chave de API (BYOK) em Configurações → IA.",
       blockedBy: status.blockedBy,
       quota: status.quota,
     },
@@ -81,72 +123,15 @@ function quotaExceededResponse(status: QuotaStatus) {
   );
 }
 
-export async function withQuotaEnforcement(
-  request: Request,
-  handler: (request: Request, userApiKeys: Partial<Record<AIProviderId, string>>, quotaInfo: Awaited<ReturnType<typeof QuotaService.getQuotaInfo>>) => Promise<NextResponse>
-): Promise<NextResponse> {
-  try {
-    requireCsrf(request);
-    const user = requireUser(request);
-    await requireActiveSession(request, user);
-    const userId = user.sub;
-
-    // Load user's BYOK keys
-    const userApiKeys: Partial<Record<AIProviderId, string>> = {};
-    try {
-      const entries = await Promise.all(
-        (await import("@/features/ai/AIProvider")).aiProviderIds.map(async (provider) => [
-          provider,
-          await (await import("./ApiKeyService")).ApiKeyService.getDecrypted(user.sub, provider),
-        ] as const)
-      );
-      for (const [provider, key] of entries) {
-        if (key) userApiKeys[provider] = key;
-      }
-    } catch {
-      // No BYOK keys or error loading
-    }
-
-    const quotaInfo = await (await import("./QuotaService")).QuotaService.getQuotaInfo(userId);
-
-    // Determine which providers might be used based on the request
-    const body = await request.clone().json().catch(() => null);
-    const bodyObj = body as { mode?: string; provider?: string; fallbackConsent?: AIFallbackConsent } | null;
-    
-    // Determine which providers might be used (same rule as ProviderManager)
-    const providersToCheck = providersToCheckFor(bodyObj?.mode, bodyObj?.provider, bodyObj?.fallbackConsent?.provider);
-
-    // Shared quota is only needed when at least one provider in play has no BYOK key.
-    if (!needsSharedQuota(providersToCheck, userApiKeys)) {
-      const response = await handler(request, userApiKeys, quotaInfo);
-      return response;
-    }
-
-    // Otherwise, check quota for shared key usage
-    const quotaCheck = await (await import("./QuotaService")).QuotaService.checkAndConsume(userId, {
-      provider: "shared",
-      useSharedKeys: true,
-    });
-
-    if (!quotaCheck.allowed) {
-      return quotaExceededResponse(quotaCheck);
-    }
-
-    const response = await handler(request, userApiKeys, quotaCheck.quota);
-    return attachQuotaHeaders(response, quotaCheck) as NextResponse;
-  } catch (error) {
-    if (error instanceof Response) {
-      // Convert plain Response to NextResponse
-      return new NextResponse(error.body, {
-        status: error.status,
-        statusText: error.statusText,
-        headers: error.headers,
-      });
-    }
-    const { normalizeAIError } = await import("@/features/ai/AIErrors");
-    const normalized = normalizeAIError(error, "Erro inesperado ao processar requisição.");
-    return NextResponse.json(normalized.body, { status: normalized.status });
-  }
+function emailNotVerifiedResponse() {
+  return NextResponse.json(
+    {
+      code: "EMAIL_NOT_VERIFIED",
+      error: "Verifique seu e-mail antes de usar a IA compartilhada do StudyAI.",
+      suggestion: "Confirme seu e-mail em Conta ou configure sua própria chave de API (BYOK) em Configurações → IA.",
+    },
+    { status: 403, headers: { "cache-control": "no-store" } },
+  );
 }
 
 export async function createQuotaAwareAIRequest(
@@ -169,7 +154,7 @@ export async function createQuotaAwareAIRequest(
   userId: string,
   userApiKeys: Partial<Record<string, string>>,
   routing?: { task?: AITaskDescription; routingPolicy?: "smart"; promptPrepared?: boolean },
-) {
+): Promise<QuotaAwareAIRequest> {
   const safeHistory = Array.isArray(body.history) ? body.history : [];
   const safeMessage = typeof body.message === "string" ? body.message : "";
   const studyContext = isTutorStudyContext(body.context) ? body.context : undefined;
@@ -195,6 +180,7 @@ export async function createQuotaAwareAIRequest(
     mode: body.mode,
     provider: body.provider as AIProviderId | undefined,
     stream: body.stream,
+    // Origem e chaves são resolvidas exclusivamente pelo servidor; nunca aceitas do cliente.
     apiKeys: Object.keys(userApiKeys).length > 0 ? userApiKeys : undefined,
     requestId: body.requestId,
     requestOwner: userId,
@@ -205,6 +191,9 @@ export async function createQuotaAwareAIRequest(
   };
 }
 
+/**
+ * Fronteira canônica de segurança e governança para todas as rotas de geração de IA.
+ */
 export async function withAIQuota(
   request: Request,
   handler: (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>,
@@ -217,10 +206,20 @@ export async function withAIQuota(
     validate?: (body: unknown) => string | null;
   }
 ): Promise<NextResponse | Response> {
+  let activeReservationId: string | undefined;
+  let activeInputEstimate: number | undefined;
+  let settled = false;
+
+  const reconcileOnce = async (settlement: AIUsageSettlement) => {
+    if (settled || !activeReservationId || typeof QuotaService.reconcileReservation !== "function") return;
+    settled = true;
+    await QuotaService.reconcileReservation(activeReservationId, settlement, {
+      inputEstimate: activeInputEstimate,
+    });
+  };
+
   try {
-    // Lê um clone: o corpo original continua disponível para handlers que
-    // validam o payload novamente (ex.: diagrams, lab, audio-lesson). Um
-    // Request só pode ser consumido uma vez.
+    // Ordem obrigatória: CSRF -> autenticação -> sessão ativa -> validação de payload -> BYOK/e-mail/orçamento.
     requireCsrf(request);
     const user = requireUser(request);
     await requireActiveSession(request, user);
@@ -237,11 +236,20 @@ export async function withAIQuota(
         return NextResponse.json({ code: "INVALID_REQUEST", error: validationError }, { status: 400 });
       }
     }
-    const body = (prepared
-      ? { ...originalBody, ...prepared, chunks: undefined, context: undefined }
-      : originalBody) as Parameters<typeof createQuotaAwareAIRequest>[1];
+    // Nunca confiar em campos de origem de chave ou credenciais enviados pelo cliente.
+    const sanitizedBody = { ...(originalBody as Record<string, unknown>) };
+    delete sanitizedBody.apiKey;
+    delete sanitizedBody.apiKeys;
+    delete sanitizedBody.credentialOrigin;
+    delete sanitizedBody.strictByok;
+    delete sanitizedBody.emailVerified;
+    delete sanitizedBody.onSettlement;
 
-    // Load user's BYOK keys
+    const body = (prepared
+      ? { ...sanitizedBody, ...prepared, chunks: undefined, context: undefined }
+      : sanitizedBody) as Parameters<typeof createQuotaAwareAIRequest>[1];
+
+    // Carregar chaves BYOK do usuário exclusivamente no servidor
     const userApiKeys: Partial<Record<string, string>> = {};
     const entries = await Promise.allSettled(aiProviderIds.map((provider) => ApiKeyService.getDecrypted(user.sub, provider)));
     const bodyObj = body as { mode?: string; provider?: string; requestId?: string; fallbackConsent?: AIFallbackConsent };
@@ -273,25 +281,84 @@ export async function withAIQuota(
       aiRequest.provider,
       aiRequest.fallbackConsent?.provider,
     );
+    const effectiveProvider = providersToCheck[0] ?? "gemini";
+    const credentialOrigin = resolveCredentialOrigin(providersToCheck, userApiKeys);
+
+    // Verificar e-mail no servidor quando necessário (e passar sinalização ao ProviderManager para não oferecer fallback compartilhado)
+    const emailVerified = typeof QuotaService.isEmailVerified === "function"
+      ? await QuotaService.isEmailVerified(userId)
+      : true;
+
+    aiRequest.credentialOrigin = credentialOrigin;
+    aiRequest.strictByok = credentialOrigin === "byok";
+    aiRequest.emailVerified = emailVerified;
 
     if (!needsSharedQuota(providersToCheck, userApiKeys)) {
-      // User has BYOK for all providers that might be used - bypass quota
+      // Usuário usa BYOK ou Ollama local — não consome cota/orçamento compartilhado.
       return handler(request, aiRequest) as Promise<NextResponse | Response>;
     }
 
-    // Otherwise, check quota for shared key usage
-    const quotaCheck = await consumeSharedQuota(userId, bodyObj);
+    // Gate Lote 3B: IA compartilhada exige e-mail verificado no servidor antes de qualquer reserva ou chamada ao provedor.
+    if (!emailVerified) {
+      return emailNotVerifiedResponse();
+    }
+
+    const estimate = typeof estimateReservationTokens === "function"
+      ? estimateReservationTokens({
+          history: aiRequest.history,
+          message: aiRequest.message,
+          maxOutputTokens: aiRequest.routingDecision?.maxOutputTokens ?? aiRequest.task?.maxOutputTokens,
+        })
+      : { inputEstimate: 0, reserveTokens: 2_000 };
+    activeInputEstimate = estimate.inputEstimate;
+
+    const effectiveRequestId = bodyObj.requestId?.trim() || randomUUID();
+    const quotaCheck = await consumeSharedQuota(
+      userId,
+      { ...bodyObj, requestId: effectiveRequestId },
+      {
+        provider: effectiveProvider,
+        model: aiRequest.model ?? aiRequest.routingDecision?.model,
+        reserveTokens: estimate.reserveTokens,
+      },
+    );
 
     if (!quotaCheck.allowed) {
-      return quotaExceededResponse(quotaCheck);
+      return quotaBlockedResponse(quotaCheck);
     }
+
+    activeReservationId = quotaCheck.reservationId;
+    aiRequest.onSettlement = reconcileOnce;
 
     const response = await (handler as unknown as (request: Request, aiRequest: QuotaAwareAIRequest) => Promise<NextResponse | Response>)(
       request,
-      aiRequest
+      aiRequest,
     );
+
+    // Segurança para handlers não-streaming que retornaram erro HTTP antes de chamar AIService (ex.: 400/502)
+    const isStreamResponse = response.headers.get("content-type")?.includes("application/x-ndjson");
+    if (!isStreamResponse && !settled && activeReservationId) {
+      if (!response.ok) {
+        await reconcileOnce({
+          outcome: "failed",
+          provider: effectiveProvider,
+          model: aiRequest.model,
+          emittedOutput: false,
+          providerContacted: response.status >= 500,
+        });
+      }
+    }
+
     return attachQuotaHeaders(response, quotaCheck);
   } catch (error) {
+    if (activeReservationId && !settled) {
+      await reconcileOnce({
+        outcome: "failed",
+        provider: "gemini",
+        emittedOutput: false,
+        providerContacted: false,
+      }).catch(() => undefined);
+    }
     if (error instanceof Response) return error as NextResponse | Response;
     const { normalizeAIError } = await import("@/features/ai/AIErrors");
     const normalized = normalizeAIError(error, "Erro inesperado ao processar requisição.");

@@ -11,12 +11,13 @@ import {
   type AIProviderId,
   type AIProviderStatistics,
   type AIResponse,
+  type AIStreamEvent,
+  type AIUsageSettlement,
 } from "./AIProvider";
 import { HealthService } from "./HealthService";
 import { LatencyService } from "./LatencyService";
 import { ProviderRegistry } from "./ProviderRegistry";
 import { AIResponseCache } from "./AIResponseCache";
-import type { AIStreamEvent } from "./AIProvider";
 import { TokenCounter } from "./TokenCounter";
 
 const MAX_LOGS = 200;
@@ -48,6 +49,11 @@ async function availableFallbacks(request: AIManagerRequest, preferred: AIProvid
   const alternatives = await Promise.all(aiProviderIds
     .filter((provider) => provider !== preferred)
     .map(async (provider): Promise<AIFallbackAlternative | null> => {
+      const costInfo = fallbackCost(provider, request);
+      // Nunca oferecer fallback de chave compartilhada se o e-mail não foi verificado.
+      if (costInfo.cost === "shared_quota" && request.emailVerified === false) {
+        return null;
+      }
       const status = await HealthService.check(provider, {
         force: true,
         signal: request.signal,
@@ -58,7 +64,7 @@ async function availableFallbacks(request: AIManagerRequest, preferred: AIProvid
       const model = requestedModel && status.models.some((item: AIModel) => item.name === requestedModel)
         ? requestedModel
         : status.models[0].name;
-      return { provider, model, ...fallbackCost(provider, request) };
+      return { provider, model, ...costInfo };
     }));
   return alternatives.filter((alternative): alternative is AIFallbackAlternative => alternative !== null);
 }
@@ -90,6 +96,16 @@ async function authorizedProvider(request: AIManagerRequest, preferred: AIProvid
     throw new AIError("A alternativa autorizada não está mais disponível.", "PROVIDER_UNAVAILABLE", 503, consent.provider);
   }
   return { provider: consent.provider, model: consent.model, fallback: true };
+}
+
+async function settle(request: AIManagerRequest, settlement: AIUsageSettlement) {
+  if (!request.onSettlement) return;
+  try {
+    await request.onSettlement(settlement);
+  } catch {
+    // Reconciliação de orçamento não deve derrubar resposta já gerada;
+    // reservas não reconciliadas expiram e são tratadas pelo mecanismo de limpeza.
+  }
 }
 
 const providerRuntime = globalThis as typeof globalThis & {
@@ -128,13 +144,30 @@ export const ProviderManager = {
     const attemptedProviders: AIProviderId[] = authorized.fallback ? [preferred, authorized.provider] : [preferred];
 
     const execute = async (): Promise<AIResponse> => {
-      if (request.signal?.aborted) throw new AIError("Operação cancelada.", "TIMEOUT", 499, authorized.provider);
       const providerId = authorized.provider;
-      const provider = ProviderRegistry.get(providerId);
       const selectedModel = authorized.model;
+      if (request.signal?.aborted) {
+        await settle(request, {
+          outcome: "cancelled",
+          provider: providerId,
+          model: selectedModel,
+          emittedOutput: false,
+          providerContacted: false,
+        });
+        throw new AIError("Operação cancelada.", "TIMEOUT", 499, providerId);
+      }
+      const provider = ProviderRegistry.get(providerId);
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
       const cached = AIResponseCache.get(cacheKey);
       if (cached) {
+        await settle(request, {
+          outcome: "cached",
+          provider: providerId,
+          model: cached.model,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, source: "provider" },
+          emittedOutput: false,
+          providerContacted: false,
+        });
         return {
           ...cached,
           execution: {
@@ -146,14 +179,17 @@ export const ProviderManager = {
           },
         };
       }
+      const strictByok = request.strictByok ?? (request.credentialOrigin === "byok" || Boolean(request.apiKeys?.[providerId]));
       const measured = await LatencyService.measure(() => provider.generate({
         ...request,
         model: selectedModel,
         apiKey: request.apiKeys?.[providerId] ?? request.apiKey,
+        strictByok,
       }));
 
       if (!("error" in measured)) {
-        const totalTokens = measured.value.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(measured.value.text);
+        const providerUsage = measured.value.usage;
+        const totalTokens = providerUsage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(measured.value.text);
         addLog({
           provider: providerId,
           model: measured.value.model,
@@ -161,6 +197,15 @@ export const ProviderManager = {
           success: true,
           fallback: authorized.fallback,
           tokens: totalTokens,
+        });
+        await settle(request, {
+          outcome: "completed",
+          provider: providerId,
+          model: measured.value.model,
+          usage: providerUsage,
+          emittedOutput: true,
+          emittedText: measured.value.text,
+          providerContacted: true,
         });
         const response: AIResponse = {
           ...measured.value,
@@ -182,6 +227,15 @@ export const ProviderManager = {
         success: false,
         fallback: authorized.fallback,
         error: safeAIErrorLogMessage(measured.error),
+      });
+      const abortedOrTimeout = Boolean(request.signal?.aborted) || (measured.error instanceof AIError && measured.error.code === "TIMEOUT");
+      const notContacted = measured.error instanceof AIError && measured.error.code === "MISSING_API_KEY";
+      await settle(request, {
+        outcome: abortedOrTimeout ? "cancelled" : "failed",
+        provider: providerId,
+        model: selectedModel,
+        emittedOutput: false,
+        providerContacted: !notContacted,
       });
       if (authorized.fallback) throw measured.error;
       return await requireFallbackConsent(request, preferred, measured.error);
@@ -217,6 +271,14 @@ export const ProviderManager = {
       const cacheKey = AIResponseCache.keyFor(request, providerId, selectedModel);
       const cached = AIResponseCache.get(cacheKey);
       if (cached) {
+        await settle(request, {
+          outcome: "cached",
+          provider: providerId,
+          model: cached.model,
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, source: "provider" },
+          emittedOutput: false,
+          providerContacted: false,
+        });
         for (const line of cached.text.match(/.{1,80}(?:\s|$)/g) ?? [cached.text]) {
           yield { type: "delta", text: line };
         }
@@ -231,12 +293,16 @@ export const ProviderManager = {
       }
 
       const startedAt = performance.now();
+      const strictByok = request.strictByok ?? (request.credentialOrigin === "byok" || Boolean(request.apiKeys?.[providerId]));
       let emitted = false;
+      let emittedText = "";
+      let settled = false;
       try {
         if (provider.stream) {
-          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey })) {
+          for await (const event of provider.stream({ ...request, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey, strictByok })) {
             if (event.type === "delta") {
               emitted = true;
+              emittedText += event.text;
               yield event;
               continue;
             }
@@ -248,13 +314,24 @@ export const ProviderManager = {
             AIResponseCache.set(cacheKey, response);
             const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
             addLog({ provider: providerId, model: response.model, latencyMs, success: true, fallback, tokens });
+            settled = true;
+            await settle(request, {
+              outcome: "completed",
+              provider: providerId,
+              model: response.model,
+              usage: response.usage,
+              emittedOutput: true,
+              emittedText: response.text,
+              providerContacted: true,
+            });
             yield { type: "done", response };
             return;
           }
         } else {
-          const response = await provider.generate({ ...request, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey });
+          const response = await provider.generate({ ...request, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey, strictByok });
           for (const line of response.text.match(/.{1,80}(?:\s|$)/g) ?? [response.text]) {
             emitted = true;
+            emittedText += line;
             yield { type: "delta", text: line };
           }
           const latencyMs = Math.round(performance.now() - startedAt);
@@ -262,12 +339,33 @@ export const ProviderManager = {
           AIResponseCache.set(cacheKey, completed);
           const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
           addLog({ provider: providerId, model: response.model, latencyMs, success: true, fallback, tokens });
+          settled = true;
+          await settle(request, {
+            outcome: "completed",
+            provider: providerId,
+            model: response.model,
+            usage: response.usage,
+            emittedOutput: true,
+            emittedText: response.text,
+            providerContacted: true,
+          });
           yield { type: "done", response: completed };
           return;
         }
       } catch (error) {
         const latencyMs = Math.round(performance.now() - startedAt);
         addLog({ provider: providerId, model: selectedModel, latencyMs, success: false, fallback, error: safeAIErrorLogMessage(error) });
+        const abortedOrTimeout = Boolean(request.signal?.aborted) || (error instanceof AIError && error.code === "TIMEOUT");
+        const notContacted = error instanceof AIError && error.code === "MISSING_API_KEY";
+        settled = true;
+        await settle(request, {
+          outcome: abortedOrTimeout ? "cancelled" : "failed",
+          provider: providerId,
+          model: selectedModel,
+          emittedOutput: emitted,
+          emittedText,
+          providerContacted: !notContacted,
+        });
         if (emitted) {
           throw new AIError(
             "A resposta foi interrompida após o início. O conteúdo parcial foi preservado e não será enviado a outro provedor.",
@@ -278,6 +376,18 @@ export const ProviderManager = {
         }
         if (request.signal?.aborted) throw error;
         await requireFallbackConsent(request, preferred, error);
+      } finally {
+        // Caso o consumidor cancele/encerre o iterador antes do evento "done"
+        if (!settled) {
+          await settle(request, {
+            outcome: "cancelled",
+            provider: providerId,
+            model: selectedModel,
+            emittedOutput: emitted,
+            emittedText,
+            providerContacted: true,
+          });
+        }
       }
     }
   },
