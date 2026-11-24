@@ -25,8 +25,16 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   device_name TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  revoked_at TIMESTAMPTZ
+  revoked_at TIMESTAMPTZ,
+  family_id TEXT,
+  replaced_by TEXT,
+  rotated_at TIMESTAMPTZ
 );
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS family_id TEXT;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS replaced_by TEXT;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS rotated_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_family ON refresh_tokens(user_id, family_id) WHERE family_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS account_tokens (
   token_hash TEXT PRIMARY KEY,
@@ -35,6 +43,7 @@ CREATE TABLE IF NOT EXISTS account_tokens (
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ
 );
+CREATE INDEX IF NOT EXISTS account_tokens_user_id ON account_tokens(user_id);
 
 CREATE TABLE IF NOT EXISTS sync_records (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -69,6 +78,7 @@ CREATE TABLE IF NOT EXISTS backups (
   size_bytes BIGINT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS backups_user_created ON backups(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS shares (
   id TEXT PRIMARY KEY,
@@ -82,6 +92,7 @@ CREATE TABLE IF NOT EXISTS shares (
 );
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS access_level TEXT NOT NULL DEFAULT 'read';
+CREATE INDEX IF NOT EXISTS shares_user_created ON shares(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS files (
   id TEXT NOT NULL,

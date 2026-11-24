@@ -1,8 +1,50 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { hasPostgres, query, transaction } from "@/server/database/Postgres";
 import { ObjectStorage } from "@/server/storage/ObjectStorage";
-import type { Backup, CloudRecord, CloudUser, DeviceSession, Share, SyncEntity, UserProfile } from "./types";
+import type {
+  Backup,
+  CloudRecord,
+  CloudUser,
+  DeviceSession,
+  Share,
+  SyncConflict,
+  SyncEntity,
+  SyncMutation,
+  UserProfile,
+} from "./types";
+
+const ALLOWED_SYNC_ENTITIES: readonly SyncEntity[] = [
+  "documents", "contents", "chunks", "embeddings", "studies", "notes",
+  "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge",
+  "academy", "lab", "metadata", "studio-documents", "workspace", "mentor", "learning",
+];
+const ALLOWED_SYNC_ENTITY_SET = new Set<string>(ALLOWED_SYNC_ENTITIES);
+
+type SyncConflictResolverFn = (
+  local: SyncMutation,
+  remote?: CloudRecord,
+) => { record?: CloudRecord; conflict?: SyncConflict };
+
+function defaultResolveConflict(local: SyncMutation, remote?: CloudRecord): { record?: CloudRecord; conflict?: SyncConflict } {
+  if (!remote) return { record: { ...local, userId: "", version: 1 } };
+  if (remote.hash === local.hash) return { record: remote };
+  if (local.baseVersion === remote.version) return { record: { ...local, userId: remote.userId, version: remote.version + 1 } };
+  if (local.operation === "delete" && new Date(local.updatedAt) > new Date(remote.updatedAt)) {
+    return { record: { ...local, userId: remote.userId, version: remote.version + 1 } };
+  }
+  return {
+    conflict: {
+      id: `${local.entity}:${local.recordId}:${remote.version}`,
+      entity: local.entity,
+      recordId: local.recordId,
+      local,
+      remote,
+      reason: "O mesmo registro foi alterado em outro dispositivo.",
+    },
+  };
+}
 
 type MemoryState = {
   users: Map<string, CloudUser>;
@@ -17,6 +59,39 @@ type MemoryState = {
   apiKeys: Map<string, { userId: string; provider: string; encryptedKey: string; keyHint: string; createdAt: string; updatedAt: string }>;
 };
 
+export const REFRESH_REUSE_GRACE_MS = 10_000;
+export const MAX_RESTORE_RECORDS = 10_000;
+export const MAX_RESTORE_BYTES = 50 * 1024 * 1024;
+
+export type RotateSessionResult =
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      sessionId: string;
+      familyId: string;
+      deviceId: string;
+      deviceName: string;
+    }
+  | {
+      ok: false;
+      reason: "expired" | "concurrent_rotated" | "reused_revoked";
+      familyRevoked?: boolean;
+    };
+
+const ENTITY_TABLE_MAP: Partial<Record<SyncEntity, string>> = {
+  documents: "materials",
+  studies: "studies",
+  workspace: "workspace",
+  mentor: "mentor",
+  learning: "learning",
+  knowledge: "knowledge",
+  flashcards: "flashcards",
+  quizzes: "quizzes",
+  summaries: "summaries",
+  notes: "notes",
+};
+
 const serverGlobal = globalThis as typeof globalThis & { __studyAiCloudMemory?: MemoryState };
 const memory: MemoryState = serverGlobal.__studyAiCloudMemory ??= { users: new Map(), profiles: new Map(), sessions: new Map(), accountTokens: new Map(), records: new Map(), logs: [], backups: [], shares: [], files: new Map(), apiKeys: new Map() };
 const recordKey = (userId: string, entity: string, recordId: string) => `${userId}:${entity}:${recordId}`;
@@ -24,6 +99,87 @@ const now = () => new Date().toISOString();
 
 function rowUser(row: Record<string, unknown>): CloudUser {
   return { id: String(row.id), email: String(row.email), passwordHash: String(row.password_hash), emailVerifiedAt: row.email_verified_at ? new Date(String(row.email_verified_at)).toISOString() : undefined, createdAt: new Date(String(row.created_at)).toISOString(), updatedAt: new Date(String(row.updated_at)).toISOString() };
+}
+
+function rowRecord(userId: string, row: Record<string, unknown>): CloudRecord {
+  return {
+    userId,
+    entity: String(row.entity) as SyncEntity,
+    recordId: String(row.record_id),
+    operation: row.deleted_at ? "delete" : "upsert",
+    data: row.payload,
+    baseVersion: Number(row.version) - 1,
+    version: Number(row.version),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+    hash: String(row.hash),
+    deviceId: String(row.device_id),
+  };
+}
+
+async function mirrorAndLogWithClient(client: PoolClient, record: CloudRecord): Promise<CloudRecord> {
+  const serializedPayload = record.data === undefined ? null : JSON.stringify(record.data);
+  const deletedAt = record.operation === "delete" ? record.updatedAt : null;
+  const table = ENTITY_TABLE_MAP[record.entity];
+  if (table) {
+    await client.query(
+      `INSERT INTO ${table} (user_id,id,payload,version,hash,updated_at,deleted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (user_id,id) DO UPDATE
+       SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at`,
+      [record.userId, record.recordId, serializedPayload, record.version, record.hash, record.updatedAt, deletedAt],
+    );
+  }
+  const logged = await client.query<{ sequence: string }>(
+    "INSERT INTO sync_logs (user_id,entity,record_id,operation,version,hash,device_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING sequence",
+    [record.userId, record.entity, record.recordId, record.operation, record.version, record.hash, record.deviceId],
+  );
+  return { ...record, sequence: Number(logged.rows[0].sequence) };
+}
+
+async function writeRecordWithClient(client: PoolClient, record: CloudRecord): Promise<CloudRecord> {
+  const serializedPayload = record.data === undefined ? null : JSON.stringify(record.data);
+  const deletedAt = record.operation === "delete" ? record.updatedAt : null;
+  await client.query(
+    `INSERT INTO sync_records (user_id,entity,record_id,payload,version,hash,updated_at,deleted_at,device_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (user_id,entity,record_id) DO UPDATE
+     SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,device_id=EXCLUDED.device_id`,
+    [record.userId, record.entity, record.recordId, serializedPayload, record.version, record.hash, record.updatedAt, deletedAt, record.deviceId],
+  );
+  return mirrorAndLogWithClient(client, record);
+}
+
+function validateBackupPayload(payload: unknown): CloudRecord[] {
+  if (!Array.isArray(payload)) {
+    throw new Error("Backup inválido ou corrompido.");
+  }
+  if (payload.length > MAX_RESTORE_RECORDS) {
+    throw new Error("Backup excede o limite máximo de registros para restauração.");
+  }
+  const serializedBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  if (serializedBytes > MAX_RESTORE_BYTES) {
+    throw new Error("Backup excede o limite máximo de tamanho para restauração.");
+  }
+  const validated: CloudRecord[] = [];
+  for (const item of payload) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("Backup contém registro com formato inválido.");
+    }
+    const candidate = item as Partial<CloudRecord>;
+    if (
+      !ALLOWED_SYNC_ENTITY_SET.has(String(candidate.entity ?? ""))
+      || typeof candidate.recordId !== "string"
+      || candidate.recordId.length === 0
+      || candidate.recordId.length > 300
+      || (candidate.operation !== "upsert" && candidate.operation !== "delete")
+      || typeof candidate.hash !== "string"
+      || candidate.hash.length > 128
+    ) {
+      throw new Error("Backup contém registro incompatível com o esquema de sincronização.");
+    }
+    validated.push(candidate as CloudRecord);
+  }
+  return validated;
 }
 
 export const CloudDatabase = {
@@ -81,34 +237,433 @@ export const CloudDatabase = {
     await query("UPDATE user_profiles SET name=$2,photo_url=$3,language=$4,theme=$5,preferences=$6,updated_at=NOW() WHERE user_id=$1", [userId, next.name, next.photoUrl ?? null, next.language, next.theme, JSON.stringify(next.preferences)]); return next;
   },
 
-  async saveSession(session: DeviceSession) { if (!hasPostgres()) { memory.sessions.set(session.id, session); return; } await query("INSERT INTO refresh_tokens (id,user_id,token_hash,device_id,device_name,expires_at,last_used_at) VALUES ($1,$2,$3,$4,$5,$6,$7)", [session.id, session.userId, session.tokenHash, session.deviceId, session.deviceName, session.expiresAt, session.lastUsedAt]); },
-  async sessionByHash(hash: string) { if (!hasPostgres()) return [...memory.sessions.values()].find((item) => item.tokenHash === hash && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE token_hash=$1 AND revoked_at IS NULL", [hash]); const row = result.rows[0]; return row ? { id: String(row.id), userId: String(row.user_id), tokenHash: String(row.token_hash), deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : undefined } satisfies DeviceSession : undefined; },
+  async saveSession(session: DeviceSession) {
+    const familyId = session.familyId ?? session.id;
+    if (!hasPostgres()) {
+      memory.sessions.set(session.id, { ...session, familyId });
+      return;
+    }
+    await query(
+      "INSERT INTO refresh_tokens (id,user_id,token_hash,device_id,device_name,expires_at,last_used_at,family_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+      [session.id, session.userId, session.tokenHash, session.deviceId, session.deviceName, session.expiresAt, session.lastUsedAt, familyId],
+    );
+  },
+
+  /**
+   * Rotaciona um refresh token de forma atômica no PostgreSQL:
+   * - Apenas uma requisição simultânea vence o `UPDATE ... WHERE revoked_at IS NULL AND expires_at > NOW()`.
+   * - Reenvio dentro da janela de tolerância (`reuseGraceMs`, padrão 10s) de um token já rotacionado
+   *   (ex.: múltiplas abas concorrentes ou resposta de rede perdida) é rejeitado sem derrubar a família.
+   * - Reutilização de token explicitamente revogado (`replaced_by IS NULL`) ou de token rotacionado
+   *   após a janela de tolerância revoga apenas a família daquela sessão, preservando outros dispositivos.
+   */
+  async rotateSession(input: {
+    currentTokenHash: string;
+    nextSessionId: string;
+    nextTokenHash: string;
+    nextExpiresAt: string;
+    reuseGraceMs?: number;
+  }): Promise<RotateSessionResult> {
+    const graceMs = Math.max(0, Math.min(60_000, Math.trunc(input.reuseGraceMs ?? REFRESH_REUSE_GRACE_MS)));
+    if (!hasPostgres()) {
+      const existing = [...memory.sessions.values()].find((item) => item.tokenHash === input.currentTokenHash);
+      if (!existing) return { ok: false, reason: "expired" };
+      const nowMs = Date.now();
+      const familyId = existing.familyId ?? existing.id;
+      if (!existing.revokedAt) {
+        if (Date.parse(existing.expiresAt) <= nowMs) return { ok: false, reason: "expired" };
+        const user = memory.users.get(existing.userId);
+        if (!user) return { ok: false, reason: "expired" };
+        const timestamp = new Date(nowMs).toISOString();
+        memory.sessions.set(existing.id, {
+          ...existing,
+          familyId,
+          revokedAt: timestamp,
+          rotatedAt: timestamp,
+          lastUsedAt: timestamp,
+          replacedBy: input.nextSessionId,
+        });
+        memory.sessions.set(input.nextSessionId, {
+          id: input.nextSessionId,
+          userId: existing.userId,
+          tokenHash: input.nextTokenHash,
+          deviceId: existing.deviceId,
+          deviceName: existing.deviceName,
+          expiresAt: input.nextExpiresAt,
+          lastUsedAt: timestamp,
+          familyId,
+        });
+        return {
+          ok: true,
+          userId: user.id,
+          email: user.email,
+          sessionId: input.nextSessionId,
+          familyId,
+          deviceId: existing.deviceId,
+          deviceName: existing.deviceName,
+        };
+      }
+      if (existing.replacedBy && existing.rotatedAt && (nowMs - Date.parse(existing.rotatedAt)) <= graceMs) {
+        return { ok: false, reason: "concurrent_rotated", familyRevoked: false };
+      }
+      const revokedTimestamp = new Date(nowMs).toISOString();
+      for (const item of memory.sessions.values()) {
+        if (item.userId === existing.userId && (item.familyId ?? item.id) === familyId && !item.revokedAt) {
+          memory.sessions.set(item.id, { ...item, revokedAt: revokedTimestamp });
+        }
+      }
+      return { ok: false, reason: "reused_revoked", familyRevoked: true };
+    }
+
+    return transaction(async (client) => {
+      const consumed = await client.query<{
+        id: string;
+        user_id: string;
+        device_id: string;
+        device_name: string;
+        family_id: string;
+      }>(
+        `UPDATE refresh_tokens
+         SET revoked_at = NOW(),
+             rotated_at = NOW(),
+             last_used_at = NOW(),
+             replaced_by = $2
+         WHERE token_hash = $1
+           AND revoked_at IS NULL
+           AND expires_at > NOW()
+         RETURNING id, user_id, device_id, device_name, COALESCE(family_id, id) AS family_id`,
+        [input.currentTokenHash, input.nextSessionId],
+      );
+
+      if (consumed.rows.length === 1) {
+        const row = consumed.rows[0];
+        const userResult = await client.query<{ id: string; email: string }>(
+          "SELECT id, email FROM users WHERE id = $1",
+          [row.user_id],
+        );
+        const user = userResult.rows[0];
+        if (!user) {
+          throw new Error("Conta não encontrada.");
+        }
+        await client.query(
+          `INSERT INTO refresh_tokens (id, user_id, token_hash, device_id, device_name, expires_at, last_used_at, family_id)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)`,
+          [input.nextSessionId, row.user_id, input.nextTokenHash, row.device_id, row.device_name, input.nextExpiresAt, row.family_id],
+        );
+        return {
+          ok: true,
+          userId: user.id,
+          email: user.email,
+          sessionId: input.nextSessionId,
+          familyId: row.family_id,
+          deviceId: row.device_id,
+          deviceName: row.device_name,
+        };
+      }
+
+      const existingResult = await client.query<{
+        id: string;
+        user_id: string;
+        revoked_at: Date | string | null;
+        rotated_at: Date | string | null;
+        replaced_by: string | null;
+        family_id: string;
+        within_grace: boolean;
+      }>(
+        `SELECT id,
+                user_id,
+                revoked_at,
+                rotated_at,
+                replaced_by,
+                COALESCE(family_id, id) AS family_id,
+                (
+                  replaced_by IS NOT NULL
+                  AND rotated_at IS NOT NULL
+                  AND rotated_at >= NOW() - ($2::bigint * INTERVAL '1 millisecond')
+                ) AS within_grace
+         FROM refresh_tokens
+         WHERE token_hash = $1`,
+        [input.currentTokenHash, graceMs],
+      );
+
+      const existing = existingResult.rows[0];
+      if (!existing || !existing.revoked_at) {
+        return { ok: false, reason: "expired" };
+      }
+      if (existing.within_grace) {
+        return { ok: false, reason: "concurrent_rotated", familyRevoked: false };
+      }
+
+      await client.query(
+        `UPDATE refresh_tokens
+         SET revoked_at = COALESCE(revoked_at, NOW())
+         WHERE user_id = $1
+           AND (family_id = $2 OR id = $2)
+           AND revoked_at IS NULL`,
+        [existing.user_id, existing.family_id],
+      );
+      console.warn("[Auth] Refresh token reuse detected; session family revoked.", {
+        timestamp: new Date().toISOString(),
+        explicitRevokeReplay: existing.replaced_by === null,
+      });
+      return { ok: false, reason: "reused_revoked", familyRevoked: true };
+    });
+  },
+
+  async sessionByHash(hash: string) { if (!hasPostgres()) return [...memory.sessions.values()].find((item) => item.tokenHash === hash && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE token_hash=$1 AND revoked_at IS NULL", [hash]); const row = result.rows[0]; return row ? { id: String(row.id), userId: String(row.user_id), tokenHash: String(row.token_hash), deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : undefined, familyId: row.family_id ? String(row.family_id) : String(row.id) } satisfies DeviceSession : undefined; },
   async revokeSession(id: string) { if (!hasPostgres()) { const item = memory.sessions.get(id); if (item) memory.sessions.set(id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE id=$1", [id]); },
   async revokeUserSession(userId: string, id: string) { if (!hasPostgres()) { const item = memory.sessions.get(id); if (item?.userId === userId) memory.sessions.set(id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE id=$1 AND user_id=$2", [id, userId]); },
   async revokeUserSessions(userId: string) { if (!hasPostgres()) { for (const item of memory.sessions.values()) if (item.userId === userId) memory.sessions.set(item.id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE user_id=$1", [userId]); },
-  async devices(userId: string) { if (!hasPostgres()) return [...memory.sessions.values()].filter((item) => item.userId === userId && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL ORDER BY last_used_at DESC", [userId]); return result.rows.map((row) => ({ id: String(row.id), userId, tokenHash: "", deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString() })); },
+  async devices(userId: string) { if (!hasPostgres()) return [...memory.sessions.values()].filter((item) => item.userId === userId && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL ORDER BY last_used_at DESC", [userId]); return result.rows.map((row) => ({ id: String(row.id), userId, tokenHash: "", deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), familyId: row.family_id ? String(row.family_id) : String(row.id) })); },
 
   async saveAccountToken(hash: string, userId: string, type: string, expiresAt: string) { if (!hasPostgres()) { memory.accountTokens.set(hash, { userId, type, expiresAt }); return; } await query("INSERT INTO account_tokens (token_hash,user_id,type,expires_at) VALUES ($1,$2,$3,$4) ON CONFLICT (token_hash) DO UPDATE SET expires_at=EXCLUDED.expires_at", [hash, userId, type, expiresAt]); },
   async consumeAccountToken(hash: string, type: string) { if (!hasPostgres()) { const token = memory.accountTokens.get(hash); if (!token || token.type !== type || token.usedAt || new Date(token.expiresAt) < new Date()) return; token.usedAt = now(); return token.userId; } const result = await query<{ user_id: string }>("UPDATE account_tokens SET used_at=NOW() WHERE token_hash=$1 AND type=$2 AND used_at IS NULL AND expires_at>NOW() RETURNING user_id", [hash, type]); return result.rows[0]?.user_id; },
 
-  async record(userId: string, entity: SyncEntity, recordId: string) { if (!hasPostgres()) return memory.records.get(recordKey(userId, entity, recordId)); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3", [userId, entity, recordId]); const row = result.rows[0]; return row ? { userId, entity, recordId, operation: row.deleted_at ? "delete" : "upsert", data: row.payload, baseVersion: Number(row.version) - 1, version: Number(row.version), updatedAt: new Date(String(row.updated_at)).toISOString(), hash: String(row.hash), deviceId: String(row.device_id) } satisfies CloudRecord : undefined; },
+  async record(userId: string, entity: SyncEntity, recordId: string) {
+    if (!hasPostgres()) return memory.records.get(recordKey(userId, entity, recordId));
+    const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3", [userId, entity, recordId]);
+    const row = result.rows[0];
+    return row ? rowRecord(userId, row) : undefined;
+  },
+
   async writeRecord(record: CloudRecord) {
-    if (!hasPostgres()) { memory.records.set(recordKey(record.userId, record.entity, record.recordId), record); const logged = { ...record, sequence: memory.logs.length + 1 }; memory.logs.push(logged); return logged; }
-    const tableMap: Partial<Record<SyncEntity, string>> = { documents: "materials", studies: "studies", workspace: "workspace", mentor: "mentor", learning: "learning", knowledge: "knowledge", flashcards: "flashcards", quizzes: "quizzes", summaries: "summaries", notes: "notes" };
+    if (!hasPostgres()) {
+      memory.records.set(recordKey(record.userId, record.entity, record.recordId), record);
+      const logged = { ...record, sequence: memory.logs.length + 1 };
+      memory.logs.push(logged);
+      return logged;
+    }
+    return transaction((client) => writeRecordWithClient(client, record));
+  },
+
+  /**
+   * Aplica uma mutação de Cloud Sync com controle otimista de concorrência no SQL:
+   * - Bloqueia a linha existente (`FOR UPDATE`) e atualiza apenas com `WHERE version = $expected`.
+   * - Em criação inicial concorrente (sem linha prévia), usa `INSERT ... ON CONFLICT DO NOTHING`
+   *   seguido de releitura + resolução de conflito para impedir sobrescrita silenciosa.
+   */
+  async applySyncMutation(
+    userId: string,
+    mutation: SyncMutation,
+    resolveConflict: SyncConflictResolverFn = defaultResolveConflict,
+  ): Promise<{ accepted?: CloudRecord; conflict?: SyncConflict }> {
+    if (!hasPostgres()) {
+      const remote = memory.records.get(recordKey(userId, mutation.entity, mutation.recordId));
+      const resolution = resolveConflict(mutation, remote);
+      if (resolution.conflict) return { conflict: resolution.conflict };
+      if (!resolution.record || resolution.record === remote) return { accepted: remote };
+      const written = await this.writeRecord({ ...resolution.record, userId });
+      return { accepted: written };
+    }
+
     return transaction(async (client) => {
-      await client.query("INSERT INTO sync_records (user_id,entity,record_id,payload,version,hash,updated_at,deleted_at,device_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (user_id,entity,record_id) DO UPDATE SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,device_id=EXCLUDED.device_id", [record.userId, record.entity, record.recordId, record.data === undefined ? null : JSON.stringify(record.data), record.version, record.hash, record.updatedAt, record.operation === "delete" ? record.updatedAt : null, record.deviceId]);
-      const table = tableMap[record.entity]; if (table) await client.query(`INSERT INTO ${table} (user_id,id,payload,version,hash,updated_at,deleted_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (user_id,id) DO UPDATE SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at`, [record.userId, record.recordId, record.data === undefined ? null : JSON.stringify(record.data), record.version, record.hash, record.updatedAt, record.operation === "delete" ? record.updatedAt : null]);
-      const logged = await client.query<{ sequence: string }>("INSERT INTO sync_logs (user_id,entity,record_id,operation,version,hash,device_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING sequence", [record.userId, record.entity, record.recordId, record.operation, record.version, record.hash, record.deviceId]);
-      return { ...record, sequence: Number(logged.rows[0].sequence) };
+      const locked = await client.query<Record<string, unknown>>(
+        "SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3 FOR UPDATE",
+        [userId, mutation.entity, mutation.recordId],
+      );
+      let remote = locked.rows[0] ? rowRecord(userId, locked.rows[0]) : undefined;
+      const resolution = resolveConflict(mutation, remote);
+      if (resolution.conflict) return { conflict: resolution.conflict };
+      if (!resolution.record || resolution.record === remote) return { accepted: remote };
+
+      const target: CloudRecord = { ...resolution.record, userId };
+      const serializedPayload = target.data === undefined ? null : JSON.stringify(target.data);
+      const deletedAt = target.operation === "delete" ? target.updatedAt : null;
+
+      if (!remote) {
+        const inserted = await client.query<Record<string, unknown>>(
+          `INSERT INTO sync_records (user_id,entity,record_id,payload,version,hash,updated_at,deleted_at,device_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (user_id,entity,record_id) DO NOTHING
+           RETURNING *`,
+          [userId, target.entity, target.recordId, serializedPayload, target.version, target.hash, target.updatedAt, deletedAt, target.deviceId],
+        );
+        if (inserted.rows.length === 1) {
+          const logged = await mirrorAndLogWithClient(client, target);
+          return { accepted: logged };
+        }
+        // Outro processo inseriu o mesmo registro entre o SELECT e o INSERT.
+        const fresh = await client.query<Record<string, unknown>>(
+          "SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3 FOR UPDATE",
+          [userId, mutation.entity, mutation.recordId],
+        );
+        remote = fresh.rows[0] ? rowRecord(userId, fresh.rows[0]) : undefined;
+        const retryResolution = resolveConflict(mutation, remote);
+        if (retryResolution.conflict) return { conflict: retryResolution.conflict };
+        if (!retryResolution.record || retryResolution.record === remote) return { accepted: remote };
+        if (!remote) {
+          return {
+            conflict: {
+              id: `${mutation.entity}:${mutation.recordId}:0`,
+              entity: mutation.entity,
+              recordId: mutation.recordId,
+              local: mutation,
+              remote: { ...target, version: 1 },
+              reason: "O mesmo registro foi alterado em outro dispositivo.",
+            },
+          };
+        }
+        const retryTarget: CloudRecord = { ...retryResolution.record, userId };
+        const retryUpdated = await client.query<Record<string, unknown>>(
+          `UPDATE sync_records
+           SET payload=$4,version=$5,hash=$6,updated_at=$7,deleted_at=$8,device_id=$9
+           WHERE user_id=$1 AND entity=$2 AND record_id=$3 AND version=$10
+           RETURNING *`,
+          [
+            userId,
+            retryTarget.entity,
+            retryTarget.recordId,
+            retryTarget.data === undefined ? null : JSON.stringify(retryTarget.data),
+            retryTarget.version,
+            retryTarget.hash,
+            retryTarget.updatedAt,
+            retryTarget.operation === "delete" ? retryTarget.updatedAt : null,
+            retryTarget.deviceId,
+            remote.version,
+          ],
+        );
+        if (retryUpdated.rows.length !== 1) {
+          return {
+            conflict: {
+              id: `${mutation.entity}:${mutation.recordId}:${remote.version}`,
+              entity: mutation.entity,
+              recordId: mutation.recordId,
+              local: mutation,
+              remote,
+              reason: "O mesmo registro foi alterado em outro dispositivo.",
+            },
+          };
+        }
+        const logged = await mirrorAndLogWithClient(client, retryTarget);
+        return { accepted: logged };
+      }
+
+      const updated = await client.query<Record<string, unknown>>(
+        `UPDATE sync_records
+         SET payload=$4,version=$5,hash=$6,updated_at=$7,deleted_at=$8,device_id=$9
+         WHERE user_id=$1 AND entity=$2 AND record_id=$3 AND version=$10
+         RETURNING *`,
+        [userId, target.entity, target.recordId, serializedPayload, target.version, target.hash, target.updatedAt, deletedAt, target.deviceId, remote.version],
+      );
+      if (updated.rows.length !== 1) {
+        const fresh = await client.query<Record<string, unknown>>(
+          "SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3",
+          [userId, mutation.entity, mutation.recordId],
+        );
+        const latest = fresh.rows[0] ? rowRecord(userId, fresh.rows[0]) : remote;
+        return {
+          conflict: {
+            id: `${mutation.entity}:${mutation.recordId}:${latest.version}`,
+            entity: mutation.entity,
+            recordId: mutation.recordId,
+            local: mutation,
+            remote: latest,
+            reason: "O mesmo registro foi alterado em outro dispositivo.",
+          },
+        };
+      }
+      const logged = await mirrorAndLogWithClient(client, target);
+      return { accepted: logged };
     });
   },
+
   async changes(userId: string, since: number) { if (!hasPostgres()) return memory.logs.filter((item) => item.userId === userId && (item.sequence ?? 0) > since); const result = await query<Record<string, unknown>>("SELECT l.sequence,r.* FROM sync_logs l JOIN sync_records r ON r.user_id=l.user_id AND r.entity=l.entity AND r.record_id=l.record_id WHERE l.user_id=$1 AND l.sequence>$2 ORDER BY l.sequence ASC LIMIT 2000", [userId, since]); return result.rows.map((row) => ({ userId, entity: String(row.entity) as SyncEntity, recordId: String(row.record_id), operation: row.deleted_at ? "delete" as const : "upsert" as const, data: row.payload, baseVersion: Number(row.version) - 1, version: Number(row.version), updatedAt: new Date(String(row.updated_at)).toISOString(), hash: String(row.hash), deviceId: String(row.device_id), sequence: Number(row.sequence) })); },
   async history(userId:string){if(!hasPostgres())return memory.logs.filter((item)=>item.userId===userId).slice(-100).reverse().map((item)=>({sequence:item.sequence,entity:item.entity,recordId:item.recordId,operation:item.operation,deviceId:item.deviceId,createdAt:item.updatedAt}));const result=await query<Record<string,unknown>>("SELECT sequence,entity,record_id,operation,device_id,created_at FROM sync_logs WHERE user_id=$1 ORDER BY sequence DESC LIMIT 100",[userId]);return result.rows.map((row)=>({sequence:Number(row.sequence),entity:String(row.entity),recordId:String(row.record_id),operation:String(row.operation),deviceId:String(row.device_id),createdAt:new Date(String(row.created_at)).toISOString()}));},
-  async allRecords(userId: string) { if (!hasPostgres()) return [...memory.records.values()].filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1", [userId]); return result.rows.map((row) => ({ userId, entity: String(row.entity) as SyncEntity, recordId: String(row.record_id), operation: row.deleted_at ? "delete" as const : "upsert" as const, data: row.payload, baseVersion: Number(row.version)-1, version: Number(row.version), updatedAt: new Date(String(row.updated_at)).toISOString(), hash: String(row.hash), deviceId: String(row.device_id) })); },
+  async allRecords(userId: string) { if (!hasPostgres()) return [...memory.records.values()].filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1", [userId]); return result.rows.map((row) => rowRecord(userId, row)); },
 
   async createBackup(userId: string) { const payload = await this.allRecords(userId); const backup = { id: randomUUID(), userId, payload, sizeBytes: Buffer.byteLength(JSON.stringify(payload)), createdAt: now() } satisfies Backup; if (!hasPostgres()) memory.backups.unshift(backup); else await query("INSERT INTO backups (id,user_id,payload,size_bytes,created_at) VALUES ($1,$2,$3,$4,$5)", [backup.id,userId,JSON.stringify(payload),backup.sizeBytes,backup.createdAt]); return backup; },
   async backups(userId: string) { if (!hasPostgres()) return memory.backups.filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM backups WHERE user_id=$1 ORDER BY created_at DESC", [userId]); return result.rows.map((row) => ({ id:String(row.id),userId,payload:row.payload as CloudRecord[],sizeBytes:Number(row.size_bytes),createdAt:new Date(String(row.created_at)).toISOString() })); },
-  async backup(userId: string, id: string) { return (await this.backups(userId)).find((item) => item.id === id); },
+  async backup(userId: string, id: string) {
+    if (!hasPostgres()) return memory.backups.find((item) => item.userId === userId && item.id === id);
+    const result = await query<Record<string, unknown>>("SELECT * FROM backups WHERE user_id=$1 AND id=$2", [userId, id]);
+    const row = result.rows[0];
+    return row
+      ? { id: String(row.id), userId, payload: row.payload as CloudRecord[], sizeBytes: Number(row.size_bytes), createdAt: new Date(String(row.created_at)).toISOString() }
+      : undefined;
+  },
+
+  /**
+   * Restaura o backup do usuário em transação única no PostgreSQL, usando a mesma
+   * conexão transacional para todas as leituras, remoções lógicas, gravações nas
+   * tabelas de entidade e entradas em `sync_logs`.
+   *
+   * Nota operacional: objetos binários no Object Storage (S3) são externos ao
+   * PostgreSQL e não são incluídos nem alterados por `backups.payload`.
+   */
+  async restoreBackupAtomic(userId: string, backupId: string, deviceId: string): Promise<CloudRecord[]> {
+    if (typeof backupId !== "string" || !backupId.trim() || backupId.length > 120) {
+      throw new Error("Identificador de backup inválido.");
+    }
+    const normalizedDeviceId = typeof deviceId === "string" && deviceId.trim() ? deviceId.trim().slice(0, 200) : "unknown";
+    const timestamp = now();
+
+    if (!hasPostgres()) {
+      const backup = memory.backups.find((item) => item.userId === userId && item.id === backupId);
+      if (!backup) throw new Error("Backup não encontrado.");
+      const payload = validateBackupPayload(backup.payload);
+      const current = [...memory.records.values()].filter((item) => item.userId === userId);
+      const currentByKey = new Map(current.map((item) => [`${item.entity}:${item.recordId}`, item]));
+      const backupKeys = new Set(payload.map((item) => `${item.entity}:${item.recordId}`));
+      const restored: CloudRecord[] = [];
+      for (const item of current) {
+        if (backupKeys.has(`${item.entity}:${item.recordId}`) || item.operation === "delete") continue;
+        restored.push(await this.writeRecord({ ...item, userId, operation: "delete", data: undefined, deviceId: normalizedDeviceId, version: item.version + 1, hash: `deleted:${item.hash}`, updatedAt: timestamp }));
+      }
+      for (const item of payload) {
+        const active = currentByKey.get(`${item.entity}:${item.recordId}`);
+        restored.push(await this.writeRecord({ ...item, userId, deviceId: normalizedDeviceId, version: (active?.version ?? 0) + 1, updatedAt: timestamp }));
+      }
+      return restored;
+    }
+
+    return transaction(async (client) => {
+      const backupResult = await client.query<Record<string, unknown>>(
+        "SELECT id, user_id, payload, size_bytes FROM backups WHERE user_id=$1 AND id=$2",
+        [userId, backupId],
+      );
+      const backupRow = backupResult.rows[0];
+      if (!backupRow) throw new Error("Backup não encontrado.");
+      const payload = validateBackupPayload(backupRow.payload);
+
+      const currentResult = await client.query<Record<string, unknown>>(
+        "SELECT * FROM sync_records WHERE user_id=$1 FOR UPDATE",
+        [userId],
+      );
+      const current = currentResult.rows.map((row) => rowRecord(userId, row));
+      const currentByKey = new Map(current.map((item) => [`${item.entity}:${item.recordId}`, item]));
+      const backupKeys = new Set(payload.map((item) => `${item.entity}:${item.recordId}`));
+      const restored: CloudRecord[] = [];
+
+      for (const item of current) {
+        if (backupKeys.has(`${item.entity}:${item.recordId}`) || item.operation === "delete") continue;
+        const written = await writeRecordWithClient(client, {
+          ...item,
+          userId,
+          operation: "delete",
+          data: undefined,
+          deviceId: normalizedDeviceId,
+          version: item.version + 1,
+          hash: `deleted:${item.hash}`,
+          updatedAt: timestamp,
+        });
+        restored.push(written);
+      }
+
+      for (const item of payload) {
+        const active = currentByKey.get(`${item.entity}:${item.recordId}`);
+        const written = await writeRecordWithClient(client, {
+          ...item,
+          userId,
+          deviceId: normalizedDeviceId,
+          version: (active?.version ?? 0) + 1,
+          updatedAt: timestamp,
+        });
+        restored.push(written);
+      }
+
+      return restored;
+    });
+  },
 
   async createShare(userId: string, entity: SyncEntity, recordId: string, expiresAt?: string, visibility:Share["visibility"]="public", accessLevel:Share["accessLevel"]="read") { const share = { id: randomUUID(), userId, token: `${randomUUID()}${randomUUID()}`.replaceAll("-",""), entity, recordId, visibility, accessLevel, expiresAt, createdAt: now() } satisfies Share; if (!hasPostgres()) memory.shares.unshift(share); else await query("INSERT INTO shares (id,user_id,token,entity,record_id,expires_at,visibility,access_level) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",[share.id,userId,share.token,entity,recordId,expiresAt??null,visibility,accessLevel]); return share; },
   async shares(userId: string) { if (!hasPostgres()) return memory.shares.filter((item) => item.userId === userId && !item.revokedAt); const result=await query<Record<string,unknown>>("SELECT * FROM shares WHERE user_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC",[userId]); return result.rows.map((row)=>({id:String(row.id),userId,token:String(row.token),entity:String(row.entity) as SyncEntity,recordId:String(row.record_id),visibility:String(row.visibility??"public") as Share["visibility"],accessLevel:String(row.access_level??"read") as Share["accessLevel"],expiresAt:row.expires_at?new Date(String(row.expires_at)).toISOString():undefined,createdAt:new Date(String(row.created_at)).toISOString()})); },

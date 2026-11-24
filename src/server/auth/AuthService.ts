@@ -11,6 +11,12 @@ export type AccessClaims = { sub: string; email: string; sessionId: string; type
 
 function normalizeEmail(email: string) { return email.trim().toLowerCase(); }
 function validPassword(password: string) { return password.length >= 10 && /[a-z]/i.test(password) && /\d/.test(password); }
+function expiredSessionResponse() {
+  return new Response(JSON.stringify({ error: "Sessão expirada." }), {
+    status: 401,
+    headers: { "content-type": "application/json" },
+  });
+}
 
 export const AuthService = {
   async register(input: { name: string; email: string; password: string; deviceId: string; deviceName: string }) {
@@ -29,20 +35,46 @@ export const AuthService = {
     return { ...(await this.createSession(user.id, user.email, input.deviceId, input.deviceName)), rememberDevice: input.rememberDevice !== false };
   },
 
-  async createSession(userId: string, email: string, deviceId: string, deviceName: string) {
-    const sessionId = randomUUID(); const refreshToken = randomToken(48); const csrfToken = randomToken(24);
+  async createSession(userId: string, email: string, deviceId: string, deviceName: string, familyId?: string) {
+    const sessionId = randomUUID();
+    const refreshToken = randomToken(48);
+    const csrfToken = randomToken(24);
     const normalizedDeviceId = typeof deviceId === "string" && deviceId.length > 0 ? deviceId.slice(0, 200) : randomUUID();
     const normalizedDeviceName = typeof deviceName === "string" && deviceName.length > 0 ? deviceName.slice(0, 120) : "Navegador";
-    await CloudDatabase.saveSession({ id: sessionId, userId, tokenHash: hashToken(refreshToken), deviceId: normalizedDeviceId, deviceName: normalizedDeviceName, expiresAt: new Date(Date.now() + REFRESH_SECONDS * 1000).toISOString(), lastUsedAt: new Date().toISOString() });
+    await CloudDatabase.saveSession({
+      id: sessionId,
+      userId,
+      tokenHash: hashToken(refreshToken),
+      deviceId: normalizedDeviceId,
+      deviceName: normalizedDeviceName,
+      expiresAt: new Date(Date.now() + REFRESH_SECONDS * 1000).toISOString(),
+      lastUsedAt: new Date().toISOString(),
+      familyId: familyId ?? sessionId,
+    });
     return { accessToken: signJwt({ sub: userId, email, sessionId, type: "access" }, ACCESS_SECONDS), refreshToken, csrfToken, expiresIn: ACCESS_SECONDS, sessionId };
   },
 
-  async refresh(refreshToken: string) {
-    const session = await CloudDatabase.sessionByHash(hashToken(refreshToken));
-    if (!session || new Date(session.expiresAt) <= new Date()) throw new Error("Sessão expirada.");
-    const user = await CloudDatabase.userById(session.userId); if (!user) throw new Error("Conta não encontrada.");
-    await CloudDatabase.revokeSession(session.id);
-    return this.createSession(user.id, user.email, session.deviceId, session.deviceName);
+  async refresh(refreshToken: string, options?: { reuseGraceMs?: number }) {
+    const nextSessionId = randomUUID();
+    const nextRefreshToken = randomToken(48);
+    const csrfToken = randomToken(24);
+    const rotated = await CloudDatabase.rotateSession({
+      currentTokenHash: hashToken(refreshToken),
+      nextSessionId,
+      nextTokenHash: hashToken(nextRefreshToken),
+      nextExpiresAt: new Date(Date.now() + REFRESH_SECONDS * 1000).toISOString(),
+      reuseGraceMs: options?.reuseGraceMs,
+    });
+    if (!rotated.ok) {
+      throw expiredSessionResponse();
+    }
+    return {
+      accessToken: signJwt({ sub: rotated.userId, email: rotated.email, sessionId: rotated.sessionId, type: "access" }, ACCESS_SECONDS),
+      refreshToken: nextRefreshToken,
+      csrfToken,
+      expiresIn: ACCESS_SECONDS,
+      sessionId: rotated.sessionId,
+    };
   },
 
   access(token?: string) { if (!token) return null; const claims = verifyJwt<AccessClaims>(token); return claims?.type === "access" ? claims : null; },

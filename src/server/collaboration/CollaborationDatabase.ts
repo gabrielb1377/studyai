@@ -155,13 +155,52 @@ export const CollaborationDatabase = {
       else await query("INSERT INTO room_resources (id,room_id,type,record_id,title,data,version,created_by,updated_by,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,1,$7,$8,$9,$9)", [resource.id, resource.roomId, resource.type, resource.recordId ?? null, resource.title, JSON.stringify(resource.data), resource.createdBy, resource.updatedBy, timestamp]);
       return resource;
     }
-    const current = (await this.resources(input.roomId)).find((item) => item.id === input.id);
-    if (!current) throw new Error("RESOURCE_NOT_FOUND");
-    if (input.expectedVersion !== undefined && current.version !== input.expectedVersion) throw new Error("VERSION_CONFLICT");
-    const next = { ...current, title: input.title, data: input.data, updatedBy: input.updatedBy, version: current.version + 1, updatedAt: timestamp };
-    if (!hasPostgres()) { const history = memory.revisions.get(current.id) ?? []; history.push(current); memory.revisions.set(current.id, history.slice(-50)); memory.resources.set(current.id, next); }
-    else await transaction(async (client) => { await client.query("INSERT INTO collaboration_revisions (id,resource_id,version,data,edited_by,created_at) VALUES ($1,$2,$3,$4,$5,$6)", [randomUUID(), current.id, current.version, JSON.stringify({ title: current.title, data: current.data }), input.updatedBy, timestamp]); await client.query("UPDATE room_resources SET title=$3,data=$4,version=version+1,updated_by=$5,updated_at=$6 WHERE id=$1 AND room_id=$2", [current.id, input.roomId, input.title, JSON.stringify(input.data), input.updatedBy, timestamp]); });
-    return next;
+    if (!hasPostgres()) {
+      const current = (await this.resources(input.roomId)).find((item) => item.id === input.id);
+      if (!current) throw new Error("RESOURCE_NOT_FOUND");
+      if (input.expectedVersion !== undefined && current.version !== input.expectedVersion) throw new Error("VERSION_CONFLICT");
+      const next = { ...current, title: input.title, data: input.data, updatedBy: input.updatedBy, version: current.version + 1, updatedAt: timestamp };
+      const history = memory.revisions.get(current.id) ?? [];
+      history.push(current);
+      memory.revisions.set(current.id, history.slice(-50));
+      memory.resources.set(current.id, next);
+      return next;
+    }
+    return transaction(async (client) => {
+      const locked = await client.query<Record<string, unknown>>(
+        "SELECT * FROM room_resources WHERE id=$1 AND room_id=$2 FOR UPDATE",
+        [input.id, input.roomId],
+      );
+      const row = locked.rows[0];
+      if (!row) throw new Error("RESOURCE_NOT_FOUND");
+      const currentVersion = Number(row.version);
+      if (input.expectedVersion !== undefined && currentVersion !== input.expectedVersion) {
+        throw new Error("VERSION_CONFLICT");
+      }
+      await client.query(
+        "INSERT INTO collaboration_revisions (id,resource_id,version,data,edited_by,created_at) VALUES ($1,$2,$3,$4,$5,$6)",
+        [randomUUID(), String(row.id), currentVersion, JSON.stringify({ title: String(row.title), data: row.data }), input.updatedBy, timestamp],
+      );
+      const updated = await client.query<Record<string, unknown>>(
+        "UPDATE room_resources SET title=$3,data=$4,version=version+1,updated_by=$5,updated_at=$6 WHERE id=$1 AND room_id=$2 AND version=$7 RETURNING *",
+        [String(row.id), input.roomId, input.title, JSON.stringify(input.data), input.updatedBy, timestamp, currentVersion],
+      );
+      const nextRow = updated.rows[0];
+      if (!nextRow) throw new Error("VERSION_CONFLICT");
+      return {
+        id: String(nextRow.id),
+        roomId: input.roomId,
+        type: String(nextRow.type),
+        recordId: nextRow.record_id ? String(nextRow.record_id) : undefined,
+        title: String(nextRow.title),
+        data: nextRow.data,
+        version: Number(nextRow.version),
+        createdBy: String(nextRow.created_by),
+        updatedBy: String(nextRow.updated_by),
+        createdAt: new Date(String(nextRow.created_at)).toISOString(),
+        updatedAt: new Date(String(nextRow.updated_at)).toISOString(),
+      } as CollaborativeResource;
+    });
   },
   async removeResource(roomId: string, id: string) {
     if (!hasPostgres()) {
