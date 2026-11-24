@@ -1,32 +1,29 @@
 # Handoff atual — StudyAI V1.2
 
-## Estado atual — Release Readiness Gate V1.2 (24/11/2026)
+## Estado atual — Lote 2 (2A/2B/2C) Concluído & Preparação Railway IaC (24/11/2026)
 
-Este é o estado vigente após revisão técnica independente do fechamento da V1.2. Diagnósticos anteriores neste arquivo são históricos. As Sprints 41–58, RH-2A/RH-2B, PS-1a e correções de estabilização estão na branch `v1.1-development`.
+Este é o estado vigente após a implementação e validação em PostgreSQL real dos Lotes 2B e 2C e a preparação isolada do IaC do Railway. Diagnósticos anteriores neste arquivo são históricos. O parecer para lançamento público permanece **NO-GO**.
 
-- **Git, PR #1 & CI remota**:
-  - Branch ativa: `v1.1-development`; `main` em `7e3d89b` (sem branch protection: `protected=false`, origem do deploy em `.github/workflows/deploy.yml` e `.railway/railway.ts`).
-  - Experimento S3 preservado intacto em `exp/s3-direct-upload` (`7b7be19`), fora da `v1.1-development`.
-  - [PR #1](https://github.com/gabrielb1377/studyai/pull/1) aberto (`v1.1-development` → `main`), `mergeable=true`, `mergeable_state=clean`.
-  - **CI remota em `9ac52e0`**: Push Run #45 (`45411864690`) e PR Run #46 (`45411877801`) **6/6 jobs verdes** (`quality`, `postgres` com PostgreSQL 17, e `e2e` 1–4 = **516 passed, 11 skipped, 0 failed**: shard 1 `125p/10s`, shard 2 `131p/1s`, shard 3 `133p/0s`, shard 4 `127p/0s`). Confirmado que os 11 testes de `tests/ps1a-prompt-injection.spec.ts` pertencem ao shard 2/4 e passaram na CI.
-- **Autocorreções cirúrgicas do Release Readiness Gate**:
-  - `src/server/database/Postgres.ts`: adicionado listener `pool.on("error")` (evita crash do processo Node em queda de cliente ocioso de pooler), validação `parsePoolSize()` para `DATABASE_POOL_SIZE`, redação de URL/senha/IP em `classifyPostgresError()` mesmo para erros não-`Error`/cross-realm, e `ROLLBACK` protegido em `transaction()` com `client.release(releaseError)`.
-  - `scripts/db-migrate.mjs`: alinhado suporte a `DATABASE_SSL=true` e `DATABASE_CA_CERT` com `Postgres.ts`.
-  - `tests/release-stabilization.spec.ts`: adicionado teste `3F` cobrindo singleton de pool, listener de erro com redação, fallback de `DATABASE_POOL_SIZE` e `transaction()` com falha no `ROLLBACK`.
-- **Correções factuais sobre o estado anterior**:
-  - `RateLimitService.ts` usa `MAX_RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000` (2h) com `assertSupportedWindow()` em todos os processos (desde `ea77e1b`), não `MIN_SAFE_RATE_LIMIT_CLEANUP_AGE_MS`.
-  - As variáveis reais de segredo no código são `AUTH_SECRET` e `API_KEYS_ENCRYPTION_KEY` (não `JWT_SECRET`/`ENCRYPTION_KEY`).
-- **Reconciliação dos Lotes 1–5 e `SA-01`..`SA-06`**:
-  - **Lote 1 (CI + Semana de Prova + PS-1a)**: **Concluído e validado** na CI (6/6 verdes, `retries: 0`).
-  - **Lote 2 (PostgreSQL/Atomicidade)**: **Parcialmente concluído** — suítes PostgreSQL/multi-instância aprovadas localmente (37/37 em PG 18.4 descartável em `9ac52e0`), `Dockerfile` sem `db-migrate` no `CMD` (`ea77e1b`), mas permanecem pendentes: rotação atômica com detecção de reuso em `AuthService.refresh()`, lock otimista SQL em `SyncService.push()`/`CollaborationDatabase.saveResource()`, `SyncService.restore()` em transação única, chamador/agendador para `OperationalCleanup.run()` e índices por `user_id` (`refresh_tokens`, `backups`, `shares`, `account_tokens`).
-  - **Lote 3 (Quotas/Tokens/BYOK + `SA-01`..`SA-06`)**: **Parcialmente concluído** — quota por requisição (500/dia, 20/min) e BYOK funcionam, mas `tokens_count` segue gravando `0`, sem orçamento global por tokens, sem exigência de `email_verified_at` para IA compartilhada, sem cotas de armazenamento (1.024 MB arquivos / 200 MB backups), `withQuotaEnforcement` morto permanece e `SA-01`..`SA-06` **não possuem definição recuperável** em nenhum documento versionado.
-  - **Lote 4 (S3/SMTP/Proxy/Observabilidade)**: **Parcialmente concluído** — código de proxy pronto (`eef4c9c`/`ea77e1b`), mas **não configurado no Railway**; S3 não revalidado após ajuste de credencial; `SMTP_*` ausente no Railway; `railway.toml` tem sunset em `2026-12-01` e `.railway/railway.ts` omite variáveis críticas (`API_KEYS_ENCRYPTION_KEY`, `TRUST_PROXY_HEADERS`, chaves IA e SMTP).
-  - **Lote 5 (Staging/Backup/Rollback)**: **Pendente** — nenhuma homologação em staging com DB/S3/SMTP reais nem ensaio de backup/restore no banco alvo. `PS-1b` preservado no backlog pós-V1.2.
-- **Auditoria somente leitura — Infraestrutura & Banco**:
-  - **Railway (`production`)**: `studyai-web` está `● Failed`; `Postgres` está `○ Offline`; `DATABASE_URL` aponta para `postgres.railway.internal:5432/railway` (divergente do Supabase `studyai-v1` com 31/32 tabelas); `TRUST_PROXY_HEADERS` está ausente (causaria HTTP **503** imediato no healthcheck `/api/health`); `DATABASE_SSL_REJECT_UNAUTHORIZED=false`; `SMTP_*` ausente.
-  - **Schema (`schema.sql` vs `main` `7e3d89b`)**: diff 100% aditivo e idempotente (`user_api_keys`, `usage_quotas`, `rate_limits`, `exam_attempts` + RLS). Pode ser aplicado antes do deploy sem quebrar `main`, mas o role/RLS do banco alvo (Supabase vs Railway Postgres) precisa ser auditado em modo leitura antes da migration.
-  - **Dependências (`npm audit --omit=dev`)**: 1 vulnerabilidade `moderate` em `next` (`15.5.28`) e 4 `low` (`katex`/math).
-- **Parecer do Release Readiness Gate**: **NO-GO para lançamento público imediato**. Próximo passo exato: (1) decidir banco oficial de produção (Supabase `studyai-v1` vs Railway Postgres), regularizar `Postgres`/`studyai-web`, configurar `TRUST_PROXY_HEADERS=true` (confirmando `TRUSTED_PROXY_HOPS`) e `SMTP_*` no Railway, e executar preflight somente leitura no banco escolhido; (2) decidir explicitamente o escopo obrigatório restante dos Lotes 2–3 (ou aceitação formal de risco para beta fechado) e concluir homologação + backup/restore em staging (Lote 5) antes de autorizar o merge da PR #1 para `main`.
+- **Git, PR #1 & Commits do Lote 2**:
+  - Branch ativa: `v1.1-development` (sincronizada com `origin/v1.1-development`); `main` intocada em `7e3d89b` (`protected=false`); `exp/s3-direct-upload` intacta em `7b7be19`.
+  - Commits desta etapa: `65bb93c` (guard `pool.on` para mocks mínimos que falharam em `postgres-no-ddl.spec.ts` nas runs #47/#48 de `8a4fbd0`), `ecb9f46` (Lote 2B: rotação atômica de refresh tokens com detecção segura de reuso + tolerância 10s, controle otimista SQL no Cloud Sync e Colaboração, restore atômico de backup em transação única e índices `user_id` em `schema.sql` + `migrations/0002_lote2_atomicity_and_indexes.sql`), `8302a8a` (Lote 2C: `OperationalCleanup` com `pg_try_advisory_xact_lock` e lotes limitados, endpoint autenticado `POST /api/internal/maintenance/cleanup`, script CLI `scripts/run-operational-cleanup.mjs`, suíte `tests/lote2-postgres-atomicity.spec.ts` e inclusão no job `postgres` da CI), e `3a905f6` (preparação Railway IaC em `.railway/railway.ts`).
+  - [PR #1](https://github.com/gabrielb1377/studyai/pull/1) aberto (`v1.1-development` → `main`).
+- **Status dos Lotes 1–5**:
+  - **Lote 1 (CI + Semana de Prova + PS-1a)**: **Concluído e validado**.
+  - **Lote 2 (2A Pool/Contrato + 2B Atomicidade SQL + 2C Índices & OperationalCleanup)**: **Concluído e validado localmente em PostgreSQL 18.4** (aguardando confirmação da CI no novo HEAD).
+  - **Lote 3 (Quotas por tokens, e-mail verificado para IA compartilhada, cotas 1.024 MB arquivos / 200 MB backups, `PS-2` e `SA-01`..`SA-06`)**: **Pendente / Parcial** (`tokens_count` grava `0`; `SA-01`..`SA-06` continuam sem definição recuperável).
+  - **Lote 4 (S3/SMTP/Proxy/Railway)**: **Parcial** — `.railway/railway.ts` atualizado com `preserve()` para todas as 34 variáveis V1.2 (sunset oficial do `railway.toml` confirmado para **2026-12-01**), sem alteração na infraestrutura remota; `studyai-web` segue `Failed`, `Postgres` Railway segue `Offline`, `TRUST_PROXY_HEADERS` e `SMTP_*` ausentes no Railway e divergência `DATABASE_URL` (Railway vs Supabase `studyai-v1`) pendente de decisão.
+  - **Lote 5 (Staging, backup/restore real e rollback)**: **Pendente**. `PS-1b` preservado fora da V1.2.
+- **Validação Real em PostgreSQL 18.4 Isolado (`--retries=0`, `0` falhas, `0` skips)**:
+  - `tests/lote2-postgres-atomicity.spec.ts`: **8/8 PASS** (endpoint `503`/`401`/`429`/`200`/`202`, validação prévia de backup, idempotência `schema.sql`/`0002` + 5 índices válidos, rotação atômica de refresh token entre 2 pools + janela 10s + revogação de família preservando Device B, Cloud Sync concorrente em update e insert inicial, `CollaborationDatabase.saveResource()` concorrente, `SyncService.restore()` com rollback total sob trigger de falha intermediária, e `OperationalCleanup` com advisory lock + CLI `run-operational-cleanup.mjs`).
+  - `tests/postgres-no-ddl.spec.ts` + `release-stabilization` (`3E`/`3E-PG`/`3F`) + `sprint41g3a-isolation`: **16/16 PASS**; `exam-attempt-integration`: **6/6 PASS**; `verify-concurrency.mjs`: **7/7 PASS**.
+  - Servidor Next.js ao vivo + PostgreSQL 18.4: `POST /api/internal/maintenance/cleanup` (`401` sem header / `200` autenticado) + `cloud-sync` (4/4), `collaboration` (4/4) e `rh2a-auth-files-security` (8/8) = **16/16 PASS** (total: **53/53 PASS**).
+  - Gates estáticos: `npm run typecheck` (**0 erros**), `npm run lint` (**0 erros**, 44 warnings preexistentes), `npm run build` (**PASS**) e `git diff --check` (**PASS**).
+- **Migrations pendentes de aplicação remota (NÃO executadas)**:
+  - `migrations/0001_exam_attempts.sql` (tabela `exam_attempts` + RLS) e `migrations/0002_lote2_atomicity_and_indexes.sql` (colunas `family_id`/`replaced_by`/`rotated_at` em `refresh_tokens` + 5 índices `user_id`), ambos refletidos em `src/server/database/schema.sql`. Em tabelas grandes de produção, criar índices fora de transação com `CREATE INDEX CONCURRENTLY IF NOT EXISTS`.
+- **Riscos residuais & Próximo passo**:
+  - `SyncService.restore()` é atômico no PostgreSQL; objetos binários S3 são externos à transação SQL. `npm audit --omit=dev` mantém 1 `moderate` em `next@15.5.28` e 4 `low` em `katex`. `railway config plan` falhou localmente no Windows por bug do SDK `railway/iac` (`execFileSync("railway")` vs `.cmd`).
+  - **Parecer**: **NO-GO** para lançamento público. **Próximo passo exato**: acompanhar CI verde no novo HEAD e iniciar o **Lote 3** (quotas reais por tokens, e-mail verificado para IA compartilhada, cotas de armazenamento e definição/encerramento de `SA-01`..`SA-06`) após autorização explícita, em paralelo à decisão de banco oficial e plano Railway IaC antes de `2026-12-01`.
 
 ## Registro histórico — Lote 1 e PS-1a (22/11/2026)
 
