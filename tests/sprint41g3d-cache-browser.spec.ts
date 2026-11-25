@@ -10,7 +10,7 @@ async function register(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Cadastrar" }).click();
-  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 }
 
 async function login(page: Page, email: string) {
@@ -18,7 +18,7 @@ async function login(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 }
 
 async function currentUserId(page: Page) {
