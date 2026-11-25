@@ -14,6 +14,7 @@ const stores = ["documents", "contents", "chunks", "embeddings", "studies", "not
 let running: { userId: string; generation: number; promise: Promise<SyncMetadata> } | undefined;
 let rerunRequested = false;
 let handshakeRequested = false;
+let applyingRemote = false;
 
 function empty(): SyncMetadata { return { key: KEY, state: { status: navigator.onLine ? "idle" : "offline", cursor: 0, pending: 0, uploadedBytes: 0 }, manifest: {}, queue: [], conflicts: [], fileManifest: {}, updatedAt: new Date().toISOString() }; }
 function stable(value:unknown):string{if(value===null||typeof value!=="object")return JSON.stringify(value);if(Array.isArray(value))return`[${value.map(stable).join(",")}]`;return`{${Object.entries(value as Record<string,unknown>).sort(([left],[right])=>left.localeCompare(right)).map(([key,item])=>`${JSON.stringify(key)}:${stable(item)}`).join(",")}}`;}
@@ -46,6 +47,16 @@ async function scan(meta: SyncMetadata, operation: SessionOperation) {
 
 async function apply(record: ClientCloudRecord, operation: SessionOperation, meta?: SyncMetadata) {
   operation.assertCurrent();
+  applyingRemote = true;
+  try {
+    return await applyInner(record, operation, meta);
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+async function applyInner(record: ClientCloudRecord, operation: SessionOperation, meta?: SyncMetadata) {
+  operation.assertCurrent();
   if (record.entity === "workspace") { if (record.operation === "delete") return; operation.assertCurrent(); applySyncPreferences(localStorage, record.data); return; }
   const store = record.entity === "mentor" || record.entity === "learning" ? "metadata" : record.entity as StorageStoreName;
   if (!stores.includes(store as typeof stores[number])) return;
@@ -73,6 +84,7 @@ async function uploadFiles(meta: SyncMetadata, operation: SessionOperation) {
 }
 
 export const CloudSyncManager = {
+  isApplyingRemote() { return applyingRemote; },
   async state(userId?: string) { const operation = SessionOperationManager.start(userId); try { return (await loadMeta(operation)).state; } finally { operation.release(); } },
   async conflicts(userId?: string) { const operation = SessionOperationManager.start(userId); try { return (await loadMeta(operation)).conflicts; } finally { operation.release(); } },
   async syncNow(options: { userId?: string; handshake?: boolean } = {}): Promise<SyncMetadata> {
@@ -99,7 +111,14 @@ export const CloudSyncManager = {
         }
         const pulled = await AuthClient.request<{ changes: ClientCloudRecord[]; cursor: number }>(`/sync?since=${meta.state.cursor}`, { operation });
         operation.assertCurrent();
-        for (const item of pulled.changes) { operation.assertCurrent(); if (item.deviceId !== AuthClient.deviceId()) await apply(item, operation, meta); const key=`${item.entity}:${item.recordId}`; if(item.operation==="delete")delete meta.manifest[key];else meta.manifest[key] = { hash: item.hash, version: item.version }; }
+        const pendingConflictKeys = new Set(meta.conflicts.map((item) => `${item.entity}:${item.recordId}`));
+        for (const item of pulled.changes) {
+          operation.assertCurrent();
+          const key = `${item.entity}:${item.recordId}`;
+          if (pendingConflictKeys.has(key)) continue;
+          if (item.deviceId !== AuthClient.deviceId()) await apply(item, operation, meta);
+          if (item.operation === "delete") delete meta.manifest[key]; else meta.manifest[key] = { hash: item.hash, version: item.version };
+        }
         const uploadedBytes = await uploadFiles(meta, operation);
         operation.assertCurrent();
         meta = await saveMeta({ ...meta, state: { ...meta.state, status: "syncing", cursor: pulled.cursor, lastSyncAt: new Date().toISOString(), uploadedBytes: meta.state.uploadedBytes + uploadedBytes } }, { operation });

@@ -12,7 +12,7 @@ export function CloudSyncProvider() {
     if (!session) return;
     let timer: number | undefined;
     let notifyWhenComplete = !navigator.onLine;
-    const schedule = (event?:Event) => { if(event?.type===STORAGE_UPDATED_EVENT&&(event as CustomEvent<{key?:IDBValidKey}>).detail?.key==="cloud-sync:v1")return;window.clearTimeout(timer); timer = window.setTimeout(() => { void CloudSyncManager.syncNow({ userId: session.user.id }).catch(() => undefined); }, 800); };
+    const schedule = (event?:Event) => { if(CloudSyncManager.isApplyingRemote())return;if(event?.type===STORAGE_UPDATED_EVENT&&(event as CustomEvent<{key?:IDBValidKey}>).detail?.key==="cloud-sync:v1")return;window.clearTimeout(timer); timer = window.setTimeout(() => { void CloudSyncManager.syncNow({ userId: session.user.id }).catch(() => undefined); }, 800); };
     const online = () => { void CloudSyncManager.syncNow({ userId: session.user.id }).catch(() => undefined); };
     const syncState = (event: Event) => {
       const state = (event as CustomEvent<{ status?: string; lastSyncAt?: string }>).detail;

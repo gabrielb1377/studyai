@@ -17,11 +17,12 @@ function transport() {
   const secure = process.env.SMTP_SECURE === "true" || port === 465;
   const user = process.env.SMTP_USER?.trim();
   const pass = smtpPassword();
+  const isLoopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
   return nodemailer.createTransport({
     host,
     port: Number.isFinite(port) && port > 0 ? port : 587,
     secure,
-    requireTLS: process.env.NODE_ENV === "production" && !secure,
+    requireTLS: process.env.NODE_ENV === "production" && !secure && !isLoopback,
     auth: user ? { user, pass } : undefined,
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
