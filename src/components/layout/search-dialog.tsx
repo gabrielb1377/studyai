@@ -91,7 +91,7 @@ export function SearchDialog() {
           <span className="hidden truncate sm:block">
             Pesquisar no workspace...
           </span>
-          <kbd className="ml-auto hidden rounded border bg-card px-1.5 py-0.5 text-xs sm:block">
+          <kbd className="ml-auto hidden shrink-0 whitespace-nowrap rounded border bg-card px-1.5 py-0.5 text-xs sm:block">
             Ctrl K
           </kbd>
         </button>

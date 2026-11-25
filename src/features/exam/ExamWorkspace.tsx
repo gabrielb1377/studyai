@@ -501,7 +501,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
         />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">Suas Provas</p>
             {exams.map((exam) => {
               const active = exam.id === selectedExam?.id;
@@ -526,7 +526,7 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
           </div>
 
           {selectedExam && (
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               <Card className="p-6 space-y-4 shadow-none">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
