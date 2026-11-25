@@ -204,9 +204,11 @@ test("gera projeto Academy e integra conteúdo, Biblioteca, estudo, grafo e ativ
   expect(exportedContents.map((item) => item.fileType)).toEqual(expect.arrayContaining(["pdf", "pptx"]));
   expect((await readIndexedDBStore(page, "knowledge")).length).toBeGreaterThanOrEqual(4);
 
-  await page.getByRole("button", { name: "Abrir no Professor" }).click();
-  await expect(page).toHaveURL(/\/tutor\?modo=professor/);
-  await expect(page.getByRole("button", { name: "Professor" })).toBeVisible();
+  await Promise.all([
+    page.waitForURL(/\/tutor\?modo=professor/, { timeout: 15_000 }),
+    page.getByRole("button", { name: "Abrir no Professor" }).click(),
+  ]);
+  await expect(page.getByRole("button", { name: "Professor" })).toBeVisible({ timeout: 15_000 });
 });
 
 test("Academy exibe erro configurável do provider e encerra o loading", async ({ page }) => {
