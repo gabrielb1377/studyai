@@ -1,25 +1,23 @@
 # Handoff atual — StudyAI V1.2
 
-## Estado atual — Fechamento Técnico V1.2 com Infraestrutura Custo Zero (R$ 0/mês) (24/11/2026)
+## Estado atual — Gate Final V1.2 (Custo Zero) e Preparação para Retomada do Roadmap (24/11/2026)
 
-Este é o estado vigente após a conclusão da homologação local completa (Lote 5 local a R\$ 0/mês) e a adaptação operacional à restrição financeira do owner. **Nenhum recurso pago foi contratado, reativado ou excluído.** O parecer para lançamento público permanece **NO-GO** até homologação remota autorizada.
+Checkpoint de fechamento técnico da V1.2 sob restrição permanente de **R\$ 0/mês** (sem contratações, cartão ou operações pagas). **A V1.2 não está publicada (`NO-GO` para produção)** e `main` permanece intocada em `7e3d89b`.
 
-- **Separação formal de estados da V1.2**:
-  - **Desenvolvimento V1.2 (Sprints 1–58 + Lotes 1–4)**: **Concluído**.
-  - **Homologação local completa (Lote 5 local — R\$ 0/mês)**: **Concluída** (Next.js standalone `NODE_ENV=production` + PostgreSQL 18.4 + S3 local + SMTP local + `pg_dump`/restore + migrations/rollback + concorrência multi-pool).
-  - **Homologação remota (staging cloud)**: **Pendente** (bloqueada pela restrição R\$ 0/mês e autorização explícita do owner).
-  - **Publicação pública (produção)**: **Pendente (`NO-GO`)** — não impede o avanço futuro do roadmap funcional em branches de desenvolvimento apropriadas.
-- **Git, PR #1 & Commits desta etapa**:
-  - Branch ativa: `v1.1-development`; `main` intocada em `7e3d89b`; `exp/s3-direct-upload` intacta em `7b7be19`; [PR #1](https://github.com/gabrielb1377/studyai/pull/1) em `draft`.
-  - Commits desta etapa: `0ff2a96` (correção da falha `e2e (1)` nas runs CI #53/#54 em `CloudSyncManager.ts` + `CloudSyncProvider.tsx` eliminando eco de pull remoto e sobrescrita de conflito pendente + permissão segura de SMTP loopback para homologação local preservando `requireTLS: true` para hosts remotos) e `faa5f6b` (teste multi-pool `PG4-3` de concorrência com reserva de IA expirada ativa + dupla reconciliação racing, suíte completa de homologação local `tests/lote5-local-homologation.spec.ts` e documento `docs/ZERO_COST_OPERATIONS_V1_2.md`).
-- **Validação Completa Local (`--retries=0`, PostgreSQL 18.4 isolado, `0` falhas)**:
-  - `tests/lote5-local-homologation.spec.ts` (`H5-1`): **1/1 PASS** em **Next.js standalone `NODE_ENV=production`** + PG 18.4 + S3 HTTP local (`AES256` + cota `413`) + SMTP RFC 5321 local (`verify`/`resend`/`recover` com tokens ocultos em produção e revogação `401`) + gate `403 EMAIL_NOT_VERIFIED` + sync/backup/restore atômico + cleanup `401`/`200` + anti-spoofing XFF `429` + **`pg_dump`/`psql`** restaurando 35 tabelas e dados reais.
-  - `tests/lote4-infrastructure-readiness.spec.ts` (`4A`–`4D`, `PG4-1`..`PG4-3`): **7/7 PASS**; `lote3`: **10/10 PASS**; `lote2`: **8/8 PASS**; `verify-concurrency.mjs`: **7/7 PASS**; `run-operational-cleanup.mjs`: **PASS**; `cloud-sync.spec.ts` conflito (`--repeat-each=2`): **2/2 PASS** — total **35/35 PASS**.
-  - Gates: `typecheck` (**0 erros**), `lint` (**0 erros**, 44 warnings preexistentes), `build` standalone Next `15.5.29` (**PASS**), `npm audit --omit=dev` (**0 moderate/high/critical**, 4 low KaTeX) e `git diff --check` (**PASS**).
-- **Preservação Railway & Alerta de Retenção ao Owner**:
-  - `studyai-web`, `Postgres` (`postgres-volume` `108,10 MB`), bucket `studyai-files-rmuyq1tg4rg`, variáveis e `railway.toml` preservados sem alteração remota.
-  - **ALERTA URGENTE:** volumes de Railway trial expirado têm janela de retenção de **30 dias** antes da purga permanente; o owner deve conferir a data no dashboard (ou avaliar transição gratuita para o **Railway Free Plan** sem cartão caso queira preservar/exportar `pg_dump`). `railway.toml` tem sunset em **2026-12-01**; migrations `0001`–`0003` permanecem pendentes de aplicação remota; **`SA-01`..`SA-06`** seguem `Sem definição recuperável`.
-- **Próximo passo**: acompanhar CI verde no novo HEAD; decidir preservação/dump do volume Railway dentro do prazo de 30 dias; quando desejado, autorizar próximo ciclo funcional em branch de desenvolvimento (ou homologação remota quando houver orçamento/decisão de provedor). Ver [docs/ZERO_COST_OPERATIONS_V1_2.md](docs/ZERO_COST_OPERATIONS_V1_2.md) e [docs/INFRASTRUCTURE_READINESS_V1_2.md](docs/INFRASTRUCTURE_READINESS_V1_2.md).
+- **Status formal dos Lotes 1–5 e da V1.2**:
+  - **Lotes 1–3**: **Implementados e validados** (CI `postgres` verde em #55/#56 com `PG-1`..`PG-6`, `PG3-1`..`PG3-6`, `PG4-1`..`PG4-3`).
+  - **Lote 4**: **Preparado e validado localmente** (pendências remotas preservadas: Railway IaC antes de `2026-12-01`, `\tAPI_KEYS_ENCRYPTION_KEY`, SMTP, TLS sem `rejectUnauthorized=false`, `TRUST_PROXY_HEADERS`, migrations `0001`–`0003` e banco oficial).
+  - **Lote 5**: **Homologado localmente** (**35/35** verificações finais aprovadas com `--retries=0`, Next.js standalone `NODE_ENV=production` + PG 18.4 + S3 local + SMTP local + `pg_dump`/`psql`).
+  - **Desenvolvimento técnico V1.2**: **Concluído, condicionado à CI final** após correção local em `tests/sprint50b1-p1-fixes.spec.ts:82`.
+  - **Homologação remota**: **Pendente** · **Publicação pública**: **NO-GO** · **Orçamento atual**: **R\$ 0/mês** · **`SA-01`..`SA-06`**: `Sem definição recuperável`.
+- **Gate CI #55/#56 (`c15e1fa`) e Correção Pendente de Commit**:
+  - **CI #56 (`pull_request`, ID `45515855366`)**: **6/6 jobs verdes (`success`)** — `quality`, `postgres`, `e2e (1)`–`e2e (4)`.
+  - **CI #55 (`push`, ID `45515847763`)**: **5/6 verdes** (`quality`, `postgres`, `e2e 1–3` ✅), 1 falha em `e2e (4)` (`tests/sprint50b1-p1-fixes.spec.ts:82` — `expect(page).toHaveURL` 5s após `alphaLink.click()`, sem `Promise.all([page.waitForURL(...), click()])` como nas linhas 90–93). Correção aplicada localmente no working tree e validada, aguardando autorização do owner para commit/push em `v1.1-development`.
+- **Preservação Railway (Somente Leitura)**:
+  - `postgres-volume` (`108,10 MB / 500 MB`): `status: "Ready"`, `deletedAt: null`, **`isPendingDeletion: false`**. A data exata de encerramento do trial só aparece no dashboard Billing. Confirmado pela CLI que volumes offline **não permitem listar/exportar arquivos sem deployment ativo**; preservação/exportação gratuita depende de transição manual do owner para o **Railway Free Plan (sem cartão)** no dashboard. `exp/s3-direct-upload` intacta em `7b7be19`.
+- **Separação dos Dois Caminhos (aguardando autorização do owner)**:
+  - **Caminho A (Publicação V1.2):** adiado em `v1.1-development` até decisão/orçamento do owner.
+  - **Caminho B (Desenvolvimento funcional, R\$ 0 local):** próxima etapa oficial recuperada de [docs/STUDYAI_FUTURE_ROADMAP.md](docs/STUDYAI_FUTURE_ROADMAP.md): **Onda 1 — `PS-1b`** (system prompt por provedor + delimitador único nos 5 fluxos restantes), seguida de `QU-1`..`QU-5` e **Onda 2 — Intelligence Engine (`IE-1`..`IE-4`)**. Nenhuma nova branch, tag ou sprint foi criada/iniciada sem autorização.
 
 ## Registro histórico — Lote 4 (24/11/2026)
 

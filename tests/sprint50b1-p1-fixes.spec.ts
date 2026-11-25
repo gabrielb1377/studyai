@@ -78,8 +78,10 @@ test("P1-A: links do Dashboard para Estudo abrem o estudo correspondente mesmo q
   const alphaLink = page.locator('a[href*="study-alpha"]').filter({ hasText: "Abrir" }).first();
   await expect(alphaLink).toBeVisible();
   await expect(alphaLink).toHaveAttribute("href", "/estudo?tema=study-alpha");
-  await alphaLink.click();
-  await expect(page).toHaveURL(/\/estudo\?tema=study-alpha/);
+  await Promise.all([
+    page.waitForURL(/\/estudo\?tema=study-alpha/),
+    alphaLink.click(),
+  ]);
 
   await expect(page.getByRole("heading", { name: "Álgebra Linear", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Cálculo Vetorial", exact: true })).toHaveCount(0);
