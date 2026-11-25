@@ -15,7 +15,7 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
     - `technique.socratic` (2.500 / 500 tokens): perguntas abertas de raciocínio investigativo (etapas 1..5), proibição estrita de revelar a solução antecipadamente (`revealsSolution: false` se `step < 5`), fallback socrático aberto.
     - `technique.active-recall` (2.000 / 500 tokens): evocação ativa, separação de pergunta e resposta esperada, obrigatoriedade de `sourceRef` em cada questão para fundamentação, fallback seguro.
     - **Harness e Fixtures (`SkillExecutionHarness` e `pilotFixtures.ts`)**: execução isolada sob provedor simulado a custo zero (R$ 0), validação de esquema de entrada, filtragem seletiva de contexto (`study`, `chunks`, `errors`, `history`), delimitação `UntrustedDataBoundary`, validação ativa de `forbiddenOutputs`.
-    - **Estabilização de testes CI (`2904c34`)**: corrigida asserção de auth em `tests/sprint41g3d-cache-browser.spec.ts` com `{ timeout: 15_000 }`.
+    - **Estabilização de testes CI (`2904c34`, `be9a704`)**: corrigida asserção de auth em `tests/sprint41g3d-cache-browser.spec.ts` (`{ timeout: 15_000 }`) e isolado seletor da região de conversa do Tutor em `tests/sprint55a-long-term-memory.spec.ts`.
   - **Baterias de teste**:
     - `tests/ie2-pilot-skills.spec.ts`: 18/18 testes aprovados.
     - `tests/ie1-skills-registry.spec.ts`: 20/20 testes aprovados (38/38 combinados).
