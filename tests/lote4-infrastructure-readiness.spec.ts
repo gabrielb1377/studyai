@@ -660,4 +660,168 @@ test.describe("Lote 4 — PostgreSQL real (ensaio migrations 0001–0003, rollba
       await pool.end().catch(() => undefined);
     }
   });
+
+  test("PG4-3: concorrência multi-pool com reserva expirada ativa + nova reserva simultânea + dupla reconciliação racing", async () => {
+    const pg = testRequire("pg") as typeof import("pg");
+    const poolA = new pg.Pool({ connectionString: databaseUrl, max: 3, ssl: false });
+    const poolB = new pg.Pool({ connectionString: databaseUrl, max: 3, ssl: false });
+    const userId = `pg4_conc_${Date.now()}`;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const makeQuotaMod = (pool: import("pg").Pool) => {
+      const pgAdapter = {
+        hasPostgres: () => true,
+        query: (sql: string, params?: unknown[]) => pool.query(sql, params),
+        transaction: async <T>(fn: (client: import("pg").PoolClient) => Promise<T>) => {
+          const client = await pool.connect();
+          try {
+            await client.query("BEGIN");
+            const out = await fn(client);
+            await client.query("COMMIT");
+            return out;
+          } catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+          } finally {
+            client.release();
+          }
+        },
+      };
+      return loadModule(
+        "src/server/ai/QuotaService.ts",
+        { "@/server/database/Postgres": pgAdapter },
+        {
+          process: {
+            ...process,
+            env: {
+              ...process.env,
+              AI_USER_DAILY_TOKEN_LIMIT: "10000",
+              AI_GLOBAL_DAILY_TOKEN_BUDGET: "5000",
+            },
+          },
+        },
+      ) as {
+        QuotaService: {
+          reserveSharedBudget: (
+            uid: string,
+            opts: { provider: string; model?: string; requestId?: string; reserveTokens: number; useSharedKeys: boolean },
+          ) => Promise<{ allowed: boolean; blockedBy?: string; reservationId?: string }>;
+          reconcileReservation: (
+            id: string,
+            settlement: {
+              outcome: "completed";
+              provider: string;
+              model?: string;
+              usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; source?: "provider" };
+              emittedOutput: boolean;
+              providerContacted: boolean;
+            },
+          ) => Promise<{ reconciled: boolean; alreadySettled?: boolean; chargedTokens: number }>;
+        };
+      };
+    };
+
+    try {
+      const schemaSql = readFileSync(path.join(process.cwd(), "src/server/database/schema.sql"), "utf8");
+      await poolA.query(schemaSql);
+      await poolA.query("INSERT INTO users (id, email, password_hash, email_verified_at) VALUES ($1, $2, 'hash', NOW())", [
+        userId,
+        `${userId}@example.test`,
+      ]);
+      await poolA.query("DELETE FROM ai_global_daily_budgets WHERE date = $1::date", [today]);
+
+      const modA = makeQuotaMod(poolA);
+      const modB = makeQuotaMod(poolB);
+
+      // 1) Req A reserva 2500 em poolA e expira enquanto ainda está ativa
+      const resA = await modA.QuotaService.reserveSharedBudget(userId, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: `conc-a-${Date.now()}`,
+        reserveTokens: 2500,
+        useSharedKeys: true,
+      });
+      expect(resA.allowed).toBe(true);
+      await poolA.query("UPDATE ai_token_reservations SET expires_at = NOW() - INTERVAL '30 seconds' WHERE id = $1", [
+        resA.reservationId,
+      ]);
+
+      // 2) Req B reserva 2500 em poolB (reclama automaticamente resA expirada)
+      const resB = await modB.QuotaService.reserveSharedBudget(userId, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: `conc-b-${Date.now()}`,
+        reserveTokens: 2500,
+        useSharedKeys: true,
+      });
+      expect(resB.allowed).toBe(true);
+
+      // 3) Corrida simultânea entre 2 pools: duas reconciliações concorrentes em resA (expirada) + reconciliação de resB
+      const [sA1, sA2, sB] = await Promise.all([
+        modA.QuotaService.reconcileReservation(resA.reservationId!, {
+          outcome: "completed",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          usage: { inputTokens: 1500, outputTokens: 1200, totalTokens: 2700, source: "provider" },
+          emittedOutput: true,
+          providerContacted: true,
+        }),
+        modB.QuotaService.reconcileReservation(resA.reservationId!, {
+          outcome: "completed",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          usage: { inputTokens: 1500, outputTokens: 1200, totalTokens: 2700, source: "provider" },
+          emittedOutput: true,
+          providerContacted: true,
+        }),
+        modB.QuotaService.reconcileReservation(resB.reservationId!, {
+          outcome: "completed",
+          provider: "gemini",
+          model: "gemini-2.5-flash",
+          usage: { inputTokens: 1400, outputTokens: 1200, totalTokens: 2600, source: "provider" },
+          emittedOutput: true,
+          providerContacted: true,
+        }),
+      ]);
+
+      // Exatamente uma reconciliação de resA vence; nenhuma cobrança dupla
+      const aWinners = [sA1, sA2].filter((item) => item.reconciled);
+      const aDuplicates = [sA1, sA2].filter((item) => item.alreadySettled);
+      expect(aWinners).toHaveLength(1);
+      expect(aDuplicates).toHaveLength(1);
+      expect(aWinners[0].chargedTokens).toBe(2700);
+      expect(sB.reconciled).toBe(true);
+      expect(sB.chargedTokens).toBe(2600);
+
+      // 4) Saldo final exato (2700 + 2600 = 5300), reserved_tokens = 0, e Req C imediatamente bloqueada
+      const globalRow = await poolA.query<{ consumed_tokens: string; reserved_tokens: string }>(
+        "SELECT consumed_tokens::text, reserved_tokens::text FROM ai_global_daily_budgets WHERE date = $1::date",
+        [today],
+      );
+      expect(Number(globalRow.rows[0].consumed_tokens)).toBe(5300);
+      expect(Number(globalRow.rows[0].reserved_tokens)).toBe(0);
+
+      const userRow = await poolA.query<{ tokens_count: string; reserved_tokens: string }>(
+        "SELECT tokens_count::text, reserved_tokens::text FROM usage_quotas WHERE user_id = $1 AND date = $2::date AND minute_bucket = 0",
+        [userId, today],
+      );
+      expect(Number(userRow.rows[0].tokens_count)).toBe(5300);
+      expect(Number(userRow.rows[0].reserved_tokens)).toBe(0);
+
+      const resC = await modA.QuotaService.reserveSharedBudget(userId, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: `conc-c-${Date.now()}`,
+        reserveTokens: 500,
+        useSharedKeys: true,
+      });
+      expect(resC.allowed).toBe(false);
+      expect(resC.blockedBy).toBe("global_budget");
+    } finally {
+      await poolA.query("DELETE FROM users WHERE id = $1", [userId]).catch(() => undefined);
+      await poolA.query("DELETE FROM ai_global_daily_budgets WHERE date = $1::date", [today]).catch(() => undefined);
+      await poolA.end().catch(() => undefined);
+      await poolB.end().catch(() => undefined);
+    }
+  });
 });
