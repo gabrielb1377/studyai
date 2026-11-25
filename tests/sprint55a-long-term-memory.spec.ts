@@ -356,7 +356,7 @@ test.describe("Sprint 55A — Memória de Longo Prazo (E2E no Navegador)", () =>
     await page.getByRole("button", { name: "Nova conversa" }).first().click();
     await page.getByLabel("Mensagem para o Tutor IA").fill("Explique busca em árvore desbalanceada");
     await page.getByRole("button", { name: "Enviar" }).click();
-    await expect(page.getByText("Vamos revisar com um exemplo de 5 nós passo a passo.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("region", { name: "Conversa com o Tutor IA" }).getByText("Vamos revisar com um exemplo de 5 nós passo a passo.")).toBeVisible({ timeout: 15_000 });
 
     expect(capturedContexts).toHaveLength(1);
     expect(capturedContexts[0].memory?.enabled).toBe(true);
