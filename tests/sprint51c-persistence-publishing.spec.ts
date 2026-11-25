@@ -171,8 +171,10 @@ test("publica e republica material do Studio sem duplicar, abre no Workspace e e
   await page.goto("/biblioteca");
   const card = page.getByRole("article", { name: "consenso-distribuido-studio.pdf" }).first();
   await expect(card).toBeVisible();
-  await card.getByRole("link", { name: "Abrir material" }).click();
-  await expect(page).toHaveURL(new RegExp(`/estudo\\?tema=${studyId}&arquivo=${expectedMaterialId}&aba=material`));
+  await Promise.all([
+    page.waitForURL(new RegExp(`/estudo\\?tema=${studyId}&arquivo=${expectedMaterialId}&aba=material`), { timeout: 15_000 }),
+    card.getByRole("link", { name: "Abrir material" }).click(),
+  ]);
   const materialPanel = page.getByRole("tabpanel", { name: "Material" });
   await expect(materialPanel.getByText("consenso-distribuido-studio.pdf").first()).toBeVisible({ timeout: 15_000 });
   await expect(materialPanel.getByText(/Página 1 de \d+/)).toBeVisible({ timeout: 15_000 });
@@ -181,8 +183,10 @@ test("publica e republica material do Studio sem duplicar, abre no Workspace e e
 
   await page.goto("/biblioteca");
   await expect(card).toBeVisible();
-  await card.getByRole("link", { name: "Tutor" }).click();
-  await expect(page).toHaveURL(new RegExp(`/estudo\\?tema=${studyId}&arquivo=${expectedMaterialId}&aba=ia`));
+  await Promise.all([
+    page.waitForURL(new RegExp(`/estudo\\?tema=${studyId}&arquivo=${expectedMaterialId}&aba=ia`), { timeout: 15_000 }),
+    card.getByRole("link", { name: "Tutor" }).click(),
+  ]);
   await page.getByLabel("Mensagem para o Tutor IA").fill("Como funciona o algoritmo Paxos?");
   await page.getByRole("button", { name: "Enviar" }).click();
   await expect(page.getByRole("region", { name: "Conversa com o Tutor IA" }).getByText("Resposta do Tutor no fluxo 51C.")).toHaveCount(3);
