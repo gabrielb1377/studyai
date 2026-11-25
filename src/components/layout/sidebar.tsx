@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BookOpen, Leaf, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import {
   Dialog,
@@ -93,6 +93,7 @@ export function Sidebar() {
   const setMenuOpen = useLayoutStore((state) => state.setMenuOpen);
   const compact = useLayoutStore((state) => state.sidebarCompact);
   const setCompact = useLayoutStore((state) => state.setSidebarCompact);
+  const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("studyai:sidebar-compact");
@@ -106,6 +107,16 @@ export function Sidebar() {
     window.dispatchEvent(new Event("studyai:workspace-updated"));
   }
 
+  function handleOpenChange(open: boolean) {
+    if (open && typeof document !== "undefined") {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        setTriggerElement(active);
+      }
+    }
+    setMenuOpen(open);
+  }
+
   return (
     <>
       <aside className={cn("sticky top-0 hidden h-dvh shrink-0 border-r bg-sidebar/92 backdrop-blur-xl transition-[width] duration-200 lg:block", compact ? "w-20" : "w-60")}>
@@ -114,13 +125,16 @@ export function Sidebar() {
           {compact ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
         </button>
       </aside>
-      <Dialog open={menuOpen} onOpenChange={setMenuOpen}>
+      <Dialog open={menuOpen} onOpenChange={handleOpenChange}>
         <DialogContent
           className="inset-y-0 left-0 h-dvh max-h-none w-[min(85vw,280px)] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-y-0 border-l-0 bg-sidebar p-0 sm:max-w-none"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            const trigger = document.getElementById("mobile-navigation-more") || document.getElementById("navigation-toggle");
-            trigger?.focus();
+            if (triggerElement && typeof triggerElement.focus === "function") {
+              triggerElement.focus();
+            } else {
+              document.getElementById("navigation-toggle")?.focus();
+            }
           }}
         >
           <DialogTitle className="sr-only">Menu de navegação</DialogTitle>
