@@ -5,6 +5,7 @@ import { Calendar, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Feedback } from "@/components/ui/feedback";
 import { daysUntilExam, EXAM_UPDATED_EVENT, ExamService } from "./ExamService";
 import type { Exam, ExamSubject, ExamPriority } from "@/types/exam";
@@ -488,11 +489,22 @@ export function ExamWorkspace({
                 linkedStudy={linkedStudy}
               />
 
-              <ExamRealProgressCard
-                examProgress={examProgress}
-                progressLoading={progressLoading}
-                progressError={progressError}
-              />
+              {progressLoading ? (
+                <div role="status" aria-label="Carregando registros autorizados" className="space-y-3">
+                  <Skeleton className="h-6 w-48" />
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {[0, 1, 2, 3].map((slot) => (
+                      <Skeleton key={slot} className="h-24 rounded-xl" />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <ExamRealProgressCard
+                  examProgress={examProgress}
+                  progressLoading={progressLoading}
+                  progressError={progressError}
+                />
+              )}
 
               <ExamChecklistAndPlan
                 exam={selectedExam}
@@ -502,28 +514,35 @@ export function ExamWorkspace({
                 onMoveSubject={moveSubject}
               />
 
-              <ExamMaterialsCard
-                selectedExam={selectedExam}
-                linkedMaterials={linkedMaterials}
-                availableMaterials={availableMaterials}
-                studies={studies}
-                eligibleStudies={eligibleStudies}
-                linkedStudyIds={linkedStudyIds}
-                preparationKey={preparationKey}
-                catalog={catalog}
-                catalogError={catalogError}
-                materialsLoading={materialsLoading}
-                materialsError={Boolean(materialsError)}
-                materialNotice={materialNotice}
-                activePractice={activePractice}
-                onSetPracticeMaterial={setPracticeMaterial}
-                onRemoveMaterial={removeMaterialFromExam}
-                onAddMaterial={addMaterialToExam}
-                onLinkStudy={linkStudyToExam}
-                onSaveMaterialAttempt={saveMaterialAttempt}
-                onRecordPractice={recordPractice}
-                onReviewMaterialsWithTutor={handleReviewMaterialsWithTutor}
-              />
+              {materialsLoading ? (
+                <div role="status" aria-label="Carregando materiais vinculados" className="space-y-3">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-32 rounded-xl" />
+                </div>
+              ) : (
+                <ExamMaterialsCard
+                  selectedExam={selectedExam}
+                  linkedMaterials={linkedMaterials}
+                  availableMaterials={availableMaterials}
+                  studies={studies}
+                  eligibleStudies={eligibleStudies}
+                  linkedStudyIds={linkedStudyIds}
+                  preparationKey={preparationKey}
+                  catalog={catalog}
+                  catalogError={catalogError}
+                  materialsLoading={materialsLoading}
+                  materialsError={Boolean(materialsError)}
+                  materialNotice={materialNotice}
+                  activePractice={activePractice}
+                  onSetPracticeMaterial={setPracticeMaterial}
+                  onRemoveMaterial={removeMaterialFromExam}
+                  onAddMaterial={addMaterialToExam}
+                  onLinkStudy={linkStudyToExam}
+                  onSaveMaterialAttempt={saveMaterialAttempt}
+                  onRecordPractice={recordPractice}
+                  onReviewMaterialsWithTutor={handleReviewMaterialsWithTutor}
+                />
+              )}
             </div>
           )}
         </div>
