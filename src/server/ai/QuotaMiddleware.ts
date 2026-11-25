@@ -244,6 +244,7 @@ export async function withAIQuota(
     delete sanitizedBody.strictByok;
     delete sanitizedBody.emailVerified;
     delete sanitizedBody.onSettlement;
+    delete sanitizedBody.systemPrompt;
 
     const body = (prepared
       ? { ...sanitizedBody, ...prepared, chunks: undefined, context: undefined }

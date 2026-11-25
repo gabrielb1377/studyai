@@ -10,6 +10,7 @@ import {
   isLabChallengeRequest,
   parseGeneratedLabChallenge,
 } from "../src/features/lab/validators/lab-validation";
+import * as UntrustedDataBoundary from "../src/features/ai/UntrustedDataBoundary";
 import type { LabProject } from "../src/features/lab/types";
 
 const TEST_PASSWORD = "StudyAI2026secure";
@@ -742,6 +743,7 @@ test("isolamento entre contas e contrato server-side de autenticação, ownershi
     },
     "@/features/ai/AIErrors": { AIError: class extends Error {} },
     "@/features/ai/TokenCounter": { TokenCounter: { truncate: (v: string) => v } },
+    "@/features/ai/UntrustedDataBoundary": UntrustedDataBoundary,
     "@/server/cloud/CloudDatabase": {
       CloudDatabase: { record: async () => undefined, allRecords: async () => [] },
     },

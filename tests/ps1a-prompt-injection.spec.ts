@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { blockedImageLabel, isLocalImageSource } from "../src/features/tutor/markdown-image";
 import { TeacherPromptBuilder } from "../src/features/teacher/TeacherPromptBuilder";
+import * as UntrustedDataBoundary from "../src/features/ai/UntrustedDataBoundary";
 import { isTeacherRequest } from "../src/features/teacher/teacher-validation";
 import type { TeacherRequest } from "../src/features/teacher/types";
 
@@ -58,6 +59,7 @@ function loadPromptBuilder() {
       },
     },
     "./TokenCounter": { TokenCounter: { messages: () => 0, estimate: (text: string) => text.length, truncate: (text: string) => text } },
+    "./UntrustedDataBoundary": UntrustedDataBoundary,
     "@/features/teacher/TeacherPromptBuilder": { TeacherPromptBuilder },
   };
   const compiled = { exports: {} as Record<string, unknown> };

@@ -1,23 +1,25 @@
-# Handoff atual — StudyAI V1.2
+# Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Gate Final V1.2 (Custo Zero) e Preparação para Retomada do Roadmap (24/11/2026)
+## Estado atual — Onda 1 / Sprint PS-1b concluída localmente em `v1.3-development` (25/11/2026)
 
-Checkpoint de fechamento técnico da V1.2 sob restrição permanente de **R\$ 0/mês** (sem contratações, cartão ou operações pagas). **A V1.2 não está publicada (`NO-GO` para produção)** e `main` permanece intocada em `7e3d89b`.
+Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R\$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
-- **Status formal dos Lotes 1–5 e da V1.2**:
-  - **Lotes 1–3**: **Implementados e validados** (CI `postgres` verde em #55/#56 com `PG-1`..`PG-6`, `PG3-1`..`PG3-6`, `PG4-1`..`PG4-3`).
-  - **Lote 4**: **Preparado e validado localmente** (pendências remotas preservadas: Railway IaC antes de `2026-12-01`, `\tAPI_KEYS_ENCRYPTION_KEY`, SMTP, TLS sem `rejectUnauthorized=false`, `TRUST_PROXY_HEADERS`, migrations `0001`–`0003` e banco oficial).
-  - **Lote 5**: **Homologado localmente** (**35/35** verificações finais aprovadas com `--retries=0`, Next.js standalone `NODE_ENV=production` + PG 18.4 + S3 local + SMTP local + `pg_dump`/`psql`).
-  - **Desenvolvimento técnico V1.2**: **Concluído, condicionado à CI final** após correção local em `tests/sprint50b1-p1-fixes.spec.ts:82`.
-  - **Homologação remota**: **Pendente** · **Publicação pública**: **NO-GO** · **Orçamento atual**: **R\$ 0/mês** · **`SA-01`..`SA-06`**: `Sem definição recuperável`.
-- **Gate CI #55/#56 (`c15e1fa`) e Correção Pendente de Commit**:
-  - **CI #56 (`pull_request`, ID `45515855366`)**: **6/6 jobs verdes (`success`)** — `quality`, `postgres`, `e2e (1)`–`e2e (4)`.
-  - **CI #55 (`push`, ID `45515847763`)**: **5/6 verdes** (`quality`, `postgres`, `e2e 1–3` ✅), 1 falha em `e2e (4)` (`tests/sprint50b1-p1-fixes.spec.ts:82` — `expect(page).toHaveURL` 5s após `alphaLink.click()`, sem `Promise.all([page.waitForURL(...), click()])` como nas linhas 90–93). Correção aplicada localmente no working tree e validada, aguardando autorização do owner para commit/push em `v1.1-development`.
-- **Preservação Railway (Somente Leitura)**:
-  - `postgres-volume` (`108,10 MB / 500 MB`): `status: "Ready"`, `deletedAt: null`, **`isPendingDeletion: false`**. A data exata de encerramento do trial só aparece no dashboard Billing. Confirmado pela CLI que volumes offline **não permitem listar/exportar arquivos sem deployment ativo**; preservação/exportação gratuita depende de transição manual do owner para o **Railway Free Plan (sem cartão)** no dashboard. `exp/s3-direct-upload` intacta em `7b7be19`.
-- **Separação dos Dois Caminhos (aguardando autorização do owner)**:
-  - **Caminho A (Publicação V1.2):** adiado em `v1.1-development` até decisão/orçamento do owner.
-  - **Caminho B (Desenvolvimento funcional, R\$ 0 local):** próxima etapa oficial recuperada de [docs/STUDYAI_FUTURE_ROADMAP.md](docs/STUDYAI_FUTURE_ROADMAP.md): **Onda 1 — `PS-1b`** (system prompt por provedor + delimitador único nos 5 fluxos restantes), seguida de `QU-1`..`QU-5` e **Onda 2 — Intelligence Engine (`IE-1`..`IE-4`)**. Nenhuma nova branch, tag ou sprint foi criada/iniciada sem autorização.
+- **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
+  - **CI GitHub Actions 6/6 VERDE**: `push` (`45519407335`) e `pull_request` (`45519417036`) aprovados em todos os 6 jobs (`quality`, `postgres`, `e2e (1)`–`e2e (4)`).
+  - Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e preservação manual gratuita do `postgres-volume` preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
+- **Caminho B — Sprint `PS-1b` (Delimitador único e system prompt por provedor) — Concluída localmente (não commitada)**:
+  - **Montador canônico único**: criado `src/features/ai/UntrustedDataBoundary.ts` (`wrapUntrustedMaterialData`, `sanitizeUntrustedBoundaries`, `UNTRUSTED_MATERIAL_SECURITY_RULE`, `DEFAULT_STUDYAI_SYSTEM_PROMPT`, `resolveSystemPrompt`, `sanitizeInlineLabel`), adotado por `PromptBuilder` e por todos os fluxos anteriormente descobertos: `LabPromptBuilder` (+ `api/lab/review`), `LabChallengeService` (havia delimitador sem neutralização de tags), `StudioAssistService`, `DiagramAssistService`, `TeacherAudioLessonService` (todas as 3 funções) e `llm-judge` (+ `api/ai-quality/judge`, corrigindo também `{description}` literal e protegendo prompts crus).
+  - **Canal nativo de system prompt por provedor**: `AIRequest.systemPrompt`, propagação em `ProviderManager` (`generate` e `stream`), `systemInstruction` nativo no `GeminiProvider`, `{ role: "system" }` no `OpenAICompatibleProvider` (Groq e OpenRouter, contabilizado no orçamento de tokens) e suporte a `systemPrompt` no `OllamaProvider`.
+  - **Isolamento de cache e anti-spoofing**: `AIResponseCache.keyFor` inclui `systemPrompt`; `QuotaMiddleware` remove `systemPrompt` enviado pelo cliente (`delete sanitizedBody.systemPrompt`).
+  - **Auditoria CSP `img-src`**: mantido `img-src 'self' data: blob: https:` em `src/middleware.ts` com base em evidência real (`Studio` `safeImageSource` e `/profile` `photoUrl` permitem `https://`), enquanto respostas Markdown da IA continuam bloqueando imagens remotas em `MarkdownRenderer` (`PS-1a`).
+- **Validação local `PS-1b` (`--retries=0`, R\$ 0)**:
+  - `npm run build` ✅ · `npm run typecheck` ✅ · `npm run lint` ✅ (0 erros, 0 novos avisos) · `git diff --check` ✅.
+  - **68/68** testes Playwright aprovados sem retries/skips (`ps1b-prompt-hardening` 12/12, `ps1a-prompt-injection` 11/11, `ai-provider-sprint40` 8/8, `sprint41h-ai-fallback` 12/12, `sprint41f-lab-security` 1/1, `sprint42-security-quota` 4/4, `sprint43-ai-routing` 13/13, `teacher` 3/3, `release-stabilization:3D` 1/1, `lote3-ai-storage-governance` 2/2, `sprint52b-ai-challenges:590` 1/1).
+- **Próxima etapa**: aguardar aprovação do owner para commit/push de `PS-1b` em `origin/v1.3-development` e decisão entre avançar para **Onda 1 — `QU-1`** (Quality Upgrade: estados e erros) ou **Onda 2 — `IE-1`** (Intelligence Engine: registro e contrato).
+
+## Registro histórico — Gate Final V1.2 (Custo Zero) (24/11/2026)
+
+- **Checkpoint V1.2 (`1d0d698` em `v1.1-development`)**: Lotes 1–3 implementados e validados; Lote 4 preparado e validado localmente; Lote 5 homologado localmente (35/35 verificações finais em standalone + PG 18.4 + S3/SMTP locais). Correção de `tests/sprint50b1-p1-fixes.spec.ts:82` (`Promise.all([page.waitForURL(...), alphaLink.click()])`) levou a CI de `v1.1-development` a **6/6 jobs verdes** (`45519407335` e `45519417036`). Documentação de operação a custo zero em `docs/ZERO_COST_OPERATIONS_V1_2.md`. Preservação gratuita do `postgres-volume` (`108,10 MB / 500 MB`, `isPendingDeletion: false`) depende de transição manual do owner ao Railway Free Plan no dashboard.
 
 ## Registro histórico — Lote 4 (24/11/2026)
 

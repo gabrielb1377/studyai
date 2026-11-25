@@ -63,6 +63,8 @@ export type AIUsageSettlement = {
 export type AIRequest = {
   history: readonly AIMessage[];
   message: string;
+  /** Instruções fixas de sistema enviadas no canal nativo `system` do provedor (resolvidas no servidor). */
+  systemPrompt?: string;
   model?: string;
   signal?: AbortSignal;
   stream?: boolean;

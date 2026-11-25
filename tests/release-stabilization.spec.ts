@@ -247,6 +247,7 @@ test("3D: Quiz, Flashcards, Simulado e Academy isolam payloads adversariais em U
       },
     },
     "./TokenCounter": { TokenCounter: { messages: () => 0, estimate: (s: string) => s.length, truncate: (s: string) => s } },
+    "./UntrustedDataBoundary": loadServerModule("src/features/ai/UntrustedDataBoundary.ts", {}),
     "@/features/teacher/TeacherPromptBuilder": { TeacherPromptBuilder: { instruction: () => "" } },
   });
 
