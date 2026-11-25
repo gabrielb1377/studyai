@@ -1,5 +1,6 @@
 "use client";
 
+import "@/styles/globals.css";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

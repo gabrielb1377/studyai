@@ -83,12 +83,15 @@ test.describe("QU-1 — Quality Upgrade: Estados de Carregamento, Erro e Vazio",
     const source = readFileSync(path.join(process.cwd(), globalErrorPath), "utf8");
 
     expect(source).toContain('"use client"');
+    expect(source).toContain('import "@/styles/globals.css"');
     expect(source).toContain("export default function GlobalError");
     expect(source).toContain("<html lang=");
     expect(source).toContain("<body");
     expect(source).toContain('role="alert"');
     expect(source).toContain("reset()");
     expect(source).toContain("Recarregar aplicação");
+    expect(source).not.toContain("error.message");
+    expect(source).not.toContain("error.stack");
   });
 
   test("Q-02: Primitivas RouteLoading e RouteErrorState cumprem o contrato ARIA", () => {
@@ -156,5 +159,55 @@ test.describe("QU-1 — Quality Upgrade: Estados de Carregamento, Erro e Vazio",
       expect(response?.status(), `Rota ${route} deve responder HTTP 200`).toBe(200);
       await expect(page.locator("main, [role='status'], [role='alert']").first()).toBeVisible();
     }
+  });
+
+  test("Comportamento real em navegador: error.tsx captura falha transitória sem vazar detalhes sensíveis e recupera com Tentar novamente", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __qu1FailStorageRender?: boolean }).__qu1FailStorageRender = true;
+      const originalEstimate = navigator.storage?.estimate?.bind(navigator.storage);
+      if (navigator.storage) {
+        Object.defineProperty(navigator.storage, "estimate", {
+          configurable: true,
+          value: async () => {
+            if (originalEstimate) {
+              const res = await originalEstimate();
+              return { usage: Math.max(res.usage ?? 0, 4096), quota: Math.max(res.quota ?? 0, 1048576) };
+            }
+            return { usage: 4096, quota: 1048576 };
+          },
+        });
+      }
+
+      const originalToLocaleString = Number.prototype.toLocaleString;
+      Number.prototype.toLocaleString = function (locales?: Intl.LocalesArgument, options?: Intl.NumberFormatOptions) {
+        if (
+          (window as unknown as { __qu1FailStorageRender?: boolean }).__qu1FailStorageRender &&
+          window.location.pathname === "/storage" &&
+          locales === "pt-BR"
+        ) {
+          throw new Error("SENSITIVE_INTERNAL_SECRET_8492 at /internal/db/secret-path:42");
+        }
+        return originalToLocaleString.call(this, locales, options);
+      };
+    });
+
+    await page.goto("/storage");
+
+    const errorAlert = page.getByRole("alert").filter({ hasText: "Não foi possível carregar o Diagnóstico de Storage" });
+    await expect(errorAlert).toBeVisible({ timeout: 15_000 });
+
+    // Garante que detalhes sensíveis do erro não vazam na UI renderizada
+    const alertText = await errorAlert.innerText();
+    expect(alertText).not.toContain("SENSITIVE_INTERNAL_SECRET_8492");
+    expect(alertText).not.toContain("/internal/db/secret-path");
+
+    // Encerra a falha transitória antes de acionar "Tentar novamente" (reset())
+    await page.evaluate(() => {
+      (window as unknown as { __qu1FailStorageRender?: boolean }).__qu1FailStorageRender = false;
+    });
+    await errorAlert.getByRole("button", { name: "Tentar novamente" }).click();
+
+    await expect(page.getByText("Object Stores")).toBeVisible({ timeout: 15_000 });
+    await expect(errorAlert).toBeHidden();
   });
 });
