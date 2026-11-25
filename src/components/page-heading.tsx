@@ -18,7 +18,7 @@ export function PageHeading({
         <h1 className="type-page-title">
           {title}
         </h1>
-        <p className="mt-2.5 max-w-2xl text-sm leading-6 text-pretty text-muted-foreground sm:text-[15px]">
+        <p className="mt-2.5 max-w-2xl text-sm leading-6 text-pretty text-muted-foreground sm:text-base">
           {description}
         </p>
       </div>

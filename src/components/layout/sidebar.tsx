@@ -119,7 +119,8 @@ export function Sidebar() {
           className="inset-y-0 left-0 h-dvh max-h-none w-[min(85vw,280px)] max-w-none translate-x-0 translate-y-0 gap-0 overflow-y-auto rounded-none border-y-0 border-l-0 bg-sidebar p-0 sm:max-w-none"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            document.getElementById("navigation-toggle")?.focus();
+            const trigger = document.getElementById("mobile-navigation-more") || document.getElementById("navigation-toggle");
+            trigger?.focus();
           }}
         >
           <DialogTitle className="sr-only">Menu de navegação</DialogTitle>

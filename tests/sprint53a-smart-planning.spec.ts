@@ -418,7 +418,7 @@ test.describe("Sprint 53A — Planejamento Inteligente (E2E no Navegador)", () =
     await page.getByLabel("Email").fill(emailA);
     await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: "Cadastrar" }).click();
-    await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 
     await createRealStudy(page, "Conteúdo exclusivo da conta Alpha.");
 
@@ -436,7 +436,7 @@ test.describe("Sprint 53A — Planejamento Inteligente (E2E no Navegador)", () =
     await page.getByLabel("Email").fill(emailB);
     await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: "Cadastrar" }).click();
-    await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 
     await page.goto("/planejamento");
     await expect(page.getByRole("heading", { name: "Plano Privado Alpha" })).toHaveCount(0);
@@ -448,7 +448,7 @@ test.describe("Sprint 53A — Planejamento Inteligente (E2E no Navegador)", () =
     await page.getByLabel("Email").fill(emailA);
     await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: "Entrar", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/planejamento");

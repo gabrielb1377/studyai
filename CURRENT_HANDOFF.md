@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 1 / QU-3 concluída em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 1 / QU-4 concluída em `v1.3-development` (25/11/2026)
 
 Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -9,14 +9,16 @@ Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob res
 - **Onda 1 — Entregas anteriores em `v1.3-development`**:
   - `PS-1b` (`140daf8`): `UntrustedDataBoundary`, `systemPrompt` nativo, cache isolado, anti-spoofing e CSP auditada.
   - `QU-1` (`de9fa6f`, `20dcd4a`): `loading.tsx`/`error.tsx` nas 14 rotas, `global-error.tsx`, `EmptyState`/`Skeleton` unificados e teste comportamental real de recuperação de erro.
-  - `CI V1.3` (`837300c`): `v1.3-development` incluída em `.github/workflows/ci.yml` (repositório público, R$ 0; `deploy.yml` inalterado). CI `45669231299` fechou 5/6 verdes (`quality`, `postgres`, `e2e 1/2/4` ✅) com 1 falha em `e2e (3)` (`sprint41i-c-exam-learning.spec.ts:138`), cuja causa raiz de overflow mobile em `/provas` foi corrigida em `ExamWorkspace.tsx` (`min-w-0` nas colunas do grid, 6/6 verdes local).
-  - `QU-2` (`d3db079`): `Inter` via `next/font/google`, contraste WCAG 2.2 AA (`#5a645d`, 54/54 pares), piso `12px` e limpeza de tokens (`Q-01`, `Q-03`, `Q-11`).
-- **Onda 1 — `QU-3` (Acessibilidade verificável: `Q-04`, `Q-06`) — Concluída em `v1.3-development`**:
-  - **Q-06**: Auditados 102 botões `size="icon*"` e 59 `<button>` nativos em `src/`. Corrigidas as 3 violações reais em `src/features/ai-quality/components/AIQualityPanel.tsx` (linhas 275, 276 e 381: removidos rótulos soltos "Editar"/"Excluir" dentro de `size="icon"`, adicionados `aria-label` descritivos e `aria-hidden="true"` nos SVGs).
-  - **Q-04**: Criada suíte automatizada sem novas dependências (`tests/qu3-accessibility.spec.ts`, integrada automaticamente nos shards `e2e` da CI com `retries=0`), validando landmarks via `ariaSnapshot()`, skip link, `<h1>`, nomes acessíveis efetivos em 10 rotas principais, navegação por teclado (`Tab`, `Ctrl+K`, `Enter`, `Escape`) + `:focus-visible`, e contraste computado real nos temas Claro, Escuro e AMOLED. A suíte detectou e corrigiu violação real de contraste em `TabsTrigger` (`src/components/ui/tabs.tsx:66`, `text-foreground/60` = `3.85:1` -> `text-muted-foreground` = `5.51:1`).
-  - **Limitações**: Testes automatizados não substituem validação manual com leitor de tela real (NVDA/VoiceOver) nem dispositivo físico.
-  - **Validação local (`--retries=0`, R$ 0)**: `typecheck` ✅ · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ · `git diff --check` ✅ · **25/25** Playwright aprovados (`qu3-accessibility` 4/4, `sprint41i-c-exam-learning` 6/6, `qu2-typography-and-scale` 5/5, `qu1-states-and-errors` 10/10).
-- **Próxima etapa oficial**: aguardar autorização do owner para **Onda 1 — `QU-4`** (Navegação mobile e consistência: `Q-07` destinos mobile em até 2 toques sem overflow em `390×844`, `Q-05` primeira pasta de tokens/cores arbitrárias e `Q-12` texto inicial/eyebrow).
+  - `CI V1.3` (`837300c`): `v1.3-development` em `.github/workflows/ci.yml`. Resolução do overflow mobile de `ExamWorkspace.tsx` (`min-w-0`, `2007b7f`) levou `e2e (3)` na CI #45674034812 a **sucesso**.
+  - `QU-2` (`d3db079`): `Inter` via `next/font/google`, contraste WCAG 2.2 AA (`#5a645d`), piso `12px` e limpeza de tokens (`Q-01`, `Q-03`, `Q-11`).
+  - `QU-3` (`dffc481`): 102 botões auditados e corrigidos (`Q-06`), suíte a11y automatizada (`tests/qu3-accessibility.spec.ts`) e contraste em `TabsTrigger` (`text-muted-foreground`).
+- **Onda 1 — `QU-4` (Navegação mobile e consistência: `Q-07`, `Q-05`, `Q-12`) — Concluída em `v1.3-development`**:
+  - **Q-07 (Navegação mobile rápida e acessível)**: expandido `MobileNavigation` para 6 colunas (`Início`, `Biblioteca`, `Estudo`, `Provas`, `Tutor` e botão `Mais`), permitindo acesso direto em 1 toque aos 5 destinos primários e até 2 toques para todos os destinos estendidos (`/lab`, `/planejamento`, `/academy`, `/salas`, `/aprendizagem`, `/importar`, `/configuracoes`, `/conta`). Estado ativo dinâmico em rotas secundárias, touch target >= 44px (`min-h-16`), texto com piso de `12px` (`text-xs`) e zero overflow horizontal em viewports `320px`, `360px`, `390px` e `430px`. Retorno automático de foco ao fechar menu via `onCloseAutoFocus`.
+  - **Q-05 (Consistência de tokens na feature dashboard)**: eliminados `text-[28px]` arbitrários em `continue-studying.tsx` (unificado para `sm:text-3xl`), `sm:text-[15px]` em `page-heading.tsx` (unificado para `sm:text-base`) e padronizados eyebrows manuais para `.type-eyebrow` em `continue-studying.tsx` e `AcademyLabOverview.tsx`.
+  - **Q-12 (Painel inicial e padrão eyebrow)**: eyebrow refinado para `"Painel de estudos"` (`.type-eyebrow`), título preservado `"Que bom ter você por aqui."` (compatibilidade com `foundation.spec.ts` e `release-candidate.spec.ts`) e descrição funcional em português brasileiro natural.
+  - **Estabilização de testes**: adicionado `{ timeout: 15_000 }` nas validações de auth em `tests/sprint53a-smart-planning.spec.ts` para paridade com as demais specs sob carga de CI.
+  - **Validação local (`--retries=0`, R$ 0)**: `typecheck` ✅ · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ · `git diff --check` ✅ · **10/10** testes focados aprovados (`qu4-mobile-navigation-consistency` 5/5, `qu2-typography-and-scale` 5/5) e bateria de regressão aprovada.
+- **Próxima etapa oficial**: aguardar autorização do owner para **Onda 1 — `QU-5`** (Telas grandes: `Q-09`, refatoração orientada a primitivas unificadas em `ExamWorkspace`, `PersonalizedLearningWorkspace` ou `PlanningWorkspace`, uma tela por vez).
 
 ## Registro histórico — Sprint PS-1b (25/11/2026)
 

@@ -25,9 +25,9 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
       aria-labelledby="continue-title"
     >
       <div className="relative z-10 max-w-md">
-        <p className="mb-6 flex items-center gap-2 text-xs font-medium text-primary">
+        <p className="type-eyebrow mb-6 flex items-center gap-2 text-primary">
           <span className="size-1.5 rounded-full bg-primary" />
-          CONTINUE DE ONDE PAROU
+          Continue de onde parou
         </p>
         {record ? (
           <>
@@ -36,7 +36,7 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
         </p>
         <h2
           id="continue-title"
-          className="text-2xl font-semibold tracking-tight sm:text-[28px]"
+          className="text-2xl font-semibold tracking-tight sm:text-3xl"
         >
           {record.title}
         </h2>
@@ -65,7 +65,7 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
         ) : (
           <>
             <p className="mb-2 text-xs text-muted-foreground">Nenhum estudo organizado</p>
-            <h2 id="continue-title" className="text-2xl font-semibold tracking-tight sm:text-[28px]">
+            <h2 id="continue-title" className="text-2xl font-semibold tracking-tight sm:text-3xl">
               Seu próximo tema começa aqui
             </h2>
             <p className="mt-3 max-w-80 text-sm leading-6 text-muted-foreground">

@@ -6,9 +6,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeading
-        eyebrow="Seu espaço de estudos"
+        eyebrow="Painel de estudos"
         title="Que bom ter você por aqui."
-        description="Um novo dia, uma nova descoberta. Vamos aprender algo?"
+        description="Acompanhe seu ritmo semanal, revise materiais recentes e retome o foco de onde parou."
       />
       <StudyDashboard />
       <WeeklyProgress />
