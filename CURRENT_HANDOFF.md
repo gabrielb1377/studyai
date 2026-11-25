@@ -18,6 +18,7 @@ Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob res
     - **Checkpoint B (`e35b741`)**: `PersonalizedLearningWorkspace.tsx` reduzido de 785 para 212 linhas (-73%), extraindo 6 módulos coesos (`learning-constants`, `LearningSummaryCards`, `DifficultyMapTab`, `ManualErrorForm`, `ErrorNotebookTab`, `TargetedReviewsTab`).
     - **Checkpoint C (`d0dc177`)**: `PlanningWorkspace.tsx` reduzido de 668 para 153 linhas (-77%), extraindo 5 módulos coesos (`planning-constants`, `PlanningSummaryMetrics`, `PlanningConfigCard`, `PlanningEmptyState`, `PlanningScheduleTimeline`).
     - **Redução total**: de 2.301 linhas para 730 linhas (-68% nas 3 telas centrais), unificando estados com `RouteLoading`, `RouteErrorState`, `EmptyState` e `Skeleton`.
+  - **Estabilização de testes em CI (`a5729ed`)**: estabilizada asserção de navegação em `tests/academy.spec.ts` com `Promise.all([page.waitForURL(...), click()])` e timeout de 15s.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ (0 erros) · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ (53/53 páginas) · `git diff --check` ✅.
   - **81/81 testes aprovados**: Provas (34/34), Aprendizagem (23/23), Planejamento (5/5), Quality Upgrade QU-1/QU-3/QU-4 (19/19).
