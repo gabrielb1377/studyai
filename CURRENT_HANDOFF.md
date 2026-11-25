@@ -1,26 +1,29 @@
 # Handoff atual — StudyAI V1.2
 
-## Estado atual — Lote 4 Concluído Localmente (Infrastructure Readiness & Railway IaC) (24/11/2026)
+## Estado atual — Fechamento Técnico V1.2 com Infraestrutura Custo Zero (R$ 0/mês) (24/11/2026)
 
-Este é o estado vigente após a conclusão das preparações técnicas e diagnósticos somente leitura do Lote 4. Nenhum recurso remoto, segredo, banco, migration ou deploy foi alterado. O parecer para lançamento público permanece **NO-GO**.
+Este é o estado vigente após a conclusão da homologação local completa (Lote 5 local a R\$ 0/mês) e a adaptação operacional à restrição financeira do owner. **Nenhum recurso pago foi contratado, reativado ou excluído.** O parecer para lançamento público permanece **NO-GO** até homologação remota autorizada.
 
-- **Git, PR #1 & Commits do Lote 4**:
-  - Branch ativa: `v1.1-development`; `main` intocada em `7e3d89b` (`protected=false`); `exp/s3-direct-upload` intacta em `7b7be19`; [PR #1](https://github.com/gabrielb1377/studyai/pull/1) aberto em `draft`.
-  - Commits desta etapa: `b75b4ba` (`next@15.5.29` resolvendo as 3 advisories moderadas; `npm audit --omit=dev` agora com 0 moderadas/altas/críticas e apenas 4 `low` de KaTeX), `781aa6e` (correção da falha `e2e (2)` nas runs CI #51/#52 em `release-stabilization.spec.ts:3C`, correção da causa raiz do flake `sprint58a` em `useWeeklyGoals.ts` e isolamento de fixtures HTTP via IPs RFC 5737 removendo todos os `DELETE FROM rate_limits`), `cdf399e` (normalização `\n` de `DATABASE_CA_CERT` + alerta de `DATABASE_SSL_REJECT_UNAUTHORIZED=false` + tabelas Lote 3 em `postgresHealth()`, `emailConfigured` em `/api/health`, STARTTLS + alias `SMTP_PASS` + `POST /auth/verify/resend` e cobrança real em reconciliação tardia de reserva expirada no `QuotaService`), `8d5e32f` (`tests/lote4-infrastructure-readiness.spec.ts`, integração no job `postgres` da CI e documento canônico `docs/INFRASTRUCTURE_READINESS_V1_2.md`).
-- **Status dos Lotes 1–5**:
-  - **Lote 1 (CI + Semana de Prova + PS-1a)** e **Lote 2 (Atomicidade PG + Índices + Cleanup)**: **Concluídos e validados**.
-  - **Lote 3 (Tokens/Orçamento/BYOK + E-mail Verificado + Cotas 1.024 MiB/200 MiB + PS-2)**: **Concluído** (CI #51/#52 `postgres` verde com `PG3-1`..`PG3-6`; **`SA-01`..`SA-06`** permanecem `Sem definição recuperável`).
-  - **Lote 4 (Infrastructure Readiness, Railway IaC e Production Preparation)**: **Preparado e validado localmente**; operações remotas aguardam autorização do owner (ver [docs/INFRASTRUCTURE_READINESS_V1_2.md](docs/INFRASTRUCTURE_READINESS_V1_2.md)).
-  - **Lote 5 (Staging remoto, backup/restore real e rollback)**: **Pendente** (aguarda autorização do owner). `PS-1b` preservado fora da V1.2.
-- **Inventário Real & Railway IaC (`railway config plan --verbose`, somente leitura)**:
-  - Railway `studyai` (`production`, plano `trial`, região `sfo`): `studyai-web` (`main@7e3d89b`) `FAILED`, `Postgres` (`postgres-ssl:18`, volume `108,1 MB`) `REMOVED`/Offline, bucket S3 `studyai-files` (`t3.storageapi.dev`, `studyai-files-rmuyq1tg4rg`) provisionado.
-  - Achados remotos críticos: variável **`\tAPI_KEYS_ENCRYPTION_KEY`** com TAB literal no nome, **`DATABASE_SSL_REJECT_UNAUTHORIZED=false`** ativo, e ausência de `TRUST_PROXY_HEADERS`, `TRUSTED_PROXY_HOPS`, `SMTP_*`, `MAINTENANCE_SECRET` e variáveis Lote 3.
-  - `railway config plan --verbose` validado nativamente no Windows (com `@railway/cli/bin` no `PATH`, sem alterar `node_modules`): **`0 to add, 0 to change, 1 to destroy`** (apenas `\tAPI_KEYS_ENCRYPTION_KEY`; zero bancos/volumes/buckets/domínios/segredos válidos afetados; sunset `railway.toml` confirmado para **2026-12-01**). `railway config apply` **não executado**.
-  - Supabase `studyai-v1`: sem `SUPABASE_ACCESS_TOKEN` nesta sessão; recomendação mantida (Railway web + Supabase `studyai-v1` com Session Pooler + CA TLS válida), condicionada à conferência de dados no `postgres-volume` e `studyai-v1` com aprovação do owner.
-- **Validação Local em PostgreSQL 18.4 (`--retries=0`, `0` falhas, `0` skips em PG)**:
-  - `lote4-infrastructure-readiness` (**6/6**, incluindo ensaio de migrations `0001`–`0003` em banco novo e legado pré-0001 com 35 tabelas, dados preservados e rollback reverso + expiração mid-request), `lote3` (**10/10**), `lote2` (**8/8**), `release-stabilization` `3C/3E/3F` (**4/4**), e bateria combinada ao vivo SEM limpeza de `rate_limits` (`cloud-sync` 4/4 + `collaboration` 4/4 + `rh2a` 8/8 + `rh2b` 7/7 + `sprint58a` 5/5 = **28/28**) — total **56/56 PASS**.
+- **Separação formal de estados da V1.2**:
+  - **Desenvolvimento V1.2 (Sprints 1–58 + Lotes 1–4)**: **Concluído**.
+  - **Homologação local completa (Lote 5 local — R\$ 0/mês)**: **Concluída** (Next.js standalone `NODE_ENV=production` + PostgreSQL 18.4 + S3 local + SMTP local + `pg_dump`/restore + migrations/rollback + concorrência multi-pool).
+  - **Homologação remota (staging cloud)**: **Pendente** (bloqueada pela restrição R\$ 0/mês e autorização explícita do owner).
+  - **Publicação pública (produção)**: **Pendente (`NO-GO`)** — não impede o avanço futuro do roadmap funcional em branches de desenvolvimento apropriadas.
+- **Git, PR #1 & Commits desta etapa**:
+  - Branch ativa: `v1.1-development`; `main` intocada em `7e3d89b`; `exp/s3-direct-upload` intacta em `7b7be19`; [PR #1](https://github.com/gabrielb1377/studyai/pull/1) em `draft`.
+  - Commits desta etapa: `0ff2a96` (correção da falha `e2e (1)` nas runs CI #53/#54 em `CloudSyncManager.ts` + `CloudSyncProvider.tsx` eliminando eco de pull remoto e sobrescrita de conflito pendente + permissão segura de SMTP loopback para homologação local preservando `requireTLS: true` para hosts remotos) e `faa5f6b` (teste multi-pool `PG4-3` de concorrência com reserva de IA expirada ativa + dupla reconciliação racing, suíte completa de homologação local `tests/lote5-local-homologation.spec.ts` e documento `docs/ZERO_COST_OPERATIONS_V1_2.md`).
+- **Validação Completa Local (`--retries=0`, PostgreSQL 18.4 isolado, `0` falhas)**:
+  - `tests/lote5-local-homologation.spec.ts` (`H5-1`): **1/1 PASS** em **Next.js standalone `NODE_ENV=production`** + PG 18.4 + S3 HTTP local (`AES256` + cota `413`) + SMTP RFC 5321 local (`verify`/`resend`/`recover` com tokens ocultos em produção e revogação `401`) + gate `403 EMAIL_NOT_VERIFIED` + sync/backup/restore atômico + cleanup `401`/`200` + anti-spoofing XFF `429` + **`pg_dump`/`psql`** restaurando 35 tabelas e dados reais.
+  - `tests/lote4-infrastructure-readiness.spec.ts` (`4A`–`4D`, `PG4-1`..`PG4-3`): **7/7 PASS**; `lote3`: **10/10 PASS**; `lote2`: **8/8 PASS**; `verify-concurrency.mjs`: **7/7 PASS**; `run-operational-cleanup.mjs`: **PASS**; `cloud-sync.spec.ts` conflito (`--repeat-each=2`): **2/2 PASS** — total **35/35 PASS**.
   - Gates: `typecheck` (**0 erros**), `lint` (**0 erros**, 44 warnings preexistentes), `build` standalone Next `15.5.29` (**PASS**), `npm audit --omit=dev` (**0 moderate/high/critical**, 4 low KaTeX) e `git diff --check` (**PASS**).
-- **Parecer & Próximo passo**: **NO-GO** para lançamento público. Acompanhar CI verde no novo HEAD e aguardar autorização explícita do owner para as ações remotas listadas em `docs/INFRASTRUCTURE_READINESS_V1_2.md` §11 (banco oficial, plano pago Railway, correção de `\tAPI_KEYS_ENCRYPTION_KEY` + `railway config apply`, SMTP, staging Lote 5 e migrations `0001`–`0003`).
+- **Preservação Railway & Alerta de Retenção ao Owner**:
+  - `studyai-web`, `Postgres` (`postgres-volume` `108,10 MB`), bucket `studyai-files-rmuyq1tg4rg`, variáveis e `railway.toml` preservados sem alteração remota.
+  - **ALERTA URGENTE:** volumes de Railway trial expirado têm janela de retenção de **30 dias** antes da purga permanente; o owner deve conferir a data no dashboard (ou avaliar transição gratuita para o **Railway Free Plan** sem cartão caso queira preservar/exportar `pg_dump`). `railway.toml` tem sunset em **2026-12-01**; migrations `0001`–`0003` permanecem pendentes de aplicação remota; **`SA-01`..`SA-06`** seguem `Sem definição recuperável`.
+- **Próximo passo**: acompanhar CI verde no novo HEAD; decidir preservação/dump do volume Railway dentro do prazo de 30 dias; quando desejado, autorizar próximo ciclo funcional em branch de desenvolvimento (ou homologação remota quando houver orçamento/decisão de provedor). Ver [docs/ZERO_COST_OPERATIONS_V1_2.md](docs/ZERO_COST_OPERATIONS_V1_2.md) e [docs/INFRASTRUCTURE_READINESS_V1_2.md](docs/INFRASTRUCTURE_READINESS_V1_2.md).
+
+## Registro histórico — Lote 4 (24/11/2026)
+
+- **Lote 4 (`b75b4ba`, `781aa6e`, `cdf399e`, `8d5e32f`, `e3bae36`)**: atualização `next@15.5.29` (0 moderadas), correção `release-stabilization:3C` e `useWeeklyGoals`, isolamento de IPs RFC 5737 nos testes, hardening TLS/CA/readiness/SMTP STARTTLS/`POST /auth/verify/resend`/expiração mid-request, inventário Railway e `railway config plan --verbose` (`0 add / 0 change / 1 destroy` na chave corrompida `\tAPI_KEYS_ENCRYPTION_KEY`). CI #53/#54 teve 5/6 jobs verdes (`quality`, `postgres`, `e2e 2–4`) e 1 falha em `e2e (1)` (`cloud-sync.spec.ts:158`), corrigida em `0ff2a96`.
 
 ## Registro histórico — Lote 3A/3B (24/11/2026)
 
