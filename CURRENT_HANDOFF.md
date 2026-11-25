@@ -1,21 +1,22 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 1 / QU-2, QU-1 e CI V1.3 concluídas em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 1 / QU-3 concluída em `v1.3-development` (25/11/2026)
 
 Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
-- **CI V1.3 (`837300c`)**: Repositório confirmado público (`visibility=public`, R$ 0 no GitHub Actions). Incluída `v1.3-development` em `push.branches` de `.github/workflows/ci.yml` preservando os 6 jobs (`quality`, `postgres`, `e2e (1)`–`e2e (4)`). `deploy.yml` inalterado (sem deploy em `v1.3-development`).
-- **Onda 1 — `PS-1b` (`140daf8`) e `QU-1` (`de9fa6f`, `20dcd4a`)**:
-  - `PS-1b`: `UntrustedDataBoundary` canônico, `systemPrompt` nativo por provedor, cache isolado, anti-spoofing e CSP auditada (68/68 local).
-  - `QU-1` (`Q-02`, `Q-08`): fronteiras `loading.tsx`/`error.tsx` nas 14 rotas principais, `global-error.tsx` (com `@/styles/globals.css`), `src/app/error.tsx` via `RouteErrorState`, unificação de `EmptyState`/`Skeleton` e teste comportamental real em navegador comprovando captura de erro transitório sem vazamento de detalhes sensíveis e recuperação via "Tentar novamente" (10/10).
-- **Onda 1 — `QU-2` (Tipografia e escala: `Q-01`, `Q-03`, `Q-11`) — Concluída em `v1.3-development`**:
-  - **Q-01**: Adotada `Inter` (SIL OFL 1.1) via `next/font/google` em `src/app/layout.tsx` (`display: "swap"`, `adjustFontFallback: true`, self-hosted em `'self'`, compatível com CSP/PWA e CLS < 0.05). Decisão e tabela WCAG 2.2 AA registradas em `docs/DESIGN_SYSTEM.md`.
-  - **Q-03**: `--muted-foreground` no tema Claro ajustado de `#68716a` (`4.45:1` FAIL em `--secondary`) para `#5a645d` (`5.42:1`–`6.15:1` PASS), elevando 54/54 pares nos temas Claro, Escuro e AMOLED a `>= 4.50:1`. Adicionadas classes `.type-eyebrow`, `.type-caption` e `.type-label` (piso `12px`) e eliminados textos `9–11px` em `page.tsx`, `page-heading.tsx`, `sidebar.tsx`, `search-dialog.tsx`, `recent-topics.tsx`, `weekly-progress.tsx` e `WeeklyGoalPanel.tsx`.
-  - **Q-11**: Consolidado bloco duplicado `@media (prefers-reduced-motion: reduce)` em `globals.css`, unificados raios/sombras de `DropdownMenuSubContent` e itens em `dropdown-menu.tsx` (`rounded-xl`/`rounded-lg`), e alinhados `themeColor` (claro) em `layout.tsx` e `background_color` em `public/manifest.webmanifest` para `#f8faf7`.
-  - **Validação local (`--retries=0`, R$ 0)**: `npm run typecheck` ✅ · `npm run lint` ✅ (0 erros, 44 avisos preexistentes) · `npm run build` ✅ · `git diff --check` ✅ · **18/18** Playwright aprovados (`qu2-typography-and-scale` 5/5, `qu1-states-and-errors` 10/10, `sprint48c-feedback` 1/1, `sprint49c-clean-ui` 2/2).
-- **Próxima etapa oficial**: aguardar autorização do owner para **Onda 1 — `QU-3`** (Acessibilidade verificável: `Q-04` verificação automática de a11y na CI e `Q-06` botões `size="icon"` com nome acessível).
+- **Onda 1 — Entregas anteriores em `v1.3-development`**:
+  - `PS-1b` (`140daf8`): `UntrustedDataBoundary`, `systemPrompt` nativo, cache isolado, anti-spoofing e CSP auditada.
+  - `QU-1` (`de9fa6f`, `20dcd4a`): `loading.tsx`/`error.tsx` nas 14 rotas, `global-error.tsx`, `EmptyState`/`Skeleton` unificados e teste comportamental real de recuperação de erro.
+  - `CI V1.3` (`837300c`): `v1.3-development` incluída em `.github/workflows/ci.yml` (repositório público, R$ 0; `deploy.yml` inalterado). CI `45669231299` fechou 5/6 verdes (`quality`, `postgres`, `e2e 1/2/4` ✅) com 1 falha em `e2e (3)` (`sprint41i-c-exam-learning.spec.ts:138`), cuja causa raiz de overflow mobile em `/provas` foi corrigida em `ExamWorkspace.tsx` (`min-w-0` nas colunas do grid, 6/6 verdes local).
+  - `QU-2` (`d3db079`): `Inter` via `next/font/google`, contraste WCAG 2.2 AA (`#5a645d`, 54/54 pares), piso `12px` e limpeza de tokens (`Q-01`, `Q-03`, `Q-11`).
+- **Onda 1 — `QU-3` (Acessibilidade verificável: `Q-04`, `Q-06`) — Concluída em `v1.3-development`**:
+  - **Q-06**: Auditados 102 botões `size="icon*"` e 59 `<button>` nativos em `src/`. Corrigidas as 3 violações reais em `src/features/ai-quality/components/AIQualityPanel.tsx` (linhas 275, 276 e 381: removidos rótulos soltos "Editar"/"Excluir" dentro de `size="icon"`, adicionados `aria-label` descritivos e `aria-hidden="true"` nos SVGs).
+  - **Q-04**: Criada suíte automatizada sem novas dependências (`tests/qu3-accessibility.spec.ts`, integrada automaticamente nos shards `e2e` da CI com `retries=0`), validando landmarks via `ariaSnapshot()`, skip link, `<h1>`, nomes acessíveis efetivos em 10 rotas principais, navegação por teclado (`Tab`, `Ctrl+K`, `Enter`, `Escape`) + `:focus-visible`, e contraste computado real nos temas Claro, Escuro e AMOLED. A suíte detectou e corrigiu violação real de contraste em `TabsTrigger` (`src/components/ui/tabs.tsx:66`, `text-foreground/60` = `3.85:1` -> `text-muted-foreground` = `5.51:1`).
+  - **Limitações**: Testes automatizados não substituem validação manual com leitor de tela real (NVDA/VoiceOver) nem dispositivo físico.
+  - **Validação local (`--retries=0`, R$ 0)**: `typecheck` ✅ · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ · `git diff --check` ✅ · **25/25** Playwright aprovados (`qu3-accessibility` 4/4, `sprint41i-c-exam-learning` 6/6, `qu2-typography-and-scale` 5/5, `qu1-states-and-errors` 10/10).
+- **Próxima etapa oficial**: aguardar autorização do owner para **Onda 1 — `QU-4`** (Navegação mobile e consistência: `Q-07` destinos mobile em até 2 toques sem overflow em `390×844`, `Q-05` primeira pasta de tokens/cores arbitrárias e `Q-12` texto inicial/eyebrow).
 
 ## Registro histórico — Sprint PS-1b (25/11/2026)
 

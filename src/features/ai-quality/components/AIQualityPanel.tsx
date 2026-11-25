@@ -272,8 +272,27 @@ function AIQualityPanel() {
                       <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{c.question}</p>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditCase(c)}><FileText className="size-4" /> Editar</Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDeleteCase(c.id)}><Trash2 className="size-4" /> Excluir</Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Editar caso ${c.name}`}
+                        title={`Editar caso ${c.name}`}
+                        onClick={() => handleEditCase(c)}
+                      >
+                        <FileText className="size-4" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive"
+                        aria-label={`Excluir caso ${c.name}`}
+                        title={`Excluir caso ${c.name}`}
+                        onClick={() => handleDeleteCase(c.id)}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </Button>
                     </div>
                   </div>
                   <details className="mt-3 text-sm text-muted-foreground">
@@ -378,7 +397,17 @@ function AIQualityPanel() {
                             Comparar com baseline
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => EvaluationStorage.deleteRun(run.id)}><Trash2 className="size-4" /></Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          aria-label={`Excluir execução de ${formatDate(run.startedAt)}`}
+                          title={`Excluir execução de ${formatDate(run.startedAt)}`}
+                          onClick={() => EvaluationStorage.deleteRun(run.id)}
+                        >
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </Button>
                       </div>
                     </div>
                     <details className="mt-2">
