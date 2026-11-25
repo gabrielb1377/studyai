@@ -1,4 +1,5 @@
 import type { TutorStudyContext } from "@/types/tutor-context";
+import { isSkillsEnabled, SkillRegistry } from "@/features/ai/skills";
 import {
   teacherLevelLabels,
   teacherMethodLabels,
@@ -47,6 +48,13 @@ export const TeacherPromptBuilder = {
    * final (PromptBuilder) o inclui dentro do bloco de dados não confiáveis.
    */
   instruction(request: TeacherRequest, options: { omitSelection?: boolean } = {}) {
+    if (isSkillsEnabled()) {
+      const spec = SkillRegistry.get(`teacher.${request.action}`);
+      if (spec?.buildInstruction) {
+        return spec.buildInstruction({ request, options });
+      }
+    }
+
     const blocks = [
       "Modo Professor ativo.",
       `Nível solicitado: ${teacherLevelLabels[request.level]}. ${levelInstructions[request.level]}`,
@@ -88,6 +96,13 @@ export const TeacherPromptBuilder = {
     summaryStyle?: TeacherRequest["summaryStyle"],
     exerciseStage?: number,
   ) {
+    if (isSkillsEnabled()) {
+      const spec = SkillRegistry.get(`teacher.${action}`);
+      if (spec?.buildActionMessage) {
+        return spec.buildActionMessage({ context, summaryStyle, exerciseStage });
+      }
+    }
+
     const topic = context?.topic || context?.title || "o tema atual";
     const messages: Record<TeacherAction, string> = {
       dialogue: "Responda considerando meu nível e o método de ensino selecionado.",

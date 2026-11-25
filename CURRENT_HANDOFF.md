@@ -1,28 +1,25 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 1 / QU-5 concluída e Fechamento do Quality Upgrade em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 2 / IE-1 concluída: Registro e Contrato Pedagógico em `v1.3-development` (25/11/2026)
 
-Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
+Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
-  - `PS-1b` (`140daf8`): `UntrustedDataBoundary`, `systemPrompt` nativo, cache isolado, anti-spoofing e CSP auditada.
-  - `QU-1` (`de9fa6f`, `20dcd4a`): `loading.tsx`/`error.tsx` em 14 rotas, `global-error.tsx`, `EmptyState`/`Skeleton` unificados.
-  - `CI V1.3` (`837300c`): inclusão de `v1.3-development` no workflow CI.
-  - `QU-2` (`d3db079`): `Inter` via `next/font/google`, contraste WCAG 2.2 AA (`#5a645d`), piso `12px` (`Q-01`, `Q-03`, `Q-11`).
-  - `QU-3` (`dffc481`): 102 botões icon auditados (`Q-06`), suíte a11y automatizada (`qu3-accessibility.spec.ts`), contraste `TabsTrigger`.
-  - `QU-4` (`d104319`): navegação mobile em até 2 toques (`Q-07`), padronização de tokens/eyebrow (`Q-05`, `Q-12`), warm-up de rotas.
-  - `QU-5` (Telas grandes: `Q-09` — Refatoração incremental orientada a primitivas unificadas):
-    - **Checkpoint A (`0ae42af`)**: `ExamWorkspace.tsx` reduzido de 848 para 365 linhas (-57%), extraindo 7 subcomponentes coesos (`ExamListSidebar`, `ExamDetailHeader`, `ExamFormCard`, `ExamLearningActionsCard`, `ExamRealProgressCard`, `ExamChecklistAndPlan`, `ExamMaterialsCard`). Contrato estático Q-08 e warm-up global (`tests/global-setup.ts`) commitados em `d04d4b1`.
-    - **Checkpoint B (`e35b741`)**: `PersonalizedLearningWorkspace.tsx` reduzido de 785 para 212 linhas (-73%), extraindo 6 módulos coesos (`learning-constants`, `LearningSummaryCards`, `DifficultyMapTab`, `ManualErrorForm`, `ErrorNotebookTab`, `TargetedReviewsTab`).
-    - **Checkpoint C (`d0dc177`)**: `PlanningWorkspace.tsx` reduzido de 668 para 153 linhas (-77%), extraindo 5 módulos coesos (`planning-constants`, `PlanningSummaryMetrics`, `PlanningConfigCard`, `PlanningEmptyState`, `PlanningScheduleTimeline`).
-    - **Redução total**: de 2.301 linhas para 730 linhas (-68% nas 3 telas centrais), unificando estados com `RouteLoading`, `RouteErrorState`, `EmptyState` e `Skeleton`.
-  - **Estabilização de testes em CI (`a5729ed`)**: estabilizada asserção de navegação em `tests/academy.spec.ts` com `Promise.all([page.waitForURL(...), click()])` e timeout de 15s.
+  - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`).
+  - **Estabilização de testes CI (`7648fe2`)**: estabilizada asserção de navegação em `tests/sprint51c-persistence-publishing.spec.ts` com `Promise.all([page.waitForURL(...), click()])` e timeout de 15s.
+- **Onda 2 — Inteligência Pedagógica / IE-1 Concluída (`v1.3-development`)**:
+  - **Contrato canônico `SkillSpec` (`src/features/ai/skills/types.ts`)**: `id`, `version` (semver), `objective`, `triggers`, `inputs`, `allowedContext`, `allowedTools`, `output`, `tokenBudget`, `safety`, `qualityCriteria`, `tests`, `fallback`.
+  - **Registro imutável `SkillRegistry` (`src/features/ai/skills/SkillRegistry.ts`)**: validação estrita de semver/campos obrigatórios, rejeição de duplicidade (`DuplicateSkillError`), congelamento profundo (`Object.freeze`), resolução semver automática para versão mais recente e hook de registro adiado.
+  - **Validador estrutural `OutputValidator` (`src/features/ai/skills/OutputValidator.ts`)**: suporte a tipos `text`, `json` (com extração tolerante de markdown) e `mermaid`, validação de chaves obrigatórias, teto de palavras (`maxOutputWords`) e validador customizado.
+  - **Serviço de reparo `SkillRepairService` (`src/features/ai/skills/SkillRepairService.ts`)**: exatamente 1 tentativa de reparo guiada pelos erros estruturais; ativação imediata do fallback seguro declarado em caso de segunda falha ou exceção (prevenção absoluta de loops).
+  - **Migração do Professor por paridade estrita (`src/features/ai/skills/teacher/TeacherSkills.ts` e `src/features/teacher/TeacherPromptBuilder.ts`)**: 13 ações (`teacher.<action>` v1.0.0), 5 níveis e 7 métodos mapeados no registro; compatibilidade total com o feature flag `isSkillsEnabled()` (`skills.enabled`, default `false`). Paridade 100% comprovada caractere-por-caractere.
+  - **Testes do IE-1 (`tests/ie1-skills-registry.spec.ts`)**: 20/20 testes aprovados, incluindo matriz 13x5x7 (455 combinações de paridade exata flag on vs off).
+  - **Regressão Tutor e Professor (`tests/teacher.spec.ts` e `tests/tutor.spec.ts`)**: 8/8 testes aprovados.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
-  - `typecheck` ✅ (0 erros) · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ (53/53 páginas) · `git diff --check` ✅.
-  - **81/81 testes aprovados**: Provas (34/34), Aprendizagem (23/23), Planejamento (5/5), Quality Upgrade QU-1/QU-3/QU-4 (19/19).
-- **Próxima etapa oficial**: Onda 2 — Inteligência Pedagógica / `IE-1` (Taxonomia Pedagógica Unificada: `BloomTaxonomyLevel`, `MisconceptionCategory`, `CognitiveGapAnalysis`). Aguardar autorização formal do owner.
+  - `typecheck` ✅ (0 erros) · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ (53/53 páginas dinâmicas) · `git diff --check` ✅.
+- **Próxima etapa oficial**: Onda 2 / `IE-2` — Skills Piloto (`technique.feynman`, `technique.socratic`, `technique.active-recall` com fixtures na CI sob provedor simulado, sem chamadas pagas). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
