@@ -1,24 +1,36 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 1 / QU-4 concluída em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 1 / QU-5 concluída e Fechamento do Quality Upgrade em `v1.3-development` (25/11/2026)
 
 Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
-  - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
-- **Onda 1 — Entregas anteriores em `v1.3-development`**:
+  - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`.
+- **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`): `UntrustedDataBoundary`, `systemPrompt` nativo, cache isolado, anti-spoofing e CSP auditada.
-  - `QU-1` (`de9fa6f`, `20dcd4a`): `loading.tsx`/`error.tsx` nas 14 rotas, `global-error.tsx`, `EmptyState`/`Skeleton` unificados e teste comportamental real de recuperação de erro.
-  - `CI V1.3` (`837300c`): `v1.3-development` em `.github/workflows/ci.yml`. Resolução do overflow mobile de `ExamWorkspace.tsx` (`min-w-0`, `2007b7f`) levou `e2e (3)` na CI #45674034812 a **sucesso**.
-  - `QU-2` (`d3db079`): `Inter` via `next/font/google`, contraste WCAG 2.2 AA (`#5a645d`), piso `12px` e limpeza de tokens (`Q-01`, `Q-03`, `Q-11`).
-  - `QU-3` (`dffc481`): 102 botões auditados e corrigidos (`Q-06`), suíte a11y automatizada (`tests/qu3-accessibility.spec.ts`) e contraste em `TabsTrigger` (`text-muted-foreground`).
-- **Onda 1 — `QU-4` (Navegação mobile e consistência: `Q-07`, `Q-05`, `Q-12`) — Concluída em `v1.3-development`**:
+  - `QU-1` (`de9fa6f`, `20dcd4a`): `loading.tsx`/`error.tsx` em 14 rotas, `global-error.tsx`, `EmptyState`/`Skeleton` unificados.
+  - `CI V1.3` (`837300c`): inclusão de `v1.3-development` no workflow CI.
+  - `QU-2` (`d3db079`): `Inter` via `next/font/google`, contraste WCAG 2.2 AA (`#5a645d`), piso `12px` (`Q-01`, `Q-03`, `Q-11`).
+  - `QU-3` (`dffc481`): 102 botões icon auditados (`Q-06`), suíte a11y automatizada (`qu3-accessibility.spec.ts`), contraste `TabsTrigger`.
+  - `QU-4` (`d104319`): navegação mobile em até 2 toques (`Q-07`), padronização de tokens/eyebrow (`Q-05`, `Q-12`), warm-up de rotas.
+  - `QU-5` (Telas grandes: `Q-09` — Refatoração incremental orientada a primitivas unificadas):
+    - **Checkpoint A (`0ae42af`)**: `ExamWorkspace.tsx` reduzido de 848 para 365 linhas (-57%), extraindo 7 subcomponentes coesos (`ExamListSidebar`, `ExamDetailHeader`, `ExamFormCard`, `ExamLearningActionsCard`, `ExamRealProgressCard`, `ExamChecklistAndPlan`, `ExamMaterialsCard`). Contrato estático Q-08 e warm-up global (`tests/global-setup.ts`) commitados em `d04d4b1`.
+    - **Checkpoint B (`e35b741`)**: `PersonalizedLearningWorkspace.tsx` reduzido de 785 para 212 linhas (-73%), extraindo 6 módulos coesos (`learning-constants`, `LearningSummaryCards`, `DifficultyMapTab`, `ManualErrorForm`, `ErrorNotebookTab`, `TargetedReviewsTab`).
+    - **Checkpoint C (`d0dc177`)**: `PlanningWorkspace.tsx` reduzido de 668 para 153 linhas (-77%), extraindo 5 módulos coesos (`planning-constants`, `PlanningSummaryMetrics`, `PlanningConfigCard`, `PlanningEmptyState`, `PlanningScheduleTimeline`).
+    - **Redução total**: de 2.301 linhas para 730 linhas (-68% nas 3 telas centrais), unificando estados com `RouteLoading`, `RouteErrorState`, `EmptyState` e `Skeleton`.
+- **Validação Integrada (`--retries=0`, R$ 0)**:
+  - `typecheck` ✅ (0 erros) · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ (53/53 páginas) · `git diff --check` ✅.
+  - **81/81 testes aprovados**: Provas (34/34), Aprendizagem (23/23), Planejamento (5/5), Quality Upgrade QU-1/QU-3/QU-4 (19/19).
+- **Próxima etapa oficial**: Onda 2 — Inteligência Pedagógica / `IE-1` (Taxonomia Pedagógica Unificada: `BloomTaxonomyLevel`, `MisconceptionCategory`, `CognitiveGapAnalysis`). Aguardar autorização formal do owner.
+
+## Registro histórico — Sprint QU-4 (25/11/2026)
+
+- **Onda 1 — `QU-4` (`d104319` em `v1.3-development`)**:
   - **Q-07 (Navegação mobile rápida e acessível)**: expandido `MobileNavigation` para 6 colunas (`Início`, `Biblioteca`, `Estudo`, `Provas`, `Tutor` e botão `Mais`), permitindo acesso direto em 1 toque aos 5 destinos primários e até 2 toques para todos os destinos estendidos (`/lab`, `/planejamento`, `/academy`, `/salas`, `/aprendizagem`, `/importar`, `/configuracoes`, `/conta`). Estado ativo dinâmico em rotas secundárias, touch target >= 44px (`min-h-16`), texto com piso de `12px` (`text-xs`) e zero overflow horizontal em viewports `320px`, `360px`, `390px` e `430px`. Retorno automático de foco ao fechar menu via `onCloseAutoFocus`.
   - **Q-05 (Consistência de tokens na feature dashboard)**: eliminados `text-[28px]` arbitrários em `continue-studying.tsx` (unificado para `sm:text-3xl`), `sm:text-[15px]` em `page-heading.tsx` (unificado para `sm:text-base`) e padronizados eyebrows manuais para `.type-eyebrow` em `continue-studying.tsx` e `AcademyLabOverview.tsx`.
   - **Q-12 (Painel inicial e padrão eyebrow)**: eyebrow refinado para `"Painel de estudos"` (`.type-eyebrow`), título preservado `"Que bom ter você por aqui."` (compatibilidade com `foundation.spec.ts` e `release-candidate.spec.ts`) e descrição funcional em português brasileiro natural.
   - **Estabilização de testes**: adicionado `{ timeout: 15_000 }` nas validações de auth em `tests/sprint53a-smart-planning.spec.ts` para paridade com as demais specs sob carga de CI.
-  - **Validação local (`--retries=0`, R$ 0)**: `typecheck` ✅ · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ · `git diff --check` ✅ · **10/10** testes focados aprovados (`qu4-mobile-navigation-consistency` 5/5, `qu2-typography-and-scale` 5/5) e bateria de regressão aprovada.
-- **Próxima etapa oficial**: aguardar autorização do owner para **Onda 1 — `QU-5`** (Telas grandes: `Q-09`, refatoração orientada a primitivas unificadas em `ExamWorkspace`, `PersonalizedLearningWorkspace` ou `PlanningWorkspace`, uma tela por vez).
+  - **Validação local (`--retries=0`, R$ 0)**: `typecheck` ✅ · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ · `git diff --check` ✅ · **10/10** testes focados aprovados e bateria de regressão aprovada.
 
 ## Registro histórico — Sprint PS-1b (25/11/2026)
 
