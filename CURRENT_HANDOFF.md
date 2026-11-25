@@ -1,19 +1,21 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 1 / QU-1 e PS-1b concluídas em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 1 / QU-2, QU-1 e CI V1.3 concluídas em `v1.3-development` (25/11/2026)
 
 Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
-  - **CI GitHub Actions 6/6 VERDE**: `push` (`45519407335`) e `pull_request` (`45519417036`) aprovados em todos os 6 jobs (`quality`, `postgres`, `e2e (1)`–`e2e (4)`).
-  - Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
-- **Caminho B — Sprint `PS-1b` (Delimitador único e system prompt por provedor) — Commitado e publicado**:
-  - Commit `140daf8` em `origin/v1.3-development`: `UntrustedDataBoundary` canônico em todos os construtores de prompt de IA, `systemPrompt` nativo (Gemini, Groq, OpenRouter, Ollama), cache isolado, anti-spoofing em `QuotaMiddleware` e auditoria de CSP. Validado localmente com 68/68 testes.
-- **Caminho C — Sprint `QU-1` (Quality Upgrade: Estados e Erros) — Concluída em `v1.3-development`**:
-  - **Q-02 (Loading & Error Boundaries)**: Criadas primitivas `RouteLoading` (`role="status"`, `aria-label`, `<span className="sr-only">`, `Skeleton` canônicos) e `RouteErrorState` (`role="alert"`, `EmptyState` com `TriangleAlert` e botão "Tentar novamente" via `reset()`) em `src/components/route-states.tsx`. Implementados `loading.tsx` e `error.tsx` em todas as 14 rotas principais e `global-error.tsx` na raiz com layout HTML completo.
-  - **Q-08 (Unificação de Skeleton e EmptyState)**: Removidos cartões, caixas pontilhadas e textos manuais ad-hoc em `ExamWorkspace.tsx`, `StudyDashboard.tsx`, `AcademyLabOverview.tsx`, `CollaborationPage.tsx` e `organizar/loading.tsx`, padronizando com `EmptyState` e `Skeleton`.
-  - **Validação local `QU-1` (`--retries=0`, R$ 0)**: `npm run build` ✅ · `npm run typecheck` ✅ · `npm run lint` ✅ (0 erros, 44 avisos preexistentes) · `git diff --check` ✅. 26/26 testes Playwright aprovados sem retries/skips (`tests/qu1-states-and-errors.spec.ts` 9/9, `tests/ps1b-prompt-hardening.spec.ts` 12/12, `tests/sprint48c-feedback.spec.ts` 1/1, `tests/sprint41g3d-browser-isolation.spec.ts` 2/2, `tests/sprint49c-clean-ui.spec.ts` 2/2).
-- **Próxima etapa**: aguardar autorização do owner para a próxima etapa oficial do roadmap: **Onda 1 — `QU-2`** (Mobile First: Sheet, touch targets 44px e safe areas) ou **Onda 2 — `IE-1`** (Intelligence Engine: registro de interações e contrato canônico).
+  - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
+- **CI V1.3 (`837300c`)**: Repositório confirmado público (`visibility=public`, R$ 0 no GitHub Actions). Incluída `v1.3-development` em `push.branches` de `.github/workflows/ci.yml` preservando os 6 jobs (`quality`, `postgres`, `e2e (1)`–`e2e (4)`). `deploy.yml` inalterado (sem deploy em `v1.3-development`).
+- **Onda 1 — `PS-1b` (`140daf8`) e `QU-1` (`de9fa6f`, `20dcd4a`)**:
+  - `PS-1b`: `UntrustedDataBoundary` canônico, `systemPrompt` nativo por provedor, cache isolado, anti-spoofing e CSP auditada (68/68 local).
+  - `QU-1` (`Q-02`, `Q-08`): fronteiras `loading.tsx`/`error.tsx` nas 14 rotas principais, `global-error.tsx` (com `@/styles/globals.css`), `src/app/error.tsx` via `RouteErrorState`, unificação de `EmptyState`/`Skeleton` e teste comportamental real em navegador comprovando captura de erro transitório sem vazamento de detalhes sensíveis e recuperação via "Tentar novamente" (10/10).
+- **Onda 1 — `QU-2` (Tipografia e escala: `Q-01`, `Q-03`, `Q-11`) — Concluída em `v1.3-development`**:
+  - **Q-01**: Adotada `Inter` (SIL OFL 1.1) via `next/font/google` em `src/app/layout.tsx` (`display: "swap"`, `adjustFontFallback: true`, self-hosted em `'self'`, compatível com CSP/PWA e CLS < 0.05). Decisão e tabela WCAG 2.2 AA registradas em `docs/DESIGN_SYSTEM.md`.
+  - **Q-03**: `--muted-foreground` no tema Claro ajustado de `#68716a` (`4.45:1` FAIL em `--secondary`) para `#5a645d` (`5.42:1`–`6.15:1` PASS), elevando 54/54 pares nos temas Claro, Escuro e AMOLED a `>= 4.50:1`. Adicionadas classes `.type-eyebrow`, `.type-caption` e `.type-label` (piso `12px`) e eliminados textos `9–11px` em `page.tsx`, `page-heading.tsx`, `sidebar.tsx`, `search-dialog.tsx`, `recent-topics.tsx`, `weekly-progress.tsx` e `WeeklyGoalPanel.tsx`.
+  - **Q-11**: Consolidado bloco duplicado `@media (prefers-reduced-motion: reduce)` em `globals.css`, unificados raios/sombras de `DropdownMenuSubContent` e itens em `dropdown-menu.tsx` (`rounded-xl`/`rounded-lg`), e alinhados `themeColor` (claro) em `layout.tsx` e `background_color` em `public/manifest.webmanifest` para `#f8faf7`.
+  - **Validação local (`--retries=0`, R$ 0)**: `npm run typecheck` ✅ · `npm run lint` ✅ (0 erros, 44 avisos preexistentes) · `npm run build` ✅ · `git diff --check` ✅ · **18/18** Playwright aprovados (`qu2-typography-and-scale` 5/5, `qu1-states-and-errors` 10/10, `sprint48c-feedback` 1/1, `sprint49c-clean-ui` 2/2).
+- **Próxima etapa oficial**: aguardar autorização do owner para **Onda 1 — `QU-3`** (Acessibilidade verificável: `Q-04` verificação automática de a11y na CI e `Q-06` botões `size="icon"` com nome acessível).
 
 ## Registro histórico — Sprint PS-1b (25/11/2026)
 

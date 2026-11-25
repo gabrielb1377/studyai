@@ -8,7 +8,7 @@
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#fafbf9",
+  "background_color": "#f8faf7",
   "theme_color": "#29664d",
   "categories": ["education", "productivity"],
   "lang": "pt-BR",

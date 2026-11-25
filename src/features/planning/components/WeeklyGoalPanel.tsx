@@ -111,7 +111,7 @@ export function WeeklyGoalPanel({
               <h2 id="weekly-goal-heading" className="text-base font-semibold">
                 Meta semanal de estudo
               </h2>
-              <Badge variant="outline" className="gap-1 text-[11px] font-normal">
+              <Badge variant="outline" className="gap-1 text-xs font-normal">
                 <CalendarDays className="size-3" aria-hidden="true" />
                 {progress.week.periodLabel}
               </Badge>
@@ -229,7 +229,7 @@ export function WeeklyGoalPanel({
                 <p className="mt-1 text-lg font-semibold tabular-nums">
                   {formatTarget(goal.type, progress.currentValue)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {progress.completedMinutes} min · {progress.completedSessions}{" "}
                   {progress.completedSessions === 1 ? "sessão" : "sessões"}
                 </p>

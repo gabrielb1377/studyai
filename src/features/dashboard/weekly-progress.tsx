@@ -50,9 +50,9 @@ export function WeeklyProgress() {
         <div className="flex h-32 items-end gap-3 sm:gap-5" role="img" aria-label={activity.map((item) => `${item.day}: ${item.count} temas`).join("; ")}>
           {activity.map((item) => (
             <div key={item.day} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2">
-              <span className="text-[10px] text-muted-foreground">{item.count || "—"}</span>
+              <span className="type-caption">{item.count || "—"}</span>
               <div className="w-full max-w-12 rounded-t-md bg-primary/25 transition-colors hover:bg-primary/50" style={{ height: `${Math.max((item.count / maximum) * 72, 3)}px` }} />
-              <span className="text-[10px] text-muted-foreground">{item.day}</span>
+              <span className="type-caption">{item.day}</span>
             </div>
           ))}
         </div>

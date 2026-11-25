@@ -12,7 +12,7 @@ export default function DashboardPage() {
       />
       <StudyDashboard />
       <WeeklyProgress />
-      <p className="pb-2 text-center text-[11px] text-muted-foreground">
+      <p className="type-caption pb-2 text-center">
         Aprender não é uma corrida. Encontre o seu ritmo.
       </p>
     </div>

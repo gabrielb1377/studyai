@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { AppShell } from "@/components/layout/app-shell";
 import { Providers } from "@/components/providers";
 import "@/styles/globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  adjustFontFallback: true,
+});
 
 export const metadata: Metadata = {
   title: { default: "Dashboard · StudyAI", template: "%s · StudyAI" },
@@ -20,7 +28,7 @@ export const metadata: Metadata = {
 
 export const viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#fafbf9" },
+    { media: "(prefers-color-scheme: light)", color: "#f8faf7" },
     { media: "(prefers-color-scheme: dark)", color: "#161b18" },
   ],
   width: "device-width",
@@ -33,7 +41,7 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" className={inter.variable} suppressHydrationWarning>
       <body>
         <Providers nonce={nonce}>
           <AppShell>{children}</AppShell>

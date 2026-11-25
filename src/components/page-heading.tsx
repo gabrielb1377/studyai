@@ -12,7 +12,7 @@ export function PageHeading({
   return (
     <header className="mb-8 flex flex-wrap items-end justify-between gap-5">
       <div>
-        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <p className="type-eyebrow mb-2.5">
           {eyebrow}
         </p>
         <h1 className="type-page-title">

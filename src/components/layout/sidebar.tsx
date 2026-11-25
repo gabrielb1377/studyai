@@ -45,7 +45,7 @@ function SidebarContent({ compact = false }: { compact?: boolean }) {
           </p>
         </div>}
       </div>
-      <p className={cn("mb-3 px-3 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground", compact && "sr-only")}>
+      <p className={cn("type-eyebrow mb-3 px-3", compact && "sr-only")}>
         SEU WORKSPACE
       </p>
       <nav aria-label="Navegação principal" className="space-y-1.5">
@@ -80,7 +80,7 @@ function SidebarContent({ compact = false }: { compact?: boolean }) {
           <br />
           Grandes descobertas.
         </p>
-        <div className="mt-6 border-t pt-4 text-[11px] text-muted-foreground">
+        <div className="type-caption mt-6 border-t pt-4">
           StudyAI <span className="mx-1">·</span> Seu ritmo, seu espaço.
         </div>
       </div>}

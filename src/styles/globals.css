@@ -30,7 +30,7 @@
   --secondary: #edf2ed;
   --secondary-foreground: #314a3e;
   --muted: #f1f3ef;
-  --muted-foreground: #68716a;
+  --muted-foreground: #5a645d;
   --accent: #e8f0e9;
   --accent-foreground: #28583e;
   --destructive: #bc3636;
@@ -149,7 +149,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 @layer base {
@@ -208,6 +208,9 @@
   .type-subtitle { @apply text-base font-semibold; }
   .type-body { @apply text-base leading-6; }
   .type-supporting { @apply text-sm leading-6 text-muted-foreground; }
+  .type-eyebrow { @apply text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground; }
+  .type-caption { @apply text-xs leading-5 text-muted-foreground; }
+  .type-label { @apply text-xs font-medium leading-4; }
 
   .feedback-info { color: var(--info-foreground); background: var(--info-surface); border-color: var(--info-border); }
   .feedback-success { color: var(--success-foreground); background: var(--success-surface); border-color: var(--success-border); }
@@ -369,11 +372,18 @@ html[data-reduced-motion="true"] *::after {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .page-enter, .content-fade, .skeleton-shimmer::after { animation: none; }
-  .surface-hover { transition: none; }
-  .surface-hover:hover { transform: none; }
-  html { scroll-behavior: auto; }
+  .page-enter,
+  .content-fade,
+  .skeleton-shimmer::after {
+    animation: none;
+  }
+  .surface-hover {
+    transition: none;
+  }
+  .surface-hover:hover {
+    transform: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
 }
