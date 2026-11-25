@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, BookOpenCheck, BrainCircuit, CalendarClock, FlaskConical, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 import { AcademyStorage, ACADEMY_UPDATED_EVENT } from "@/features/academy/storage/AcademyStorage";
 import type { AcademyStudy } from "@/features/academy/types";
@@ -62,7 +63,7 @@ export function AcademyLabOverview() {
     return { continueStudy, continuePractice, contents, nextReview: reviews[0], pending: lab.filter((project) => project.status !== "completed").length };
   }, [academy, lab, learning]);
 
-  if (loading) return <div aria-label="Carregando Academy e Laboratório" className="h-44 animate-pulse rounded-2xl border bg-muted/30" />;
+  if (loading) return <Skeleton aria-label="Carregando Academy e Laboratório" className="h-44 rounded-2xl" />;
   if (academy.length === 0 && lab.length === 0) return (
     <Card className="gap-4 border-dashed p-5 shadow-none sm:flex-row sm:items-center">
       <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>

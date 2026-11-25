@@ -1,8 +1,11 @@
+import { RouteLoading } from "@/components/route-states";
+import { Skeleton } from "@/components/ui/skeleton";
+
 export default function OrganizationLoading() {
   return (
-    <div className="space-y-6" aria-label="Carregando organização">
-      <div className="h-28 animate-pulse rounded-xl bg-muted" />
-      <div className="h-96 animate-pulse rounded-xl bg-muted" />
-    </div>
+    <RouteLoading label="Carregando organização">
+      <Skeleton className="h-28 rounded-xl" />
+      <Skeleton className="h-96 rounded-xl" />
+    </RouteLoading>
   );
 }

@@ -12,6 +12,7 @@ import { useNotes } from "@/features/notes/useNotes";
 import { useMaterials } from "@/hooks/useMaterials";
 import { DashboardStats } from "./dashboard-stats";
 import { useExtraction } from "@/features/extraction/useExtraction";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SmartLearningDashboard } from "@/features/learning/components/SmartLearningDashboard";
 import { useExperiencePreferences } from "@/features/preferences/ExperiencePreferences";
 import { WorkspaceLauncher } from "./WorkspaceLauncher";
@@ -20,8 +21,8 @@ import { StudyProgressPanel } from "./StudyProgressPanel";
 import { WeeklyGoalPanel } from "@/features/planning/components/WeeklyGoalPanel";
 
 const DiagnosticsDrawer = dynamic(() => import("./DiagnosticsDrawer").then((module) => module.DiagnosticsDrawer));
-const KnowledgeDashboard = dynamic(() => import("@/features/semantic/KnowledgeDashboard").then((module) => module.KnowledgeDashboard), { loading: () => <div className="h-40 animate-pulse rounded-2xl border bg-muted/30" /> });
-const AcademyLabOverview = dynamic(() => import("./AcademyLabOverview").then((module) => module.AcademyLabOverview), { loading: () => <div className="h-44 animate-pulse rounded-2xl border bg-muted/30" /> });
+const KnowledgeDashboard = dynamic(() => import("@/features/semantic/KnowledgeDashboard").then((module) => module.KnowledgeDashboard), { loading: () => <Skeleton className="h-40 rounded-2xl" /> });
+const AcademyLabOverview = dynamic(() => import("./AcademyLabOverview").then((module) => module.AcademyLabOverview), { loading: () => <Skeleton className="h-44 rounded-2xl" /> });
 
 export function StudyDashboard() {
   const { records, isLoading: studiesLoading, error: studiesError } = useStudyEngine();

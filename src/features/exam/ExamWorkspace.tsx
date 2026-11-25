@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Feedback } from "@/components/ui/feedback";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -492,11 +494,11 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
       )}
 
       {exams.length === 0 && !isCreating ? (
-        <Card className="p-12 text-center space-y-3">
-          <Calendar className="size-10 text-primary mx-auto" />
-          <h2 className="type-section-title">Nenhuma prova cadastrada</h2>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto">Cadastre sua data de prova para gerar automaticamente o plano de revisão ideal até o dia do exame.</p>
-        </Card>
+        <EmptyState
+          icon={Calendar}
+          title="Nenhuma prova cadastrada"
+          description="Cadastre sua data de prova para gerar automaticamente o plano de revisão ideal até o dia do exame."
+        />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
           <div className="space-y-3">
@@ -613,7 +615,10 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 </div>
 
                 {progressLoading ? (
-                  <p className="mt-5 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">Carregando registros autorizados…</p>
+                  <div role="status" aria-label="Carregando registros autorizados" className="mt-5 space-y-2">
+                    <span className="sr-only">Carregando registros autorizados…</span>
+                    <Skeleton className="h-16 w-full rounded-xl" />
+                  </div>
                 ) : progressError ? (
                   <Feedback variant="warning" role="status" className="mt-5 p-4">{progressError}</Feedback>
                 ) : !examProgress || examProgress.state === "insufficient_data" ? (
@@ -734,7 +739,11 @@ export function ExamWorkspace({ studies, sessionOwner, requestedExamId }: { stud
                 ) : null}
 
                 {materialsLoading ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">Carregando materiais vinculados...</p>
+                  <div role="status" aria-label="Carregando materiais vinculados" className="py-4 space-y-2">
+                    <span className="sr-only">Carregando materiais vinculados...</span>
+                    <Skeleton className="h-12 w-full rounded-xl" />
+                    <Skeleton className="h-12 w-full rounded-xl" />
+                  </div>
                 ) : materialsError ? (
                   <p role="status" className="text-sm text-muted-foreground text-center py-4">
                     A Biblioteca está temporariamente indisponível. Os vínculos existentes foram preservados.

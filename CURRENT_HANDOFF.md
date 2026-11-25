@@ -1,21 +1,23 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 1 / Sprint PS-1b concluída localmente em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 1 / QU-1 e PS-1b concluídas em `v1.3-development` (25/11/2026)
 
-Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R\$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
+Ciclo funcional pós-V1.2 em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE**: `push` (`45519407335`) e `pull_request` (`45519417036`) aprovados em todos os 6 jobs (`quality`, `postgres`, `e2e (1)`–`e2e (4)`).
-  - Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e preservação manual gratuita do `postgres-volume` preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
-- **Caminho B — Sprint `PS-1b` (Delimitador único e system prompt por provedor) — Concluída localmente (não commitada)**:
-  - **Montador canônico único**: criado `src/features/ai/UntrustedDataBoundary.ts` (`wrapUntrustedMaterialData`, `sanitizeUntrustedBoundaries`, `UNTRUSTED_MATERIAL_SECURITY_RULE`, `DEFAULT_STUDYAI_SYSTEM_PROMPT`, `resolveSystemPrompt`, `sanitizeInlineLabel`), adotado por `PromptBuilder` e por todos os fluxos anteriormente descobertos: `LabPromptBuilder` (+ `api/lab/review`), `LabChallengeService` (havia delimitador sem neutralização de tags), `StudioAssistService`, `DiagramAssistService`, `TeacherAudioLessonService` (todas as 3 funções) e `llm-judge` (+ `api/ai-quality/judge`, corrigindo também `{description}` literal e protegendo prompts crus).
-  - **Canal nativo de system prompt por provedor**: `AIRequest.systemPrompt`, propagação em `ProviderManager` (`generate` e `stream`), `systemInstruction` nativo no `GeminiProvider`, `{ role: "system" }` no `OpenAICompatibleProvider` (Groq e OpenRouter, contabilizado no orçamento de tokens) e suporte a `systemPrompt` no `OllamaProvider`.
-  - **Isolamento de cache e anti-spoofing**: `AIResponseCache.keyFor` inclui `systemPrompt`; `QuotaMiddleware` remove `systemPrompt` enviado pelo cliente (`delete sanitizedBody.systemPrompt`).
-  - **Auditoria CSP `img-src`**: mantido `img-src 'self' data: blob: https:` em `src/middleware.ts` com base em evidência real (`Studio` `safeImageSource` e `/profile` `photoUrl` permitem `https://`), enquanto respostas Markdown da IA continuam bloqueando imagens remotas em `MarkdownRenderer` (`PS-1a`).
-- **Validação local `PS-1b` (`--retries=0`, R\$ 0)**:
-  - `npm run build` ✅ · `npm run typecheck` ✅ · `npm run lint` ✅ (0 erros, 0 novos avisos) · `git diff --check` ✅.
-  - **68/68** testes Playwright aprovados sem retries/skips (`ps1b-prompt-hardening` 12/12, `ps1a-prompt-injection` 11/11, `ai-provider-sprint40` 8/8, `sprint41h-ai-fallback` 12/12, `sprint41f-lab-security` 1/1, `sprint42-security-quota` 4/4, `sprint43-ai-routing` 13/13, `teacher` 3/3, `release-stabilization:3D` 1/1, `lote3-ai-storage-governance` 2/2, `sprint52b-ai-challenges:590` 1/1).
-- **Próxima etapa**: aguardar aprovação do owner para commit/push de `PS-1b` em `origin/v1.3-development` e decisão entre avançar para **Onda 1 — `QU-1`** (Quality Upgrade: estados e erros) ou **Onda 2 — `IE-1`** (Intelligence Engine: registro e contrato).
+  - Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`. `SA-01`..`SA-06`: `Sem definição recuperável`.
+- **Caminho B — Sprint `PS-1b` (Delimitador único e system prompt por provedor) — Commitado e publicado**:
+  - Commit `140daf8` em `origin/v1.3-development`: `UntrustedDataBoundary` canônico em todos os construtores de prompt de IA, `systemPrompt` nativo (Gemini, Groq, OpenRouter, Ollama), cache isolado, anti-spoofing em `QuotaMiddleware` e auditoria de CSP. Validado localmente com 68/68 testes.
+- **Caminho C — Sprint `QU-1` (Quality Upgrade: Estados e Erros) — Concluída em `v1.3-development`**:
+  - **Q-02 (Loading & Error Boundaries)**: Criadas primitivas `RouteLoading` (`role="status"`, `aria-label`, `<span className="sr-only">`, `Skeleton` canônicos) e `RouteErrorState` (`role="alert"`, `EmptyState` com `TriangleAlert` e botão "Tentar novamente" via `reset()`) em `src/components/route-states.tsx`. Implementados `loading.tsx` e `error.tsx` em todas as 14 rotas principais e `global-error.tsx` na raiz com layout HTML completo.
+  - **Q-08 (Unificação de Skeleton e EmptyState)**: Removidos cartões, caixas pontilhadas e textos manuais ad-hoc em `ExamWorkspace.tsx`, `StudyDashboard.tsx`, `AcademyLabOverview.tsx`, `CollaborationPage.tsx` e `organizar/loading.tsx`, padronizando com `EmptyState` e `Skeleton`.
+  - **Validação local `QU-1` (`--retries=0`, R$ 0)**: `npm run build` ✅ · `npm run typecheck` ✅ · `npm run lint` ✅ (0 erros, 44 avisos preexistentes) · `git diff --check` ✅. 26/26 testes Playwright aprovados sem retries/skips (`tests/qu1-states-and-errors.spec.ts` 9/9, `tests/ps1b-prompt-hardening.spec.ts` 12/12, `tests/sprint48c-feedback.spec.ts` 1/1, `tests/sprint41g3d-browser-isolation.spec.ts` 2/2, `tests/sprint49c-clean-ui.spec.ts` 2/2).
+- **Próxima etapa**: aguardar autorização do owner para a próxima etapa oficial do roadmap: **Onda 1 — `QU-2`** (Mobile First: Sheet, touch targets 44px e safe areas) ou **Onda 2 — `IE-1`** (Intelligence Engine: registro de interações e contrato canônico).
+
+## Registro histórico — Sprint PS-1b (25/11/2026)
+
+- **Sprint `PS-1b` (`140daf8` em `v1.3-development`)**: Criado `src/features/ai/UntrustedDataBoundary.ts` (`wrapUntrustedMaterialData`, `sanitizeUntrustedBoundaries`, `UNTRUSTED_MATERIAL_SECURITY_RULE`, `DEFAULT_STUDYAI_SYSTEM_PROMPT`, `resolveSystemPrompt`, `sanitizeInlineLabel`). Canal nativo de system prompt por provedor em `AIRequest.systemPrompt`, `ProviderManager`, `GeminiProvider` (`systemInstruction`), `OpenAICompatibleProvider` (`role: "system"` contabilizado em tokens), `OllamaProvider`. Cache isolado com `systemPrompt` na chave, anti-spoofing em `QuotaMiddleware`, CSP `img-src` auditada com preservação de `https:` para Studio e Foto de perfil. 68/68 testes aprovados.
 
 ## Registro histórico — Gate Final V1.2 (Custo Zero) (24/11/2026)
 
