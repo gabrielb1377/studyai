@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 2 / IE-1 concluída: Registro e Contrato Pedagógico em `v1.3-development` (25/11/2026)
+## Estado atual — Onda 2 / IE-2 concluída: Skills Piloto em `v1.3-development` (25/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,18 +8,21 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; pendências Railway IaC (`\tAPI_KEYS_ENCRYPTION_KEY`), SMTP, TLS, migrations `0001`–`0003`, banco oficial e volume preservadas. `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`).
-  - **Estabilização de testes CI (`7648fe2`)**: estabilizada asserção de navegação em `tests/sprint51c-persistence-publishing.spec.ts` com `Promise.all([page.waitForURL(...), click()])` e timeout de 15s.
-- **Onda 2 — Inteligência Pedagógica / IE-1 Concluída (`v1.3-development`)**:
-  - **Contrato canônico `SkillSpec` (`src/features/ai/skills/types.ts`)**: `id`, `version` (semver), `objective`, `triggers`, `inputs`, `allowedContext`, `allowedTools`, `output`, `tokenBudget`, `safety`, `qualityCriteria`, `tests`, `fallback`.
-  - **Registro imutável `SkillRegistry` (`src/features/ai/skills/SkillRegistry.ts`)**: validação estrita de semver/campos obrigatórios, rejeição de duplicidade (`DuplicateSkillError`), congelamento profundo (`Object.freeze`), resolução semver automática para versão mais recente e hook de registro adiado.
-  - **Validador estrutural `OutputValidator` (`src/features/ai/skills/OutputValidator.ts`)**: suporte a tipos `text`, `json` (com extração tolerante de markdown) e `mermaid`, validação de chaves obrigatórias, teto de palavras (`maxOutputWords`) e validador customizado.
-  - **Serviço de reparo `SkillRepairService` (`src/features/ai/skills/SkillRepairService.ts`)**: exatamente 1 tentativa de reparo guiada pelos erros estruturais; ativação imediata do fallback seguro declarado em caso de segunda falha ou exceção (prevenção absoluta de loops).
-  - **Migração do Professor por paridade estrita (`src/features/ai/skills/teacher/TeacherSkills.ts` e `src/features/teacher/TeacherPromptBuilder.ts`)**: 13 ações (`teacher.<action>` v1.0.0), 5 níveis e 7 métodos mapeados no registro; compatibilidade total com o feature flag `isSkillsEnabled()` (`skills.enabled`, default `false`). Paridade 100% comprovada caractere-por-caractere.
-  - **Testes do IE-1 (`tests/ie1-skills-registry.spec.ts`)**: 20/20 testes aprovados, incluindo matriz 13x5x7 (455 combinações de paridade exata flag on vs off).
-  - **Regressão Tutor e Professor (`tests/teacher.spec.ts` e `tests/tutor.spec.ts`)**: 8/8 testes aprovados.
+- **Onda 2 — Inteligência Pedagógica / IE-1 e IE-2 Concluídas (`v1.3-development`)**:
+  - **IE-1 (`24cb663`)**: Contrato `SkillSpec`, registro em memória `SkillRegistry`, `OutputValidator`, `SkillRepairService` (1 tentativa de reparo, fallback seguro), paridade estrita do Professor (13 ações, 5 níveis, 7 métodos), `isSkillsEnabled()` default `false`. Estabilização em `7648fe2`.
+  - **IE-2 (Skills Piloto: `technique.feynman`, `technique.socratic`, `technique.active-recall` v0.1.0)**:
+    - `technique.feynman` (2.500 / 700 tokens): autoexplicação pelo aluno, localização de lacunas conceituais fundamentadas no material ou marcadas 'sem apoio no material', versão simplificada (<= 120 palavras), pergunta de acompanhamento e fallback reflexivo.
+    - `technique.socratic` (2.500 / 500 tokens): perguntas abertas de raciocínio investigativo (etapas 1..5), proibição estrita de revelar a solução antecipadamente (`revealsSolution: false` se `step < 5`), fallback socrático aberto.
+    - `technique.active-recall` (2.000 / 500 tokens): evocação ativa, separação de pergunta e resposta esperada, obrigatoriedade de `sourceRef` em cada questão para fundamentação, fallback seguro.
+    - **Harness e Fixtures (`SkillExecutionHarness` e `pilotFixtures.ts`)**: execução isolada sob provedor simulado a custo zero (R$ 0), validação de esquema de entrada, filtragem seletiva de contexto (`study`, `chunks`, `errors`, `history`), delimitação `UntrustedDataBoundary`, validação ativa de `forbiddenOutputs`.
+    - **Estabilização de testes CI (`2904c34`)**: corrigida asserção de auth em `tests/sprint41g3d-cache-browser.spec.ts` com `{ timeout: 15_000 }`.
+  - **Baterias de teste**:
+    - `tests/ie2-pilot-skills.spec.ts`: 18/18 testes aprovados.
+    - `tests/ie1-skills-registry.spec.ts`: 20/20 testes aprovados (38/38 combinados).
+    - `tests/sprint41g3d-cache-browser.spec.ts`: 1/1 aprovado.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ (0 erros) · `lint` ✅ (0 erros, 44 avisos preexistentes) · `build` ✅ (53/53 páginas dinâmicas) · `git diff --check` ✅.
-- **Próxima etapa oficial**: Onda 2 / `IE-2` — Skills Piloto (`technique.feynman`, `technique.socratic`, `technique.active-recall` com fixtures na CI sob provedor simulado, sem chamadas pagas). Aguardar autorização do owner.
+- **Próxima etapa oficial**: Onda 2 / `IE-3` — Contabilização e Orçamento por Skill (gravação de `usage` real em `usage_quotas.tokens_count`, orçamento no `ContextCompressor`, dependente do item 3 do fechamento). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 

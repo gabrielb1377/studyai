@@ -111,7 +111,17 @@ export const OutputValidator = {
       }
     }
 
-    // 3. Validador customizado fornecido pela própria especificação
+    // 3. Validação ativa de regras de segurança: termos ou padrões proibidos (forbiddenOutputs)
+    if (spec.safety?.forbiddenOutputs && spec.safety.forbiddenOutputs.length > 0) {
+      const lower = trimmed.toLowerCase();
+      for (const forbidden of spec.safety.forbiddenOutputs) {
+        if (lower.includes(forbidden.toLowerCase())) {
+          errors.push(`A saída violou a regra de segurança ao conter conteúdo proibido: "${forbidden}".`);
+        }
+      }
+    }
+
+    // 4. Validador customizado fornecido pela própria especificação
     if (spec.output.validator) {
       try {
         const customResult = spec.output.validator(trimmed);

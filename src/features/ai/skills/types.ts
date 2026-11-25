@@ -81,7 +81,7 @@ export interface SkillOutput {
   readonly example?: string;
   readonly schema?: Record<string, unknown>;
   readonly requiredKeys?: readonly string[];
-  readonly validator?: (output: string) => { valid: boolean; errors: string[] };
+  readonly validator?: (output: string) => SkillValidationResult | { valid: boolean; errors: readonly string[] };
 }
 
 export interface SkillFallback {
