@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, BookOpen, Layers } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StudyRecord } from "@/types/study-engine";
 import type { Material } from "@/types/material";
@@ -76,19 +76,6 @@ export function ContinueStudying({ records, materials }: { records: readonly Stu
             </Button>
           </>
         )}
-      </div>
-      <div
-        className="pointer-events-none absolute -right-6 top-10 hidden size-52 items-center justify-center rounded-full border border-primary/10 xl:flex"
-        aria-hidden="true"
-      >
-        <div className="flex size-40 items-center justify-center rounded-full border border-primary/10">
-          <div className="flex size-28 -rotate-12 items-center justify-center rounded-2xl border border-primary/15 bg-card/60 text-primary/60 shadow-sm">
-            <BookOpen className="size-14" strokeWidth={1} />
-          </div>
-        </div>
-        <div className="absolute bottom-2 left-3 rounded-xl border bg-card p-3 text-primary/70">
-          <Layers className="size-5" strokeWidth={1.5} />
-        </div>
       </div>
     </section>
   );

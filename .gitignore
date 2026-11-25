@@ -71,6 +71,19 @@ web_modules/
 !.env.example
 !.env.production.example
 
+# Local secrets, certificates and database backups
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.bak
+*.sql.gz
+backups/
+secrets/
+.aws/
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
@@ -152,3 +165,6 @@ ios/App/DerivedData/
 # Browser verification artifacts
 test-results/
 playwright-report/
+
+# Work in progress (not part of the build)
+tmp/

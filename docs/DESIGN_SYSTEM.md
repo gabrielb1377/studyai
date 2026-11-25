@@ -25,6 +25,8 @@ Os temas suportados são Claro, Escuro, AMOLED e Sistema. O tema AMOLED usa pret
 
 Componentes reutilizáveis ficam em `src/components/ui`. Telas não devem recriar Button, Card, Input, Badge, Progress, Tabs, Dialog, Dropdown, Tooltip ou Skeleton. Estados vazios devem usar `src/components/empty-state.tsx`; cabeçalhos de páginas usam `src/components/page-heading.tsx`.
 
+Desde a Sprint 37C.1, o conjunto inclui também `Textarea`, `Select` e `ScrollArea`. O `Select` usa o elemento `<select>` nativo do navegador — mantenha essa escolha: o seletor nativo é mais acessível em dispositivos móveis e preserva a navegação por teclado do sistema.
+
 Variações visuais devem ser expressas por props ou classes no componente base. Cores semânticas nunca devem ser definidas por hexadecimal dentro de features.
 
 ## Acessibilidade

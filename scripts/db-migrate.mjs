@@ -10,10 +10,16 @@ if (!connectionString) {
   process.exit(1);
 }
 
+const rawCaCert = process.env.DATABASE_CA_CERT?.trim();
+const caCert = rawCaCert ? rawCaCert.replace(/\\n/g, "\n") : undefined;
+const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
 const ssl = process.env.DATABASE_SSL === "false"
   ? false
-  : process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
+  : process.env.NODE_ENV === "production" || process.env.DATABASE_SSL === "true" || caCert
+    ? {
+        rejectUnauthorized,
+        ...(caCert ? { ca: caCert } : {}),
+      }
     : undefined;
 
 const pool = new Pool({

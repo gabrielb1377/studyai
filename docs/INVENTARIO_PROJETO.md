@@ -47,7 +47,8 @@ Contagens obtidas por arquivos do workspace. “Serviços”, “hooks” e “p
 | `/api/ai/manager` | GET health agregado de providers e métricas |
 | `/api/ai/providers/[provider]` | GET health/modelos do provider |
 | `/api/files/[id]` | PUT upload, GET download autenticado, DELETE binário |
-| `/api/health` | GET status de serviço e runtime protegido |
+| `/api/health/live` | GET liveness sem dependências |
+| `/api/health` | GET readiness (DB, schema, S3, URL) e runtime protegido |
 | `/api/ocr/assets/[asset]` | GET worker/runtime do OCR local |
 | `/api/ocr/languages/[language]` | GET pacote de idioma OCR |
 | `/api/telemetry` | POST métricas allowlisted e consentidas |

@@ -50,6 +50,57 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     )
   );
 
+  const validMemory = context.memory === undefined || (
+    typeof context.memory === "object" && context.memory !== null &&
+    typeof context.memory.enabled === "boolean" &&
+    (context.memory.explanationLevel === undefined ||
+      context.memory.explanationLevel === "basic" ||
+      context.memory.explanationLevel === "intermediate" ||
+      context.memory.explanationLevel === "advanced" ||
+      context.memory.explanationLevel === "technical") &&
+    Array.isArray(context.memory.items) &&
+    context.memory.items.length <= 5 &&
+    context.memory.items.every((item) =>
+      typeof item === "object" && item !== null &&
+      (item.category === "preference" || item.category === "goal" || item.category === "difficulty" || item.category === "continuity" || item.category === "milestone") &&
+      (item.source === "explicit" || item.source === "session") &&
+      typeof item.title === "string" && item.title.length <= 120 &&
+      typeof item.content === "string" && item.content.length <= 320 &&
+      typeof item.updatedAt === "string" &&
+      (item.stale === undefined || typeof item.stale === "boolean"),
+    ) &&
+    (context.memory.pendingErrors === undefined || (
+      Array.isArray(context.memory.pendingErrors) &&
+      context.memory.pendingErrors.length <= 5 &&
+      context.memory.pendingErrors.every((entry) =>
+        typeof entry === "object" && entry !== null &&
+        typeof entry.topic === "string" && entry.topic.length <= 100 &&
+        typeof entry.prompt === "string" && entry.prompt.length <= 200 &&
+        typeof entry.occurrences === "number",
+      )
+    ))
+  );
+
+  const validMedia = context.media === undefined || (
+    Array.isArray(context.media) &&
+    context.media.length <= 20 &&
+    context.media.every((item) =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof item.name === "string" &&
+      item.name.trim().length > 0 &&
+      item.name.length <= 240 &&
+      (item.type === "audio" || item.type === "video") &&
+      (item.durationSeconds === undefined ||
+        (typeof item.durationSeconds === "number" && Number.isFinite(item.durationSeconds) && item.durationSeconds >= 0)) &&
+      typeof item.hasTranscription === "boolean" &&
+      (item.transcriptionSource === undefined ||
+        item.transcriptionSource === "automatic" ||
+        item.transcriptionSource === "manual" ||
+        item.transcriptionSource === "subtitle"),
+    )
+  );
+
   return typeof context.studyId === "string" && typeof context.title === "string" &&
     typeof context.subject === "string" && typeof context.topic === "string" &&
     typeof context.progress === "number" &&
@@ -59,5 +110,5 @@ export function isTutorStudyContext(value: unknown): value is TutorStudyContext 
     ) && (context.summary === undefined || (
       typeof context.summary === "object" && context.summary !== null &&
       typeof context.summary.title === "string" && typeof context.summary.content === "string"
-    )) && validDocument && validLearning && validKnowledge && validMentor;
+    )) && validDocument && validLearning && validKnowledge && validMentor && validMemory && validMedia;
 }

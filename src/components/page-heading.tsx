@@ -15,7 +15,7 @@ export function PageHeading({
         <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {eyebrow}
         </p>
-        <h1 className="text-[1.85rem] font-semibold tracking-[-0.04em] text-balance sm:text-[2.15rem] sm:leading-tight">
+        <h1 className="type-page-title">
           {title}
         </h1>
         <p className="mt-2.5 max-w-2xl text-sm leading-6 text-pretty text-muted-foreground sm:text-[15px]">

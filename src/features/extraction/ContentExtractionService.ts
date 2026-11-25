@@ -5,6 +5,9 @@ import type {
   ExtractionMetadata,
   ExtractionResult,
 } from "./ExtractionTypes";
+import { pagesFromSections } from "../ocr/structure";
+import { inspectPdf } from "../ocr/pdf";
+import { getExtension, validateMediaSignature } from "./media-validation";
 
 function baseMetadata(file: File): ExtractionMetadata {
   const now = new Date().toISOString();
@@ -118,39 +121,26 @@ async function loadZip(file: File) {
 }
 
 async function extractPdf(file: File): Promise<ExtractionResult> {
-  const { pdfjs } = await import("react-pdf");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
-  const documentProxy = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const inspection = await inspectPdf(file);
   const sections: DocumentSection[] = [];
-  let documentTitle: string | undefined;
-
-  try {
-    const documentMetadata = await documentProxy.getMetadata().catch(() => null);
-    const info = documentMetadata?.info as { Title?: string } | undefined;
-    documentTitle = info?.Title?.trim() || undefined;
-    if (documentTitle) sections.push({ type: "title", text: documentTitle });
-
-    for (let pageNumber = 1; pageNumber <= documentProxy.numPages; pageNumber += 1) {
-      const page = await documentProxy.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const text = content.items.map((item) => "str" in item ? item.str : "").filter(Boolean).join(" ").trim();
-      if (text) sections.push({ type: "paragraph", text, page: pageNumber });
-    }
-
-    const extractedText = sectionsToText(sections);
-    return {
-      extractedText,
-      sections,
-      metadata: {
-        ...baseMetadata(file),
-        title: documentTitle,
-        pageCount: documentProxy.numPages,
-        hasTextLayer: extractedText.trim().length > 0,
-      },
-    };
-  } finally {
-    await documentProxy.destroy();
+  const documentTitle = inspection.title;
+  if (documentTitle) sections.push({ type: "title", text: documentTitle });
+  for (const page of inspection.pages) {
+    if (page.text) sections.push({ type: "paragraph", text: page.text, page: page.page });
   }
+
+  const extractedText = sectionsToText(sections);
+  return {
+    extractedText,
+    sections,
+    pages: pagesFromSections(sections),
+    metadata: {
+      ...baseMetadata(file),
+      title: documentTitle,
+      pageCount: inspection.numPages,
+      hasTextLayer: extractedText.trim().length > 0,
+    },
+  };
 }
 
 async function extractDocx(file: File): Promise<ExtractionResult> {
@@ -170,7 +160,7 @@ async function extractDocx(file: File): Promise<ExtractionResult> {
       sections.push(...parseDocumentXml(await entry.async("string"), definition.type));
     }
   }
-  return { extractedText: sectionsToText(sections), sections, metadata: baseMetadata(file) };
+  return { extractedText: sectionsToText(sections), sections, pages: pagesFromSections(sections), metadata: baseMetadata(file) };
 }
 
 async function extractPptx(file: File): Promise<ExtractionResult> {
@@ -203,6 +193,7 @@ async function extractPptx(file: File): Promise<ExtractionResult> {
   return {
     extractedText: sectionsToText(sections),
     sections,
+    pages: pagesFromSections(sections, { slideMode: true }),
     metadata: { ...baseMetadata(file), pageCount: slideEntries.length },
   };
 }
@@ -228,19 +219,29 @@ async function extractTxt(file: File): Promise<ExtractionResult> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const { encoding, offset } = detectTextEncoding(bytes);
   const extractedText = new TextDecoder(encoding).decode(bytes.slice(offset));
+  const sections = extractedText.split(/\n{2,}/).filter(Boolean).map((text) => ({ type: "paragraph" as const, text }));
   return {
     extractedText,
-    sections: extractedText.split(/\n{2,}/).filter(Boolean).map((text) => ({ type: "paragraph", text })),
+    sections,
+    pages: pagesFromSections(sections),
     metadata: { ...baseMetadata(file), encoding },
   };
 }
 
-function extractMedia(file: File, type: "audio" | "video"): Promise<ExtractionResult> {
+async function extractMedia(file: File, type: "audio" | "video", signal?: AbortSignal): Promise<ExtractionResult> {
+  if (signal?.aborted) throw new Error("Processamento cancelado pelo usuário.");
+  await validateMediaSignature(file, getExtension(file.name));
+  if (signal?.aborted) throw new Error("Processamento cancelado pelo usuário.");
   return new Promise((resolve, reject) => {
     const element = document.createElement(type);
     const source = URL.createObjectURL(file);
+    let settled = false;
+    const onAbort = () => finish(() => reject(new Error("Processamento cancelado pelo usuário.")));
     const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
       window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
       element.removeAttribute("src");
       element.load();
       URL.revokeObjectURL(source);
@@ -249,6 +250,7 @@ function extractMedia(file: File, type: "audio" | "video"): Promise<ExtractionRe
     const timeout = window.setTimeout(() => finish(() => reject(
       new Error("Não foi possível ler os metadados da mídia em até 10 segundos."),
     )), 10_000);
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     element.preload = "metadata";
     element.onloadedmetadata = () => finish(() => {
@@ -282,15 +284,15 @@ async function extractImage(file: File): Promise<ExtractionResult> {
   }
 }
 
-const extractors: Record<ExtractionFileType, (file: File) => Promise<ExtractionResult>> = {
+const extractors: Record<ExtractionFileType, (file: File, signal?: AbortSignal) => Promise<ExtractionResult>> = {
   pdf: extractPdf,
   docx: extractDocx,
   pptx: extractPptx,
   txt: extractTxt,
-  mp3: (file) => extractMedia(file, "audio"),
-  wav: (file) => extractMedia(file, "audio"),
-  m4a: (file) => extractMedia(file, "audio"),
-  mp4: (file) => extractMedia(file, "video"),
+  mp3: (file, signal) => extractMedia(file, "audio", signal),
+  wav: (file, signal) => extractMedia(file, "audio", signal),
+  m4a: (file, signal) => extractMedia(file, "audio", signal),
+  mp4: (file, signal) => extractMedia(file, "video", signal),
   png: extractImage,
   jpg: extractImage,
   jpeg: extractImage,
@@ -298,8 +300,8 @@ const extractors: Record<ExtractionFileType, (file: File) => Promise<ExtractionR
 };
 
 export const ContentExtractionService = {
-  extract(file: File, fileType: ExtractionFileType) {
-    return extractors[fileType](file);
+  extract(file: File, fileType: ExtractionFileType, signal?: AbortSignal) {
+    return extractors[fileType](file, signal);
   },
 
   createBaseMetadata: baseMetadata,

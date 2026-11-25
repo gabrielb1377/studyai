@@ -1,5 +1,7 @@
 import { IndexedDB } from "./IndexedDB";
+import { currentDatabaseName } from "./Database";
 import {
+  STORAGE_DATABASE_NAME,
   STORAGE_MIGRATION_KEY,
   STORAGE_SCHEMA_VERSION,
   STORAGE_STORES,
@@ -60,10 +62,21 @@ function metadataRecords() {
 export const Migration = {
   async run() {
     if (typeof window === "undefined") return;
+    const database = currentDatabaseName();
     const current = await IndexedDB.transaction(["metadata"], "readonly", (storage) =>
       storage.get<MetadataRecord>("metadata", STORAGE_MIGRATION_KEY),
     );
+    if (database !== currentDatabaseName()) throw new Error("A conta mudou durante a migração local. Tente novamente.");
     if (current?.value === STORAGE_SCHEMA_VERSION) return;
+
+    // Legacy localStorage has no trustworthy owner. Only the guest database may
+    // consume it; an authenticated account must never claim or remove it.
+    if (database !== STORAGE_DATABASE_NAME) {
+      await IndexedDB.transaction(["metadata"], "readwrite", (storage) =>
+        storage.put("metadata", { key: STORAGE_MIGRATION_KEY, value: STORAGE_SCHEMA_VERSION, updatedAt: new Date().toISOString() } satisfies MetadataRecord),
+      );
+      return;
+    }
 
     const legacy = definitions.flatMap((definition) => definition.keys.flatMap((key) => {
       const value = parse(key);

@@ -99,7 +99,7 @@ Backups salvam `sync_records`. Os bytes de S3/OPFS não fazem parte do snapshot.
 
 ## Endpoints
 
-O inventário completo dos 27 handlers está em [INVENTARIO_PROJETO.md](./INVENTARIO_PROJETO.md). Contratos de maior impacto:
+Na auditoria de 6/11/2026 foram encontrados 52 handlers rastreados e 1 rota experimental não rastreada de upload direto. O inventário histórico em [INVENTARIO_PROJETO.md](./INVENTARIO_PROJETO.md) precisa ser regenerado antes de ser tratado como lista completa. Contratos de maior impacto:
 
 | Endpoint | Direção | Segurança/função |
 | --- | --- | --- |
@@ -108,6 +108,7 @@ O inventário completo dos 27 handlers está em [INVENTARIO_PROJETO.md](./INVENT
 | `/sync` | cliente ↔ server | Push de deltas e pull por cursor; sessão/CSRF e versionamento. |
 | `/api/files/[id]` | cliente ↔ server | PUT/GET/DELETE binário autenticado por userId e hash. |
 | `/backup` | cliente ↔ server | Snapshots/restauração dos registros syncáveis. |
+| `/api/health/live` | monitor | server | Liveness sem DB/S3. |
 | `/api/health` | monitor → server | Health público mínimo e detalhes protegidos. |
 | `/api/telemetry` | cliente → server | Métricas anônimas e allowlisted com consentimento. |
 

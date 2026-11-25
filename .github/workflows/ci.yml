@@ -3,7 +3,19 @@ name: Quality
 on:
   pull_request:
   push:
-    branches: [main, develop]
+    branches: [main, develop, v1.1-development]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # CI runs on CPU-only hosts; ONNX Runtime bundles its CPU provider.
+  ONNXRUNTIME_NODE_INSTALL: skip
 
 jobs:
   quality:
@@ -16,14 +28,72 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
-        if: failure()
+
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: studyai_test
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: studyai_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U studyai_test -d studyai_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: playwright-report
-          path: playwright-report/
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:e2e -- -c playwright.41g1b.config.ts tests/release-stabilization.spec.ts --grep "3E"
+        env:
+          DATABASE_URL: postgresql://studyai_test:local-ci-only@127.0.0.1:5432/studyai_test
+          STUDYAI_ALLOW_LOCAL_DB_TESTS: "1"
+      - run: npm run test:e2e -- -c playwright.41g1b.config.ts tests/lote2-postgres-atomicity.spec.ts
+        env:
+          DATABASE_URL: postgresql://studyai_test:local-ci-only@127.0.0.1:5432/studyai_test
+          STUDYAI_ALLOW_LOCAL_DB_TESTS: "1"
+      - run: npm run test:e2e -- -c playwright.41g1b.config.ts tests/lote3-ai-storage-governance.spec.ts
+        env:
+          DATABASE_URL: postgresql://studyai_test:local-ci-only@127.0.0.1:5432/studyai_test
+          STUDYAI_ALLOW_LOCAL_DB_TESTS: "1"
+      - run: npm run test:e2e -- -c playwright.41g1b.config.ts tests/lote4-infrastructure-readiness.spec.ts
+        env:
+          DATABASE_URL: postgresql://studyai_test:local-ci-only@127.0.0.1:5432/studyai_test
+          STUDYAI_ALLOW_LOCAL_DB_TESTS: "1"
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e -- --shard=${{ matrix.shard }}/4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7

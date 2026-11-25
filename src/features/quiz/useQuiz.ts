@@ -45,13 +45,20 @@ export function useQuiz(studyId?: string) {
     [store.results, studyId],
   );
 
-  const generate = async (study: Pick<StudyRecord, "studyId" | "title" | "subject">) => {
+  const generate = async (
+    study: Pick<StudyRecord, "studyId" | "title" | "subject">,
+    options?: { count?: number; difficulty?: "easy" | "medium" | "hard" },
+  ) => {
     if (isGenerating) return false;
     setError(null);
     setIsGenerating(true);
 
     try {
-      const generatedQuestions = await QuizService.requestGeneration(study);
+      const generatedQuestions = await QuizService.requestGeneration({
+        ...study,
+        count: options?.count,
+        difficulty: options?.difficulty,
+      });
       const nextStore = {
         ...store,
         questions: [

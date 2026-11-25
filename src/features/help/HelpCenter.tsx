@@ -9,6 +9,12 @@ import { Input } from "@/components/ui/input";
 import { helpTopics } from "./help-content";
 import { BetaFeedbackDialog, type BetaFeedbackKind } from "./BetaFeedbackDialog";
 
+const categories = [
+  { title: "Primeiros passos e conta", ids: ["conta", "importar", "biblioteca", "sincronizacao"] },
+  { title: "Estudar e praticar", ids: ["workspace", "academy", "tutor", "mentor", "flashcards", "quiz", "semana-de-prova"] },
+  { title: "Configuração e suporte", ids: ["ia-cloud", "ia-local", "pesquisa", "problemas", "faq"] },
+] as const;
+
 function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
@@ -33,7 +39,7 @@ export function HelpCenter() {
     if (!term) return helpTopics;
     const tokens = term.split(/\s+/).filter(Boolean);
     return helpTopics.filter((topic) => {
-      const content = normalize(`${topic.title} ${topic.description} ${topic.keywords.join(" ")}`);
+      const content = normalize(`${topic.title} ${topic.description} ${topic.keywords.join(" ")} ${topic.steps.join(" ")}`);
       return tokens.every((token) => content.includes(token));
     });
   }, [query]);
@@ -51,15 +57,15 @@ export function HelpCenter() {
         <span className="hidden sm:inline">Ajuda</span>
       </Button>
       <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setSelected(null); setQuery(""); } }}>
-        <DialogContent className="max-h-[min(760px,90dvh)] max-w-3xl overflow-hidden p-0">
-          <div className="border-b px-5 py-5 sm:px-7">
+        <DialogContent className="flex max-h-[min(760px,90dvh)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+          <div className="shrink-0 border-b px-5 py-5 pr-12 sm:px-7 sm:pr-12">
             <DialogTitle className="text-xl">{selected?.title ?? "Como podemos ajudar?"}</DialogTitle>
             <DialogDescription className="mt-1.5">
               {selected?.description ?? "Encontre respostas rápidas sem sair do que está fazendo."}
             </DialogDescription>
           </div>
           {selected ? (
-            <div className="overflow-y-auto px-5 py-5 sm:px-7">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
               <ol className="space-y-3">
                 {selected.steps.map((step, index) => (
                   <li key={step} className="flex gap-3 rounded-xl border bg-muted/30 p-4 text-sm leading-6">
@@ -76,15 +82,21 @@ export function HelpCenter() {
               </div>
             </div>
           ) : (
-            <div className="min-h-0 overflow-y-auto px-5 pb-6 sm:px-7">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 sm:px-7">
               <div className="sticky top-0 z-10 bg-background py-4">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="Ex.: Como importar PDF?" autoFocus />
                 </div>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {topics.map((topic) => {
+              <div className="space-y-3">
+                {categories.map((category) => {
+                  const categoryTopics = topics.filter((topic) => (category.ids as readonly string[]).includes(topic.id));
+                  if (!categoryTopics.length) return null;
+                  return <details key={category.title} open={query.trim() ? true : undefined} className="rounded-xl border p-3">
+                    <summary className="cursor-pointer rounded-md px-1 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{category.title} <span className="text-muted-foreground">({categoryTopics.length})</span></summary>
+                    <div className="grid gap-2 pt-2 sm:grid-cols-2">
+                {categoryTopics.map((topic) => {
                   const Icon = topic.icon;
                   return (
                     <button key={topic.id} type="button" onClick={() => setSelected(topic)} className="group flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring">
@@ -92,6 +104,9 @@ export function HelpCenter() {
                       <span className="min-w-0"><span className="block text-sm font-semibold">{topic.title}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{topic.description}</span></span>
                     </button>
                   );
+                })}
+                    </div>
+                  </details>;
                 })}
               </div>
               {topics.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Nenhum guia encontrado. Tente “Tutor”, “PDF” ou “sincronização”.</p>}

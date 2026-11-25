@@ -1,10 +1,14 @@
 import "server-only";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
-let pool: Pool | undefined;
-let initialized: Promise<void> | undefined;
+type GlobalPostgresState = {
+  pool?: Pool;
+  connectionString?: string;
+};
+
+const globalPostgres = globalThis as typeof globalThis & {
+  __studyAIPostgres?: GlobalPostgresState;
+};
 
 export function hasPostgres(options: { allowMissing?: boolean } = {}) {
   const configured = Boolean(process.env.DATABASE_URL?.trim());
@@ -14,29 +18,66 @@ export function hasPostgres(options: { allowMissing?: boolean } = {}) {
   return configured;
 }
 
+function parsePoolSize(raw: string | undefined, fallback = 10): number {
+  const trimmed = raw?.trim();
+  if (!trimmed || !/^[1-9][0-9]*$/.test(trimmed)) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : fallback;
+}
+
 export function postgresPool() {
-  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL não foi configurada.");
-  pool ??= new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
+  const connectionString = process.env.DATABASE_URL?.trim();
+  if (!connectionString) throw new Error("DATABASE_URL não foi configurada.");
+  const state = (globalPostgres.__studyAIPostgres ??= {});
+  if (state.pool && state.connectionString === connectionString) {
+    return state.pool;
+  }
+  if (state.pool && state.connectionString !== connectionString) {
+    void state.pool.end().catch(() => undefined);
+    state.pool = undefined;
+  }
+  const rawCaCert = process.env.DATABASE_CA_CERT?.trim();
+  const caCert = rawCaCert ? rawCaCert.replace(/\\n/g, "\n") : undefined;
+  const rejectUnauthorized = process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false";
+  if (process.env.NODE_ENV === "production" && !rejectUnauthorized) {
+    console.warn(
+      "[PostgreSQL TLS] DATABASE_SSL_REJECT_UNAUTHORIZED=false está ativo em produção. " +
+        "Configure DATABASE_CA_CERT ou TLS válido e reative a verificação de certificado.",
+    );
+  }
+
+  const pool = new Pool({
+    connectionString,
+    max: parsePoolSize(process.env.DATABASE_POOL_SIZE, 10),
     ssl: process.env.DATABASE_SSL === "false"
       ? false
-      : process.env.NODE_ENV === "production"
-        ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" }
+      : process.env.NODE_ENV === "production" || process.env.DATABASE_SSL === "true" || caCert
+        ? {
+            rejectUnauthorized,
+            ...(caCert ? { ca: caCert } : {}),
+          }
         : undefined,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
   });
-  return pool;
-}
+  // Evita encerramento do processo Node por erro assíncrono em cliente ocioso
+  // (ex.: reinício do PostgreSQL ou timeout de pooler como Supabase/Railway).
+  if (typeof pool.on === "function") {
+    pool.on("error", (error) => {
+      const classification = classifyPostgresError(error);
+      console.error("[PostgreSQL Pool Error]", {
+        category: classification.category,
+        code: classification.code,
+        name: classification.name,
+        message: classification.messageSummary,
+        timestamp: new Date().toISOString(),
+      });
+    });
+  }
 
-export async function initializePostgres() {
-  if (!hasPostgres()) return;
-  initialized ??= readFile(path.join(process.cwd(), "src/server/database/schema.sql"), "utf8")
-    .then((sql) => postgresPool().query(sql))
-    .then(() => undefined)
-    .catch((error) => { initialized = undefined; throw error; });
-  await initialized;
+  state.connectionString = connectionString;
+  state.pool = pool;
+  return state.pool;
 }
 
 export async function postgresHealth() {
@@ -47,16 +88,28 @@ export async function postgresHealth() {
   const startedAt = performance.now();
   try {
     const result = await postgresPool().query<{ schema_ready: boolean }>(
-      "SELECT to_regclass('public.users') IS NOT NULL AS schema_ready",
+      "SELECT NOT EXISTS (SELECT 1 FROM unnest(ARRAY['users', 'refresh_tokens', 'sync_records', 'files', 'backups', 'usage_quotas', 'rate_limits', 'exam_attempts', 'ai_global_daily_budgets', 'ai_token_reservations', 'storage_reservations']) AS required(name) WHERE to_regclass('public.' || required.name) IS NULL) AS schema_ready",
     );
     return {
       available: true,
       configured: true,
       schemaReady: Boolean(result.rows[0]?.schema_ready),
+      tlsVerificationEnabled: process.env.DATABASE_SSL !== "false" && process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false",
       mode: "postgres" as const,
       latencyMs: Math.round(performance.now() - startedAt),
     };
   } catch (error) {
+    const classification = classifyPostgresError(error);
+    const urlInspection = inspectDatabaseUrl();
+    console.error("[PostgreSQL Health Failure]", {
+      category: classification.category,
+      code: classification.code,
+      name: classification.name,
+      message: classification.messageSummary,
+      urlInspection,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       available: false,
       configured: true,
@@ -68,24 +121,163 @@ export async function postgresHealth() {
   }
 }
 
+
+
+function inspectDatabaseUrl() {
+  const rawUrl = process.env.DATABASE_URL;
+  if (!rawUrl) {
+    return { configured: false };
+  }
+
+  const hasWhitespace = /\s/.test(rawUrl);
+  const hasLeadingOrTrailingWhitespace = rawUrl !== rawUrl.trim();
+  let isValidSyntax = false;
+  let protocol: string | undefined;
+  let port: string | undefined;
+  let endsWithSupabasePooler = false;
+  let isHostnameBase = false;
+  let sslmode: string | null = null;
+  let hasSslRootCert = false;
+  let hasSslCert = false;
+  let hasSslKey = false;
+
+  try {
+    const parsed = new URL(rawUrl.trim());
+    isValidSyntax = true;
+    protocol = parsed.protocol;
+    port = parsed.port || (parsed.protocol === "postgres:" || parsed.protocol === "postgresql:" ? "5432" : "");
+    endsWithSupabasePooler = parsed.hostname.endsWith(".pooler.supabase.com");
+    isHostnameBase = parsed.hostname.toLowerCase() === "base";
+    sslmode = parsed.searchParams.get("sslmode");
+    hasSslRootCert = parsed.searchParams.has("sslrootcert");
+    hasSslCert = parsed.searchParams.has("sslcert");
+    hasSslKey = parsed.searchParams.has("sslkey");
+  } catch {
+    isValidSyntax = false;
+  }
+
+  return {
+    configured: true,
+    isValidSyntax,
+    protocol,
+    port,
+    endsWithSupabasePooler,
+    isHostnameBase,
+    hasWhitespace,
+    hasLeadingOrTrailingWhitespace,
+    sslmode,
+    hasSslRootCert,
+    hasSslCert,
+    hasSslKey,
+    hasCaCertEnv: Boolean(process.env.DATABASE_CA_CERT?.trim()),
+  };
+}
+
+function sanitizeErrorText(raw: string): string {
+  const redacted = raw
+    .replace(/postgres:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/postgresql:\/\/[^@\s]+@[^\s]+/gi, "[REDACTED_URL]")
+    .replace(/password=[^\s&]+/gi, "password=[REDACTED]")
+    .replace(/\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g, "[IP]");
+  return redacted.length > 200 ? redacted.slice(0, 200) + "..." : redacted;
+}
+
+function classifyPostgresError(error: unknown): {
+  category: string;
+  code?: string;
+  name?: string;
+  messageSummary: string;
+} {
+  const isErrorLike =
+    error instanceof Error ||
+    (typeof error === "object" && error !== null && "message" in error && typeof (error as { message?: unknown }).message === "string");
+  if (!isErrorLike) {
+    return {
+      category: "unknown",
+      messageSummary: sanitizeErrorText(String(error ?? "Unknown error")),
+    };
+  }
+
+  const err = error as { message: string; code?: string; errno?: string | number; syscall?: string; name?: string };
+  const code = err.code ?? (err.errno ? String(err.errno) : undefined);
+  const name = typeof err.name === "string" ? err.name : undefined;
+  const message = err.message.toLowerCase();
+
+  const sanitizedMessage = sanitizeErrorText(err.message);
+
+  let category = "connection";
+
+  if (
+    code === "ENOTFOUND" ||
+    code === "EAI_AGAIN" ||
+    message.includes("enotfound") ||
+    message.includes("getaddrinfo")
+  ) {
+    category = "dns";
+  } else if (
+    code === "28P01" ||
+    code === "28000" ||
+    message.includes("password authentication failed") ||
+    message.includes("auth")
+  ) {
+    category = "authentication";
+  } else if (
+    code === "3D000" ||
+    (message.includes("database") && message.includes("does not exist"))
+  ) {
+    category = "database_not_found";
+  } else if (
+    code === "ETIMEDOUT" ||
+    message.includes("timeout") ||
+    message.includes("timed out")
+  ) {
+    category = "timeout";
+  } else if (
+    code === "ECONNREFUSED" ||
+    code === "ECONNRESET" ||
+    message.includes("connection refused") ||
+    message.includes("reset")
+  ) {
+    category = "connection_refused_or_reset";
+  } else if (
+    message.includes("ssl") ||
+    message.includes("tls") ||
+    message.includes("certificate") ||
+    message.includes("self signed") ||
+    Boolean(name?.includes("TLSSocket"))
+  ) {
+    category = "tls_ssl";
+  }
+
+  return {
+    category,
+    ...(code ? { code } : {}),
+    ...(name ? { name } : {}),
+    messageSummary: sanitizedMessage.length > 200 ? sanitizedMessage.slice(0, 200) + "..." : sanitizedMessage,
+  };
+}
+
 export async function query<T extends QueryResultRow>(text: string, values: unknown[] = []) {
-  await initializePostgres();
   return postgresPool().query<T>(text, values);
 }
 
 export async function transaction<T>(operation: (client: PoolClient) => Promise<T>) {
-  await initializePostgres();
   const client = await postgresPool().connect();
+  let releaseError: Error | undefined;
   try {
     await client.query("BEGIN");
     const result = await operation(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      releaseError = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
+    }
     throw error;
   } finally {
-    client.release();
+    client.release(releaseError);
   }
 }
 

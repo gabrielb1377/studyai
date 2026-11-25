@@ -2,7 +2,6 @@ import { expect, test } from "@playwright/test";
 
 test("preferências visuais aplicam acessibilidade e persistem", async ({ page }) => {
   await page.goto("/configuracoes");
-
   await page.getByRole("button", { name: "Grande", exact: true }).click();
   await page.getByLabel(/Reduzir animações/).check();
   await page.getByLabel(/Alto contraste/).check();
@@ -12,7 +11,22 @@ test("preferências visuais aplicam acessibilidade e persistem", async ({ page }
   await expect(root).toHaveAttribute("data-reduced-motion", "true");
   await expect(root).toHaveAttribute("data-contrast", "high");
 
-  await page.reload();
+  // Hold session recovery so the global preferences provider first renders
+  // without a session, as it can on a slower reload.
+  let releaseSession!: () => void;
+  const sessionReady = new Promise<void>((resolve) => { releaseSession = resolve; });
+  await page.route("**/auth/session", async (route) => {
+    await sessionReady;
+    await route.continue();
+  });
+  try {
+    await page.reload();
+    await expect(page.getByText("Preparando seu espaço de estudos…")).toBeVisible();
+    await expect(root).toHaveAttribute("data-font-scale", "default");
+  } finally {
+    releaseSession();
+  }
+  await expect(page.getByRole("button", { name: "Grande", exact: true })).toBeVisible();
   await expect(root).toHaveAttribute("data-font-scale", "large");
   await expect(root).toHaveAttribute("data-reduced-motion", "true");
   await expect(root).toHaveAttribute("data-contrast", "high");

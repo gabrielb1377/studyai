@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, BookOpenCheck, Brain, CheckCircle2, Download, FileText, FlaskConical, GraduationCap, ListChecks, Presentation } from "lucide-react";
+import { BookOpen, BookOpenCheck, Brain, CheckCircle2, Download, FileText, FlaskConical, GraduationCap, LayoutTemplate, ListChecks, Presentation, Volume2, Square } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { academyLabels, type AcademyExportKind, type AcademyGeneratedContent, type AcademyStudy } from "../types";
 import { useAcademyLearningTracker } from "../hooks/useAcademyLearningTracker";
+import { useVoice } from "@/features/voice/hooks/useVoice";
+import { prepareNarrationText } from "@/features/teacher/services/TeacherNarrationService";
 
 export function AcademyContentViewer({ study, content, open, onOpenChange, onOpenProfessor, onExport, exportingKind }: {
   study: AcademyStudy;
@@ -19,6 +21,8 @@ export function AcademyContentViewer({ study, content, open, onOpenChange, onOpe
   exportingKind?: AcademyExportKind;
 }) {
   const [exportError, setExportError] = useState<string>();
+  const [narrating, setNarrating] = useState(false);
+  const { speak, stop } = useVoice();
   useAcademyLearningTracker({ studyId: study.id, chapter: content?.title ?? study.topic, active: open && Boolean(content) });
   if (!content) return null;
   const contentExports = study.exports.filter((item) => item.contentId === content.id);
@@ -27,6 +31,23 @@ export function AcademyContentViewer({ study, content, open, onOpenChange, onOpe
     try { await onExport(kind); }
     catch (cause) { setExportError(cause instanceof Error ? cause.message : "Não foi possível exportar o conteúdo."); }
   }
+
+  const narrateContent = async () => {
+    if (narrating) {
+      await stop();
+      setNarrating(false);
+      return;
+    }
+    const chapters = content.chapters
+      .map((chapter) => `${chapter.title}. ${chapter.content}`)
+      .join(" ");
+    const spoken = prepareNarrationText(`${content.objective}. ${chapters} ${content.summary}`);
+    if (!spoken) return;
+    setNarrating(true);
+    try { await speak(spoken); }
+    catch { /* Falha de TTS não impede a leitura do texto na tela. */ }
+    finally { setNarrating(false); }
+  };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl">
@@ -37,6 +58,13 @@ export function AcademyContentViewer({ study, content, open, onOpenChange, onOpe
         </DialogHeader>
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_15rem]">
           <div className="space-y-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" variant="secondary" onClick={() => void narrateContent()}>
+                {narrating ? <Square className="size-3.5 me-1" aria-hidden="true" /> : <Volume2 className="size-3.5 me-1" aria-hidden="true" />}
+                {narrating ? "Parar narração" : "Ouvir conteúdo"}
+              </Button>
+              <span className="text-xs text-muted-foreground">Narração usa a voz do navegador; o texto continua visível.</span>
+            </div>
             {content.chapters.map((chapter) => (
               <article key={chapter.id} className="rounded-2xl border bg-card p-5">
                 <h3 className="flex items-center gap-2 font-semibold"><BookOpen className="size-4 text-primary" />{chapter.title}</h3>
@@ -62,7 +90,7 @@ export function AcademyContentViewer({ study, content, open, onOpenChange, onOpe
           </aside>
         </div>
         {exportError ? <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{exportError}</p> : null}
-        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button><Button variant="outline" asChild><Link href={`/lab?academyStudyId=${encodeURIComponent(study.id)}&contentId=${encodeURIComponent(content.id)}`}><FlaskConical />Abrir no Lab</Link></Button><Button onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button><Button variant="outline" asChild><Link href={`/lab?academyStudyId=${encodeURIComponent(study.id)}&contentId=${encodeURIComponent(content.id)}`}><FlaskConical />Abrir no Lab</Link></Button><Button variant="outline" asChild><Link href={`/academy/studio?estudo=${encodeURIComponent(study.id)}&conteudo=${encodeURIComponent(content.id)}&tipo=document`}><LayoutTemplate />Abrir no Studio</Link></Button><Button onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

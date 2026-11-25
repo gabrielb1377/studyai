@@ -1,7 +1,11 @@
 import "server-only";
 
 import { ContextBuilder } from "@/features/ai/ContextBuilder";
-import { PromptBuilder } from "@/features/ai/PromptBuilder";
+import {
+  PromptBuilder,
+  UNTRUSTED_MATERIAL_SECURITY_RULE,
+  wrapUntrustedMaterialData,
+} from "@/features/ai/PromptBuilder";
 import { TokenCounter } from "@/features/ai/TokenCounter";
 import type { AcademyContentKind, AcademyGenerationMode, AcademyGenerationStage, AcademyStudy } from "../types";
 
@@ -50,14 +54,15 @@ export const AcademyPromptBuilder = {
       : "Nenhuma etapa anterior.";
     const question = [
       "Crie conteúdo educacional original, correto e seguro para o Academy do StudyAI.",
+      UNTRUSTED_MATERIAL_SECURITY_RULE,
       "MODO DE GERAÇÃO LIVRE: use somente as preferências fornecidas abaixo. Não exija, procure ou presuma PDF, materialId, documentId, chunks, Biblioteca ou Knowledge Graph existente.",
       "Responda SOMENTE com JSON válido no schema informado, sem markdown ao redor do JSON.",
       "Não mencione arquivos, PDFs ou fontes que não foram fornecidos. Não invente credenciais, links ou referências.",
       "Use conteúdo suficiente para estudo, respeitando o nível, a duração e a profundidade pedidos.",
-      "Contexto do estudo:",
-      ContextBuilder.fromAcademy(study, kind),
-      "Etapas anteriores (use para manter consistência e não repetir conteúdo):",
-      previousContext,
+      wrapUntrustedMaterialData([
+        `Contexto do estudo:\n${ContextBuilder.fromAcademy(study, kind)}`,
+        `Etapas anteriores (use para manter consistência e não repetir conteúdo):\n${previousContext}`,
+      ]),
       `Etapa atual: ${stage}`,
       stageInstruction(kind, stage),
       "Schema obrigatório:",

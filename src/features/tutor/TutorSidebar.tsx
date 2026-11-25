@@ -49,7 +49,7 @@ export function TutorSidebar({
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input aria-label="Pesquisar conversa" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Pesquisar conversa" className="h-10 pl-9" />
       </label>
-      <div className="mt-5">
+      {conversations.length > 0 && <div className="mt-5">
         <p className="mb-2 px-2 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground">CONVERSAS</p>
         <ul className="space-y-1" aria-label="Histórico de conversas">
           {visibleConversations.map((conversation) => {
@@ -74,7 +74,7 @@ export function TutorSidebar({
           })}
         </ul>
         {visibleConversations.length === 0 && <p className="px-2 py-6 text-center text-sm text-muted-foreground">Nenhuma conversa encontrada.</p>}
-      </div>
+      </div>}
     </aside>
   );
 }

@@ -1,6 +1,6 @@
 export const STORAGE_DATABASE_NAME = "studyai-db";
-export const STORAGE_DATABASE_VERSION = 4;
-export const STORAGE_SCHEMA_VERSION = 4;
+export const STORAGE_DATABASE_VERSION = 5;
+export const STORAGE_SCHEMA_VERSION = 5;
 export const STORAGE_MIGRATION_KEY = "storage-migration";
 
 export const STORAGE_STORES = [
@@ -19,6 +19,7 @@ export const STORAGE_STORES = [
   "academy",
   "lab",
   "metadata",
+  "studio-documents",
 ] as const;
 
 export type StorageStoreName = (typeof STORAGE_STORES)[number];

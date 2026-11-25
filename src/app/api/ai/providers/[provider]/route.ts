@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { AIService } from "@/features/ai/AIService";
 import { isAIProviderId } from "@/features/ai/AIProvider";
+import { ApiKeyService } from "@/server/ai/ApiKeyService";
+import { apiError, requireActiveSession, requireUser } from "@/server/auth/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,17 +11,27 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ provider: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
-  const { provider } = await params;
-  if (!isAIProviderId(provider)) {
-    return NextResponse.json({ error: "Provider de IA inválido." }, { status: 400 });
-  }
+  try {
+    const { provider } = await params;
+    if (!isAIProviderId(provider)) {
+      return NextResponse.json({ error: "Provider de IA inválido." }, { status: 400 });
+    }
 
-  const url = new URL(request.url);
-  const status = await AIService.inspect(provider, {
-    force: url.searchParams.get("refresh") === "true",
-    signal: request.signal,
-  });
-  return NextResponse.json(status, {
-    headers: { "Cache-Control": "no-store" },
-  });
+    const url = new URL(request.url);
+    const user = requireUser(request);
+    await requireActiveSession(request, user);
+    let apiKey: string | undefined;
+    try { apiKey = await ApiKeyService.getDecrypted(user.sub, provider); }
+    catch { return NextResponse.json({ provider, available: false, models: [], latencyMs: 0, error: "Não foi possível ler a chave salva." }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
+    const status = await AIService.inspect(provider, {
+      force: url.searchParams.get("refresh") === "true",
+      signal: request.signal,
+      apiKey,
+    });
+    return NextResponse.json(status, {
+      headers: { "Cache-Control": "no-store, private" },
+    });
+  } catch (error) {
+    return apiError(error);
+  }
 }

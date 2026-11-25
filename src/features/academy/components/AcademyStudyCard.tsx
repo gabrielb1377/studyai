@@ -1,4 +1,5 @@
-import { BookOpen, Clock3, GraduationCap, Layers3, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, Clock3, GraduationCap, Layers3, LayoutTemplate, Mic, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -7,11 +8,12 @@ import { academyLabels, type AcademyStudy } from "../types";
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
-export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfessor, isGenerating }: {
+export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfessor, onOuvirContent, isGenerating }: {
   study: AcademyStudy;
   onGenerate: () => void;
   onOpenContent: () => void;
   onOpenProfessor: () => void;
+  onOuvirContent?: () => void;
   isGenerating: boolean;
 }) {
   return (
@@ -19,7 +21,7 @@ export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfe
       <CardHeader className="gap-3">
         <div className="flex items-start justify-between gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="size-5" aria-hidden="true" /></span>
-          <Badge variant="outline">Material Gerado por IA</Badge>
+          <Badge variant="outline">{study.contents.length ? "Material Gerado por IA" : "Estudo livre"}</Badge>
         </div>
         <div className="space-y-1.5">
           <h3 className="text-base font-semibold leading-6">{study.title}</h3>
@@ -43,8 +45,24 @@ export function AcademyStudyCard({ study, onGenerate, onOpenContent, onOpenProfe
         {study.generationError ? <p role="alert" className="rounded-xl bg-destructive/5 p-3 text-xs text-destructive">{study.generationError}</p> : null}
         <div className="grid grid-cols-2 gap-2">
           <Button variant="outline" onClick={onGenerate} disabled={isGenerating}><Sparkles />{isGenerating ? "Gerando..." : "Gerar"}</Button>
-          {study.contents.length ? <Button onClick={onOpenContent}><BookOpen />Abrir conteúdo</Button> : <Button disabled><BookOpen />Sem conteúdo</Button>}
+          {study.contents.length ? (
+            <Button onClick={onOpenContent}><BookOpen />Abrir conteúdo</Button>
+          ) : (
+            <Button asChild variant="secondary">
+              <Link href={`/academy/studio?estudo=${encodeURIComponent(study.id)}`}>
+                <LayoutTemplate />Editar no Studio
+              </Link>
+            </Button>
+          )}
           {study.contents.length ? <Button className="col-span-2" variant="secondary" onClick={onOpenProfessor}><GraduationCap />Abrir no Professor</Button> : null}
+          {study.contents.length ? <Button variant="ghost" onClick={onOuvirContent ? onOuvirContent : undefined}><Mic />Ouvir conteúdo</Button> : null}
+          {study.contents.length ? (
+            <Button asChild variant="ghost">
+              <Link href={`/academy/studio?estudo=${encodeURIComponent(study.id)}&conteudo=${encodeURIComponent(study.contents[0].id)}`}>
+                <LayoutTemplate />Editar no Studio
+              </Link>
+            </Button>
+          ) : null}
         </div>
       </CardContent>
     </Card>

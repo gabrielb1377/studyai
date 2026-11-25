@@ -1,6 +1,13 @@
 import "server-only";
 import { createHash, createHmac, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import {
+  decryptApiKey,
+  encryptApiKey,
+  getEncryptionVersion,
+  isV1Encryption,
+  isV2Encryption,
+} from "./crypto-core";
 
 const scrypt = promisify(scryptCallback);
 const encoder = new TextEncoder();
@@ -11,6 +18,10 @@ function secret() {
   if (value && value.length >= 32) return value;
   if (process.env.NODE_ENV === "production") throw new Error("AUTH_SECRET deve possuir ao menos 32 caracteres em produção.");
   return "studyai-development-secret-change-before-production";
+}
+
+function apiKeysEncryptionSecret(): string | undefined {
+  return process.env.API_KEYS_ENCRYPTION_KEY;
 }
 
 export async function hashPassword(password: string) {
@@ -64,3 +75,19 @@ export function constantTimeEqual(left: string, right: string) {
   const a = encoder.encode(left); const b = encoder.encode(right);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+function apiKeySecrets() {
+  return { authSecret: secret(), apiKeysEncryptionKey: apiKeysEncryptionSecret() };
+}
+
+export async function encryptSecret(plaintext: string): Promise<string> {
+  // v2 when API_KEYS_ENCRYPTION_KEY is configured, legacy v1 otherwise.
+  return encryptApiKey(plaintext, apiKeySecrets());
+}
+
+export async function decryptSecret(payload: string): Promise<string> {
+  // v1 and v2 ciphertexts remain readable while the same secrets stay configured.
+  return decryptApiKey(payload, apiKeySecrets());
+}
+
+export { getEncryptionVersion, isV1Encryption, isV2Encryption };

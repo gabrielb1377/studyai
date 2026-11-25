@@ -88,7 +88,7 @@ function createChapters(text: string, sections: readonly DocumentSection[]): Stu
 function chapterTopic(chapter: StudyChapter) {
   if (!(["unit", "chapter", "section"] as StudyChapterMarker[]).includes(chapter.marker)) return undefined;
   const parsed = parseMarker(chapter.title);
-  return parsed?.detail;
+  return parsed?.detail?.replace(/[.!?]+$/, "").trim();
 }
 
 export const TopicDetector = {
@@ -97,7 +97,9 @@ export const TopicDetector = {
       .filter((section) => section.type === "title" || section.type === "heading")
       .map((section) => section.text.replace(/^#+\s*/, "").trim())
       .filter(Boolean);
-    const meaningfulHeadings = headings.filter((heading) => !parseMarker(heading));
+    const meaningfulHeadings = headings
+      .filter((heading) => !parseMarker(heading))
+      .map((heading) => heading.replace(/[.!?]+$/, "").trim());
     const fileTitle = cleanFileTitle(fileName);
     const titleCandidate = meaningfulHeadings[0] || fileTitle;
     const title = GENERIC_TITLES.has(normalizeForDetection(titleCandidate)) ? "Documento sem título" : titleCandidate;

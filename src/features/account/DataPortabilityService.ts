@@ -1,5 +1,6 @@
 import { StorageManager } from "@/lib/storage/StorageManager";
 import { STORAGE_SCHEMA_VERSION, STORAGE_STORES, type StorageStoreName } from "@/lib/storage/StorageVersion";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 type PortableArchive = {
   product: "StudyAI";
@@ -29,8 +30,16 @@ function portablePreference(key: string) {
   return preferencePrefixes.some((prefix) => key.startsWith(prefix));
 }
 
+function currentUserId(): string | null {
+  if (typeof window === "undefined") return null;
+  const session = SessionOperationManager.current();
+  return session.userId ?? null;
+}
+
 function collectPreferences() {
   if (typeof localStorage === "undefined") return {};
+  const userId = currentUserId();
+  if (!userId) return {};
   const preferences: Record<string, string> = {};
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index);
@@ -85,8 +94,11 @@ export const DataPortabilityService = {
       }
     });
     if (typeof localStorage !== "undefined") {
-      for (const [key, value] of Object.entries(parsed.preferences ?? {})) localStorage.setItem(key, value);
-      window.dispatchEvent(new Event("studyai:workspace-updated"));
+      const userId = currentUserId();
+      if (userId) {
+        for (const [key, value] of Object.entries(parsed.preferences ?? {})) localStorage.setItem(key, value);
+        window.dispatchEvent(new Event("studyai:workspace-updated"));
+      }
     }
     return parsed;
   },

@@ -14,10 +14,13 @@ const actionInstructions: Record<TeacherAction, string> = {
   flowchart: "Gere um fluxograma em um bloco Mermaid `flowchart TD`. Inclua apenas relações sustentadas pelo material e acrescente uma explicação curta após o diagrama.",
   mind_map: "Gere um mapa mental em um bloco Mermaid `mindmap`. Use somente conceitos presentes no contexto e não crie ramificações sem evidência.",
   timeline: "Crie uma linha do tempo apenas se o material possuir ordem cronológica ou sequencial. Caso contrário, explique objetivamente por que esse formato não se aplica, sem inventar datas.",
-  exercise: "Proponha um exercício adequado ao tema. Varie entre múltipla escolha, verdadeiro/falso, completar, associação, discursiva, código e estudo de caso. Apresente um exercício por vez e aguarde a resposta.",
+  exercise: "Proponha um exercício gradual adequado ao tema e ao nível do estudante. Comece por fixação conceitual (etapa 1: fácil), avance para aplicação (etapa 2: médio) e depois análise/síntese (etapa 3+: difícil), ajustando conforme acertos e erros pendentes. Varie entre múltipla escolha, verdadeiro/falso, completar, associação, discursiva, código e estudo de caso. Apresente um exercício por vez e aguarde a resposta.",
   compare: "Compare os conceitos pedidos em uma tabela clara, destacando definição, finalidade, diferenças, semelhanças e um exemplo sustentado pelo contexto.",
   adaptive_summary: "Produza o resumo no formato solicitado, preservando conceitos, relações e ressalvas importantes do material.",
   explain_selection: "Explique prioritariamente o trecho selecionado e use os demais trechos apenas para esclarecer seu contexto. Informe a página ou capítulo quando disponível.",
+  audio_lesson: "Conduza uma aula narrada completa sobre o tema. Estruture em etapas: 1) Introdução e objetivos, 2) Explicação conceitual clara, 3) Exemplos práticos do material, 4) Exercício proposto, 5) Correção e feedback, 6) Resumo e próxima etapa. Pare em cada etapa e aguarde confirmação do aluno antes de avançar. Use linguagem natural para narração: evite markdown excessivo, não leia URLs, explique fórmulas de forma compreensível.",
+  voice_question: "O aluno fez uma pergunta por voz durante a aula narrada. Responda de forma direta e clara, usando o contexto da aula atual. Se a pergunta estiver fora do escopo da aula atual, diga que abordará depois e foque no tema da aula. Use linguagem natural para narração.",
+  explain_differently: "O aluno pediu para explicar o conceito atual de outra forma. Use analogias diferentes, exemplos práticos distintos, ou uma abordagem mais visual/passo a passo. Não repita a explicação anterior. Identifique onde o aluno pode ter travado e foque nesse ponto. Use linguagem natural para narração.",
 };
 
 const levelInstructions: Record<TeacherRequest["level"], string> = {
@@ -39,7 +42,11 @@ const methodInstructions: Record<TeacherRequest["method"], string> = {
 };
 
 export const TeacherPromptBuilder = {
-  instruction(request: TeacherRequest) {
+  /**
+   * `omitSelection` deixa o trecho selecionado de fora: quem monta o prompt
+   * final (PromptBuilder) o inclui dentro do bloco de dados não confiáveis.
+   */
+  instruction(request: TeacherRequest, options: { omitSelection?: boolean } = {}) {
     const blocks = [
       "Modo Professor ativo.",
       `Nível solicitado: ${teacherLevelLabels[request.level]}. ${levelInstructions[request.level]}`,
@@ -49,10 +56,22 @@ export const TeacherPromptBuilder = {
       "Quando corrigir uma resposta, mostre: resposta correta, justificativa, conceito relacionado, fonte utilizada e recomendação de revisão.",
       "Ao usar uma fonte, cite o rótulo de fonte recebido no contexto; não invente páginas, capítulos ou referências.",
     ];
+    if (request.action === "exercise" && request.exerciseStage) {
+      const stage = request.exerciseStage;
+      const stageGuidance = stage === 1
+        ? "Progressão gradual — Etapa 1 (fácil/fixação): verifique compreensão básica antes de aumentar a complexidade."
+        : stage === 2
+          ? "Progressão gradual — Etapa 2 (médio/aplicação): exija aplicação do conceito em cenário concreto."
+          : `Progressão gradual — Etapa ${stage} (difícil/análise): proponha problema de síntese, comparação ou caso complexo.`;
+      blocks.push(stageGuidance);
+    }
     if (request.action === "adaptive_summary") {
       blocks.push(`Formato do resumo: ${teacherSummaryStyleLabels[request.summaryStyle]}.`);
     }
-    if (request.selection) {
+    if (request.action === "audio_lesson") {
+      blocks.push(`Preferências de áudio: voz "${request.voice ?? "padrão"}", velocidade ${request.rate}x, reprodução automática ${request.autoplay ? "ligada" : "desligada"}.`);
+    }
+    if (request.selection && !options.omitSelection) {
       const location = [
         request.selection.sourceName,
         request.selection.page ? `página ${request.selection.page}` : undefined,
@@ -63,7 +82,12 @@ export const TeacherPromptBuilder = {
     return blocks.join("\n");
   },
 
-  actionMessage(action: TeacherAction, context?: TutorStudyContext | null, summaryStyle?: TeacherRequest["summaryStyle"]) {
+  actionMessage(
+    action: TeacherAction,
+    context?: TutorStudyContext | null,
+    summaryStyle?: TeacherRequest["summaryStyle"],
+    exerciseStage?: number,
+  ) {
     const topic = context?.topic || context?.title || "o tema atual";
     const messages: Record<TeacherAction, string> = {
       dialogue: "Responda considerando meu nível e o método de ensino selecionado.",
@@ -72,10 +96,15 @@ export const TeacherPromptBuilder = {
       flowchart: `Crie um fluxograma dos conceitos e relações centrais de ${topic}.`,
       mind_map: `Crie um mapa mental dos conceitos centrais de ${topic}.`,
       timeline: `Verifique se ${topic} possui uma sequência cronológica ou processual e, quando fizer sentido, crie uma linha do tempo.`,
-      exercise: `Proponha um exercício sobre ${topic} e aguarde minha resposta.`,
+      exercise: exerciseStage
+        ? `Proponha um exercício gradual (etapa ${exerciseStage}) sobre ${topic} e aguarde minha resposta.`
+        : `Proponha um exercício sobre ${topic} e aguarde minha resposta.`,
       compare: `Compare os conceitos centrais e mais relacionados de ${topic}.`,
       adaptive_summary: `Gere um ${teacherSummaryStyleLabels[summaryStyle ?? "medium"].toLocaleLowerCase("pt-BR")} de ${topic}.`,
       explain_selection: "Explique o trecho selecionado com base no contexto do material.",
+      audio_lesson: `Inicie uma aula narrada completa sobre ${topic}. Comece pela introdução e pelo objetivo da aula, depois prossiga etapa por etapa aguardando minha confirmação para avançar.`,
+      voice_question: "Tenho uma dúvida sobre o que você acabou de explicar. Por favor, esclareça.",
+      explain_differently: "Não entendi completamente. Poderia explicar de outra forma, com uma analogia ou exemplo diferente?",
     };
     return messages[action];
   },

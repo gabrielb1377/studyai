@@ -51,9 +51,9 @@ export function DashboardStats({
   const visibleStats = advanced ? stats : stats.slice(0, 5);
 
   return (
-    <section aria-label="Resumo dos dados de estudo" className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5">
+    <section aria-label="Resumo dos dados de estudo" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {visibleStats.map(({ label, value, icon: Icon }) => (
-        <Card key={label} className="min-w-[10rem] snap-start gap-3 p-4 sm:min-w-0">
+        <Card key={label} className="min-w-0 gap-2 p-3 sm:gap-3 sm:p-4">
           <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-primary">
             <Icon className="size-4" aria-hidden="true" />
           </span>

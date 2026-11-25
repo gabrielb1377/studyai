@@ -66,6 +66,7 @@ test("pipeline persiste o grafo e o expõe na Biblioteca, Dashboard e Workspace"
   expect(graphs[0].statistics.conceptCount).toBeGreaterThan(0);
 
   await page.goto("/biblioteca");
+  await page.getByRole("button", { name: "Detalhes", exact: true }).click();
   await expect(page.getByText("Conceitos", { exact: true })).toBeVisible();
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Conhecimento estruturado" })).toBeVisible();

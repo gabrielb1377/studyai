@@ -88,7 +88,17 @@ export function StorageDiagnostics() {
                   </tbody>
                 </table>
               </div>
-              <p className="mt-4 text-xs text-muted-foreground">Última migração: {diagnostics?.lastMigration ? new Date(diagnostics.lastMigration).toLocaleString("pt-BR") : "não registrada"}</p>
+              <p className="mt-4 text-xs text-muted-foreground">
+                Persistência do navegador:{" "}
+                <span className="font-medium text-foreground">
+                  {diagnostics?.persisted === true
+                    ? "Garantida pelo navegador sob cota normal"
+                    : diagnostics?.persisted === false
+                      ? "Não garantida (o navegador pode remover dados sob pressão de espaço)"
+                      : "Status indisponível neste navegador"}
+                </span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">Última migração: {diagnostics?.lastMigration ? new Date(diagnostics.lastMigration).toLocaleString("pt-BR") : "não registrada"}</p>
             </CardContent>
           </Card>
         </>

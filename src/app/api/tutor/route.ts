@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { AIService } from "@/features/ai/AIService";
+import { jsonBody } from "@/server/auth/http";
 import { normalizeAIError } from "@/features/ai/AIErrors";
 import {
   isAIModelPreferences,
   isAIProviderId,
   isAISelectionMode,
+  type AIFallbackConsent,
   type AIModelPreferences,
   type AIProviderId,
   type AISelectionMode,
@@ -18,6 +20,8 @@ import { isTutorStudyContext } from "@/features/tutor/utils/tutor-context-valida
 import { TokenCounter } from "@/features/ai/TokenCounter";
 import type { TeacherRequest } from "@/features/teacher/types";
 import { isTeacherRequest } from "@/features/teacher/teacher-validation";
+import { withAIQuota } from "@/server/ai/QuotaMiddleware";
+import { AIRouter } from "@/features/ai/AIRouter";
 
 export const runtime = "nodejs";
 
@@ -32,12 +36,27 @@ type TutorRequest = {
   provider?: AIProviderId;
   stream?: boolean;
   teaching?: TeacherRequest;
+  requestId: string;
+  fallbackConsent?: AIFallbackConsent;
 };
+
+function isFallbackConsent(value: unknown, requestId: string) : value is AIFallbackConsent {
+  if (value === undefined) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const consent = value as Partial<AIFallbackConsent>;
+  return consent.requestId === requestId &&
+    isAIProviderId(consent.originalProvider) &&
+    isAIProviderId(consent.provider) &&
+    consent.provider !== consent.originalProvider &&
+    typeof consent.model === "string" && consent.model.trim().length > 0;
+}
 
 function isTutorRequest(value: unknown): value is TutorRequest {
   if (typeof value !== "object" || value === null) return false;
   const request = value as Partial<TutorRequest>;
   return typeof request.message === "string" && request.message.trim().length > 0 &&
+    typeof request.requestId === "string" && /^[A-Za-z0-9_-]{8,128}$/.test(request.requestId) &&
+    isFallbackConsent(request.fallbackConsent, request.requestId) &&
     (request.model === undefined || (typeof request.model === "string" && request.model.trim().length > 0)) &&
     isAIModelPreferences(request.models) &&
     (request.mode === undefined || isAISelectionMode(request.mode)) &&
@@ -57,88 +76,101 @@ function isTutorRequest(value: unknown): value is TutorRequest {
 }
 
 export async function POST(request: Request) {
-  const body: unknown = await request.json().catch(() => null);
+  // Clone para validar sem consumir o corpo que `withAIQuota` lerá em seguida.
+  const parsed = await jsonBody<unknown>(request.clone(), 256 * 1024).catch((error: unknown) => error);
+  if (parsed instanceof Response) {
+    return new NextResponse(parsed.body, { status: parsed.status, headers: parsed.headers });
+  }
+  const body: unknown = parsed;
   if (!isTutorRequest(body)) {
     return NextResponse.json(
       { code: "INVALID_REQUEST", error: "Mensagem ou histórico inválido." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
-  try {
-    const prompt = PromptBuilder.contextual({
-      question: body.message,
-      history: body.history,
-      studyContext: body.context,
-      chunks: body.chunks,
-      teaching: body.teaching,
-    });
-    const aiRequest = {
-      history: prompt.history,
-      message: prompt.message,
-      model: body.model,
-      models: body.models,
-      mode: body.mode,
-      signal: request.signal,
-      provider: body.provider,
-      stream: body.stream,
-    };
-    if (body.stream) {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream<Uint8Array>({
-        async start(controller) {
-          try {
-            for await (const event of AIService.stream(aiRequest)) {
-              const payload = event.type === "done"
-                ? {
-                    ...event,
-                    response: {
-                      ...event.response,
-                      usage: {
-                        ...event.response.usage,
-                        inputTokens: event.response.usage?.inputTokens ?? prompt.metrics.promptTokens,
-                        outputTokens: event.response.usage?.outputTokens ?? TokenCounter.estimate(event.response.text),
-                        totalTokens: event.response.usage?.totalTokens ?? prompt.metrics.promptTokens + TokenCounter.estimate(event.response.text),
-                        contextTokens: prompt.metrics.contextTokens,
-                        historyTokens: prompt.metrics.compressedHistoryTokens,
-                        chunkTokens: prompt.metrics.chunkTokens,
+  const prompt = PromptBuilder.contextual({
+    question: body.message,
+    history: body.history,
+    studyContext: body.context,
+    chunks: body.chunks,
+    teaching: body.teaching,
+  });
+  const task = AIRouter.describeTutorTask({
+    message: body.message,
+    history: body.history,
+    promptTokens: prompt.metrics.promptTokens,
+    contextTokens: prompt.metrics.contextTokens,
+  });
+
+  return withAIQuota(request, async (request, aiRequest) => {
+    try {
+      if (body.stream) {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            try {
+              for await (const event of AIService.stream({ ...aiRequest, fallbackPolicy: "consent" })) {
+                const payload = event.type === "done"
+                  ? {
+                      ...event,
+                      response: {
+                        ...event.response,
+                        usage: {
+                          ...event.response.usage,
+                          estimated: event.response.usage?.inputTokens === undefined || event.response.usage?.outputTokens === undefined,
+                          inputTokens: event.response.usage?.inputTokens ?? prompt.metrics.promptTokens,
+                          outputTokens: event.response.usage?.outputTokens ?? TokenCounter.estimate(event.response.text),
+                          totalTokens: event.response.usage?.totalTokens ?? prompt.metrics.promptTokens + TokenCounter.estimate(event.response.text),
+                          contextTokens: prompt.metrics.contextTokens,
+                          historyTokens: prompt.metrics.compressedHistoryTokens,
+                          chunkTokens: prompt.metrics.chunkTokens,
+                          contextLimited: prompt.metrics.removedMessages > 0 || prompt.metrics.removedChunks > 0,
+                        },
                       },
-                    },
-                  }
-                : event;
-              controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+                    }
+                  : event;
+                controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+              }
+            } catch (error) {
+              const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
+              controller.enqueue(encoder.encode(`${JSON.stringify({ type: "error", ...normalized.body })}\n`));
+            } finally {
+              controller.close();
             }
-          } catch (error) {
-            const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
-            controller.enqueue(encoder.encode(`${JSON.stringify({ type: "error", ...normalized.body })}\n`));
-          } finally {
-            controller.close();
-          }
+          },
+        });
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "application/x-ndjson; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+          },
+        });
+      }
+      const response = await AIService.generate({ ...aiRequest, fallbackPolicy: "consent" });
+      const outputTokens = response.usage?.outputTokens ?? TokenCounter.estimate(response.text);
+      return NextResponse.json({
+        ...response,
+        usage: {
+          ...response.usage,
+          estimated: response.usage?.inputTokens === undefined || response.usage?.outputTokens === undefined,
+          inputTokens: response.usage?.inputTokens ?? prompt.metrics.promptTokens,
+          outputTokens,
+          totalTokens: response.usage?.totalTokens ?? prompt.metrics.promptTokens + outputTokens,
+          contextTokens: prompt.metrics.contextTokens,
+          historyTokens: prompt.metrics.compressedHistoryTokens,
+          chunkTokens: prompt.metrics.chunkTokens,
+          contextLimited: prompt.metrics.removedMessages > 0 || prompt.metrics.removedChunks > 0,
         },
       });
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "application/x-ndjson; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-        },
-      });
+    } catch (error) {
+      const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
+      return NextResponse.json(normalized.body, { status: normalized.status });
     }
-    const response = await AIService.generate(aiRequest);
-    const outputTokens = response.usage?.outputTokens ?? TokenCounter.estimate(response.text);
-    return NextResponse.json({
-      ...response,
-      usage: {
-        ...response.usage,
-        inputTokens: response.usage?.inputTokens ?? prompt.metrics.promptTokens,
-        outputTokens,
-        totalTokens: response.usage?.totalTokens ?? prompt.metrics.promptTokens + outputTokens,
-        contextTokens: prompt.metrics.contextTokens,
-        historyTokens: prompt.metrics.compressedHistoryTokens,
-        chunkTokens: prompt.metrics.chunkTokens,
-      },
-    });
-  } catch (error) {
-    const normalized = normalizeAIError(error, "Erro inesperado ao consultar o Tutor IA.");
-    return NextResponse.json(normalized.body, { status: normalized.status });
-  }
+  }, {
+    history: prompt.history,
+    message: prompt.message,
+    task,
+    routingPolicy: "smart",
+  });
 }

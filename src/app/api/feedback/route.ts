@@ -32,7 +32,7 @@ function rating(value: unknown) {
 }
 
 export async function POST(request: Request) {
-  const limit = rateLimit(`beta-feedback:${requestAddress(request)}`, 5, 10 * 60_000);
+  const limit = await rateLimit(`beta-feedback:${requestAddress(request)}`, 5, 10 * 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "Aguarde antes de enviar outro relato." }, { status: 429 });
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
   if (declaredLength > MAX_BODY_BYTES) return NextResponse.json({ error: "O relato excede o limite permitido." }, { status: 413 });

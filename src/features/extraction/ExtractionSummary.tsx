@@ -55,14 +55,18 @@ export function ExtractionSummary() {
             <span><strong className="text-foreground">{statistics.errors}</strong> com erro</span>
           </div>
         </div>
-        <dl className="grid gap-3 border-t pt-4 text-xs sm:grid-cols-3">
+        <dl className="grid gap-3 border-t pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <dt className="text-muted-foreground">OCR realizado</dt>
-            <dd className="mt-1 font-semibold">{statistics.ocr}</dd>
+            <dt className="text-muted-foreground">Páginas com OCR</dt>
+            <dd className="mt-1 font-semibold">{statistics.ocrPages}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Transcrições realizadas</dt>
-            <dd className="mt-1 font-semibold">{statistics.transcriptions}</dd>
+            <dt className="text-muted-foreground">Páginas a revisar</dt>
+            <dd className="mt-1 font-semibold">{statistics.pendingReviewPages}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Páginas corrigidas</dt>
+            <dd className="mt-1 font-semibold">{statistics.reviewedPages}</dd>
           </div>
           <div>
             <dt className="text-muted-foreground">Tempo de processamento</dt>

@@ -25,8 +25,16 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   device_name TEXT NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  revoked_at TIMESTAMPTZ
+  revoked_at TIMESTAMPTZ,
+  family_id TEXT,
+  replaced_by TEXT,
+  rotated_at TIMESTAMPTZ
 );
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS family_id TEXT;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS replaced_by TEXT;
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS rotated_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS refresh_tokens_user_family ON refresh_tokens(user_id, family_id) WHERE family_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS account_tokens (
   token_hash TEXT PRIMARY KEY,
@@ -35,6 +43,7 @@ CREATE TABLE IF NOT EXISTS account_tokens (
   expires_at TIMESTAMPTZ NOT NULL,
   used_at TIMESTAMPTZ
 );
+CREATE INDEX IF NOT EXISTS account_tokens_user_id ON account_tokens(user_id);
 
 CREATE TABLE IF NOT EXISTS sync_records (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -69,6 +78,7 @@ CREATE TABLE IF NOT EXISTS backups (
   size_bytes BIGINT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS backups_user_created ON backups(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS shares (
   id TEXT PRIMARY KEY,
@@ -82,6 +92,7 @@ CREATE TABLE IF NOT EXISTS shares (
 );
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
 ALTER TABLE shares ADD COLUMN IF NOT EXISTS access_level TEXT NOT NULL DEFAULT 'read';
+CREATE INDEX IF NOT EXISTS shares_user_created ON shares(user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS files (
   id TEXT NOT NULL,
@@ -203,6 +214,37 @@ CREATE TABLE IF NOT EXISTS collaboration_activity (
 );
 CREATE INDEX IF NOT EXISTS collaboration_activity_room ON collaboration_activity(room_id,created_at DESC);
 
+CREATE TABLE IF NOT EXISTS user_api_keys (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  encrypted_key TEXT NOT NULL,
+  key_hint TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, provider)
+);
+
+CREATE TABLE IF NOT EXISTS usage_quotas (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  minute_bucket INT NOT NULL DEFAULT 0,
+  requests_count BIGINT NOT NULL DEFAULT 0,
+  tokens_count BIGINT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, date, minute_bucket)
+);
+CREATE INDEX IF NOT EXISTS usage_quotas_user_date ON usage_quotas(user_id, date);
+CREATE INDEX IF NOT EXISTS usage_quotas_user_minute ON usage_quotas(user_id, minute_bucket);
+
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT NOT NULL,
+  window_bucket BIGINT NOT NULL,
+  count BIGINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (key, window_bucket)
+);
+CREATE INDEX IF NOT EXISTS rate_limits_bucket ON rate_limits(window_bucket);
+
 CREATE TABLE IF NOT EXISTS collaboration_progress (
   room_id TEXT NOT NULL REFERENCES study_rooms(id) ON DELETE CASCADE,
   resource_id TEXT NOT NULL REFERENCES room_resources(id) ON DELETE CASCADE,
@@ -214,3 +256,72 @@ CREATE TABLE IF NOT EXISTS collaboration_progress (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (room_id,resource_id,user_id)
 );
+
+-- Sprint 41G.2A: tentativas protegidas do Modo Prova.
+-- O gabarito e as explicações vivem apenas aqui; o cliente recebe
+-- questões sanitizadas e o resultado completo só após a entrega autorizada.
+-- Tabela dedicada de propósito: sync_records é lido por /sync e vazaria o gabarito.
+CREATE TABLE IF NOT EXISTS exam_attempts (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created','in_progress','completed')),
+  title TEXT,
+  questions JSONB NOT NULL,
+  answers JSONB,
+  score NUMERIC,
+  correct_count INTEGER,
+  total_count INTEGER NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS exam_attempts_user_status ON exam_attempts(user_id, status);
+-- Protected answers are available only to the server database role.
+ALTER TABLE exam_attempts ENABLE ROW LEVEL SECURITY;
+
+-- Lote 3A/3B: governanca de tokens/orcamento global de IA compartilhada e cotas de armazenamento.
+ALTER TABLE usage_quotas ADD COLUMN IF NOT EXISTS reserved_tokens BIGINT NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS ai_global_daily_budgets (
+  date DATE PRIMARY KEY,
+  reserved_tokens BIGINT NOT NULL DEFAULT 0 CHECK (reserved_tokens >= 0),
+  consumed_tokens BIGINT NOT NULL DEFAULT 0 CHECK (consumed_tokens >= 0),
+  requests_count BIGINT NOT NULL DEFAULT 0 CHECK (requests_count >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ai_token_reservations (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  usage_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  provider TEXT NOT NULL,
+  model TEXT,
+  credential_origin TEXT NOT NULL CHECK (credential_origin IN ('shared','byok','local')),
+  reserved_tokens BIGINT NOT NULL CHECK (reserved_tokens >= 0),
+  actual_input_tokens BIGINT,
+  actual_output_tokens BIGINT,
+  actual_total_tokens BIGINT,
+  usage_source TEXT NOT NULL DEFAULT 'reserved' CHECK (usage_source IN ('reserved','provider','estimated','unknown')),
+  status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','reconciled','failed','cancelled','expired')),
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reconciled_at TIMESTAMPTZ,
+  UNIQUE (user_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS ai_token_reservations_status_expires ON ai_token_reservations(status, expires_at);
+CREATE INDEX IF NOT EXISTS ai_token_reservations_user_date ON ai_token_reservations(user_id, usage_date);
+
+CREATE TABLE IF NOT EXISTS storage_reservations (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('files','backups')),
+  resource_id TEXT,
+  reserved_bytes BIGINT NOT NULL CHECK (reserved_bytes >= 0),
+  status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved','committed','released','expired')),
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS storage_reservations_user_kind_status ON storage_reservations(user_id, kind, status);
+CREATE INDEX IF NOT EXISTS storage_reservations_expires ON storage_reservations(status, expires_at);

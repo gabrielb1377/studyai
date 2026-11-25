@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Highlighter, History, Link2, List, MessageSquare, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bookmark, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Highlighter, History, Link2, List, MessageSquare, Mic, Minus, Pencil, Plus, Search, Trash2, Volume2 } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { StudyMaterial } from "@/types/study";
 import { WorkspacePersistence, type PdfAnnotation, type PdfAnnotationKind } from "./services/WorkspacePersistence";
+import { useVoice } from "@/features/voice/hooks/useVoice";
+import { prepareNarrationText } from "@/features/teacher/services/TeacherNarrationService";
 
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
@@ -82,6 +84,7 @@ export default function PdfMaterialViewer({ material, studyId, compact = false }
   const pageTextCache = useRef(new Map<number, string>());
   const pageSurfaceRef = useRef<HTMLDivElement>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
+  const { speak } = useVoice();
 
   useEffect(() => {
     WorkspacePersistence.savePdf(studyId, material.id, {
@@ -240,9 +243,62 @@ export default function PdfMaterialViewer({ material, studyId, compact = false }
         chapter: material.chapters?.[chapterIndex]?.title,
       },
     }));
+    setLastSelection(text.slice(0, 4_000));
   };
 
   const pageAnnotations = annotations.filter((annotation) => annotation.page === pageNumber);
+
+  const [narrationState, setNarrationState] = useState<"idle" | "reading" | "unavailable">("idle");
+  const [lastSelection, setLastSelection] = useState<string>("");
+
+  /** Lê o texto de uma página do PDF já extraído (sem enviar o arquivo a serviços externos). */
+  const readPageText = useCallback(async (page: number) => {
+    if (!pdfDocument) return "";
+    const pdfPage = await pdfDocument.getPage(page);
+    const content = await pdfPage.getTextContent();
+    return content.items.map((item) => ("str" in item ? item.str : "")).join(" ").replace(/\s+/g, " ").trim();
+  }, [pdfDocument]);
+
+  const narratePage = useCallback(async () => {
+    setNarrationState("reading");
+    try {
+      const text = await readPageText(pageNumber);
+      if (!text) {
+        setNarrationState("unavailable");
+        return;
+      }
+      const spoken = prepareNarrationText(text);
+      if (!spoken) {
+        setNarrationState("unavailable");
+        return;
+      }
+      await speak(spoken);
+      setNarrationState("idle");
+    } catch {
+      setNarrationState("unavailable");
+    }
+  }, [pageNumber, readPageText, speak]);
+
+  const narrateSelection = useCallback(async () => {
+    const selection = window.getSelection();
+    const text = selection?.toString().replace(/\s+/g, " ").trim() || lastSelection;
+    if (!text) {
+      setNarrationState("unavailable");
+      return;
+    }
+    setNarrationState("reading");
+    try {
+      const spoken = prepareNarrationText(text);
+      if (!spoken) {
+        setNarrationState("unavailable");
+        return;
+      }
+      await speak(spoken);
+      setNarrationState("idle");
+    } catch {
+      setNarrationState("unavailable");
+    }
+  }, [lastSelection, speak]);
 
   return (
     <div className="overflow-hidden rounded-xl border bg-muted/40">
@@ -255,6 +311,8 @@ export default function PdfMaterialViewer({ material, studyId, compact = false }
         </label>
         {query && <div className="flex items-center gap-1"><Button type="button" variant="ghost" size="icon-sm" aria-label="Ocorrência anterior" onClick={() => navigateResult(-1)} disabled={searchResults.length === 0}><ChevronUp /></Button><Button type="button" variant="ghost" size="icon-sm" aria-label="Próxima ocorrência" onClick={() => navigateResult(1)} disabled={searchResults.length === 0}><ChevronDown /></Button></div>}
         <div className="flex items-center gap-1">
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Ouvir página" onClick={() => void narratePage()} disabled={narrationState === "reading"}><Volume2 /></Button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Ouvir texto selecionado" onClick={() => void narrateSelection()} disabled={narrationState === "reading"}><Mic /></Button>
           <Button type="button" variant={annotationMode === "highlight" ? "secondary" : "ghost"} size="icon-sm" aria-label="Marca-texto" onClick={() => setAnnotationMode((current) => current === "highlight" ? null : "highlight")}><Highlighter /></Button>
           <Button type="button" variant={annotationMode === "comment" ? "secondary" : "ghost"} size="icon-sm" aria-label="Adicionar comentário" onClick={() => setAnnotationMode((current) => current === "comment" ? null : "comment")}><MessageSquare /></Button>
           <Button type="button" variant={annotationMode === "drawing" ? "secondary" : "ghost"} size="icon-sm" aria-label="Desenhar no PDF" onClick={() => setAnnotationMode((current) => current === "drawing" ? null : "drawing")}><Pencil /></Button>

@@ -27,7 +27,7 @@ function toStudyMaterialType(fileType: string): StudyMaterialType {
   return "document";
 }
 
-export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, resetWorkspace = false }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; resetWorkspace?: boolean }) {
+export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, requestedQuizMode, resetWorkspace = false, returnHref }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; requestedQuizMode?: "exam"; resetWorkspace?: boolean; returnHref?: string }) {
   const { records, isLoading, recordAccess, setProgress, setStatus } = useStudyEngine();
   const { materials } = useMaterials();
   const { records: extractedContents } = useExtraction();
@@ -38,6 +38,8 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   const { cards: flashcards } = useFlashcards(studyId);
   const { results: quizzes } = useQuiz(studyId);
   const [workspace, setWorkspace] = useState<StudyWorkspaceState | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [sidebarInFocus, setSidebarInFocus] = useState(false);
 
   const studyMaterials = useMemo<StudyMaterial[]>(() => {
     if (!studyId) return [];
@@ -48,11 +50,17 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
         name: material.name,
         type: toStudyMaterialType(material.fileType),
         mimeType: material.mimeType,
+        fileType: material.fileType,
         size: material.size,
         source: MaterialRuntimeStore.get(material.id)?.source,
         textContent: extracted?.extractedText,
+        duration: extracted?.metadata.duration,
+        transcriptionPerformed: extracted?.metadata.transcriptionPerformed,
+        transcriptionSource: extracted?.metadata.transcriptionSource,
+        transcriptionSegments: extracted?.transcription?.segments,
         chapters: extracted?.metadata.chapters,
         persistentBinary: material.persistentBinary,
+        binaryStorageId: material.binaryStorageId,
         lastModified: material.lastModified,
       };
     });
@@ -65,10 +73,16 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   useEffect(() => {
     if (!studyId) return;
     const stored = WorkspacePersistence.load(studyId);
-    const next = { ...stored, materialId: requestedMaterialId ?? stored.materialId };
+    const next = {
+      ...stored,
+      materialId: requestedMaterialId ?? stored.materialId,
+      quiz: requestedTab === "quiz" && requestedQuizMode
+        ? { ...stored.quiz, mode: requestedQuizMode }
+        : stored.quiz,
+    };
     setWorkspace(next);
     WorkspacePersistence.save(studyId, next);
-  }, [requestedMaterialId, requestedTab, studyId]);
+  }, [requestedMaterialId, requestedQuizMode, requestedTab, studyId]);
 
   const updateWorkspace = (changes: Partial<StudyWorkspaceState>) => {
     if (!studyId) return;
@@ -80,15 +94,18 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   }
 
   if (!record) {
+    const invalidRequestedStudy = Boolean(requestedStudyId);
     return (
-      <Card className="items-center gap-4 p-10 text-center shadow-none">
+      <section className="flex max-w-xl flex-col items-start gap-4 py-4">
         <BookOpen className="size-9 text-muted-foreground" aria-hidden="true" />
-        <h1 className="text-xl font-semibold">Nenhum estudo disponível</h1>
+        <h1 className="type-page-title">{invalidRequestedStudy ? "Estudo indisponível" : "Nenhum estudo disponível"}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          Importe e organize um material para criar automaticamente um estudo.
+          {invalidRequestedStudy
+            ? "O estudo solicitado não está disponível nesta conta. O endereço informado não concede acesso a estudos de outra sessão."
+            : "Importe e organize um material para criar automaticamente um estudo."}
         </p>
-        <Button asChild><Link href="/importar">Importar material</Link></Button>
-      </Card>
+        <Button asChild><Link href={returnHref ?? (invalidRequestedStudy ? "/estudo" : "/importar")}>{returnHref === "/biblioteca" ? "Voltar à Biblioteca" : returnHref ? "Voltar à Semana de Prova" : invalidRequestedStudy ? "Ver estudos disponíveis" : "Importar material"}</Link></Button>
+      </section>
     );
   }
 
@@ -96,11 +113,27 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
     ? workspace.materialId
     : studyMaterials[0]?.id;
   const activeMaterial = studyMaterials.find((material) => material.id === activeMaterialId);
+  const showSidebar = !focusMode || sidebarInFocus;
   return (
     <>
-      <StudyHeader study={record} fileName={activeMaterial?.name} />
-      <div className="grid items-start gap-5 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <StudyNavigationSidebar studies={records} materials={materials} activeStudyId={record.studyId} activeMaterialId={activeMaterialId} />
+      <StudyHeader
+        study={record}
+        fileName={activeMaterial?.name}
+        returnHref={returnHref}
+        focusMode={focusMode}
+        sidebarVisible={sidebarInFocus}
+        onToggleSidebar={() => setSidebarInFocus((current) => !current)}
+      />
+      <div className={`grid items-start gap-5 ${showSidebar ? "lg:grid-cols-[16rem_minmax(0,1fr)]" : "grid-cols-1"}`}>
+        {showSidebar ? (
+          <StudyNavigationSidebar
+            studies={records}
+            materials={materials}
+            activeStudyId={record.studyId}
+            activeMaterialId={activeMaterialId}
+            returnHref={returnHref}
+          />
+        ) : null}
         <main className="min-w-0">
           <WorkspaceCanvas
             study={record}
@@ -114,6 +147,10 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
             onMaterialChange={(materialId) => updateWorkspace({ materialId })}
             onProgressChange={(progress) => setProgress(record.studyId, progress)}
             onStatusChange={(status) => setStatus(record.studyId, status)}
+            onFocusModeChange={(active) => {
+              setFocusMode(active);
+              if (!active) setSidebarInFocus(false);
+            }}
           />
         </main>
       </div>

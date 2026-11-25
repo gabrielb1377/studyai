@@ -1,8 +1,50 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import { hasPostgres, query, transaction } from "@/server/database/Postgres";
 import { ObjectStorage } from "@/server/storage/ObjectStorage";
-import type { Backup, CloudRecord, CloudUser, DeviceSession, Share, SyncEntity, UserProfile } from "./types";
+import type {
+  Backup,
+  CloudRecord,
+  CloudUser,
+  DeviceSession,
+  Share,
+  SyncConflict,
+  SyncEntity,
+  SyncMutation,
+  UserProfile,
+} from "./types";
+
+const ALLOWED_SYNC_ENTITIES: readonly SyncEntity[] = [
+  "documents", "contents", "chunks", "embeddings", "studies", "notes",
+  "summaries", "flashcards", "quizzes", "transcriptions", "ocr", "knowledge",
+  "academy", "lab", "metadata", "studio-documents", "workspace", "mentor", "learning",
+];
+const ALLOWED_SYNC_ENTITY_SET = new Set<string>(ALLOWED_SYNC_ENTITIES);
+
+type SyncConflictResolverFn = (
+  local: SyncMutation,
+  remote?: CloudRecord,
+) => { record?: CloudRecord; conflict?: SyncConflict };
+
+function defaultResolveConflict(local: SyncMutation, remote?: CloudRecord): { record?: CloudRecord; conflict?: SyncConflict } {
+  if (!remote) return { record: { ...local, userId: "", version: 1 } };
+  if (remote.hash === local.hash) return { record: remote };
+  if (local.baseVersion === remote.version) return { record: { ...local, userId: remote.userId, version: remote.version + 1 } };
+  if (local.operation === "delete" && new Date(local.updatedAt) > new Date(remote.updatedAt)) {
+    return { record: { ...local, userId: remote.userId, version: remote.version + 1 } };
+  }
+  return {
+    conflict: {
+      id: `${local.entity}:${local.recordId}:${remote.version}`,
+      entity: local.entity,
+      recordId: local.recordId,
+      local,
+      remote,
+      reason: "O mesmo registro foi alterado em outro dispositivo.",
+    },
+  };
+}
 
 type MemoryState = {
   users: Map<string, CloudUser>;
@@ -14,15 +56,175 @@ type MemoryState = {
   backups: Backup[];
   shares: Share[];
   files: Map<string, { userId: string; id: string; name: string; mimeType: string; hash: string; sizeBytes: number; content: Buffer; storageProvider: "memory"; updatedAt: string }>;
+  apiKeys: Map<string, { userId: string; provider: string; encryptedKey: string; keyHint: string; createdAt: string; updatedAt: string }>;
+};
+
+export const REFRESH_REUSE_GRACE_MS = 10_000;
+export const MAX_RESTORE_RECORDS = 10_000;
+export const MAX_RESTORE_BYTES = 50 * 1024 * 1024;
+// Convenção binária MiB (1 MiB = 1.048.576 bytes), alinhada com MAX_FILE_BYTES e MAX_RESTORE_BYTES.
+const MIB_BYTES = 1024 * 1024;
+export const DEFAULT_FILES_QUOTA_BYTES = 1024 * MIB_BYTES;
+export const DEFAULT_BACKUPS_QUOTA_BYTES = 200 * MIB_BYTES;
+const DEFAULT_STORAGE_RESERVATION_TTL_MS = 5 * 60_000;
+
+function parsePositiveIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw || !/^[0-9]+$/.test(raw)) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function getStorageQuotaLimits() {
+  return {
+    filesQuotaBytes: parsePositiveIntEnv("STORAGE_FILES_QUOTA_BYTES", DEFAULT_FILES_QUOTA_BYTES, 1, 100 * 1024 * MIB_BYTES),
+    backupsQuotaBytes: parsePositiveIntEnv("STORAGE_BACKUPS_QUOTA_BYTES", DEFAULT_BACKUPS_QUOTA_BYTES, 1, 100 * 1024 * MIB_BYTES),
+    reservationTtlMs: parsePositiveIntEnv("STORAGE_RESERVATION_TTL_MS", DEFAULT_STORAGE_RESERVATION_TTL_MS, 5_000, 30 * 60_000),
+  };
+}
+
+function storageQuotaErrorResponse(input: {
+  kind: "files" | "backups";
+  usedBytes: number;
+  limitBytes: number;
+  requestedBytes: number;
+}): Response {
+  const label = input.kind === "files" ? "arquivos" : "backups";
+  const limitMb = (input.limitBytes / MIB_BYTES).toFixed(input.limitBytes >= 100 * MIB_BYTES ? 0 : 1);
+  return new Response(
+    JSON.stringify({
+      code: "STORAGE_QUOTA_EXCEEDED",
+      kind: input.kind,
+      usedBytes: input.usedBytes,
+      limitBytes: input.limitBytes,
+      requestedBytes: input.requestedBytes,
+      error: `Cota de armazenamento de ${label} (${limitMb} MB) atingida. Remova itens antigos para liberar espaço.`,
+    }),
+    {
+      status: 413,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    },
+  );
+}
+
+export type RotateSessionResult =
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      sessionId: string;
+      familyId: string;
+      deviceId: string;
+      deviceName: string;
+    }
+  | {
+      ok: false;
+      reason: "expired" | "concurrent_rotated" | "reused_revoked";
+      familyRevoked?: boolean;
+    };
+
+const ENTITY_TABLE_MAP: Partial<Record<SyncEntity, string>> = {
+  documents: "materials",
+  studies: "studies",
+  workspace: "workspace",
+  mentor: "mentor",
+  learning: "learning",
+  knowledge: "knowledge",
+  flashcards: "flashcards",
+  quizzes: "quizzes",
+  summaries: "summaries",
+  notes: "notes",
 };
 
 const serverGlobal = globalThis as typeof globalThis & { __studyAiCloudMemory?: MemoryState };
-const memory: MemoryState = serverGlobal.__studyAiCloudMemory ??= { users: new Map(), profiles: new Map(), sessions: new Map(), accountTokens: new Map(), records: new Map(), logs: [], backups: [], shares: [], files: new Map() };
+const memory: MemoryState = serverGlobal.__studyAiCloudMemory ??= { users: new Map(), profiles: new Map(), sessions: new Map(), accountTokens: new Map(), records: new Map(), logs: [], backups: [], shares: [], files: new Map(), apiKeys: new Map() };
 const recordKey = (userId: string, entity: string, recordId: string) => `${userId}:${entity}:${recordId}`;
 const now = () => new Date().toISOString();
 
 function rowUser(row: Record<string, unknown>): CloudUser {
   return { id: String(row.id), email: String(row.email), passwordHash: String(row.password_hash), emailVerifiedAt: row.email_verified_at ? new Date(String(row.email_verified_at)).toISOString() : undefined, createdAt: new Date(String(row.created_at)).toISOString(), updatedAt: new Date(String(row.updated_at)).toISOString() };
+}
+
+function rowRecord(userId: string, row: Record<string, unknown>): CloudRecord {
+  return {
+    userId,
+    entity: String(row.entity) as SyncEntity,
+    recordId: String(row.record_id),
+    operation: row.deleted_at ? "delete" : "upsert",
+    data: row.payload,
+    baseVersion: Number(row.version) - 1,
+    version: Number(row.version),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+    hash: String(row.hash),
+    deviceId: String(row.device_id),
+  };
+}
+
+async function mirrorAndLogWithClient(client: PoolClient, record: CloudRecord): Promise<CloudRecord> {
+  const serializedPayload = record.data === undefined ? null : JSON.stringify(record.data);
+  const deletedAt = record.operation === "delete" ? record.updatedAt : null;
+  const table = ENTITY_TABLE_MAP[record.entity];
+  if (table) {
+    await client.query(
+      `INSERT INTO ${table} (user_id,id,payload,version,hash,updated_at,deleted_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (user_id,id) DO UPDATE
+       SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at`,
+      [record.userId, record.recordId, serializedPayload, record.version, record.hash, record.updatedAt, deletedAt],
+    );
+  }
+  const logged = await client.query<{ sequence: string }>(
+    "INSERT INTO sync_logs (user_id,entity,record_id,operation,version,hash,device_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING sequence",
+    [record.userId, record.entity, record.recordId, record.operation, record.version, record.hash, record.deviceId],
+  );
+  return { ...record, sequence: Number(logged.rows[0].sequence) };
+}
+
+async function writeRecordWithClient(client: PoolClient, record: CloudRecord): Promise<CloudRecord> {
+  const serializedPayload = record.data === undefined ? null : JSON.stringify(record.data);
+  const deletedAt = record.operation === "delete" ? record.updatedAt : null;
+  await client.query(
+    `INSERT INTO sync_records (user_id,entity,record_id,payload,version,hash,updated_at,deleted_at,device_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (user_id,entity,record_id) DO UPDATE
+     SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,device_id=EXCLUDED.device_id`,
+    [record.userId, record.entity, record.recordId, serializedPayload, record.version, record.hash, record.updatedAt, deletedAt, record.deviceId],
+  );
+  return mirrorAndLogWithClient(client, record);
+}
+
+function validateBackupPayload(payload: unknown): CloudRecord[] {
+  if (!Array.isArray(payload)) {
+    throw new Error("Backup inválido ou corrompido.");
+  }
+  if (payload.length > MAX_RESTORE_RECORDS) {
+    throw new Error("Backup excede o limite máximo de registros para restauração.");
+  }
+  const serializedBytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  if (serializedBytes > MAX_RESTORE_BYTES) {
+    throw new Error("Backup excede o limite máximo de tamanho para restauração.");
+  }
+  const validated: CloudRecord[] = [];
+  for (const item of payload) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error("Backup contém registro com formato inválido.");
+    }
+    const candidate = item as Partial<CloudRecord>;
+    if (
+      !ALLOWED_SYNC_ENTITY_SET.has(String(candidate.entity ?? ""))
+      || typeof candidate.recordId !== "string"
+      || candidate.recordId.length === 0
+      || candidate.recordId.length > 300
+      || (candidate.operation !== "upsert" && candidate.operation !== "delete")
+      || typeof candidate.hash !== "string"
+      || candidate.hash.length > 128
+    ) {
+      throw new Error("Backup contém registro incompatível com o esquema de sincronização.");
+    }
+    validated.push(candidate as CloudRecord);
+  }
+  return validated;
 }
 
 export const CloudDatabase = {
@@ -80,55 +282,680 @@ export const CloudDatabase = {
     await query("UPDATE user_profiles SET name=$2,photo_url=$3,language=$4,theme=$5,preferences=$6,updated_at=NOW() WHERE user_id=$1", [userId, next.name, next.photoUrl ?? null, next.language, next.theme, JSON.stringify(next.preferences)]); return next;
   },
 
-  async saveSession(session: DeviceSession) { if (!hasPostgres()) { memory.sessions.set(session.id, session); return; } await query("INSERT INTO refresh_tokens (id,user_id,token_hash,device_id,device_name,expires_at,last_used_at) VALUES ($1,$2,$3,$4,$5,$6,$7)", [session.id, session.userId, session.tokenHash, session.deviceId, session.deviceName, session.expiresAt, session.lastUsedAt]); },
-  async sessionByHash(hash: string) { if (!hasPostgres()) return [...memory.sessions.values()].find((item) => item.tokenHash === hash && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE token_hash=$1 AND revoked_at IS NULL", [hash]); const row = result.rows[0]; return row ? { id: String(row.id), userId: String(row.user_id), tokenHash: String(row.token_hash), deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : undefined } satisfies DeviceSession : undefined; },
+  async saveSession(session: DeviceSession) {
+    const familyId = session.familyId ?? session.id;
+    if (!hasPostgres()) {
+      memory.sessions.set(session.id, { ...session, familyId });
+      return;
+    }
+    await query(
+      "INSERT INTO refresh_tokens (id,user_id,token_hash,device_id,device_name,expires_at,last_used_at,family_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+      [session.id, session.userId, session.tokenHash, session.deviceId, session.deviceName, session.expiresAt, session.lastUsedAt, familyId],
+    );
+  },
+
+  /**
+   * Rotaciona um refresh token de forma atômica no PostgreSQL:
+   * - Apenas uma requisição simultânea vence o `UPDATE ... WHERE revoked_at IS NULL AND expires_at > NOW()`.
+   * - Reenvio dentro da janela de tolerância (`reuseGraceMs`, padrão 10s) de um token já rotacionado
+   *   (ex.: múltiplas abas concorrentes ou resposta de rede perdida) é rejeitado sem derrubar a família.
+   * - Reutilização de token explicitamente revogado (`replaced_by IS NULL`) ou de token rotacionado
+   *   após a janela de tolerância revoga apenas a família daquela sessão, preservando outros dispositivos.
+   */
+  async rotateSession(input: {
+    currentTokenHash: string;
+    nextSessionId: string;
+    nextTokenHash: string;
+    nextExpiresAt: string;
+    reuseGraceMs?: number;
+  }): Promise<RotateSessionResult> {
+    const graceMs = Math.max(0, Math.min(60_000, Math.trunc(input.reuseGraceMs ?? REFRESH_REUSE_GRACE_MS)));
+    if (!hasPostgres()) {
+      const existing = [...memory.sessions.values()].find((item) => item.tokenHash === input.currentTokenHash);
+      if (!existing) return { ok: false, reason: "expired" };
+      const nowMs = Date.now();
+      const familyId = existing.familyId ?? existing.id;
+      if (!existing.revokedAt) {
+        if (Date.parse(existing.expiresAt) <= nowMs) return { ok: false, reason: "expired" };
+        const user = memory.users.get(existing.userId);
+        if (!user) return { ok: false, reason: "expired" };
+        const timestamp = new Date(nowMs).toISOString();
+        memory.sessions.set(existing.id, {
+          ...existing,
+          familyId,
+          revokedAt: timestamp,
+          rotatedAt: timestamp,
+          lastUsedAt: timestamp,
+          replacedBy: input.nextSessionId,
+        });
+        memory.sessions.set(input.nextSessionId, {
+          id: input.nextSessionId,
+          userId: existing.userId,
+          tokenHash: input.nextTokenHash,
+          deviceId: existing.deviceId,
+          deviceName: existing.deviceName,
+          expiresAt: input.nextExpiresAt,
+          lastUsedAt: timestamp,
+          familyId,
+        });
+        return {
+          ok: true,
+          userId: user.id,
+          email: user.email,
+          sessionId: input.nextSessionId,
+          familyId,
+          deviceId: existing.deviceId,
+          deviceName: existing.deviceName,
+        };
+      }
+      if (existing.replacedBy && existing.rotatedAt && (nowMs - Date.parse(existing.rotatedAt)) <= graceMs) {
+        return { ok: false, reason: "concurrent_rotated", familyRevoked: false };
+      }
+      const revokedTimestamp = new Date(nowMs).toISOString();
+      for (const item of memory.sessions.values()) {
+        if (item.userId === existing.userId && (item.familyId ?? item.id) === familyId && !item.revokedAt) {
+          memory.sessions.set(item.id, { ...item, revokedAt: revokedTimestamp });
+        }
+      }
+      return { ok: false, reason: "reused_revoked", familyRevoked: true };
+    }
+
+    return transaction(async (client) => {
+      const consumed = await client.query<{
+        id: string;
+        user_id: string;
+        device_id: string;
+        device_name: string;
+        family_id: string;
+      }>(
+        `UPDATE refresh_tokens
+         SET revoked_at = NOW(),
+             rotated_at = NOW(),
+             last_used_at = NOW(),
+             replaced_by = $2
+         WHERE token_hash = $1
+           AND revoked_at IS NULL
+           AND expires_at > NOW()
+         RETURNING id, user_id, device_id, device_name, COALESCE(family_id, id) AS family_id`,
+        [input.currentTokenHash, input.nextSessionId],
+      );
+
+      if (consumed.rows.length === 1) {
+        const row = consumed.rows[0];
+        const userResult = await client.query<{ id: string; email: string }>(
+          "SELECT id, email FROM users WHERE id = $1",
+          [row.user_id],
+        );
+        const user = userResult.rows[0];
+        if (!user) {
+          throw new Error("Conta não encontrada.");
+        }
+        await client.query(
+          `INSERT INTO refresh_tokens (id, user_id, token_hash, device_id, device_name, expires_at, last_used_at, family_id)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)`,
+          [input.nextSessionId, row.user_id, input.nextTokenHash, row.device_id, row.device_name, input.nextExpiresAt, row.family_id],
+        );
+        return {
+          ok: true,
+          userId: user.id,
+          email: user.email,
+          sessionId: input.nextSessionId,
+          familyId: row.family_id,
+          deviceId: row.device_id,
+          deviceName: row.device_name,
+        };
+      }
+
+      const existingResult = await client.query<{
+        id: string;
+        user_id: string;
+        revoked_at: Date | string | null;
+        rotated_at: Date | string | null;
+        replaced_by: string | null;
+        family_id: string;
+        within_grace: boolean;
+      }>(
+        `SELECT id,
+                user_id,
+                revoked_at,
+                rotated_at,
+                replaced_by,
+                COALESCE(family_id, id) AS family_id,
+                (
+                  replaced_by IS NOT NULL
+                  AND rotated_at IS NOT NULL
+                  AND rotated_at >= NOW() - ($2::bigint * INTERVAL '1 millisecond')
+                ) AS within_grace
+         FROM refresh_tokens
+         WHERE token_hash = $1`,
+        [input.currentTokenHash, graceMs],
+      );
+
+      const existing = existingResult.rows[0];
+      if (!existing || !existing.revoked_at) {
+        return { ok: false, reason: "expired" };
+      }
+      if (existing.within_grace) {
+        return { ok: false, reason: "concurrent_rotated", familyRevoked: false };
+      }
+
+      await client.query(
+        `UPDATE refresh_tokens
+         SET revoked_at = COALESCE(revoked_at, NOW())
+         WHERE user_id = $1
+           AND (family_id = $2 OR id = $2)
+           AND revoked_at IS NULL`,
+        [existing.user_id, existing.family_id],
+      );
+      console.warn("[Auth] Refresh token reuse detected; session family revoked.", {
+        timestamp: new Date().toISOString(),
+        explicitRevokeReplay: existing.replaced_by === null,
+      });
+      return { ok: false, reason: "reused_revoked", familyRevoked: true };
+    });
+  },
+
+  async sessionByHash(hash: string) { if (!hasPostgres()) return [...memory.sessions.values()].find((item) => item.tokenHash === hash && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE token_hash=$1 AND revoked_at IS NULL", [hash]); const row = result.rows[0]; return row ? { id: String(row.id), userId: String(row.user_id), tokenHash: String(row.token_hash), deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : undefined, familyId: row.family_id ? String(row.family_id) : String(row.id) } satisfies DeviceSession : undefined; },
   async revokeSession(id: string) { if (!hasPostgres()) { const item = memory.sessions.get(id); if (item) memory.sessions.set(id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE id=$1", [id]); },
   async revokeUserSession(userId: string, id: string) { if (!hasPostgres()) { const item = memory.sessions.get(id); if (item?.userId === userId) memory.sessions.set(id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE id=$1 AND user_id=$2", [id, userId]); },
   async revokeUserSessions(userId: string) { if (!hasPostgres()) { for (const item of memory.sessions.values()) if (item.userId === userId) memory.sessions.set(item.id, { ...item, revokedAt: now() }); return; } await query("UPDATE refresh_tokens SET revoked_at=NOW() WHERE user_id=$1", [userId]); },
-  async devices(userId: string) { if (!hasPostgres()) return [...memory.sessions.values()].filter((item) => item.userId === userId && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL ORDER BY last_used_at DESC", [userId]); return result.rows.map((row) => ({ id: String(row.id), userId, tokenHash: "", deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString() })); },
+  async devices(userId: string) { if (!hasPostgres()) return [...memory.sessions.values()].filter((item) => item.userId === userId && !item.revokedAt); const result = await query<Record<string, unknown>>("SELECT * FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL ORDER BY last_used_at DESC", [userId]); return result.rows.map((row) => ({ id: String(row.id), userId, tokenHash: "", deviceId: String(row.device_id), deviceName: String(row.device_name), expiresAt: new Date(String(row.expires_at)).toISOString(), lastUsedAt: new Date(String(row.last_used_at)).toISOString(), familyId: row.family_id ? String(row.family_id) : String(row.id) })); },
 
   async saveAccountToken(hash: string, userId: string, type: string, expiresAt: string) { if (!hasPostgres()) { memory.accountTokens.set(hash, { userId, type, expiresAt }); return; } await query("INSERT INTO account_tokens (token_hash,user_id,type,expires_at) VALUES ($1,$2,$3,$4) ON CONFLICT (token_hash) DO UPDATE SET expires_at=EXCLUDED.expires_at", [hash, userId, type, expiresAt]); },
   async consumeAccountToken(hash: string, type: string) { if (!hasPostgres()) { const token = memory.accountTokens.get(hash); if (!token || token.type !== type || token.usedAt || new Date(token.expiresAt) < new Date()) return; token.usedAt = now(); return token.userId; } const result = await query<{ user_id: string }>("UPDATE account_tokens SET used_at=NOW() WHERE token_hash=$1 AND type=$2 AND used_at IS NULL AND expires_at>NOW() RETURNING user_id", [hash, type]); return result.rows[0]?.user_id; },
 
-  async record(userId: string, entity: SyncEntity, recordId: string) { if (!hasPostgres()) return memory.records.get(recordKey(userId, entity, recordId)); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3", [userId, entity, recordId]); const row = result.rows[0]; return row ? { userId, entity, recordId, operation: row.deleted_at ? "delete" : "upsert", data: row.payload, baseVersion: Number(row.version) - 1, version: Number(row.version), updatedAt: new Date(String(row.updated_at)).toISOString(), hash: String(row.hash), deviceId: String(row.device_id) } satisfies CloudRecord : undefined; },
+  async record(userId: string, entity: SyncEntity, recordId: string) {
+    if (!hasPostgres()) return memory.records.get(recordKey(userId, entity, recordId));
+    const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3", [userId, entity, recordId]);
+    const row = result.rows[0];
+    return row ? rowRecord(userId, row) : undefined;
+  },
+
   async writeRecord(record: CloudRecord) {
-    if (!hasPostgres()) { memory.records.set(recordKey(record.userId, record.entity, record.recordId), record); const logged = { ...record, sequence: memory.logs.length + 1 }; memory.logs.push(logged); return logged; }
-    const tableMap: Partial<Record<SyncEntity, string>> = { documents: "materials", studies: "studies", workspace: "workspace", mentor: "mentor", learning: "learning", knowledge: "knowledge", flashcards: "flashcards", quizzes: "quizzes", summaries: "summaries", notes: "notes" };
+    if (!hasPostgres()) {
+      memory.records.set(recordKey(record.userId, record.entity, record.recordId), record);
+      const logged = { ...record, sequence: memory.logs.length + 1 };
+      memory.logs.push(logged);
+      return logged;
+    }
+    return transaction((client) => writeRecordWithClient(client, record));
+  },
+
+  /**
+   * Aplica uma mutação de Cloud Sync com controle otimista de concorrência no SQL:
+   * - Bloqueia a linha existente (`FOR UPDATE`) e atualiza apenas com `WHERE version = $expected`.
+   * - Em criação inicial concorrente (sem linha prévia), usa `INSERT ... ON CONFLICT DO NOTHING`
+   *   seguido de releitura + resolução de conflito para impedir sobrescrita silenciosa.
+   */
+  async applySyncMutation(
+    userId: string,
+    mutation: SyncMutation,
+    resolveConflict: SyncConflictResolverFn = defaultResolveConflict,
+  ): Promise<{ accepted?: CloudRecord; conflict?: SyncConflict }> {
+    if (!hasPostgres()) {
+      const remote = memory.records.get(recordKey(userId, mutation.entity, mutation.recordId));
+      const resolution = resolveConflict(mutation, remote);
+      if (resolution.conflict) return { conflict: resolution.conflict };
+      if (!resolution.record || resolution.record === remote) return { accepted: remote };
+      const written = await this.writeRecord({ ...resolution.record, userId });
+      return { accepted: written };
+    }
+
     return transaction(async (client) => {
-      await client.query("INSERT INTO sync_records (user_id,entity,record_id,payload,version,hash,updated_at,deleted_at,device_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (user_id,entity,record_id) DO UPDATE SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at,device_id=EXCLUDED.device_id", [record.userId, record.entity, record.recordId, record.data === undefined ? null : JSON.stringify(record.data), record.version, record.hash, record.updatedAt, record.operation === "delete" ? record.updatedAt : null, record.deviceId]);
-      const table = tableMap[record.entity]; if (table) await client.query(`INSERT INTO ${table} (user_id,id,payload,version,hash,updated_at,deleted_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (user_id,id) DO UPDATE SET payload=EXCLUDED.payload,version=EXCLUDED.version,hash=EXCLUDED.hash,updated_at=EXCLUDED.updated_at,deleted_at=EXCLUDED.deleted_at`, [record.userId, record.recordId, record.data === undefined ? null : JSON.stringify(record.data), record.version, record.hash, record.updatedAt, record.operation === "delete" ? record.updatedAt : null]);
-      const logged = await client.query<{ sequence: string }>("INSERT INTO sync_logs (user_id,entity,record_id,operation,version,hash,device_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING sequence", [record.userId, record.entity, record.recordId, record.operation, record.version, record.hash, record.deviceId]);
-      return { ...record, sequence: Number(logged.rows[0].sequence) };
+      const locked = await client.query<Record<string, unknown>>(
+        "SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3 FOR UPDATE",
+        [userId, mutation.entity, mutation.recordId],
+      );
+      let remote = locked.rows[0] ? rowRecord(userId, locked.rows[0]) : undefined;
+      const resolution = resolveConflict(mutation, remote);
+      if (resolution.conflict) return { conflict: resolution.conflict };
+      if (!resolution.record || resolution.record === remote) return { accepted: remote };
+
+      const target: CloudRecord = { ...resolution.record, userId };
+      const serializedPayload = target.data === undefined ? null : JSON.stringify(target.data);
+      const deletedAt = target.operation === "delete" ? target.updatedAt : null;
+
+      if (!remote) {
+        const inserted = await client.query<Record<string, unknown>>(
+          `INSERT INTO sync_records (user_id,entity,record_id,payload,version,hash,updated_at,deleted_at,device_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (user_id,entity,record_id) DO NOTHING
+           RETURNING *`,
+          [userId, target.entity, target.recordId, serializedPayload, target.version, target.hash, target.updatedAt, deletedAt, target.deviceId],
+        );
+        if (inserted.rows.length === 1) {
+          const logged = await mirrorAndLogWithClient(client, target);
+          return { accepted: logged };
+        }
+        // Outro processo inseriu o mesmo registro entre o SELECT e o INSERT.
+        const fresh = await client.query<Record<string, unknown>>(
+          "SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3 FOR UPDATE",
+          [userId, mutation.entity, mutation.recordId],
+        );
+        remote = fresh.rows[0] ? rowRecord(userId, fresh.rows[0]) : undefined;
+        const retryResolution = resolveConflict(mutation, remote);
+        if (retryResolution.conflict) return { conflict: retryResolution.conflict };
+        if (!retryResolution.record || retryResolution.record === remote) return { accepted: remote };
+        if (!remote) {
+          return {
+            conflict: {
+              id: `${mutation.entity}:${mutation.recordId}:0`,
+              entity: mutation.entity,
+              recordId: mutation.recordId,
+              local: mutation,
+              remote: { ...target, version: 1 },
+              reason: "O mesmo registro foi alterado em outro dispositivo.",
+            },
+          };
+        }
+        const retryTarget: CloudRecord = { ...retryResolution.record, userId };
+        const retryUpdated = await client.query<Record<string, unknown>>(
+          `UPDATE sync_records
+           SET payload=$4,version=$5,hash=$6,updated_at=$7,deleted_at=$8,device_id=$9
+           WHERE user_id=$1 AND entity=$2 AND record_id=$3 AND version=$10
+           RETURNING *`,
+          [
+            userId,
+            retryTarget.entity,
+            retryTarget.recordId,
+            retryTarget.data === undefined ? null : JSON.stringify(retryTarget.data),
+            retryTarget.version,
+            retryTarget.hash,
+            retryTarget.updatedAt,
+            retryTarget.operation === "delete" ? retryTarget.updatedAt : null,
+            retryTarget.deviceId,
+            remote.version,
+          ],
+        );
+        if (retryUpdated.rows.length !== 1) {
+          return {
+            conflict: {
+              id: `${mutation.entity}:${mutation.recordId}:${remote.version}`,
+              entity: mutation.entity,
+              recordId: mutation.recordId,
+              local: mutation,
+              remote,
+              reason: "O mesmo registro foi alterado em outro dispositivo.",
+            },
+          };
+        }
+        const logged = await mirrorAndLogWithClient(client, retryTarget);
+        return { accepted: logged };
+      }
+
+      const updated = await client.query<Record<string, unknown>>(
+        `UPDATE sync_records
+         SET payload=$4,version=$5,hash=$6,updated_at=$7,deleted_at=$8,device_id=$9
+         WHERE user_id=$1 AND entity=$2 AND record_id=$3 AND version=$10
+         RETURNING *`,
+        [userId, target.entity, target.recordId, serializedPayload, target.version, target.hash, target.updatedAt, deletedAt, target.deviceId, remote.version],
+      );
+      if (updated.rows.length !== 1) {
+        const fresh = await client.query<Record<string, unknown>>(
+          "SELECT * FROM sync_records WHERE user_id=$1 AND entity=$2 AND record_id=$3",
+          [userId, mutation.entity, mutation.recordId],
+        );
+        const latest = fresh.rows[0] ? rowRecord(userId, fresh.rows[0]) : remote;
+        return {
+          conflict: {
+            id: `${mutation.entity}:${mutation.recordId}:${latest.version}`,
+            entity: mutation.entity,
+            recordId: mutation.recordId,
+            local: mutation,
+            remote: latest,
+            reason: "O mesmo registro foi alterado em outro dispositivo.",
+          },
+        };
+      }
+      const logged = await mirrorAndLogWithClient(client, target);
+      return { accepted: logged };
     });
   },
+
   async changes(userId: string, since: number) { if (!hasPostgres()) return memory.logs.filter((item) => item.userId === userId && (item.sequence ?? 0) > since); const result = await query<Record<string, unknown>>("SELECT l.sequence,r.* FROM sync_logs l JOIN sync_records r ON r.user_id=l.user_id AND r.entity=l.entity AND r.record_id=l.record_id WHERE l.user_id=$1 AND l.sequence>$2 ORDER BY l.sequence ASC LIMIT 2000", [userId, since]); return result.rows.map((row) => ({ userId, entity: String(row.entity) as SyncEntity, recordId: String(row.record_id), operation: row.deleted_at ? "delete" as const : "upsert" as const, data: row.payload, baseVersion: Number(row.version) - 1, version: Number(row.version), updatedAt: new Date(String(row.updated_at)).toISOString(), hash: String(row.hash), deviceId: String(row.device_id), sequence: Number(row.sequence) })); },
   async history(userId:string){if(!hasPostgres())return memory.logs.filter((item)=>item.userId===userId).slice(-100).reverse().map((item)=>({sequence:item.sequence,entity:item.entity,recordId:item.recordId,operation:item.operation,deviceId:item.deviceId,createdAt:item.updatedAt}));const result=await query<Record<string,unknown>>("SELECT sequence,entity,record_id,operation,device_id,created_at FROM sync_logs WHERE user_id=$1 ORDER BY sequence DESC LIMIT 100",[userId]);return result.rows.map((row)=>({sequence:Number(row.sequence),entity:String(row.entity),recordId:String(row.record_id),operation:String(row.operation),deviceId:String(row.device_id),createdAt:new Date(String(row.created_at)).toISOString()}));},
-  async allRecords(userId: string) { if (!hasPostgres()) return [...memory.records.values()].filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1", [userId]); return result.rows.map((row) => ({ userId, entity: String(row.entity) as SyncEntity, recordId: String(row.record_id), operation: row.deleted_at ? "delete" as const : "upsert" as const, data: row.payload, baseVersion: Number(row.version)-1, version: Number(row.version), updatedAt: new Date(String(row.updated_at)).toISOString(), hash: String(row.hash), deviceId: String(row.device_id) })); },
+  async allRecords(userId: string) { if (!hasPostgres()) return [...memory.records.values()].filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM sync_records WHERE user_id=$1", [userId]); return result.rows.map((row) => rowRecord(userId, row)); },
 
-  async createBackup(userId: string) { const payload = await this.allRecords(userId); const backup = { id: randomUUID(), userId, payload, sizeBytes: Buffer.byteLength(JSON.stringify(payload)), createdAt: now() } satisfies Backup; if (!hasPostgres()) memory.backups.unshift(backup); else await query("INSERT INTO backups (id,user_id,payload,size_bytes,created_at) VALUES ($1,$2,$3,$4,$5)", [backup.id,userId,JSON.stringify(payload),backup.sizeBytes,backup.createdAt]); return backup; },
+  async createBackup(userId: string) {
+    const limits = getStorageQuotaLimits();
+    if (!hasPostgres()) {
+      const payload = await this.allRecords(userId);
+      const serialized = JSON.stringify(payload);
+      const sizeBytes = Buffer.byteLength(serialized, "utf8");
+      const usedBytes = memory.backups
+        .filter((item) => item.userId === userId)
+        .reduce((sum, item) => sum + item.sizeBytes, 0);
+      if (usedBytes + sizeBytes > limits.backupsQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "backups",
+          usedBytes,
+          limitBytes: limits.backupsQuotaBytes,
+          requestedBytes: sizeBytes,
+        });
+      }
+      const backup = { id: randomUUID(), userId, payload, sizeBytes, createdAt: now() } satisfies Backup;
+      memory.backups.unshift(backup);
+      return backup;
+    }
+
+    return transaction(async (client) => {
+      // Lock no registro do usuário serializa criações simultâneas de backup entre instâncias.
+      await client.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId]);
+      await client.query(
+        "UPDATE storage_reservations SET status='expired', updated_at=NOW() WHERE user_id=$1 AND kind='backups' AND status='reserved' AND expires_at <= NOW()",
+        [userId],
+      );
+      const recordsResult = await client.query<Record<string, unknown>>(
+        "SELECT * FROM sync_records WHERE user_id=$1",
+        [userId],
+      );
+      const payload = recordsResult.rows.map((row) => rowRecord(userId, row));
+      const serialized = JSON.stringify(payload);
+      const sizeBytes = Buffer.byteLength(serialized, "utf8");
+
+      const [existingSum, pendingSum] = await Promise.all([
+        client.query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM backups WHERE user_id=$1", [userId]),
+        client.query<{ total: string }>(
+          "SELECT COALESCE(SUM(reserved_bytes), 0)::text AS total FROM storage_reservations WHERE user_id=$1 AND kind='backups' AND status='reserved' AND expires_at > NOW()",
+          [userId],
+        ),
+      ]);
+      const usedBytes = Number(existingSum.rows[0]?.total ?? 0);
+      const reservedBytes = Number(pendingSum.rows[0]?.total ?? 0);
+      if (usedBytes + reservedBytes + sizeBytes > limits.backupsQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "backups",
+          usedBytes: usedBytes + reservedBytes,
+          limitBytes: limits.backupsQuotaBytes,
+          requestedBytes: sizeBytes,
+        });
+      }
+
+      const backup = { id: randomUUID(), userId, payload, sizeBytes, createdAt: now() } satisfies Backup;
+      await client.query(
+        "INSERT INTO backups (id,user_id,payload,size_bytes,created_at) VALUES ($1,$2,$3,$4,$5)",
+        [backup.id, userId, serialized, backup.sizeBytes, backup.createdAt],
+      );
+      return backup;
+    });
+  },
+  async storageUsage(userId: string) {
+    const limits = getStorageQuotaLimits();
+    if (!hasPostgres()) {
+      let filesUsed = 0;
+      for (const file of memory.files.values()) {
+        if (file.userId === userId) filesUsed += file.sizeBytes;
+      }
+      const backupsUsed = memory.backups
+        .filter((item) => item.userId === userId)
+        .reduce((sum, item) => sum + item.sizeBytes, 0);
+      return {
+        files: { usedBytes: filesUsed, reservedBytes: 0, limitBytes: limits.filesQuotaBytes },
+        backups: { usedBytes: backupsUsed, reservedBytes: 0, limitBytes: limits.backupsQuotaBytes },
+      };
+    }
+
+    const [filesRes, backupsRes, pendingRes] = await Promise.all([
+      query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM files WHERE user_id=$1", [userId]),
+      query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM backups WHERE user_id=$1", [userId]),
+      query<{ kind: string; total: string }>(
+        "SELECT kind, COALESCE(SUM(reserved_bytes), 0)::text AS total FROM storage_reservations WHERE user_id=$1 AND status='reserved' AND expires_at > NOW() GROUP BY kind",
+        [userId],
+      ),
+    ]);
+    const pendingByKind = new Map(pendingRes.rows.map((r) => [r.kind, Number(r.total)]));
+    return {
+      files: {
+        usedBytes: Number(filesRes.rows[0]?.total ?? 0),
+        reservedBytes: pendingByKind.get("files") ?? 0,
+        limitBytes: limits.filesQuotaBytes,
+      },
+      backups: {
+        usedBytes: Number(backupsRes.rows[0]?.total ?? 0),
+        reservedBytes: pendingByKind.get("backups") ?? 0,
+        limitBytes: limits.backupsQuotaBytes,
+      },
+    };
+  },
   async backups(userId: string) { if (!hasPostgres()) return memory.backups.filter((item) => item.userId === userId); const result = await query<Record<string, unknown>>("SELECT * FROM backups WHERE user_id=$1 ORDER BY created_at DESC", [userId]); return result.rows.map((row) => ({ id:String(row.id),userId,payload:row.payload as CloudRecord[],sizeBytes:Number(row.size_bytes),createdAt:new Date(String(row.created_at)).toISOString() })); },
-  async backup(userId: string, id: string) { return (await this.backups(userId)).find((item) => item.id === id); },
+  async backup(userId: string, id: string) {
+    if (!hasPostgres()) return memory.backups.find((item) => item.userId === userId && item.id === id);
+    const result = await query<Record<string, unknown>>("SELECT * FROM backups WHERE user_id=$1 AND id=$2", [userId, id]);
+    const row = result.rows[0];
+    return row
+      ? { id: String(row.id), userId, payload: row.payload as CloudRecord[], sizeBytes: Number(row.size_bytes), createdAt: new Date(String(row.created_at)).toISOString() }
+      : undefined;
+  },
+
+  /**
+   * Restaura o backup do usuário em transação única no PostgreSQL, usando a mesma
+   * conexão transacional para todas as leituras, remoções lógicas, gravações nas
+   * tabelas de entidade e entradas em `sync_logs`.
+   *
+   * Nota operacional: objetos binários no Object Storage (S3) são externos ao
+   * PostgreSQL e não são incluídos nem alterados por `backups.payload`.
+   */
+  async restoreBackupAtomic(userId: string, backupId: string, deviceId: string): Promise<CloudRecord[]> {
+    if (typeof backupId !== "string" || !backupId.trim() || backupId.length > 120) {
+      throw new Error("Identificador de backup inválido.");
+    }
+    const normalizedDeviceId = typeof deviceId === "string" && deviceId.trim() ? deviceId.trim().slice(0, 200) : "unknown";
+    const timestamp = now();
+
+    if (!hasPostgres()) {
+      const backup = memory.backups.find((item) => item.userId === userId && item.id === backupId);
+      if (!backup) throw new Error("Backup não encontrado.");
+      const payload = validateBackupPayload(backup.payload);
+      const current = [...memory.records.values()].filter((item) => item.userId === userId);
+      const currentByKey = new Map(current.map((item) => [`${item.entity}:${item.recordId}`, item]));
+      const backupKeys = new Set(payload.map((item) => `${item.entity}:${item.recordId}`));
+      const restored: CloudRecord[] = [];
+      for (const item of current) {
+        if (backupKeys.has(`${item.entity}:${item.recordId}`) || item.operation === "delete") continue;
+        restored.push(await this.writeRecord({ ...item, userId, operation: "delete", data: undefined, deviceId: normalizedDeviceId, version: item.version + 1, hash: `deleted:${item.hash}`, updatedAt: timestamp }));
+      }
+      for (const item of payload) {
+        const active = currentByKey.get(`${item.entity}:${item.recordId}`);
+        restored.push(await this.writeRecord({ ...item, userId, deviceId: normalizedDeviceId, version: (active?.version ?? 0) + 1, updatedAt: timestamp }));
+      }
+      return restored;
+    }
+
+    return transaction(async (client) => {
+      const backupResult = await client.query<Record<string, unknown>>(
+        "SELECT id, user_id, payload, size_bytes FROM backups WHERE user_id=$1 AND id=$2",
+        [userId, backupId],
+      );
+      const backupRow = backupResult.rows[0];
+      if (!backupRow) throw new Error("Backup não encontrado.");
+      const payload = validateBackupPayload(backupRow.payload);
+
+      const currentResult = await client.query<Record<string, unknown>>(
+        "SELECT * FROM sync_records WHERE user_id=$1 FOR UPDATE",
+        [userId],
+      );
+      const current = currentResult.rows.map((row) => rowRecord(userId, row));
+      const currentByKey = new Map(current.map((item) => [`${item.entity}:${item.recordId}`, item]));
+      const backupKeys = new Set(payload.map((item) => `${item.entity}:${item.recordId}`));
+      const restored: CloudRecord[] = [];
+
+      for (const item of current) {
+        if (backupKeys.has(`${item.entity}:${item.recordId}`) || item.operation === "delete") continue;
+        const written = await writeRecordWithClient(client, {
+          ...item,
+          userId,
+          operation: "delete",
+          data: undefined,
+          deviceId: normalizedDeviceId,
+          version: item.version + 1,
+          hash: `deleted:${item.hash}`,
+          updatedAt: timestamp,
+        });
+        restored.push(written);
+      }
+
+      for (const item of payload) {
+        const active = currentByKey.get(`${item.entity}:${item.recordId}`);
+        const written = await writeRecordWithClient(client, {
+          ...item,
+          userId,
+          deviceId: normalizedDeviceId,
+          version: (active?.version ?? 0) + 1,
+          updatedAt: timestamp,
+        });
+        restored.push(written);
+      }
+
+      return restored;
+    });
+  },
 
   async createShare(userId: string, entity: SyncEntity, recordId: string, expiresAt?: string, visibility:Share["visibility"]="public", accessLevel:Share["accessLevel"]="read") { const share = { id: randomUUID(), userId, token: `${randomUUID()}${randomUUID()}`.replaceAll("-",""), entity, recordId, visibility, accessLevel, expiresAt, createdAt: now() } satisfies Share; if (!hasPostgres()) memory.shares.unshift(share); else await query("INSERT INTO shares (id,user_id,token,entity,record_id,expires_at,visibility,access_level) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",[share.id,userId,share.token,entity,recordId,expiresAt??null,visibility,accessLevel]); return share; },
   async shares(userId: string) { if (!hasPostgres()) return memory.shares.filter((item) => item.userId === userId && !item.revokedAt); const result=await query<Record<string,unknown>>("SELECT * FROM shares WHERE user_id=$1 AND revoked_at IS NULL ORDER BY created_at DESC",[userId]); return result.rows.map((row)=>({id:String(row.id),userId,token:String(row.token),entity:String(row.entity) as SyncEntity,recordId:String(row.record_id),visibility:String(row.visibility??"public") as Share["visibility"],accessLevel:String(row.access_level??"read") as Share["accessLevel"],expiresAt:row.expires_at?new Date(String(row.expires_at)).toISOString():undefined,createdAt:new Date(String(row.created_at)).toISOString()})); },
   async revokeShare(userId:string,id:string){if(!hasPostgres()){const index=memory.shares.findIndex((item)=>item.userId===userId&&item.id===id);if(index>=0)memory.shares[index]={...memory.shares[index],revokedAt:now()};return;}await query("UPDATE shares SET revoked_at=NOW() WHERE user_id=$1 AND id=$2",[userId,id]);},
   async shareByToken(token: string) { const share = hasPostgres() ? (await query<Record<string,unknown>>("SELECT * FROM shares WHERE token=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>NOW())",[token])).rows[0] : memory.shares.find((item)=>item.token===token&&!item.revokedAt&&(!item.expiresAt||new Date(item.expiresAt)>new Date())); if(!share)return; const normalized = hasPostgres()?{id:String((share as Record<string,unknown>).id),userId:String((share as Record<string,unknown>).user_id),token,entity:String((share as Record<string,unknown>).entity) as SyncEntity,recordId:String((share as Record<string,unknown>).record_id),visibility:String((share as Record<string,unknown>).visibility??"public") as Share["visibility"],accessLevel:String((share as Record<string,unknown>).access_level??"read") as Share["accessLevel"],createdAt:new Date(String((share as Record<string,unknown>).created_at)).toISOString()}:share as Share; return { share: normalized, record: await this.record(normalized.userId,normalized.entity,normalized.recordId) }; },
 
-  async saveFile(userId:string,id:string,name:string,mimeType:string,hash:string,content:Buffer){
-    const timestamp=now();
-    if(!hasPostgres()){
-      const item={userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,storageProvider:"memory" as const,updatedAt:timestamp};
-      memory.files.set(`${userId}:${id}`,item);
+  /**
+   * Salva um arquivo com validação de tamanho real (`content.byteLength`) e cota acumulada
+   * por conta protegida contra uploads concorrentes via `storage_reservations`.
+   *
+   * Arquitetura PostgreSQL + S3 (NÃO são uma transação atômica única):
+   * 1) Transação PG reserva o delta de bytes sob lock do usuário.
+   * 2) Upload para S3 ocorre fora da transação PG; em falha do S3, a reserva é liberada imediatamente.
+   * 3) Transação PG grava metadados em `files` e marca a reserva como `committed`; em falha após
+   *    upload S3 bem-sucedido, executa compensação best-effort removendo o objeto S3 órfão e liberando a reserva.
+   * 4) Objeto S3 substituído é removido em best-effort após o commit no banco.
+   */
+  async saveFile(userId: string, id: string, name: string, mimeType: string, hash: string, content: Buffer) {
+    const timestamp = now();
+    const actualBytes = content.byteLength;
+    const limits = getStorageQuotaLimits();
+
+    if (!hasPostgres()) {
+      const existing = memory.files.get(`${userId}:${id}`);
+      const existingSize = existing?.sizeBytes ?? 0;
+      let totalUsed = 0;
+      for (const item of memory.files.values()) {
+        if (item.userId === userId) totalUsed += item.sizeBytes;
+      }
+      const projectedTotal = totalUsed - existingSize + actualBytes;
+      // Contas legadas já acima da cota podem substituir por arquivo menor/igual sem exclusão automática.
+      if (actualBytes > existingSize && projectedTotal > limits.filesQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "files",
+          usedBytes: totalUsed,
+          limitBytes: limits.filesQuotaBytes,
+          requestedBytes: actualBytes,
+        });
+      }
+      const item = { userId, id, name, mimeType, hash, sizeBytes: actualBytes, content, storageProvider: "memory" as const, updatedAt: timestamp };
+      memory.files.set(`${userId}:${id}`, item);
       return item;
     }
-    const previous=await query<{storage_key:string|null}>("SELECT storage_key FROM files WHERE user_id=$1 AND id=$2",[userId,id]);
-    const previousStorageKey=previous.rows[0]?.storage_key??undefined;
-    const storageProvider=ObjectStorage.mode();
-    const storageKey=storageProvider==="s3"?ObjectStorage.key(userId,id,hash):undefined;
-    if(storageKey)await ObjectStorage.put(storageKey,content,mimeType,{userId,materialId:id,hash});
-    await query("INSERT INTO files (id,user_id,name,mime_type,hash,size_bytes,content,storage_key,storage_provider) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (user_id,id) DO UPDATE SET name=EXCLUDED.name,mime_type=EXCLUDED.mime_type,hash=EXCLUDED.hash,size_bytes=EXCLUDED.size_bytes,content=EXCLUDED.content,storage_key=EXCLUDED.storage_key,storage_provider=EXCLUDED.storage_provider,updated_at=NOW()",[id,userId,name,mimeType,hash,content.byteLength,storageProvider==="database"?content:null,storageKey??null,storageProvider]);
-    if(previousStorageKey&&previousStorageKey!==storageKey&&storageProvider==="s3")await ObjectStorage.delete(previousStorageKey);
-    return {userId,id,name,mimeType,hash,sizeBytes:content.byteLength,content,storageProvider,storageKey,updatedAt:timestamp};
+
+    // Fase 1: reserva atômica no PostgreSQL
+    const reservationId = randomUUID();
+    const { previousStorageKey } = await transaction(async (client) => {
+      await client.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [userId]);
+      await client.query(
+        "UPDATE storage_reservations SET status='expired', updated_at=NOW() WHERE user_id=$1 AND kind='files' AND status='reserved' AND expires_at <= NOW()",
+        [userId],
+      );
+      const existingRes = await client.query<{ size_bytes: string; storage_key: string | null }>(
+        "SELECT size_bytes::text, storage_key FROM files WHERE user_id=$1 AND id=$2",
+        [userId, id],
+      );
+      const existingSize = Number(existingRes.rows[0]?.size_bytes ?? 0);
+      const prevKey = existingRes.rows[0]?.storage_key ?? undefined;
+
+      const [sumFiles, sumPending] = await Promise.all([
+        client.query<{ total: string }>("SELECT COALESCE(SUM(size_bytes), 0)::text AS total FROM files WHERE user_id=$1", [userId]),
+        client.query<{ total: string }>(
+          "SELECT COALESCE(SUM(reserved_bytes), 0)::text AS total FROM storage_reservations WHERE user_id=$1 AND kind='files' AND status='reserved' AND expires_at > NOW()",
+          [userId],
+        ),
+      ]);
+      const existingTotal = Number(sumFiles.rows[0]?.total ?? 0);
+      const pendingReserved = Number(sumPending.rows[0]?.total ?? 0);
+      const deltaBytes = Math.max(0, actualBytes - existingSize);
+      const projectedTotal = existingTotal - existingSize + pendingReserved + actualBytes;
+
+      if (deltaBytes > 0 && projectedTotal > limits.filesQuotaBytes) {
+        throw storageQuotaErrorResponse({
+          kind: "files",
+          usedBytes: existingTotal + pendingReserved,
+          limitBytes: limits.filesQuotaBytes,
+          requestedBytes: actualBytes,
+        });
+      }
+
+      await client.query(
+        `INSERT INTO storage_reservations (id, user_id, kind, resource_id, reserved_bytes, status, expires_at)
+         VALUES ($1, $2, 'files', $3, $4, 'reserved', NOW() + ($5::bigint * INTERVAL '1 millisecond'))`,
+        [reservationId, userId, id, deltaBytes, limits.reservationTtlMs],
+      );
+      return { previousStorageKey: prevKey };
+    });
+
+    const releaseReservation = async () => {
+      await query(
+        "UPDATE storage_reservations SET status='released', updated_at=NOW() WHERE id=$1 AND status='reserved'",
+        [reservationId],
+      ).catch(() => undefined);
+    };
+
+    const storageProvider = ObjectStorage.mode();
+    const storageKey = storageProvider === "s3" ? ObjectStorage.key(userId, id, hash) : undefined;
+
+    // Fase 2: upload externo S3 (fora da transação PG)
+    let uploadedNewS3Object = false;
+    if (storageKey) {
+      try {
+        await ObjectStorage.put(storageKey, content, mimeType, { userId, materialId: id, hash });
+        uploadedNewS3Object = true;
+      } catch (error) {
+        await releaseReservation();
+        throw error;
+      }
+    }
+
+    // Fase 3: commit de metadados + confirmação da reserva em transação PG
+    try {
+      await transaction(async (client) => {
+        await client.query(
+          `INSERT INTO files (id,user_id,name,mime_type,hash,size_bytes,content,storage_key,storage_provider)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (user_id,id) DO UPDATE
+           SET name=EXCLUDED.name,mime_type=EXCLUDED.mime_type,hash=EXCLUDED.hash,size_bytes=EXCLUDED.size_bytes,content=EXCLUDED.content,storage_key=EXCLUDED.storage_key,storage_provider=EXCLUDED.storage_provider,updated_at=NOW()`,
+          [id, userId, name, mimeType, hash, actualBytes, storageProvider === "database" ? content : null, storageKey ?? null, storageProvider],
+        );
+        await client.query(
+          "UPDATE storage_reservations SET status='committed', updated_at=NOW() WHERE id=$1 AND status='reserved'",
+          [reservationId],
+        );
+      });
+    } catch (error) {
+      await releaseReservation();
+      if (uploadedNewS3Object && storageKey && storageKey !== previousStorageKey) {
+        await ObjectStorage.delete(storageKey).catch(() => {
+          console.error("[Storage] Compensação S3 falhou após erro no PostgreSQL (objeto pode requerer limpeza posterior).", {
+            timestamp: new Date().toISOString(),
+          });
+        });
+      }
+      throw error;
+    }
+
+    // Fase 4: limpeza best-effort do objeto S3 substituído
+    if (previousStorageKey && previousStorageKey !== storageKey && storageProvider === "s3") {
+      await ObjectStorage.delete(previousStorageKey).catch(() => {
+        console.warn("[Storage] Limpeza do objeto S3 substituído falhou (sem impacto na gravação confirmada).", {
+          timestamp: new Date().toISOString(),
+        });
+      });
+    }
+
+    return { userId, id, name, mimeType, hash, sizeBytes: actualBytes, content, storageProvider, storageKey, updatedAt: timestamp };
   },
   async file(userId:string,id:string){
     if(!hasPostgres())return memory.files.get(`${userId}:${id}`);
@@ -145,6 +972,35 @@ export const CloudDatabase = {
     const storageKey=result.rows[0]?.storage_key;
     if(storageKey)await ObjectStorage.delete(storageKey);
   },
+  async saveApiKey(userId: string, provider: string, encryptedKey: string, keyHint: string) {
+    const timestamp = new Date().toISOString();
+    const key = `${userId}:${provider}`;
+    if (!hasPostgres()) {
+      const existing = memory.apiKeys.get(key);
+      memory.apiKeys.set(key, { userId, provider, encryptedKey, keyHint, createdAt: existing?.createdAt ?? timestamp, updatedAt: timestamp });
+      return;
+    }
+    await query(
+      "INSERT INTO user_api_keys (user_id,provider,encrypted_key,key_hint,created_at,updated_at) VALUES ($1,$2,$3,$4,NOW(),NOW()) ON CONFLICT (user_id,provider) DO UPDATE SET encrypted_key=EXCLUDED.encrypted_key,key_hint=EXCLUDED.key_hint,updated_at=NOW()",
+      [userId, provider, encryptedKey, keyHint],
+    );
+  },
+  async apiKey(userId: string, provider: string) {
+    if (!hasPostgres()) return memory.apiKeys.get(`${userId}:${provider}`);
+    const result = await query<Record<string, unknown>>("SELECT * FROM user_api_keys WHERE user_id=$1 AND provider=$2", [userId, provider]);
+    const row = result.rows[0];
+    if (!row) return undefined;
+    return { userId, provider, encryptedKey: String(row.encrypted_key), keyHint: String(row.key_hint), createdAt: new Date(String(row.created_at)).toISOString(), updatedAt: new Date(String(row.updated_at)).toISOString() };
+  },
+  async apiKeys(userId: string) {
+    if (!hasPostgres()) return [...memory.apiKeys.values()].filter((item) => item.userId === userId);
+    const result = await query<Record<string, unknown>>("SELECT * FROM user_api_keys WHERE user_id=$1 ORDER BY provider", [userId]);
+    return result.rows.map((row) => ({ userId, provider: String(row.provider), encryptedKey: String(row.encrypted_key), keyHint: String(row.key_hint), createdAt: new Date(String(row.created_at)).toISOString(), updatedAt: new Date(String(row.updated_at)).toISOString() }));
+  },
+  async deleteApiKey(userId: string, provider: string) {
+    if (!hasPostgres()) { memory.apiKeys.delete(`${userId}:${provider}`); return; }
+    await query("DELETE FROM user_api_keys WHERE user_id=$1 AND provider=$2", [userId, provider]);
+  },
   async deleteAccount(userId: string) {
     if (!hasPostgres()) {
       memory.users.delete(userId); memory.profiles.delete(userId);
@@ -155,6 +1011,7 @@ export const CloudDatabase = {
       memory.backups = memory.backups.filter((item) => item.userId !== userId);
       memory.shares = memory.shares.filter((item) => item.userId !== userId);
       for (const [key, file] of memory.files) if (file.userId === userId) memory.files.delete(key);
+      for (const [key, item] of memory.apiKeys) if (item.userId === userId) memory.apiKeys.delete(key);
       return;
     }
     const files = await query<{ storage_key: string | null }>("SELECT storage_key FROM files WHERE user_id=$1 AND storage_key IS NOT NULL", [userId]);

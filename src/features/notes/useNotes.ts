@@ -5,10 +5,31 @@ import type { StudyNote } from "@/types/note";
 import { NotesService } from "./NotesService";
 import { LearningService } from "@/features/learning/LearningService";
 
+export type NoteSaveStatus = "idle" | "saving" | "saved" | "error";
+
 export function useNotes(studyId?: string) {
   const [allNotes, setAllNotes] = useState<StudyNote[]>([]);
+  const [saveStatus, setSaveStatus] = useState<NoteSaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const trackedSaves = useRef<Record<string, number>>({});
-  const reload = useCallback(async () => setAllNotes(await NotesService.load()), []);
+  const latestNotesRef = useRef<StudyNote[]>([]);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const reload = useCallback(async () => {
+    try {
+      const loaded = await NotesService.load();
+      latestNotesRef.current = loaded;
+      setAllNotes(loaded);
+      setSaveError(null);
+    } catch (error) {
+      setSaveStatus("error");
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar suas notas do armazenamento local.",
+      );
+    }
+  }, []);
 
   useEffect(() => {
     void reload();
@@ -19,11 +40,26 @@ export function useNotes(studyId?: string) {
 
   const updateNotes = useCallback(
     (updater: (current: StudyNote[]) => StudyNote[]) => {
-      setAllNotes((current) => {
-        const nextNotes = updater(current);
-        void NotesService.save(nextNotes);
-        return nextNotes;
-      });
+      const nextNotes = updater(latestNotesRef.current);
+      latestNotesRef.current = nextNotes;
+      setAllNotes(nextNotes);
+      setSaveStatus("saving");
+      setSaveError(null);
+      saveQueueRef.current = saveQueueRef.current
+        .catch(() => undefined)
+        .then(() => NotesService.save(nextNotes))
+        .then(() => {
+          setSaveStatus("saved");
+          setSaveError(null);
+        })
+        .catch((error) => {
+          setSaveStatus("error");
+          setSaveError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível salvar suas notas no armazenamento local.",
+          );
+        });
     },
     [],
   );
@@ -40,6 +76,7 @@ export function useNotes(studyId?: string) {
     LearningService.enqueueActivity({ type: "note", studyId: nextStudyId });
     return note;
   };
+
   const save = useCallback(
     (note: StudyNote) => {
       updateNotes((current) => NotesService.upsert(current, note));
@@ -51,6 +88,7 @@ export function useNotes(studyId?: string) {
     },
     [updateNotes],
   );
+
   const remove = useCallback(
     (noteId: string) => updateNotes((current) => NotesService.remove(current, noteId)),
     [updateNotes],
@@ -61,5 +99,7 @@ export function useNotes(studyId?: string) {
     create,
     save,
     remove,
+    saveStatus,
+    saveError,
   };
 }

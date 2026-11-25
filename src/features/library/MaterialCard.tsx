@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, Sparkles, Star, Trash2 } from "lucide-react";
+import { BookOpen, Bot, Clock3, Eye, FlaskConical, FolderInput, LayoutTemplate, Pencil, ScanText, Sparkles, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import type { Material } from "@/types/material";
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
 import { formatMaterialDate, materialTypes } from "./material-utils";
 import type { KnowledgeGraph } from "@/features/semantic/types";
+import { qualityLabel } from "@/features/ocr/quality";
 import type { LibraryView } from "./LibraryBrowser";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ const academyKindLabels = {
   "generated-pdf": "PDF Gerado",
   "generated-workbook": "Apostila Gerada",
   "generated-presentation": "Apresentação Gerada",
+  "generated-diagram": "Diagrama Gerado",
 } as const;
 
 export function MaterialCard({ material, content, knowledge, view = "grid", selected = false, onSelectedChange, onMove, onDelete }: { material: Material; content?: ExtractedContent; knowledge?: KnowledgeGraph; view?: LibraryView; selected?: boolean; onSelectedChange?: (selected: boolean) => void; onMove?: () => void; onDelete?: () => void }) {
@@ -38,6 +40,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
   const label = generatedByLab ? "Exercício de Laboratório" : generatedByAcademy
     ? generatedExportLabel ?? "Material Gerado por IA"
     : typeInfo.label;
+  const reviewNeeded = Boolean(content?.pages?.some((page) => page.status === "review" || page.status === "error"));
   const details = [
     ...(generatedByAcademy ? [] : [{ label: "Tamanho", value: formatFileSize(material.size) }]),
     ...(material.academyMaterialKind ? [{ label: "Tipo Academy", value: academyKindLabels[material.academyMaterialKind] }] : []),
@@ -62,6 +65,12 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
     ...(content?.metadata.readingTimeMinutes !== undefined
       ? [{ label: "Leitura", value: `${content.metadata.readingTimeMinutes} min` }]
       : []),
+    ...(content?.pipeline ? [
+      { label: "Extração", value: content.pipeline.mode === "native" ? "Texto nativo" : content.pipeline.mode === "force" ? "OCR forçado" : "Automática" },
+      { label: "Páginas OCR", value: `${content.pipeline.ocrPages} de ${content.pipeline.pages}` },
+      { label: "Revisadas", value: String(content.pipeline.reviewedPages) },
+      { label: "Qualidade", value: qualityLabel(content.metadata.quality ?? "unknown") },
+    ] : []),
     ...(knowledge ? [
       { label: "Conceitos", value: String(knowledge.statistics.conceptCount) },
       { label: "Relações", value: String(knowledge.statistics.relationCount) },
@@ -110,14 +119,24 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
             </span>
           )}
         </div>
+        {content?.metadata.ocrPerformed || reviewNeeded ? (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {content?.metadata.ocrPerformed ? <Badge variant="outline">OCR aplicado</Badge> : null}
+            {reviewNeeded ? (
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200">
+                Revisar extração
+              </Badge>
+            ) : null}
+          </div>
+        ) : null}
         <h3
           id={`material-${material.id}`}
           className={cn("break-words text-sm font-semibold leading-6", view === "grid" && "mb-5")}
         >
           {material.name}
         </h3>
-        {(view === "grid" || showDetails) && <dl className={cn("space-y-2.5 text-xs leading-5", view === "grid" ? "mb-5" : "col-span-full mt-4 rounded-xl border bg-secondary/20 p-4 sm:grid sm:grid-cols-2 sm:gap-x-6")}>
-          {details.map((detail) => (
+        <dl className={cn("space-y-2.5 text-xs leading-5", view === "grid" ? "mb-5" : "col-span-full mt-4")}>
+          {details.filter((detail) => detail.label === "Disciplina" || detail.label === "Tema").map((detail) => (
             <div
               key={detail.label}
               className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2"
@@ -126,7 +145,7 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
               <dd className="break-words">{detail.value}</dd>
             </div>
           ))}
-        </dl>}
+        </dl>
         <div className={cn("space-y-2", view === "grid" ? "mb-4 border-t pt-4" : "my-3 sm:my-0")}>
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <span>{generatedByAcademy || generatedByLab ? "Pronto" : material.status === "ready" ? "Extraído" : material.status === "error" ? "Erro" : "Processando"}</span>
@@ -140,14 +159,17 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
           </p>
         ) : null}
         {view === "grid" && material.tags?.length ? <p className="mb-4 text-xs text-muted-foreground"><strong className="text-foreground">Tags:</strong> {material.tags.join(", ")}</p> : null}
-        {showDetails && (
-          <div className="col-span-full mb-4 rounded-xl border bg-secondary/25 p-3 text-xs leading-5 text-muted-foreground">
+        <div id={`material-details-${material.id}`} hidden={!showDetails} className="col-span-full mb-4 rounded-xl border bg-secondary/25 p-3 text-xs leading-5 text-muted-foreground">
+            <dl className="space-y-2">
+              {details.filter((detail) => detail.label !== "Disciplina" && detail.label !== "Tema").map((detail) => (
+                <div key={detail.label} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-2"><dt>{detail.label}</dt><dd className="break-words">{detail.value}</dd></div>
+              ))}
+            </dl>
             <p><strong className="text-foreground">Caminho:</strong> {material.relativePath}</p>
             <p><strong className="text-foreground">Atualizado:</strong> {formatMaterialDate(material.updatedAt)}</p>
             <p><strong className="text-foreground">Palavras:</strong> {content?.metadata.wordCount ?? 0}</p>
             <p><strong className="text-foreground">Conceitos isolados:</strong> {knowledge?.statistics.isolatedConceptCount ?? 0}</p>
           </div>
-        )}
         {content?.errorDetails ? (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
             <p className="font-medium">{content.errorDetails.reason}</p>
@@ -159,13 +181,32 @@ export function MaterialCard({ material, content, knowledge, view = "grid", sele
           {generatedByLab ? (
             <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/lab?exercise=${material.labProjectId ?? ""}`}><FlaskConical />Abrir exercício</Link></Button>
           ) : generatedByAcademy ? (
-            <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}${material.academyContentId ? `&conteudo=${material.academyContentId}` : ""}`}><Sparkles />Abrir estudo</Link></Button>
+            <>
+              <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy?estudo=${material.academyStudyId ?? material.studyId ?? ""}${material.academyContentId ? `&conteudo=${material.academyContentId}` : ""}`}><Sparkles />Abrir estudo</Link></Button>
+              {material.academyStudyId && material.academyContentId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}&conteudo=${material.academyContentId}&tipo=document`}><LayoutTemplate />Abrir no Studio</Link></Button>
+              ) : null}
+              {material.academyStudioDocumentId && material.academyStudyId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/academy/studio?estudo=${material.academyStudyId}${material.academyContentId ? `&conteudo=${material.academyContentId}` : `&documento=${material.academyStudioDocumentId}`}&tipo=${material.academyMaterialKind === "generated-presentation" ? "presentation" : "document"}`}><Pencil />Reabrir no Studio</Link></Button>
+              ) : null}
+              {(material.fileType === "png" || Boolean(material.academyStudioDocumentId)) && material.studyId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=material&origem=biblioteca`}><Eye />Abrir material</Link></Button>
+              ) : null}
+              {material.academyStudioDocumentId && material.studyId ? (
+                <Button asChild size="sm" variant="outline" className="col-span-2 sm:col-span-1"><Link href={`/estudo?tema=${material.studyId}&arquivo=${material.id}&aba=ia&origem=biblioteca`}><Bot />Tutor</Link></Button>
+              ) : null}
+            </>
           ) : <>
-            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material`}><Eye />Abrir</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards`}><BookOpen />Estudar</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia`}><Bot />Tutor</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=material&origem=biblioteca`}><Eye />Abrir</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=flashcards&origem=biblioteca`}><BookOpen />Estudar</Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=ia&origem=biblioteca`}><Bot />Tutor</Link></Button>
           </>}
-          <Button type="button" size="sm" variant="ghost" onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
+          {content ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/estudo?tema=${material.studyId ?? ""}&arquivo=${material.id}&aba=revisao&origem=biblioteca`}><ScanText />Revisar</Link>
+            </Button>
+          ) : null}
+          <Button type="button" size="sm" variant="ghost" aria-expanded={showDetails} aria-controls={`material-details-${material.id}`} onClick={() => setShowDetails((current) => !current)}><Eye />Detalhes</Button>
           <Button type="button" size="sm" variant="ghost" onClick={onMove}><FolderInput />Mover</Button>
           <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 />Excluir</Button>
         </div>

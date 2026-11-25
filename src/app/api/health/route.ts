@@ -3,6 +3,8 @@ import packageJson from "../../../../package.json";
 import { postgresHealth } from "@/server/database/Postgres";
 import { ObjectStorage } from "@/server/storage/ObjectStorage";
 import { Telemetry } from "@/server/observability/Telemetry";
+import { clientAddressSource } from "@/server/security/RateLimit";
+import { EmailService } from "@/server/auth/EmailService";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +24,10 @@ export async function GET(request: Request) {
       publicUrlReady = false;
     }
   }
+  const clientAddress = clientAddressSource();
+  const clientAddressReady = !production || clientAddress !== "none";
   const ready = production
-    ? publicUrlReady && database.available && database.schemaReady && storage.available
+    ? publicUrlReady && clientAddressReady && database.available && database.schemaReady && storage.available
     : true;
   const publicDatabase = {
     available: database.available,
@@ -45,7 +49,11 @@ export async function GET(request: Request) {
     database: database.mode,
     objectStorage: publicStorage,
     checks: {
-      application: { publicUrlConfigured: publicUrlReady },
+      application: {
+        publicUrlConfigured: publicUrlReady,
+        clientAddressConfigured: clientAddressReady,
+        emailConfigured: EmailService.configured(),
+      },
       database: includeRuntime ? database : publicDatabase,
       objectStorage: includeRuntime ? storage : publicStorage,
     },

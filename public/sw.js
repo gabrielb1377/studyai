@@ -1,10 +1,33 @@
 /* StudyAI service worker: app shell, runtime cache, share target and local notifications. */
-const VERSION = "v1";
+const VERSION = "v2";
 const SHELL = `studyai-shell-${VERSION}`;
 const STATIC = `studyai-static-${VERSION}`;
 const MATERIALS = `studyai-materials-${VERSION}`;
 const SHARED = "studyai-shared-v1";
-const PRECACHE = ["/", "/biblioteca", "/estudo", "/importar", "/organizar", "/configuracoes", "/tutor", "/offline.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable.png"];
+const SAFE_SHELL_ROUTES = [
+  "/",
+  "/biblioteca",
+  "/estudo",
+  "/importar",
+  "/organizar",
+  "/planejamento",
+  "/provas",
+  "/aprendizagem",
+  "/configuracoes",
+  "/tutor",
+  "/storage",
+];
+const SAFE_SHELL_ROUTE_SET = new Set(SAFE_SHELL_ROUTES);
+const PRECACHE = [
+  "/",
+  "/estudo",
+  "/offline.html",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-maskable.png",
+];
+const NO_CACHE_PREFIXES = ["/api/", "/auth", "/sync", "/profile", "/backup", "/share", "/compartilhar"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(SHELL).then(async (cache) => {
@@ -14,7 +37,13 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(Promise.all([
-    caches.keys().then((names) => Promise.all(names.filter((name) => name.startsWith("studyai-") && ![SHELL, STATIC, MATERIALS, SHARED].includes(name)).map((name) => caches.delete(name)))),
+    caches.keys().then((names) =>
+      Promise.all(
+        names
+          .filter((name) => name.startsWith("studyai-") && ![SHELL, STATIC, MATERIALS, SHARED].includes(name))
+          .map((name) => caches.delete(name)),
+      ),
+    ),
     self.clients.claim(),
   ]));
 });
@@ -31,7 +60,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(storeSharedFiles(request));
     return;
   }
-  if (request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/") || ["/auth", "/sync", "/profile", "/backup", "/share"].some((prefix) => url.pathname.startsWith(prefix))) return;
+  if (
+    request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    NO_CACHE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))
+  ) {
+    return;
+  }
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request, SHELL, "/offline.html"));
     return;
@@ -61,19 +96,33 @@ async function storeSharedFiles(request) {
 
 async function networkFirst(request, cacheName, fallback) {
   const cache = await caches.open(cacheName);
+  const url = new URL(request.url);
   try {
     const response = await fetch(request);
-    if (response.ok) await cache.put(request, response.clone());
+    if (response.ok && SAFE_SHELL_ROUTE_SET.has(url.pathname)) {
+      await cache.put(url.pathname, response.clone());
+    }
     return response;
   } catch {
-    return (await cache.match(request)) || (await cache.match(fallback));
+    const exactMatch = await cache.match(request);
+    if (exactMatch) return exactMatch;
+    if (SAFE_SHELL_ROUTE_SET.has(url.pathname)) {
+      const shellMatch = await cache.match(url.pathname);
+      if (shellMatch) return shellMatch;
+    }
+    return (await cache.match(fallback)) || Response.error();
   }
 }
 
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
-  const fresh = fetch(request).then((response) => { if (response.ok) void cache.put(request, response.clone()); return response; }).catch(() => cached);
+  const fresh = fetch(request)
+    .then((response) => {
+      if (response.ok) void cache.put(request, response.clone());
+      return response;
+    })
+    .catch(() => cached || Response.error());
   return cached || fresh;
 }
 
@@ -81,9 +130,13 @@ async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(request);
   if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
-  return response;
+  try {
+    const response = await fetch(request);
+    if (response.ok) await cache.put(request, response.clone());
+    return response;
+  } catch {
+    return Response.error();
+  }
 }
 
 self.addEventListener("notificationclick", (event) => {

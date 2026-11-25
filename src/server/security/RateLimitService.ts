@@ -1,0 +1,155 @@
+import "server-only";
+
+import type { PoolClient } from "pg";
+import { query } from "@/server/database/Postgres";
+
+export type RateLimitStatus = {
+  allowed: boolean;
+  remaining: number;
+  limit: number;
+  resetAt: string;
+  retryAfter?: number;
+};
+
+export const MAX_RATE_LIMIT_WINDOW_MS = 2 * 60 * 60 * 1000;
+export const DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS = 24 * 60 * 60 * 1000;
+export const DEFAULT_CLEANUP_BATCH_LIMIT = 10_000;
+export const MAX_CLEANUP_BATCH_LIMIT = 50_000;
+
+// The same bound applies to writers and cleanup in every process.
+function assertSupportedWindow(windowMs: number) {
+  if (!Number.isSafeInteger(windowMs) || windowMs < 1 || windowMs > MAX_RATE_LIMIT_WINDOW_MS) {
+    throw new RangeError("Unsupported rate limit window");
+  }
+}
+
+function getWindowBucket(windowMs: number, now = Date.now()): number {
+  return Math.floor(now / windowMs);
+}
+
+function getWindowEnd(windowMs: number): string {
+  const now = Date.now();
+  const nextWindow = new Date((getWindowBucket(windowMs, now) + 1) * windowMs);
+  return nextWindow.toISOString();
+}
+
+async function hasPostgresAsync(): Promise<boolean> {
+  return (await import("@/server/database/Postgres")).hasPostgres();
+}
+
+export const RateLimitService = {
+  async checkAndConsume(
+    key: string,
+    options: {
+      limit: number;
+      windowMs: number;
+    }
+  ): Promise<RateLimitStatus> {
+    assertSupportedWindow(options.windowMs);
+    const windowBucket = getWindowBucket(options.windowMs);
+    const windowEnd = getWindowEnd(options.windowMs);
+
+    const hasPg = await hasPostgresAsync();
+    if (!hasPg) {
+      // In-memory fallback for development
+      return { allowed: true, remaining: options.limit - 1, limit: options.limit, resetAt: windowEnd };
+    }
+
+    try {
+      const result = await query(
+        `INSERT INTO rate_limits (key, window_bucket, count)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (key, window_bucket)
+         DO UPDATE SET count = rate_limits.count + 1
+         RETURNING count`,
+        [key, windowBucket]
+      );
+
+      const used = Number(result.rows[0]?.count ?? 1);
+      const remaining = Math.max(0, options.limit - used);
+      const allowed = used <= options.limit;
+
+      if (!allowed) {
+        return {
+          allowed: false,
+          remaining: 0,
+          limit: options.limit,
+          resetAt: windowEnd,
+          retryAfter: Math.ceil((new Date(windowEnd).getTime() - Date.now()) / 1000),
+        };
+      }
+
+      return {
+        allowed: true,
+        remaining,
+        limit: options.limit,
+        resetAt: windowEnd,
+      };
+    } catch (error) {
+      // Fail-closed for security-critical rate limits
+      // If we can't verify, don't allow the request
+      throw error;
+    }
+  },
+
+  async getStatus(key: string, options: { limit: number; windowMs: number }): Promise<RateLimitStatus> {
+    assertSupportedWindow(options.windowMs);
+    const windowBucket = getWindowBucket(options.windowMs);
+    const windowEnd = getWindowEnd(options.windowMs);
+
+    const hasPg = await hasPostgresAsync();
+    if (!hasPg) {
+      return { allowed: true, remaining: options.limit, limit: options.limit, resetAt: windowEnd };
+    }
+
+    try {
+      const result = await query(
+        `SELECT COALESCE(count, 0) as used FROM rate_limits WHERE key = $1 AND window_bucket = $2`,
+        [key, windowBucket]
+      );
+
+      const used = Number(result.rows[0]?.used ?? 0);
+      const remaining = Math.max(0, options.limit - used);
+
+      return {
+        allowed: used < options.limit,
+        remaining,
+        limit: options.limit,
+        resetAt: windowEnd,
+      };
+    } catch {
+      return { allowed: true, remaining: options.limit, limit: options.limit, resetAt: windowEnd };
+    }
+  },
+
+  async cleanup(
+    maxAgeMs = DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS,
+    options?: { batchLimit?: number; client?: PoolClient },
+  ): Promise<number> {
+    const hasPg = await hasPostgresAsync();
+    if (!hasPg) return 0;
+
+    const requestedAgeMs = Number.isFinite(maxAgeMs)
+      ? Math.trunc(maxAgeMs)
+      : DEFAULT_RATE_LIMIT_CLEANUP_AGE_MS;
+    const safeMaxAgeMs = Math.max(MAX_RATE_LIMIT_WINDOW_MS, requestedAgeMs);
+    const requestedBatch = Number.isFinite(options?.batchLimit)
+      ? Math.trunc(options!.batchLimit!)
+      : DEFAULT_CLEANUP_BATCH_LIMIT;
+    const safeBatchLimit = Math.min(MAX_CLEANUP_BATCH_LIMIT, Math.max(100, requestedBatch));
+    try {
+      const sql = `DELETE FROM rate_limits
+        WHERE ctid IN (
+          SELECT ctid FROM rate_limits
+          WHERE created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
+          LIMIT $2
+        )`;
+      const result = options?.client
+        ? await options.client.query(sql, [safeMaxAgeMs, safeBatchLimit])
+        : await query(sql, [safeMaxAgeMs, safeBatchLimit]);
+      return result.rowCount ?? 0;
+    } catch {
+      return 0;
+    }
+  },
+};

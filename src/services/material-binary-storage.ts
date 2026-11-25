@@ -1,4 +1,5 @@
 import type { Material } from "@/types/material";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 
 const DIRECTORY_NAME = "studyai-materials";
 
@@ -12,7 +13,11 @@ async function directory(create = false) {
   if (!storage.getDirectory) return null;
   try {
     const root = await storage.getDirectory();
-    return await root.getDirectoryHandle(DIRECTORY_NAME, { create });
+    const base = await root.getDirectoryHandle(DIRECTORY_NAME, { create });
+    const session = SessionOperationManager.current();
+    if (session.suspended) return null;
+    const scope = session.userId ? `user-${session.userId.replace(/[^a-zA-Z0-9_-]/g, "_")}` : "guest";
+    return await base.getDirectoryHandle(scope, { create });
   } catch {
     return null;
   }
@@ -38,11 +43,11 @@ export const MaterialBinaryStorage = {
     }
   },
 
-  async load(material: Pick<Material, "id" | "name" | "mimeType"> & { lastModified?: number }) {
+  async load(material: Pick<Material, "id" | "name" | "mimeType"> & { lastModified?: number; binaryStorageId?: string }) {
     const targetDirectory = await directory(false);
     if (!targetDirectory) return null;
     try {
-      const handle = await targetDirectory.getFileHandle(material.id);
+      const handle = await targetDirectory.getFileHandle(material.binaryStorageId ?? material.id);
       const stored = await handle.getFile();
       return new File([stored], material.name, {
         type: material.mimeType || stored.type,

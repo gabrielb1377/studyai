@@ -8,6 +8,7 @@ import { CollaborationClient } from "@/features/collaboration/CollaborationClien
 import type { CollaborationComment, StudyRoom } from "@/features/collaboration/types";
 import type { ExtractedContent } from "@/features/extraction/ExtractionTypes";
 import type { LabProject } from "@/features/lab/types";
+import { ConnectivityService } from "@/features/platform/ConnectivityService";
 
 export type GlobalSearchCategory = "material" | "note" | "summary" | "flashcard" | "quiz" | "concept" | "knowledge" | "room" | "comment";
 
@@ -71,22 +72,55 @@ function studyHref(studyId: unknown, tab: string, materialId?: string) {
   return `/estudo?${query.toString()}`;
 }
 
+async function fetchRemoteCollaboration(): Promise<{
+  rooms: StudyRoom[];
+  comments: Array<CollaborationComment & { roomName: string }>;
+}> {
+  if (!ConnectivityService.getSnapshot().isOnline) {
+    return { rooms: [], comments: [] };
+  }
+  const fetchTask = (async () => {
+    const rooms = await CollaborationClient.list().then((result) => result.rooms).catch(() => []);
+    const roomSnapshots = await Promise.all(rooms.map((room) => CollaborationClient.room(room.id).catch(() => null)));
+    const comments = roomSnapshots.flatMap((snapshotItem) =>
+      snapshotItem ? snapshotItem.comments.map((comment) => ({ ...comment, roomName: snapshotItem.room.name })) : [],
+    );
+    return { rooms, comments };
+  })();
+  const timeout = new Promise<{ rooms: StudyRoom[]; comments: Array<CollaborationComment & { roomName: string }> }>((resolve) => {
+    globalThis.setTimeout(() => resolve({ rooms: [], comments: [] }), 1_200);
+  });
+  return Promise.race([fetchTask, timeout]);
+}
+
 async function snapshot(): Promise<SearchSnapshot> {
   if (cache && cache.expiresAt > Date.now()) return cache.value;
-  const [materials, notes, summaries, flashcards, quizzes, graphs, contents, labProjects] = await Promise.all([
-    StorageManager.getAll<Material>("documents"),
-    StorageManager.getAll<StudyNote>("notes"),
-    StorageManager.getAll<StudySummary>("summaries"),
-    StorageManager.getAll<Flashcard>("flashcards"),
-    StorageManager.getAll<Record<string, unknown>>("quizzes"),
-    StorageManager.getAll<KnowledgeGraph>("knowledge"),
-    StorageManager.getAll<ExtractedContent>("contents"),
-    StorageManager.getAll<LabProject>("lab"),
+  const [localData, remoteData] = await Promise.all([
+    Promise.all([
+      StorageManager.getAll<Material>("documents"),
+      StorageManager.getAll<StudyNote>("notes"),
+      StorageManager.getAll<StudySummary>("summaries"),
+      StorageManager.getAll<Flashcard>("flashcards"),
+      StorageManager.getAll<Record<string, unknown>>("quizzes"),
+      StorageManager.getAll<KnowledgeGraph>("knowledge"),
+      StorageManager.getAll<ExtractedContent>("contents"),
+      StorageManager.getAll<LabProject>("lab"),
+    ]),
+    fetchRemoteCollaboration(),
   ]);
-  const rooms = await CollaborationClient.list().then((result) => result.rooms).catch(() => []);
-  const roomSnapshots = await Promise.all(rooms.map((room) => CollaborationClient.room(room.id).catch(() => null)));
-  const comments = roomSnapshots.flatMap((snapshot) => snapshot ? snapshot.comments.map((comment) => ({ ...comment, roomName: snapshot.room.name })) : []);
-  const value = { materials, notes, summaries, flashcards, quizzes, graphs, contents, labProjects, rooms, comments };
+  const [materials, notes, summaries, flashcards, quizzes, graphs, contents, labProjects] = localData;
+  const value = {
+    materials,
+    notes,
+    summaries,
+    flashcards,
+    quizzes,
+    graphs,
+    contents,
+    labProjects,
+    rooms: remoteData.rooms,
+    comments: remoteData.comments,
+  };
   cache = { value, expiresAt: Date.now() + 5_000 };
   return value;
 }

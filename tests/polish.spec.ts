@@ -104,7 +104,8 @@ test("Tutor processa streaming NDJSON e renderiza Markdown, GFM, matemática e m
   await expect(conversation.getByRole("table")).toBeVisible();
   await expect(conversation.getByText("const vetor = [1, 2];", { exact: true })).toBeVisible();
   await expect(conversation.locator(".katex")).toBeVisible();
-  await expect(conversation).toContainText("Prompt 120");
+  await expect(conversation).toContainText("Enviados 120");
+  await expect(conversation).toContainText("Recebidos 45");
   await expect(conversation).toContainText("Contexto 70");
   await expect(conversation).toContainText("Chunks 30");
   await expect(conversation).toContainText("cache");
@@ -154,7 +155,18 @@ test("drop em nova estrutura cria hierarquia e organização usa autosave", asyn
   await importTextMaterial(page, "novo-tema.txt", "Conteúdo de um novo tema.");
   await page.goto("/organizar");
   const source = page.getByText("novo-tema.txt", { exact: true }).locator("xpath=ancestor::li[1]");
-  await source.dragTo(page.locator('[data-drop-level="new"]'));
+  const destination = page.locator('[data-drop-level="new"]');
+  // Exercise the app's actual drag payload and drop handler without relying on
+  // native pointer drag recognition in the headless runner.
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  try {
+    await source.dispatchEvent("dragstart", { dataTransfer });
+    expect(await dataTransfer.evaluate((transfer) => transfer.getData("text/material-id"))).not.toBe("");
+    await destination.dispatchEvent("dragover", { dataTransfer });
+    await destination.dispatchEvent("drop", { dataTransfer });
+  } finally {
+    await dataTransfer.dispose();
+  }
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Curso", exact: true }).fill("Novo curso");
   await dialog.getByRole("textbox", { name: "Semestre", exact: true }).fill("2º semestre");
@@ -171,9 +183,11 @@ test("pdf.js permanece lazy até um PDF ser realmente processado", async ({ page
   const before = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
   expect(before.some((name) => name.includes("pdf.worker"))).toBe(false);
   await page.goto("/importar");
-  await page.getByLabel("Selecionar arquivos do dispositivo").setInputFiles({ name: "lazy.pdf", mimeType: "application/pdf", buffer: createTextPdf(["Lazy PDF"]) });
+  await page.getByLabel("Selecionar arquivos do dispositivo").setInputFiles({ name: "lazy.pdf", mimeType: "application/pdf", buffer: createTextPdf(["Vetores armazenam dados em ordem e usam indices.", "Esta pagina tem texto nativo e dispensa reconhecimento de imagem."]) });
   await page.getByRole("button", { name: "Importar", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible();
+  // The first lazy PDF.js worker startup can outlast the default 5-second
+  // assertion window on a cold dev server.
+  await expect(page.getByRole("button", { name: "Extração concluída" })).toBeVisible({ timeout: 15_000 });
   const after = await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name));
   expect(after.some((name) => name.includes("pdf.worker"))).toBe(true);
 });

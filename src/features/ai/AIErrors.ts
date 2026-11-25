@@ -1,4 +1,4 @@
-import type { AIProviderId } from "./AIProvider";
+import type { AIFallbackOffer, AIProviderId } from "./AIProvider";
 
 export type AIErrorCode =
   | "INVALID_RESPONSE"
@@ -6,6 +6,11 @@ export type AIErrorCode =
   | "PROVIDER_ERROR"
   | "PROVIDER_UNAVAILABLE"
   | "RATE_LIMIT"
+  | "QUOTA_EXCEEDED"
+  | "EMAIL_NOT_VERIFIED"
+  | "SHARED_AI_UNAVAILABLE"
+  | "FALLBACK_CONSENT_REQUIRED"
+  | "PARTIAL_RESPONSE"
   | "TIMEOUT";
 
 export const AI_RATE_LIMIT_MESSAGE =
@@ -23,7 +28,28 @@ export class AIError extends Error {
   }
 }
 
+export class AIFallbackConsentError extends AIError {
+  constructor(public readonly fallback: AIFallbackOffer) {
+    super(
+      "O provedor escolhido não respondeu. Confirme se deseja usar uma alternativa.",
+      "FALLBACK_CONSENT_REQUIRED",
+      409,
+      fallback.primaryProvider,
+    );
+    this.name = "AIFallbackConsentError";
+  }
+}
+
 function suggestionFor(error: AIError) {
+  if (error.code === "EMAIL_NOT_VERIFIED") {
+    return "Verifique seu e-mail em Conta para liberar a IA compartilhada ou configure sua própria chave (BYOK) em Configurações > IA.";
+  }
+  if (error.code === "QUOTA_EXCEEDED") {
+    return "Aguarde a renovação da cota ou configure sua própria chave (BYOK) em Configurações > IA.";
+  }
+  if (error.code === "SHARED_AI_UNAVAILABLE") {
+    return "A IA compartilhada está temporariamente indisponível. Tente novamente mais tarde ou configure sua chave própria (BYOK) em Configurações > IA.";
+  }
   if (error.code === "MISSING_API_KEY") {
     return "Abra Configurações > IA, configure o provider e reinicie o servidor após alterar o arquivo .env.local.";
   }
@@ -44,9 +70,8 @@ function suggestionFor(error: AIError) {
 
 export function isAIRateLimitError(error: unknown) {
   return error instanceof AIError && (
-    error.code === "RATE_LIMIT" ||
     error.status === 429 ||
-    /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)
+    (error.status >= 500 && error.status < 600 && (error.code === "RATE_LIMIT" || /high demand|overload|resource exhausted|rate.?limit/i.test(error.message)))
   );
 }
 
@@ -56,8 +81,20 @@ export function safeAIErrorLogMessage(error: unknown) {
 }
 
 export function normalizeAIError(error: unknown, fallbackMessage: string) {
+  if (error instanceof AIFallbackConsentError) {
+    return {
+      status: error.status,
+      body: {
+        code: error.code,
+        error: error.message,
+        provider: error.provider,
+        suggestion: "Escolha uma das alternativas exibidas ou cancele para manter sua mensagem.",
+        fallback: error.fallback,
+      },
+    };
+  }
   if (error instanceof AIError) {
-    const rateLimited = isAIRateLimitError(error);
+    const rateLimited = isAIRateLimitError(error) && error.code !== "QUOTA_EXCEEDED";
     return {
       status: rateLimited ? 429 : error.status,
       body: {

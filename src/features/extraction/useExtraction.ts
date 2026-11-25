@@ -25,6 +25,12 @@ export function useExtraction() {
     extracted: records.filter((record) => record.status === "extracted").length,
     errors: records.filter((record) => record.status === "error").length,
     ocr: records.filter((record) => record.metadata.ocrPerformed).length,
+    ocrPages: records.reduce((total, record) => total + (record.pipeline?.ocrPages ?? record.metadata.ocrPages ?? 0), 0),
+    reviewedPages: records.reduce((total, record) => total + (record.pipeline?.reviewedPages ?? record.metadata.reviewedPages ?? 0), 0),
+    pendingReviewPages: records.reduce(
+      (total, record) => total + (record.pages?.filter((page) => page.status === "review" || page.status === "error").length ?? 0),
+      0,
+    ),
     transcriptions: records.filter((record) => record.metadata.transcriptionPerformed).length,
     processingTimeMs: records.reduce(
       (total, record) => total + (record.metadata.processingTimeMs ?? 0),

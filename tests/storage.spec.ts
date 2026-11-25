@@ -1,9 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { STORAGE_DATABASE_VERSION } from "../src/lib/storage/StorageVersion";
 import { readIndexedDBStore } from "./helpers/indexed-db";
 
 async function writeSimulatedDocuments(page: Page, count: number) {
-  await page.evaluate(async (total) => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("studyai-db", 4);
+  await page.evaluate(async ({ total, version }) => new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("studyai-db", version);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -30,7 +31,7 @@ async function writeSimulatedDocuments(page: Page, count: number) {
       transaction.oncomplete = () => { database.close(); resolve(); };
       transaction.onerror = () => reject(transaction.error);
     };
-  }), count);
+  }), { total: count, version: STORAGE_DATABASE_VERSION });
 }
 
 test("migra dados pesados do localStorage sem perda e remove apenas as chaves antigas", async ({ page }) => {
@@ -68,8 +69,8 @@ test("transação abortada executa rollback sem apagar dados anteriores", async 
   await page.goto("/storage");
   await expect(page.getByText("studyai-db", { exact: true })).toBeVisible();
   await writeSimulatedDocuments(page, 1);
-  await page.evaluate(async () => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.open("studyai-db", 4);
+  await page.evaluate(async (version) => new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("studyai-db", version);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -79,7 +80,7 @@ test("transação abortada executa rollback sem apagar dados anteriores", async 
       transaction.onerror = () => undefined;
       transaction.abort();
     };
-  }));
+  }), STORAGE_DATABASE_VERSION);
 
   const documents = await readIndexedDBStore<{ id: string }>(page, "documents");
   expect(documents).toHaveLength(1);

@@ -1,3 +1,5 @@
+import { DataLabService } from "./DataLabService";
+import { MathLabService } from "./MathLabService";
 import { validateExecutableCode } from "../validators/lab-validation";
 import type { LabExecutionResult, LabLanguage } from "../types";
 
@@ -10,8 +12,10 @@ export const SafeExecutionService = {
     const started = performance.now();
     const invalid = validateExecutableCode(language, code);
     if (invalid) return result("error", started, [], invalid);
-    if (language === "typescript") return result("unsupported", started, [], "TypeScript possui editor e preview, mas a execução requer compilação e está desativada nesta versão.");
-    if (language === "python") return result("unsupported", started, [], "Python está preparado no contrato do Lab, mas não executa código nesta versão.");
+    if (language === "math") return MathLabService.execute(code);
+    if (language === "data") return DataLabService.execute(code);
+    if (language === "typescript") return result("unsupported", started, [], "TypeScript possui editor e preview, mas a execução requer compilação e está desativada nesta versão. Use JavaScript ou Matemática para execução direta.");
+    if (language === "python") return result("unsupported", started, [], "Python está preparado no contrato do Lab, mas não executa código nesta versão. Use JavaScript, SQL, Matemática ou Dados para execução local.");
     if (language !== "javascript") return result("unsupported", started, [], "Use o preview ou o executor específico deste modo.");
 
     return new Promise((resolve) => {

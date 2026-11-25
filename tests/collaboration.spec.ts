@@ -3,7 +3,10 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 const password = "StudyAI2026secure";
 const uniqueEmail = (label: string) => `${label}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
+import { testClientHeaders } from "./helpers/test-client-ip";
+
 async function register(page: Page, label: string, name: string) {
+  await page.context().setExtraHTTPHeaders(testClientHeaders(`collab:${label}:${name}:${Date.now()}`));
   await page.goto("/conta");
   await page.getByRole("button", { name: "Criar conta" }).click();
   await page.getByLabel("Nome").fill(name);
