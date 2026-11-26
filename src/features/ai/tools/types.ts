@@ -105,9 +105,16 @@ export interface ToolIntent {
 export interface ToolWriteConfirmation {
   readonly confirmationId: string;
   readonly userId: string;
+  readonly sessionId?: string;
+  readonly sessionGeneration?: number;
   readonly turnId: string;
   readonly toolId: SkillToolName;
+  readonly toolVersion?: string;
+  readonly proposalId?: string;
   readonly argsFingerprint: string;
+  readonly previewHash?: string;
+  readonly destination?: string;
+  readonly expiresAt?: string;
   readonly previewShown: true;
   readonly confirmedByUser: true;
 }
@@ -144,7 +151,10 @@ export type ToolDenialReason =
   | "loop_detected"
   | "confirmation_required"
   | "confirmation_invalid"
+  | "confirmation_expired"
+  | "confirmation_cancelled"
   | "confirmation_replayed"
+  | "precondition_failed"
   | "invalid_arguments"
   | "session_changed"
   | "execution_timeout"
@@ -181,6 +191,9 @@ export type ToolExecutorFn = (
     sessionId: string;
     turnId: string;
     skillId: string;
+    confirmation?: ToolWriteConfirmation;
+    confirmationService?: unknown;
+    approvedProposal?: Readonly<Record<string, unknown>>;
   }>,
 ) => Promise<Record<string, unknown>> | Record<string, unknown>;
 

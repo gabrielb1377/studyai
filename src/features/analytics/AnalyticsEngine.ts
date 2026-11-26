@@ -1,4 +1,6 @@
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import type { LearningActivity } from "@/features/learning/types";
+import { currentDatabaseGeneration } from "@/lib/storage/Database";
 import type {
   AnalyticsBreakdown,
   AnalyticsInsight,
@@ -206,11 +208,15 @@ function streaks(activities: readonly LearningActivity[]) {
 }
 
 function signature(input: AnalyticsInput, now: Date) {
+  const session = SessionOperationManager.current();
+  const effectiveAccountId = input.accountId ?? session.userId ?? input.profile.id;
   return JSON.stringify([
-    input.accountId ?? input.profile.id,
+    effectiveAccountId,
+    input.accountId ? "explicit" : `gen:${session.generation}:db:${currentDatabaseGeneration()}`,
     input.profile.updatedAt,
     input.profile.totalStudyMinutes,
-    input.studies.map((s) => s.studyId),
+    input.studies.map((s) => `${s.studyId}:${s.progress}:${s.updatedAt}`),
+    input.knowledge.map((k) => `${k.studyId}:${k.knowledge}:${k.confidence}`),
     input.flashcards.length,
     input.quizzes.length,
     input.graphs.length,
