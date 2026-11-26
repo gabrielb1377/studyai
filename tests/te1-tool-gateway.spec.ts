@@ -138,8 +138,18 @@ test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", 
   test("tools.enabled=false e skills.enabled=false por padrão, registro de produção restrito às ferramentas de leitura (TE-2/TE-3) e catálogo 20+13 preservado", async () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
-    // TE-2 + TE-3 conectam exclusivamente 4 ferramentas de leitura; nenhuma ferramenta de escrita/execução existe em produção
-    expect(ToolRegistry.list().map((t) => t.id)).toEqual(["calculator", "library", "performance", "errors"]);
+    // TE-2 + TE-3 + TE-4 conectam exatamente 8 ferramentas canônicas (5 leitura + 3 transformação com confirmação); TE-5 (js_execution/diagram/audio) segue desconectada
+    expect(ToolRegistry.list().map((t) => t.id)).toEqual([
+      "calculator",
+      "library",
+      "performance",
+      "errors",
+      "doc_reader",
+      "flashcards",
+      "quiz",
+      "plan",
+    ]);
+    expect(ToolRegistry.list().some((t) => t.class === "execution")).toBe(false);
     expect(SkillRegistry.list().length).toBe(33);
 
     // Gateway de produção recusa execução com flag desligada
@@ -150,11 +160,11 @@ test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", 
     expect(denied.ok).toBe(false);
     expect(denied.denialReason).toBe("tools_disabled");
 
-    // Mesmo com flag ligada em teste, ferramentas de escrita/execução (TE-4/TE-5) continuam não conectadas
+    // Mesmo com flag ligada em teste, ferramentas da TE-5/Fase 3 (js_execution, diagram, audio) continuam não conectadas
     setToolsEnabledForTesting(true);
     const unknown = await defaultToolGateway.execute(
-      JSON.stringify({ tool: "flashcards", args: { title: "teste" } }),
-      makeTrustedContext(),
+      JSON.stringify({ tool: "js_execution", args: { code: "1 + 1" } }),
+      makeTrustedContext({ skillId: "teacher.flowchart", grantedPermissions: ["execution"] }),
     );
     expect(unknown.ok).toBe(false);
     expect(unknown.denialReason).toBe("unknown_tool");

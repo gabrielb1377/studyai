@@ -327,9 +327,12 @@ test.describe("TE-3: Registro das 4 Ferramentas de Leitura, Flags e Hardening de
   test("registra exatamente calculator, library, performance e errors com flags desligadas e impede reset de turno evictado", async () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
-    expect(ToolRegistry.size()).toBe(4);
-    expect(ToolRegistry.list().map((t) => t.id)).toEqual(["calculator", "library", "performance", "errors"]);
-    expect(ToolRegistry.list().every((t) => t.class === "read" && t.requiresConfirmation === false)).toBe(true);
+    expect(ToolRegistry.size()).toBe(8);
+    for (const readId of ["calculator", "library", "performance", "errors", "doc_reader"] as const) {
+      const entry = ToolRegistry.get(readId);
+      expect(entry?.spec.class).toBe("read");
+      expect(entry?.spec.requiresConfirmation).toBe(false);
+    }
 
     // Flag desligada bloqueia todas as 3 novas ferramentas
     for (const tool of ["library", "performance", "errors"] as const) {

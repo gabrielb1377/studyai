@@ -1,27 +1,28 @@
-# Handoff atual — StudyAI V1.3 (Onda 1)
+# Handoff atual — StudyAI V1.3 (Onda 3)
 
-## Estado atual — Onda 3 / TE-3 Concluída: Ferramentas de Leitura no Cliente e Isolamento A→B em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 3 / TE-4 Concluída: Transformações com Confirmação Explícita em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
-  - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`). `PS-2` verificado (0 ocorrências de `withQuotaEnforcement` em `src/`).
+  - `PS-1b` (`140daf8`), `QU-1`..`QU-5` concluídas; `PS-2` verificado (0 ocorrências de `withQuotaEnforcement` em `src/`).
 - **Onda 2 — Intelligence Engine Formalmente Encerrada (`3246b73`, CI `45895240129` 6/6 VERDE)**:
   - Catálogo oficial completo **20/20 skills (`0.1.0`) + 13 Teacher (`1.0.0`) = 33 registros únicos imutáveis**; `skills.enabled = false` por padrão.
-- **Onda 3 — Tool Engine / TE-1, TE-2 e TE-3 Concluídas (`v1.3-development`)**:
-  - **Endurecimento compartilhado**: `retiredTurnKeys` em `ToolTurnState.ts` (evicção nunca reseta limites), `denialReason: "session_changed"` em `ToolGateway.ts` para `SessionChangedError`, e isolamento de cache por `accountId` em `AnalyticsEngine.ts` (`clearCache()` + chave enriquecida).
-  - **TE-3 — 3 Ferramentas de Leitura no Cliente (`src/features/ai/tools/read/`)**:
-    - `library@0.1.0` (`SearchService` + `RankingService`, deduplicação `(fileId, chunkIndex)`, trechos <= 450 chars, máx. 5 itens).
-    - `performance@0.1.0` (`AnalyticsEngine` + `KnowledgeEngine`, diferenciação `no_data` vs. baixo desempenho e `observedMetrics` vs. `derivedIndicators`).
-    - `errors@0.1.0` (`ErrorNotebookStorage` + `MemoryRetrievalEngine`, respeita `settings.enabled === false`, máx. 5 erros e 5 memórias, zero escrita).
-    - **Isolamento A→B**: `runWithVerifiedAccountSession` valida `SessionOperationManager.start(userId)` antes da leitura e `operation.assertCurrent()` antes da entrega (recusa `session_changed` em troca de sessão A→B durante leitura assíncrona); descarta dados legados sem `ownerId` verificável.
-  - **Registro de produção**: exatamente **4 ferramentas de leitura** (`calculator`, `library`, `performance`, `errors`), todas com `tools.enabled = false` por padrão e zero ferramentas de escrita/execução conectadas.
-- **Validação Integrada (`--retries=0`, R$ 0)**:
-  - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **116/116 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): TE-1 (5), TE-2 (4), TE-3 (5 — incluindo A→B multi-conta real), IE-1..IE-4F (80), PS-1b/PS-1a (12), quota-policy (10).
-- **Próxima etapa oficial**: Onda 3 / **`TE-4`** (Transformações com confirmação explícita e pré-visualização: `doc_reader`, `flashcards`, `quiz`, `plan`). Aguardar autorização do owner.
+- **Onda 3 — Tool Engine / TE-1, TE-2, TE-3 (CI `45907390048` 6/6 VERDE) e TE-4 Concluídas (`v1.3-development`)**:
+  - **Revisão diferencial TE-3 e endurecimento compartilhado**:
+    - `ToolTurnState.ts`: evicção fail-closed ao saturar `MAX_RETIRED_TURN_KEYS` (2048), `canAcquireSlot` read-only (impede envenenamento de `seenFingerprints` por confirmação fabricada), `closeTurn` e controle global de `confirmationId` consumidos.
+    - `AnalyticsEngine.ts`: fallback seguro por `SessionOperationManager.current()` + geração de sessão/DB quando `accountId` é omitido, impedindo colisão de cache cross-account.
+    - `ToolCrypto.ts` + `ToolConfirmationService.ts`: protocolo autoritativo de 6 etapas (preparação → pré-visualização → confirmação explícita → claim síncrono atômico → execução → auditoria), integridade por **SHA-256 (RFC 6234)**, vínculo a `(userId, sessionId, sessionGeneration, turnId, toolId, toolVersion, argsFingerprint, previewHash, destination, expiresAt)`, uso único, proteção contra replay, concorrência (clique duplo) e troca A→B.
+  - **TE-4 — 4 Ferramentas Canônicas (`src/features/ai/tools/transform/`)**:
+    - `doc_reader@0.1.0` (`class: "read"`, `requiresConfirmation: false`): leitura documental por página reutilizando `ContentStorage`/`ExtractedContent`, bloqueia URLs/traversal, diferencia `ready`, `page_not_found`, `material_unavailable` e `content_not_extracted`.
+    - `flashcards@0.1.0` (`class: "transform"`, `prepare` sem escrita + `commit` confirmado com permissão `"write"`): reutiliza `FlashcardService`, deduplicação determinística.
+    - `quiz@0.1.0` (`class: "transform"`, `prepare` + `correct_answer` + `commit` confirmado): reutiliza `QuizService` e `AdaptiveAssessmentEngine`, separa visão do aluno do gabarito (ocultação lógica no cliente, não segurança de servidor), classifica correção em 4 níveis sem mutar tentativas/notas/erros.
+    - `plan@0.1.0` (`class: "transform"`, `prepare` + `commit` confirmado): reutiliza exclusivamente `PlanningEngine`, bloqueia sobrescrita silenciosa sem `overwriteExisting: true`.
+  - **Registro de produção**: exatamente **8 ferramentas canônicas** (`calculator`, `library`, `performance`, `errors`, `doc_reader`, `flashcards`, `quiz`, `plan`), zero ferramentas de execução (`js_execution`, `diagram`, `audio` permanecem desconectadas), `tools.enabled = false` e `skills.enabled = false` por padrão.
+- **Limitações registradas**: Gateway no cliente não substitui autorização server-side; `defaultClientReadProvider.loadPerformance` e agregação de `exams` em `defaultClientTransformProvider.loadPlanningContext` aguardam ligação de runtime no navegador quando as flags forem ativadas; testes A→B da TE-4 validam motores reais + store multi-conta não pré-filtrado em Node (persistência IndexedDB em navegador segue coberta pelas specs E2E da CI).
+- **Próxima etapa oficial**: Onda 3 / **`TE-5`** (Gráficos e execução restrita de JS em Worker sem rede). Aguardar CI verde da TE-4 e autorização explícita do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
