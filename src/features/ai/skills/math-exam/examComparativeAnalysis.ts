@@ -359,6 +359,7 @@ export const examComparativeAnalysisSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "provas, questões ou estatísticas fabricadas",
       "garantia de cobrança futura baseada apenas em histórico",

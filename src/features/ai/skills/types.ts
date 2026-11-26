@@ -56,6 +56,8 @@ export interface SkillSafetyRules {
   readonly doNotLeakInstructions?: boolean;
   readonly untrustedInputDelimited?: boolean;
   readonly requireSourceGrounding?: boolean;
+  /** Quando true, SkillBudgetExecutor exige contextualValidator obrigatoriamente (não pode ser omitido pelo consumidor). */
+  readonly requiresContextualValidation?: boolean;
   readonly forbiddenOutputs?: readonly string[];
   readonly customRules?: readonly string[];
 }

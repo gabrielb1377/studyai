@@ -271,9 +271,9 @@ export const SkillBudgetExecutor = {
       throw new Error(`Skill não encontrada no registro: "${options.skillId}"`);
     }
 
-    if (options.requireContextualValidator && !options.contextualValidator) {
+    if ((spec.safety.requiresContextualValidation || options.requireContextualValidator) && !options.contextualValidator) {
       throw new Error(
-        `A execução de "${spec.id}" exige contextualValidator explícito para validação determinística.`,
+        `A execução de "${spec.id}" exige contextualValidator explícito conforme contrato/política interna de validação determinística.`,
       );
     }
 

@@ -281,6 +281,7 @@ export const reviewFromErrorsSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: false,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "erros ou IDs inventados fora do caderno de erros",
       "marcação automática de erros como resolvidos",

@@ -611,14 +611,13 @@ test.describe("IE-4D: explain.multimodal (Representação Declarativa, Fallback 
 
 test.describe("IE-4D: Infraestrutura Compartilhada (requireContextualValidator, Cache, Isolamento, Budget e Fallback)", () => {
   test("bloqueia omissão de contextualValidator quando obrigatório, isola cache por usuário/snapshot, neutraliza injection e preserva totalChargedTokens em fallback", async () => {
-    // 1. requireContextualValidator=true recusa omissão de contextualValidator (zero validação permissiva)
+    // 1. Política derivada do contrato (spec.safety.requiresContextualValidation=true) recusa omissão mesmo sem requireContextualValidator na chamada
     const { adapter: guardAdapter } = createTrackingQuota();
     await expect(
       SkillBudgetExecutor.execute({
         skillId: "feedback.personal",
         userId: "user-guard",
         requestId: "req-guard-1",
-        requireContextualValidator: true,
         quotaAdapter: guardAdapter,
         inputs: { referenceDate: IE4D_FIXED_DATE },
         provider: async () => ({
@@ -655,6 +654,7 @@ test.describe("IE-4D: Infraestrutura Compartilhada (requireContextualValidator, 
         context: {
           chunks: [makeChunk({ id: `c-inj-${tc.skillId}`, sourceName: "Doc", text: injection })],
         },
+        contextualValidator: () => ({ valid: true, errors: [] }),
         provider: async (req) => {
           capturedPrompts.push(req.message);
           return {
@@ -789,6 +789,7 @@ test.describe("IE-4D: Infraestrutura Compartilhada (requireContextualValidator, 
       skipCache: true,
       quotaAdapter: overflowQuota.adapter,
       inputs: { referenceDate: IE4D_FIXED_DATE, payload: "Z".repeat(25_000) },
+      contextualValidator: () => ({ valid: true, errors: [] }),
       provider: async () => {
         overflowCalls += 1;
         return {

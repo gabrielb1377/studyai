@@ -363,6 +363,7 @@ export const mathStepByStepSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: false,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "uso de eval, new Function ou scripts",
       "alegação falsa de uso da ferramenta calculadora TE-2",

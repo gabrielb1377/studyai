@@ -460,6 +460,7 @@ test.describe("IE-4F: Infraestrutura Compartilhada (Isolamento, Cache, Budget e 
       skipCache: true,
       quotaAdapter: overflowQuota.adapter,
       inputs: { discipline: "X".repeat(30_000) },
+      contextualValidator: () => ({ valid: true, errors: [] }),
       provider: async () => {
         overflowCalls += 1;
         return {

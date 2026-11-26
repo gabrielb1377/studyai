@@ -337,6 +337,7 @@ export const feedbackPersonalSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: false,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "notas ou métricas fabricadas",
       "diagnósticos psicológicos ou rótulos pessoais",
