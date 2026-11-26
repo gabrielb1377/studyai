@@ -74,7 +74,8 @@ export function validateParsedSourceRefs(
     !hasChunks &&
     skillId !== "grounding.guard" &&
     skillId !== "doc.analysis" &&
-    skillId !== "explain.multimodal"
+    skillId !== "explain.multimodal" &&
+    skillId !== "audio.learning"
   ) {
     return { valid: true, errors: [] };
   }
@@ -164,13 +165,13 @@ export function validateParsedSourceRefs(
         }
       });
     }
-  } else if (skillId === "explain.multimodal") {
+  } else if (skillId === "explain.multimodal" || skillId === "audio.learning") {
     const sourceRefs = (parsed as { sourceRefs?: string[] }).sourceRefs;
     if (Array.isArray(sourceRefs)) {
       sourceRefs.forEach((ref, idx) => {
         if (!isSourceRefGrounded(ref, authorizedLabels, { allowExplicitNoSupport: true })) {
           errors.push(
-            `Referência multimodal ${idx + 1} ("${ref}") não encontrada no contexto efetivamente autorizado.`,
+            `Referência ${idx + 1} ("${ref}") não encontrada no contexto efetivamente autorizado.`,
           );
         }
       });

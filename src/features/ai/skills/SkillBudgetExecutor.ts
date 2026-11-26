@@ -189,7 +189,8 @@ function validateSkillResponse(
     ((chunks && chunks.length > 0) ||
       spec.id === "grounding.guard" ||
       spec.id === "doc.analysis" ||
-      spec.id === "explain.multimodal")
+      spec.id === "explain.multimodal" ||
+      spec.id === "audio.learning")
   ) {
     const grounding = validateParsedSourceRefs(spec.id, parsed, chunks);
     if (!grounding.valid) {
