@@ -89,6 +89,8 @@ export interface SkillBudgetExecutionOptions {
   };
   readonly signal?: AbortSignal;
   readonly skipCache?: boolean;
+  /** Quando true, recusa execução sem contextualValidator explícito (evita validação permissiva). */
+  readonly requireContextualValidator?: boolean;
   /** Validador contextual opcional aplicado uniformemente em cache hits, resposta inicial e reparo. */
   readonly contextualValidator?: (
     parsed: unknown,
@@ -182,7 +184,13 @@ function validateSkillResponse(
   const parsed = structural.parsed ?? (spec.output.type === "json" ? tryParseJson(text) : undefined);
 
   const chunks = compression.chunks;
-  if (structural.valid && ((chunks && chunks.length > 0) || spec.id === "grounding.guard" || spec.id === "doc.analysis")) {
+  if (
+    structural.valid &&
+    ((chunks && chunks.length > 0) ||
+      spec.id === "grounding.guard" ||
+      spec.id === "doc.analysis" ||
+      spec.id === "explain.multimodal")
+  ) {
     const grounding = validateParsedSourceRefs(spec.id, parsed, chunks);
     if (!grounding.valid) {
       errors.push(...grounding.errors);
@@ -190,9 +198,15 @@ function validateSkillResponse(
   }
 
   if (errors.length === 0 && contextualValidator) {
-    const contextual = contextualValidator(parsed, compression);
-    if (!contextual.valid) {
-      errors.push(...contextual.errors);
+    try {
+      const contextual = contextualValidator(parsed, compression);
+      if (!contextual.valid) {
+        errors.push(...contextual.errors);
+      }
+    } catch (err) {
+      errors.push(
+        `Falha interna no validador contextual: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -253,6 +267,12 @@ export const SkillBudgetExecutor = {
     const spec = SkillRegistry.get(options.skillId, options.version);
     if (!spec) {
       throw new Error(`Skill não encontrada no registro: "${options.skillId}"`);
+    }
+
+    if (options.requireContextualValidator && !options.contextualValidator) {
+      throw new Error(
+        `A execução de "${spec.id}" exige contextualValidator explícito para validação determinística.`,
+      );
     }
 
     // 1. Validar parâmetros de entrada obrigatórios

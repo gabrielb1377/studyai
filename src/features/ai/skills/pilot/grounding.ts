@@ -70,7 +70,12 @@ export function validateParsedSourceRefs(
     return { valid: true, errors: [] };
   }
   const hasChunks = Boolean(chunks && chunks.length > 0);
-  if (!hasChunks && skillId !== "grounding.guard" && skillId !== "doc.analysis") {
+  if (
+    !hasChunks &&
+    skillId !== "grounding.guard" &&
+    skillId !== "doc.analysis" &&
+    skillId !== "explain.multimodal"
+  ) {
     return { valid: true, errors: [] };
   }
 
@@ -155,6 +160,17 @@ export function validateParsedSourceRefs(
         if (!isSourceRefGrounded(ref, authorizedLabels, { allowExplicitNoSupport: doc.status === "insufficient_material" })) {
           errors.push(
             `Proveniência ${idx + 1} ("${ref}") não encontrada no contexto efetivamente autorizado.`,
+          );
+        }
+      });
+    }
+  } else if (skillId === "explain.multimodal") {
+    const sourceRefs = (parsed as { sourceRefs?: string[] }).sourceRefs;
+    if (Array.isArray(sourceRefs)) {
+      sourceRefs.forEach((ref, idx) => {
+        if (!isSourceRefGrounded(ref, authorizedLabels, { allowExplicitNoSupport: true })) {
+          errors.push(
+            `Referência multimodal ${idx + 1} ("${ref}") não encontrada no contexto efetivamente autorizado.`,
           );
         }
       });
