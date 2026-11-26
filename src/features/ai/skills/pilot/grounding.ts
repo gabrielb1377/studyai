@@ -66,11 +66,15 @@ export function validateParsedSourceRefs(
   parsed: unknown,
   chunks?: readonly RetrievedChunk[],
 ): { valid: boolean; errors: string[] } {
-  if (!chunks || chunks.length === 0 || !parsed || typeof parsed !== "object") {
+  if (!parsed || typeof parsed !== "object") {
+    return { valid: true, errors: [] };
+  }
+  const hasChunks = Boolean(chunks && chunks.length > 0);
+  if (!hasChunks && skillId !== "grounding.guard") {
     return { valid: true, errors: [] };
   }
 
-  const authorizedLabels = extractAuthorizedSourceLabels(chunks);
+  const authorizedLabels = hasChunks ? extractAuthorizedSourceLabels(chunks!) : [];
   const errors: string[] = [];
 
   if (skillId === "technique.active-recall") {
@@ -91,6 +95,39 @@ export function validateParsedSourceRefs(
         if (gap.sourceRef && !isSourceRefGrounded(gap.sourceRef, authorizedLabels, { allowExplicitNoSupport: true })) {
           errors.push(
             `Lacuna ${idx + 1} cita sourceRef "${gap.sourceRef}" não encontrado no contexto autorizado.`,
+          );
+        }
+      });
+    }
+  } else if (skillId === "grounding.guard") {
+    const claims = (parsed as { claims?: Array<{ statement?: string; grounded?: boolean; sourceRef?: string }> }).claims;
+    if (Array.isArray(claims)) {
+      claims.forEach((claim, idx) => {
+        if (claim.grounded && (!claim.sourceRef || !isSourceRefGrounded(claim.sourceRef, authorizedLabels, { allowExplicitNoSupport: false }))) {
+          errors.push(
+            `Afirmação ${idx + 1} marcada como fundamentada cita sourceRef "${claim.sourceRef ?? ""}" ausente no contexto efetivamente autorizado.`,
+          );
+        }
+      });
+    }
+  } else if (skillId === "tutor.beginner") {
+    const sourceRefs = (parsed as { sourceRefs?: string[] }).sourceRefs;
+    if (Array.isArray(sourceRefs)) {
+      sourceRefs.forEach((ref, idx) => {
+        if (!isSourceRefGrounded(ref, authorizedLabels, { allowExplicitNoSupport: true })) {
+          errors.push(
+            `Referência ${idx + 1} ("${ref}") não encontrada no contexto efetivamente autorizado.`,
+          );
+        }
+      });
+    }
+  } else if (skillId === "examples.analogies") {
+    const items = (parsed as { items?: Array<{ sourceRef?: string }> }).items;
+    if (Array.isArray(items)) {
+      items.forEach((item, idx) => {
+        if (item.sourceRef && !isSourceRefGrounded(item.sourceRef, authorizedLabels, { allowExplicitNoSupport: true })) {
+          errors.push(
+            `Exemplo/Analogia ${idx + 1} cita sourceRef "${item.sourceRef}" não encontrado no contexto efetivamente autorizado.`,
           );
         }
       });

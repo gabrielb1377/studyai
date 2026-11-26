@@ -84,6 +84,7 @@ export interface SkillBudgetExecutionOptions {
     readonly studyContext?: TutorStudyContext | null;
     readonly chunks?: readonly RetrievedChunk[];
     readonly history?: readonly AIMessage[];
+    readonly errors?: readonly string[];
   };
   readonly signal?: AbortSignal;
   readonly skipCache?: boolean;
@@ -173,7 +174,7 @@ function validateSkillResponse(
   const errors = [...structural.errors];
   const parsed = structural.parsed ?? (spec.output.type === "json" ? tryParseJson(text) : undefined);
 
-  if (structural.valid && chunks && chunks.length > 0) {
+  if (structural.valid && ((chunks && chunks.length > 0) || spec.id === "grounding.guard")) {
     const grounding = validateParsedSourceRefs(spec.id, parsed, chunks);
     if (!grounding.valid) {
       errors.push(...grounding.errors);
@@ -221,6 +222,9 @@ function buildFinalMessage(
     });
     sections.push("", wrapUntrustedMaterialData(chunkLines));
   }
+  if (compression.errors.length > 0) {
+    sections.push("", wrapUntrustedMaterialData(["Erros recentes do estudante:", ...compression.errors]));
+  }
   return sections.join("\n");
 }
 
@@ -260,6 +264,7 @@ export const SkillBudgetExecutor = {
       studyContextText: studyTopic,
       history: options.context?.history,
       chunks: options.context?.chunks,
+      errors: options.context?.errors,
     });
 
     const effectiveMaxOutputTokens = resolveEffectiveOutputLimit(spec.tokenBudget.output, {

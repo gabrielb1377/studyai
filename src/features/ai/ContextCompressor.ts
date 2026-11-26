@@ -51,6 +51,7 @@ export type SkillCompressionInput = {
   studyContextText?: string;
   history?: readonly AIMessage[];
   chunks?: readonly RetrievedChunk[];
+  errors?: readonly string[];
   providerFormatOverheadTokens?: number;
 };
 
@@ -64,13 +65,16 @@ export type SkillCompressionResult = {
   studyContextText?: string;
   history: AIMessage[];
   chunks: RetrievedChunk[];
+  errors: string[];
   historySummary?: string;
   statistics: {
     originalHistoryTokens: number;
     compressedHistoryTokens: number;
     chunkTokens: number;
+    errorTokens: number;
     removedMessages: number;
     removedChunks: number;
+    removedErrors: number;
     droppedStudyContext: boolean;
   };
 };
@@ -151,6 +155,7 @@ export const ContextCompressor = {
 
     const rawHistory = input.allowedContext.includes("history") ? (input.history ?? []) : [];
     const rawChunks = input.allowedContext.includes("chunks") ? (input.chunks ?? []) : [];
+    const rawErrors = input.allowedContext.includes("errors") ? (input.errors ?? []) : [];
     const originalHistoryTokens = TokenCounter.messages(rawHistory);
 
     if (mandatoryTokens > budget) {
@@ -164,12 +169,15 @@ export const ContextCompressor = {
         studyContextText: undefined,
         history: [],
         chunks: [],
+        errors: [],
         statistics: {
           originalHistoryTokens,
           compressedHistoryTokens: 0,
           chunkTokens: 0,
+          errorTokens: 0,
           removedMessages: rawHistory.length,
           removedChunks: rawChunks.length,
+          removedErrors: rawErrors.length,
           droppedStudyContext: Boolean(input.studyContextText),
         },
       };
@@ -250,7 +258,26 @@ export const ContextCompressor = {
     }
 
     const compressedHistoryTokens = TokenCounter.messages(boundedHistory);
-    const contextTokens = studyTokens + chunkTokens + compressedHistoryTokens;
+    const remainingForErrors = Math.max(0, remaining - chunkTokens - compressedHistoryTokens);
+    const boundedErrors: string[] = [];
+    let errorTokens = 0;
+    if (rawErrors.length > 0 && remainingForErrors >= 12) {
+      const seenErrors = new Set<string>();
+      for (const errText of rawErrors) {
+        const key = normalize(errText);
+        if (!key || seenErrors.has(key)) continue;
+        seenErrors.add(key);
+        const avail = remainingForErrors - errorTokens;
+        if (avail <= 8) break;
+        const truncated = TokenCounter.truncate(errText, avail);
+        const tokens = TokenCounter.estimate(truncated);
+        if (!truncated || tokens <= 0 || errorTokens + tokens > remainingForErrors) continue;
+        boundedErrors.push(truncated);
+        errorTokens += tokens;
+      }
+    }
+
+    const contextTokens = studyTokens + chunkTokens + compressedHistoryTokens + errorTokens;
     const totalEstimatedTokens = mandatoryTokens + contextTokens;
 
     return {
@@ -263,12 +290,15 @@ export const ContextCompressor = {
       studyContextText,
       history: boundedHistory,
       chunks: boundedChunks,
+      errors: boundedErrors,
       statistics: {
         originalHistoryTokens,
         compressedHistoryTokens,
         chunkTokens,
+        errorTokens,
         removedMessages: Math.max(0, rawHistory.length - boundedHistory.length),
         removedChunks: Math.max(0, rawChunks.length - boundedChunks.length),
+        removedErrors: Math.max(0, rawErrors.length - boundedErrors.length),
         droppedStudyContext,
       },
     };

@@ -19,6 +19,7 @@ function keyFor(request: AIManagerRequest, provider: string, model?: string) {
       : undefined,
     requestOwner: request.requestOwner,
     skillKey: request.skill ? `${request.skill.id}@${request.skill.version}` : undefined,
+    maxOutputTokens: request.skill?.maxOutputTokens ?? request.maxOutputTokens,
     systemPrompt: request.systemPrompt,
     history: request.history,
     message: request.message,
