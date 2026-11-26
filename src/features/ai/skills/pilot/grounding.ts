@@ -75,7 +75,8 @@ export function validateParsedSourceRefs(
     skillId !== "grounding.guard" &&
     skillId !== "doc.analysis" &&
     skillId !== "explain.multimodal" &&
-    skillId !== "audio.learning"
+    skillId !== "audio.learning" &&
+    skillId !== "exam.comparative-analysis"
   ) {
     return { valid: true, errors: [] };
   }
@@ -165,7 +166,11 @@ export function validateParsedSourceRefs(
         }
       });
     }
-  } else if (skillId === "explain.multimodal" || skillId === "audio.learning") {
+  } else if (
+    skillId === "explain.multimodal" ||
+    skillId === "audio.learning" ||
+    skillId === "exam.comparative-analysis"
+  ) {
     const sourceRefs = (parsed as { sourceRefs?: string[] }).sourceRefs;
     if (Array.isArray(sourceRefs)) {
       sourceRefs.forEach((ref, idx) => {

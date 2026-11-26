@@ -190,7 +190,8 @@ function validateSkillResponse(
       spec.id === "grounding.guard" ||
       spec.id === "doc.analysis" ||
       spec.id === "explain.multimodal" ||
-      spec.id === "audio.learning")
+      spec.id === "audio.learning" ||
+      spec.id === "exam.comparative-analysis")
   ) {
     const grounding = validateParsedSourceRefs(spec.id, parsed, chunks);
     if (!grounding.valid) {

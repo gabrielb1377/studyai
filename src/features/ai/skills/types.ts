@@ -44,7 +44,8 @@ export type SkillToolName =
   | "js_execution"
   | "plan"
   | "errors"
-  | "doc_reader";
+  | "doc_reader"
+  | "calculator";
 
 export interface SkillTokenBudget {
   readonly input: number;
