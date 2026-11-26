@@ -8,13 +8,15 @@ import { registerTeacherSkills } from "./teacher/TeacherSkills";
 import { registerPilotSkills } from "./pilot";
 import { registerFoundationSkills } from "./foundation";
 import { registerOrganizationSkills } from "./organization";
+import { registerPracticeSkills } from "./practice";
 
-// Configura o handler de registro das skills do Teacher, Pilot, Foundation (IE-4A) e Organization (IE-4B)
+// Configura o handler de registro das skills do Teacher, Pilot, Foundation (IE-4A), Organization (IE-4B) e Practice (IE-4C)
 setDefaultRegistrationHandler((registry) => {
   registerTeacherSkills(registry);
   registerPilotSkills(registry);
   registerFoundationSkills(registry);
   registerOrganizationSkills(registry);
+  registerPracticeSkills(registry);
 });
 
 export * from "./types";
@@ -25,4 +27,5 @@ export * from "./SkillRepairService";
 export * from "./pilot";
 export * from "./foundation";
 export * from "./organization";
+export * from "./practice";
 export { registerTeacherSkills, buildTeacherInstruction, buildTeacherActionMessage } from "./teacher/TeacherSkills";
