@@ -148,6 +148,13 @@ export type AIFallbackOffer = {
   alternatives: AIFallbackAlternative[];
 };
 
+export type AISkillIdentity = {
+  readonly id: string;
+  readonly version: string;
+  readonly maxInputTokens?: number;
+  readonly maxOutputTokens?: number;
+};
+
 export type AIManagerRequest = AIRequest & {
   provider?: AIProviderId;
   mode?: AISelectionMode;
@@ -158,6 +165,10 @@ export type AIManagerRequest = AIRequest & {
   credentialOrigin?: "shared" | "byok" | "local";
   emailVerified?: boolean;
   onSettlement?: (settlement: AIUsageSettlement) => Promise<void> | void;
+  /** Identidade e orçamento da skill resolvidos exclusivamente no servidor via SkillRegistry. */
+  skill?: AISkillIdentity;
+  /** Predicado server-side opcional: quando retorna false, impede gravação de saída inválida no AIResponseCache. */
+  validateResponse?: (text: string) => boolean;
   fallbackPolicy?: "consent";
   fallbackConsent?: AIFallbackConsent;
   task?: AITaskDescription;

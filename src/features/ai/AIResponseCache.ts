@@ -18,6 +18,7 @@ function keyFor(request: AIManagerRequest, provider: string, model?: string) {
       ? createHash("sha256").update(credential).digest("hex")
       : undefined,
     requestOwner: request.requestOwner,
+    skillKey: request.skill ? `${request.skill.id}@${request.skill.version}` : undefined,
     systemPrompt: request.systemPrompt,
     history: request.history,
     message: request.message,

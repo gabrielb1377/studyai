@@ -197,8 +197,13 @@ export const ProviderManager = {
         };
       }
       const strictByok = request.strictByok ?? (request.credentialOrigin === "byok" || Boolean(request.apiKeys?.[providerId]));
+      const effectiveMaxOutputTokens =
+        request.skill?.maxOutputTokens !== undefined
+          ? Math.min(request.maxOutputTokens ?? request.skill.maxOutputTokens, request.skill.maxOutputTokens)
+          : request.maxOutputTokens;
       const measured = await LatencyService.measure(() => provider.generate({
         ...requestWithSystem,
+        maxOutputTokens: effectiveMaxOutputTokens,
         model: selectedModel,
         apiKey: request.apiKeys?.[providerId] ?? request.apiKey,
         strictByok,
@@ -233,7 +238,9 @@ export const ProviderManager = {
             routing: request.routingDecision,
           },
         };
-        AIResponseCache.set(cacheKey, response);
+        if (!request.validateResponse || request.validateResponse(response.text)) {
+          AIResponseCache.set(cacheKey, response);
+        }
         return response;
       }
 
@@ -313,12 +320,16 @@ export const ProviderManager = {
 
       const startedAt = performance.now();
       const strictByok = request.strictByok ?? (request.credentialOrigin === "byok" || Boolean(request.apiKeys?.[providerId]));
+      const effectiveMaxOutputTokens =
+        request.skill?.maxOutputTokens !== undefined
+          ? Math.min(request.maxOutputTokens ?? request.skill.maxOutputTokens, request.skill.maxOutputTokens)
+          : request.maxOutputTokens;
       let emitted = false;
       let emittedText = "";
       let settled = false;
       try {
         if (provider.stream) {
-          for await (const event of provider.stream({ ...requestWithSystem, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey, strictByok })) {
+          for await (const event of provider.stream({ ...requestWithSystem, maxOutputTokens: effectiveMaxOutputTokens, model: selectedModel, stream: true, apiKey: request.apiKeys?.[providerId] ?? request.apiKey, strictByok })) {
             if (event.type === "delta") {
               emitted = true;
               emittedText += event.text;
@@ -330,7 +341,9 @@ export const ProviderManager = {
               ...event.response,
               execution: { attemptedProviders, fallbackUsed: fallback, latencyMs, routing: request.routingDecision },
             };
-            AIResponseCache.set(cacheKey, response);
+            if (!request.validateResponse || request.validateResponse(response.text)) {
+              AIResponseCache.set(cacheKey, response);
+            }
             const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
             addLog({ provider: providerId, model: response.model, latencyMs, success: true, fallback, tokens });
             settled = true;
@@ -347,7 +360,7 @@ export const ProviderManager = {
             return;
           }
         } else {
-          const response = await provider.generate({ ...requestWithSystem, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey, strictByok });
+          const response = await provider.generate({ ...requestWithSystem, maxOutputTokens: effectiveMaxOutputTokens, model: selectedModel, stream: false, apiKey: request.apiKeys?.[providerId] ?? request.apiKey, strictByok });
           for (const line of response.text.match(/.{1,80}(?:\s|$)/g) ?? [response.text]) {
             emitted = true;
             emittedText += line;
@@ -355,7 +368,9 @@ export const ProviderManager = {
           }
           const latencyMs = Math.round(performance.now() - startedAt);
           const completed = { ...response, execution: { attemptedProviders, fallbackUsed: fallback, latencyMs, routing: request.routingDecision } };
-          AIResponseCache.set(cacheKey, completed);
+          if (!request.validateResponse || request.validateResponse(completed.text)) {
+            AIResponseCache.set(cacheKey, completed);
+          }
           const tokens = response.usage?.totalTokens ?? TokenCounter.messages(request.history) + TokenCounter.estimate(request.message) + TokenCounter.estimate(response.text);
           addLog({ provider: providerId, model: response.model, latencyMs, success: true, fallback, tokens });
           settled = true;

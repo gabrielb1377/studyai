@@ -773,15 +773,8 @@ export const QuotaService = {
         ],
       );
 
-      await client.query(
-        `UPDATE usage_quotas
-         SET reserved_tokens = GREATEST(0, reserved_tokens - $3),
-             tokens_count = tokens_count + $4,
-             updated_at = NOW()
-         WHERE user_id = $1 AND date = $2::date AND minute_bucket = 0`,
-        [row.user_id, row.usage_date, releaseFromReserved, resolved.chargedTokens],
-      );
-
+      // Ordem de lock determinística idêntica à `reserveSharedBudget`:
+      // `ai_global_daily_budgets` antes de `usage_quotas` para eliminar deadlocks sob concorrência.
       await client.query(
         `UPDATE ai_global_daily_budgets
          SET reserved_tokens = GREATEST(0, reserved_tokens - $2),
@@ -789,6 +782,15 @@ export const QuotaService = {
              updated_at = NOW()
          WHERE date = $1::date`,
         [row.usage_date, releaseFromReserved, resolved.chargedTokens],
+      );
+
+      await client.query(
+        `UPDATE usage_quotas
+         SET reserved_tokens = GREATEST(0, reserved_tokens - $3),
+             tokens_count = tokens_count + $4,
+             updated_at = NOW()
+         WHERE user_id = $1 AND date = $2::date AND minute_bucket = 0`,
+        [row.user_id, row.usage_date, releaseFromReserved, resolved.chargedTokens],
       );
 
       return {

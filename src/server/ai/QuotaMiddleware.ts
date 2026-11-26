@@ -236,7 +236,7 @@ export async function withAIQuota(
         return NextResponse.json({ code: "INVALID_REQUEST", error: validationError }, { status: 400 });
       }
     }
-    // Nunca confiar em campos de origem de chave ou credenciais enviados pelo cliente.
+    // Nunca confiar em campos de origem de chave, credenciais ou identidade/orçamento de skill enviados pelo cliente.
     const sanitizedBody = { ...(originalBody as Record<string, unknown>) };
     delete sanitizedBody.apiKey;
     delete sanitizedBody.apiKeys;
@@ -245,6 +245,13 @@ export async function withAIQuota(
     delete sanitizedBody.emailVerified;
     delete sanitizedBody.onSettlement;
     delete sanitizedBody.systemPrompt;
+    delete sanitizedBody.skill;
+    delete sanitizedBody.skillId;
+    delete sanitizedBody.skillVersion;
+    delete sanitizedBody.tokenBudget;
+    delete sanitizedBody.maxInputTokens;
+    delete sanitizedBody.maxOutputTokens;
+    delete sanitizedBody.validateResponse;
 
     const body = (prepared
       ? { ...sanitizedBody, ...prepared, chunks: undefined, context: undefined }

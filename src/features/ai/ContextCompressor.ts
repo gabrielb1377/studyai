@@ -42,6 +42,41 @@ export type CompressedContext = {
   };
 };
 
+export type SkillCompressionInput = {
+  maxInputTokens: number;
+  systemPrompt: string;
+  skillInstructions: string;
+  studentInputs: string;
+  allowedContext: readonly string[];
+  studyContextText?: string;
+  history?: readonly AIMessage[];
+  chunks?: readonly RetrievedChunk[];
+  providerFormatOverheadTokens?: number;
+};
+
+export type SkillCompressionResult = {
+  withinBudget: boolean;
+  budget: number;
+  mandatoryTokens: number;
+  contextTokens: number;
+  totalEstimatedTokens: number;
+  exceededBy: number;
+  studyContextText?: string;
+  history: AIMessage[];
+  chunks: RetrievedChunk[];
+  historySummary?: string;
+  statistics: {
+    originalHistoryTokens: number;
+    compressedHistoryTokens: number;
+    chunkTokens: number;
+    removedMessages: number;
+    removedChunks: number;
+    droppedStudyContext: boolean;
+  };
+};
+
+const DEFAULT_PROVIDER_FORMAT_OVERHEAD_TOKENS = 32;
+
 export const ContextCompressor = {
   compress(
     history: readonly AIMessage[],
@@ -90,6 +125,151 @@ export const ContextCompressor = {
         chunkTokens,
         removedMessages: Math.max(0, history.length - boundedRecent.length),
         removedChunks: Math.max(0, chunks.length - boundedChunks.length),
+      },
+    };
+  },
+
+  /**
+   * Aplica o orçamento de entrada declarado em `SkillSpec.tokenBudget.input`
+   * considerando todos os componentes da solicitação (system prompt, instruções
+   * da skill, inputs do aluno, delimitadores de segurança, overhead do provedor
+   * e blocos de contexto autorizados).
+   *
+   * Regras invioláveis:
+   * - Nunca remove instruções obrigatórias de segurança ou system prompt.
+   * - Quando o conteúdo mínimo obrigatório já excede `maxInputTokens`, retorna
+   *   `withinBudget: false` para que o chamador não envie a requisição ao provedor.
+   */
+  compressForSkill(input: SkillCompressionInput): SkillCompressionResult {
+    const budget = Math.max(1, Math.trunc(input.maxInputTokens));
+    const overhead = input.providerFormatOverheadTokens ?? DEFAULT_PROVIDER_FORMAT_OVERHEAD_TOKENS;
+    const mandatoryTokens =
+      TokenCounter.estimate(input.systemPrompt) +
+      TokenCounter.estimate(input.skillInstructions) +
+      TokenCounter.estimate(input.studentInputs) +
+      overhead;
+
+    const rawHistory = input.allowedContext.includes("history") ? (input.history ?? []) : [];
+    const rawChunks = input.allowedContext.includes("chunks") ? (input.chunks ?? []) : [];
+    const originalHistoryTokens = TokenCounter.messages(rawHistory);
+
+    if (mandatoryTokens > budget) {
+      return {
+        withinBudget: false,
+        budget,
+        mandatoryTokens,
+        contextTokens: 0,
+        totalEstimatedTokens: mandatoryTokens,
+        exceededBy: mandatoryTokens - budget,
+        studyContextText: undefined,
+        history: [],
+        chunks: [],
+        statistics: {
+          originalHistoryTokens,
+          compressedHistoryTokens: 0,
+          chunkTokens: 0,
+          removedMessages: rawHistory.length,
+          removedChunks: rawChunks.length,
+          droppedStudyContext: Boolean(input.studyContextText),
+        },
+      };
+    }
+
+    let remaining = budget - mandatoryTokens;
+    let studyContextText: string | undefined;
+    let studyTokens = 0;
+    let droppedStudyContext = false;
+
+    if (input.studyContextText && input.allowedContext.includes("study")) {
+      const est = TokenCounter.estimate(input.studyContextText);
+      if (est <= remaining) {
+        studyContextText = input.studyContextText;
+        studyTokens = est;
+        remaining -= studyTokens;
+      } else if (remaining >= 32) {
+        studyContextText = TokenCounter.truncate(input.studyContextText, Math.min(remaining, 180));
+        studyTokens = TokenCounter.estimate(studyContextText);
+        if (studyTokens <= remaining) {
+          remaining -= studyTokens;
+        } else {
+          studyContextText = undefined;
+          studyTokens = 0;
+          droppedStudyContext = true;
+        }
+      } else {
+        droppedStudyContext = true;
+      }
+    } else if (input.studyContextText) {
+      droppedStudyContext = true;
+    }
+
+    const hasChunks = rawChunks.length > 0;
+    const hasHistory = rawHistory.length > 0;
+    let maxChunkTokens = 0;
+    let maxHistoryTokens = 0;
+
+    if (remaining > 0) {
+      if (hasChunks && hasHistory) {
+        maxChunkTokens = Math.floor(remaining * 0.65);
+        maxHistoryTokens = remaining - maxChunkTokens;
+      } else if (hasChunks) {
+        maxChunkTokens = remaining;
+      } else if (hasHistory) {
+        maxHistoryTokens = remaining;
+      }
+    }
+
+    // Comprimir chunks respeitando estritamente maxChunkTokens
+    const deduplicated = hasChunks ? uniqueChunks(rawChunks) : [];
+    const boundedChunks: RetrievedChunk[] = [];
+    let chunkTokens = 0;
+    for (const chunk of deduplicated) {
+      const avail = maxChunkTokens - chunkTokens;
+      if (avail <= 8) break;
+      const text = TokenCounter.truncate(chunk.text, avail);
+      const tokens = TokenCounter.estimate(text);
+      if (!text || tokens <= 0 || chunkTokens + tokens > maxChunkTokens) continue;
+      boundedChunks.push({ ...chunk, text });
+      chunkTokens += tokens;
+    }
+
+    // Reaproveitar eventual sobra de chunks para histórico se permitido
+    const leftoverFromChunks = Math.max(0, maxChunkTokens - chunkTokens);
+    const effectiveHistoryBudget = hasHistory ? maxHistoryTokens + leftoverFromChunks : 0;
+
+    const boundedHistory: AIMessage[] = [];
+    let usedHistoryTokens = 0;
+    if (hasHistory && effectiveHistoryBudget >= 12) {
+      const recent = rawHistory.slice(-MAX_RECENT_MESSAGES);
+      for (const message of [...recent].reverse()) {
+        const tokens = TokenCounter.estimate(message.content) + 4;
+        if (usedHistoryTokens + tokens > effectiveHistoryBudget) continue;
+        boundedHistory.unshift(message);
+        usedHistoryTokens += tokens;
+      }
+    }
+
+    const compressedHistoryTokens = TokenCounter.messages(boundedHistory);
+    const contextTokens = studyTokens + chunkTokens + compressedHistoryTokens;
+    const totalEstimatedTokens = mandatoryTokens + contextTokens;
+
+    return {
+      withinBudget: totalEstimatedTokens <= budget,
+      budget,
+      mandatoryTokens,
+      contextTokens,
+      totalEstimatedTokens,
+      exceededBy: Math.max(0, totalEstimatedTokens - budget),
+      studyContextText,
+      history: boundedHistory,
+      chunks: boundedChunks,
+      statistics: {
+        originalHistoryTokens,
+        compressedHistoryTokens,
+        chunkTokens,
+        removedMessages: Math.max(0, rawHistory.length - boundedHistory.length),
+        removedChunks: Math.max(0, rawChunks.length - boundedChunks.length),
+        droppedStudyContext,
       },
     };
   },
