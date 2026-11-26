@@ -1,24 +1,25 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 2 / IE-4E concluída: Lote 5 de Skills (Áudio e Computação — 18/20) em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 2 / IE-4F concluída: Catálogo Oficial 20/20 em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
-  - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`).
-- **Onda 2 — Inteligência Pedagógica / IE-1..IE-3 e IE-4A..IE-4E Concluídas (`v1.3-development`)**:
-  - **Fundação e Lotes 1–4 (IE-1..IE-4D, CI `45885716916` 6/6 VERDE)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado, `SkillBudgetExecutor` (`requireContextualValidator`, captura segura de exceções) e 15/20 skills.
-  - **IE-4E (Lote 5 — Áudio e Computação, catálogo oficial 18/20)**:
-    - `audio.learning` (`0.1.0`, 2.500/900 tokens, `allowedTools: ["audio"]` declarativo): reutiliza `NarratedLessonStep` e `TeacherNarrationService` (`prepareNarrationText`, `isNarratable`) via `buildAudioLearningSnapshot`, impõe `audioSynthesized === false` e `durationBasis === "estimated_from_script"`, valida `sourceRefs` pós-compressão em `grounding.ts` e bloqueia alegação falsa de áudio MP3/WAV sintetizado.
-    - `code.teaching` (`0.1.0`, 3.000/900 tokens, `allowedTools: ["js_execution"]` declarativo): reutiliza `LabLanguage` e `validateExecutableCode` (`lab-validation.ts`) de forma puramente estática via `buildCodeTeachingSnapshot`, impõe `wasExecuted === false` e `executionStatus === "not_executed"`, diferencia erros `confirmed` de `hypothesis`, bloqueia `eval`/`new Function`/`child_process` e delimita código malicioso em `<UNTRUSTED_MATERIAL_DATA>`.
-    - `cs.algorithms` (`0.1.0`, 3.000/900 tokens, `allowedTools: ["js_execution", "diagram"]` declarativo): ensina algoritmos/estruturas com traço sequencial, estados intermediários, complexidade temporal/espacial e diagrama Mermaid/fallback declarativo (`declarativeOnly === true`), com validação determinística explícita no subconjunto canônico (`binary_search`, `linear_search`, `insertion_sort`, incluindo entrada vazia `[]`) sem alegar validação universal e bloqueando HTML/JS/Mermaid malicioso.
-  - **Convivência e Rollback**: 31 skills registradas (13 Teacher + 18/20 catálogo oficial), `skills.enabled = false` por padrão, `allowedTools` estritamente declarativo até a Onda 3.
+  - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`). `PS-2` verificado (0 ocorrências de `withQuotaEnforcement` em `src/`).
+- **Onda 2 — Intelligence Engine (IE-1..IE-3 e IE-4A..IE-4F — Catálogo 20/20 Completo)**:
+  - **Fundação e Lotes 1–5 (CI `45888609899` 6/6 VERDE)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado, `SkillBudgetExecutor` (`requireContextualValidator`, captura segura de exceções, grounding pós-compressão) e 18/20 skills.
+  - **IE-4F (Lote Final — Matemática e Análise de Provas, catálogo oficial 20/20)**:
+    - `math.step-by-step` (`0.1.0`, 2.500/900 tokens, `allowedTools: ["calculator"]` declarativo): reutiliza `MathLabService.execute` para validação determinística de expressões numéricas suportadas (exatas, aproximadas com `approximationDetails` obrigatório, domínio inválido como divisão por zero), sem CAS nem TE-2 (`calculatorToolUsed === false`).
+    - `exam.comparative-analysis` (`0.1.0`, 3.500/800 tokens, `allowedTools: ["library", "performance"]` declarativo): reutiliza `Exam` / `parseExamDate` (`ExamService.ts`) e `grounding.ts` via `buildExamComparativeSnapshot`, deduplica provas repetidas, valida IDs/denominadores/contagens/percentuais, trata amostra insuficiente (< 2 provas) e bloqueia garantia de cobrança futura.
+  - **Convivência, Revisão Diferencial e Rollback**: **33 skills registradas** (13 Teacher + 20/20 catálogo oficial, zero duplicações), `skills.enabled = false` por padrão, `allowedTools` estritamente declarativo até a Onda 3.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **98/98 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): IE-1 (20/20), IE-2 (18/18), IE-3 unit/comportamental (10/10), IE-4A (8/8), IE-4B (5/5), IE-4C (5/5), IE-4D (5/5), IE-4E (5/5), PS-1b/PS-1a + quota-policy (22/22).
-- **Próxima etapa oficial**: Onda 2 / `IE-4F` — Lote final de 2 skills (`math.step-by-step`, `exam.comparative-analysis`, fechando 20/20 do catálogo e encerrando a Onda 2). Aguardar autorização do owner.
+  - **102/102 testes aprovados** (2 PG skipped localmente, cobertos pelo job `postgres` da CI): IE-1 (20), IE-2 (18), IE-3 unit/comportamental (10), IE-4A (8), IE-4B (5), IE-4C (5), IE-4D (5), IE-4E (5), IE-4F (4), PS-1b/PS-1a (12), quota-policy (10).
+- **Encerramento da Onda 2 e Próxima Etapa**:
+  - Catálogo 20/20 concluído localmente e publicado em `v1.3-development`; **encerramento formal da Onda 2 condicionado à aprovação 6/6 da CI final da IE-4F** (incluindo job `postgres`).
+  - **Próxima etapa oficial**: Onda 3 / **`TE-1`** (Tool Engine — Gateway, contrato, esquemas, auditoria e limites, sem ferramentas). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
