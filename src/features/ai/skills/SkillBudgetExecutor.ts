@@ -82,6 +82,7 @@ export interface SkillBudgetExecutionOptions {
   readonly inputs: Record<string, unknown>;
   readonly context?: {
     readonly studyContext?: TutorStudyContext | null;
+    readonly profileContextText?: string;
     readonly chunks?: readonly RetrievedChunk[];
     readonly history?: readonly AIMessage[];
     readonly errors?: readonly string[];
@@ -174,7 +175,7 @@ function validateSkillResponse(
   const errors = [...structural.errors];
   const parsed = structural.parsed ?? (spec.output.type === "json" ? tryParseJson(text) : undefined);
 
-  if (structural.valid && ((chunks && chunks.length > 0) || spec.id === "grounding.guard")) {
+  if (structural.valid && ((chunks && chunks.length > 0) || spec.id === "grounding.guard" || spec.id === "doc.analysis")) {
     const grounding = validateParsedSourceRefs(spec.id, parsed, chunks);
     if (!grounding.valid) {
       errors.push(...grounding.errors);
@@ -212,6 +213,9 @@ function buildFinalMessage(
   const sections = [skillInstructions, "", studentInputsWrapped];
   if (compression.studyContextText) {
     sections.push("", wrapUntrustedMaterialData([`Tema de estudo: ${compression.studyContextText}`]));
+  }
+  if (compression.profileContextText) {
+    sections.push("", wrapUntrustedMaterialData([`Contexto determinístico do perfil/desempenho:\n${compression.profileContextText}`]));
   }
   if (compression.chunks.length > 0) {
     const chunkLines = compression.chunks.map((c, idx) => {
@@ -262,6 +266,7 @@ export const SkillBudgetExecutor = {
       studentInputs: studentInputsWrapped,
       allowedContext: spec.allowedContext,
       studyContextText: studyTopic,
+      profileContextText: options.context?.profileContextText,
       history: options.context?.history,
       chunks: options.context?.chunks,
       errors: options.context?.errors,

@@ -70,7 +70,7 @@ export function validateParsedSourceRefs(
     return { valid: true, errors: [] };
   }
   const hasChunks = Boolean(chunks && chunks.length > 0);
-  if (!hasChunks && skillId !== "grounding.guard") {
+  if (!hasChunks && skillId !== "grounding.guard" && skillId !== "doc.analysis") {
     return { valid: true, errors: [] };
   }
 
@@ -128,6 +128,33 @@ export function validateParsedSourceRefs(
         if (item.sourceRef && !isSourceRefGrounded(item.sourceRef, authorizedLabels, { allowExplicitNoSupport: true })) {
           errors.push(
             `Exemplo/Analogia ${idx + 1} cita sourceRef "${item.sourceRef}" não encontrado no contexto efetivamente autorizado.`,
+          );
+        }
+      });
+    }
+  } else if (skillId === "doc.analysis") {
+    const doc = parsed as {
+      status?: string;
+      keyConcepts?: Array<{ concept?: string; sourceRef?: string }>;
+      provenance?: string[];
+    };
+    if (doc.status === "analyzed" && !hasChunks) {
+      errors.push("Análise documental não pode ter status='analyzed' quando não há trechos autorizados no contexto.");
+    }
+    if (Array.isArray(doc.keyConcepts)) {
+      doc.keyConcepts.forEach((kc, idx) => {
+        if (!kc.sourceRef || !isSourceRefGrounded(kc.sourceRef, authorizedLabels, { allowExplicitNoSupport: false })) {
+          errors.push(
+            `Conceito-chave ${idx + 1} cita sourceRef "${kc.sourceRef ?? ""}" ausente no contexto efetivamente autorizado.`,
+          );
+        }
+      });
+    }
+    if (Array.isArray(doc.provenance)) {
+      doc.provenance.forEach((ref, idx) => {
+        if (!isSourceRefGrounded(ref, authorizedLabels, { allowExplicitNoSupport: doc.status === "insufficient_material" })) {
+          errors.push(
+            `Proveniência ${idx + 1} ("${ref}") não encontrada no contexto efetivamente autorizado.`,
           );
         }
       });

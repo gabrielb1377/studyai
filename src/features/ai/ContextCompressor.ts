@@ -49,6 +49,7 @@ export type SkillCompressionInput = {
   studentInputs: string;
   allowedContext: readonly string[];
   studyContextText?: string;
+  profileContextText?: string;
   history?: readonly AIMessage[];
   chunks?: readonly RetrievedChunk[];
   errors?: readonly string[];
@@ -63,6 +64,7 @@ export type SkillCompressionResult = {
   totalEstimatedTokens: number;
   exceededBy: number;
   studyContextText?: string;
+  profileContextText?: string;
   history: AIMessage[];
   chunks: RetrievedChunk[];
   errors: string[];
@@ -72,10 +74,12 @@ export type SkillCompressionResult = {
     compressedHistoryTokens: number;
     chunkTokens: number;
     errorTokens: number;
+    profileTokens: number;
     removedMessages: number;
     removedChunks: number;
     removedErrors: number;
     droppedStudyContext: boolean;
+    droppedProfileContext: boolean;
   };
 };
 
@@ -167,6 +171,7 @@ export const ContextCompressor = {
         totalEstimatedTokens: mandatoryTokens,
         exceededBy: mandatoryTokens - budget,
         studyContextText: undefined,
+        profileContextText: undefined,
         history: [],
         chunks: [],
         errors: [],
@@ -175,10 +180,12 @@ export const ContextCompressor = {
           compressedHistoryTokens: 0,
           chunkTokens: 0,
           errorTokens: 0,
+          profileTokens: 0,
           removedMessages: rawHistory.length,
           removedChunks: rawChunks.length,
           removedErrors: rawErrors.length,
           droppedStudyContext: Boolean(input.studyContextText),
+          droppedProfileContext: Boolean(input.profileContextText),
         },
       };
     }
@@ -209,6 +216,33 @@ export const ContextCompressor = {
       }
     } else if (input.studyContextText) {
       droppedStudyContext = true;
+    }
+
+    let profileContextText: string | undefined;
+    let profileTokens = 0;
+    let droppedProfileContext = false;
+
+    if (input.profileContextText && input.allowedContext.includes("profile")) {
+      const est = TokenCounter.estimate(input.profileContextText);
+      if (est <= remaining) {
+        profileContextText = input.profileContextText;
+        profileTokens = est;
+        remaining -= profileTokens;
+      } else if (remaining >= 32) {
+        profileContextText = TokenCounter.truncate(input.profileContextText, Math.min(remaining, 240));
+        profileTokens = TokenCounter.estimate(profileContextText);
+        if (profileTokens <= remaining) {
+          remaining -= profileTokens;
+        } else {
+          profileContextText = undefined;
+          profileTokens = 0;
+          droppedProfileContext = true;
+        }
+      } else {
+        droppedProfileContext = true;
+      }
+    } else if (input.profileContextText) {
+      droppedProfileContext = true;
     }
 
     const hasChunks = rawChunks.length > 0;
@@ -277,7 +311,7 @@ export const ContextCompressor = {
       }
     }
 
-    const contextTokens = studyTokens + chunkTokens + compressedHistoryTokens + errorTokens;
+    const contextTokens = studyTokens + profileTokens + chunkTokens + compressedHistoryTokens + errorTokens;
     const totalEstimatedTokens = mandatoryTokens + contextTokens;
 
     return {
@@ -288,6 +322,7 @@ export const ContextCompressor = {
       totalEstimatedTokens,
       exceededBy: Math.max(0, totalEstimatedTokens - budget),
       studyContextText,
+      profileContextText,
       history: boundedHistory,
       chunks: boundedChunks,
       errors: boundedErrors,
@@ -296,10 +331,12 @@ export const ContextCompressor = {
         compressedHistoryTokens,
         chunkTokens,
         errorTokens,
+        profileTokens,
         removedMessages: Math.max(0, rawHistory.length - boundedHistory.length),
         removedChunks: Math.max(0, rawChunks.length - boundedChunks.length),
         removedErrors: Math.max(0, rawErrors.length - boundedErrors.length),
         droppedStudyContext,
+        droppedProfileContext,
       },
     };
   },
