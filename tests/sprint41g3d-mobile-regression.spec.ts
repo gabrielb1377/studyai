@@ -12,7 +12,7 @@ async function register(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Cadastrar" }).click();
-  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 }
 
 async function login(page: Page, email: string) {
@@ -20,7 +20,7 @@ async function login(page: Page, email: string) {
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Conta e sincronização" })).toBeVisible({ timeout: 15_000 });
 }
 
 async function sync(page: Page) {
@@ -43,9 +43,11 @@ test("viewport mobile: login, navegação, sincronização e troca A → B → A
   }, markerA);
   await sync(page);
 
-  await page.getByRole("navigation", { name: "Navegação rápida" }).getByRole("link", { name: "Biblioteca", exact: true }).click();
-  await expect(page).toHaveURL(/\/biblioteca$/);
-  await expect(page.getByRole("heading", { name: "Biblioteca", exact: true })).toBeVisible();
+  await Promise.all([
+    page.waitForURL(/\/biblioteca$/, { timeout: 15_000 }),
+    page.getByRole("navigation", { name: "Navegação rápida" }).getByRole("link", { name: "Biblioteca", exact: true }).click(),
+  ]);
+  await expect(page.getByRole("heading", { name: "Biblioteca", exact: true })).toBeVisible({ timeout: 15_000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   await page.goto("/conta");

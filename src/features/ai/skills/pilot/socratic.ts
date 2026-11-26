@@ -27,6 +27,23 @@ export interface SocraticOutput {
 export const SOCRATIC_FALLBACK_TEXT =
   "Vamos analisar este ponto juntos: o que você já sabe sobre os conceitos fundamentais envolvidos e qual seria o primeiro princípio aplicável a este caso?";
 
+export const SOCRATIC_FALLBACK_JSON = JSON.stringify({
+  understandingAssessment: "Não foi possível avaliar a resposta automaticamente no formato esperado; retomando investigação aberta.",
+  guidingQuestion: SOCRATIC_FALLBACK_TEXT,
+  nextStep: 1,
+  revealsSolution: false,
+} satisfies SocraticOutput);
+
+/**
+ * Padrões determinísticos de vazamento explícito de solução quando `revealsSolution === false`.
+ * Limitação conhecida: detecção heurística complementar — não garante detecção semântica universal.
+ */
+const EXPLICIT_SOLUTION_LEAK_PATTERNS = [
+  /\ba resposta (final |correta )?é(?=\s|$|[.,:;!?])/i,
+  /\ba solução (final |completa )?é(?=\s|$|[.,:;!?])/i,
+  /\bsolução completa:/i,
+];
+
 export function validateSocraticOutput(outputStr: string): SkillValidationResult {
   const errors: string[] = [];
   let parsed: SocraticOutput | null = null;
@@ -58,6 +75,11 @@ export function validateSocraticOutput(outputStr: string): SkillValidationResult
     errors.push("A propriedade 'revealsSolution' deve ser um booleano.");
   } else if (parsed.nextStep < 5 && parsed.revealsSolution === true) {
     errors.push("A técnica socrática proíbe revelar a solução prematuramente antes do passo final (etapa < 5).");
+  } else if (parsed.nextStep < 5 && parsed.revealsSolution === false) {
+    const combinedText = `${parsed.understandingAssessment ?? ""} ${parsed.guidingQuestion ?? ""} ${parsed.hint ?? ""}`;
+    if (EXPLICIT_SOLUTION_LEAK_PATTERNS.some((pattern) => pattern.test(combinedText))) {
+      errors.push("A saída declara revealsSolution=false, mas contém formulação explícita de entrega da resposta final.");
+    }
   }
 
   return {
@@ -151,8 +173,8 @@ export const socraticSkillSpec: SkillSpec = {
     },
   ],
   fallback: {
-    type: "text",
-    content: SOCRATIC_FALLBACK_TEXT,
-    description: "Pergunta socrática de reflexão aberta para continuar o diálogo sem travar.",
+    type: "json",
+    content: SOCRATIC_FALLBACK_JSON,
+    description: "Estrutura JSON válida com pergunta socrática de reflexão aberta para continuar o diálogo sem travar.",
   },
 };

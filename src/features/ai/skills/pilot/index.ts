@@ -11,6 +11,7 @@ import { activeRecallSkillSpec } from "./activeRecall";
 export * from "./feynman";
 export * from "./socratic";
 export * from "./activeRecall";
+export * from "./grounding";
 export * from "./SkillExecutionHarness";
 export * from "./__fixtures__";
 

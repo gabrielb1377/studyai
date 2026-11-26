@@ -37,6 +37,20 @@ export const FEYNMAN_FALLBACK_TEXT = [
   "3. Que exemplo prático ou analogia cotidiana melhor representa este funcionamento?",
 ].join("\n");
 
+export const FEYNMAN_FALLBACK_JSON = JSON.stringify({
+  understood: [],
+  gaps: [
+    {
+      point: "Autoavaliação orientada necessária",
+      why: "A análise automática não retornou estrutura válida; use as perguntas de reflexão para revisar o conceito.",
+      sourceRef: "sem apoio no material",
+    },
+  ],
+  simplifiedVersion: FEYNMAN_FALLBACK_TEXT,
+  followUpQuestion: "Como você explicaria este conceito com suas próprias palavras para alguém sem conhecimento prévio?",
+  confidence: "low",
+} satisfies FeynmanOutput);
+
 export function validateFeynmanOutput(outputStr: string): SkillValidationResult {
   const errors: string[] = [];
   let parsed: FeynmanOutput | null = null;
@@ -171,8 +185,8 @@ export const feynmanSkillSpec: SkillSpec = {
     },
   ],
   fallback: {
-    type: "text",
-    content: FEYNMAN_FALLBACK_TEXT,
-    description: "Três perguntas socráticas de reflexão para guiar a autoavaliação do aluno.",
+    type: "json",
+    content: FEYNMAN_FALLBACK_JSON,
+    description: "Estrutura JSON válida contendo as 3 perguntas de reflexão fixas para guiar a autoavaliação do aluno.",
   },
 };

@@ -14,6 +14,7 @@
 import { SkillRegistry } from "../SkillRegistry";
 import { SkillRepairService } from "../SkillRepairService";
 import type { SkillSpec } from "../types";
+import { validateParsedSourceRefs } from "./grounding";
 import {
   UNTRUSTED_MATERIAL_SECURITY_RULE,
   wrapUntrustedMaterialData,
@@ -113,8 +114,28 @@ export class SkillExecutionHarness {
 
     // 4. Validação, 1 tentativa de reparo e fallback
     const repairFn = options.repairProvider || options.provider;
+    const chunks = options.context?.chunks;
+    const effectiveSpec: SkillSpec =
+      chunks && chunks.length > 0 && spec.output.validator
+        ? {
+            ...spec,
+            output: {
+              ...spec.output,
+              validator: (output: string) => {
+                const base = spec.output.validator!(output);
+                if (!base.valid) return base;
+                const parsedObj = "parsed" in base ? base.parsed : undefined;
+                const grounding = validateParsedSourceRefs(spec.id, parsedObj, chunks);
+                if (!grounding.valid) {
+                  return { valid: false, errors: [...base.errors, ...grounding.errors] };
+                }
+                return base;
+              },
+            },
+          }
+        : spec;
     const repairResult = await SkillRepairService.validateOrRepair({
-      spec,
+      spec: effectiveSpec,
       rawOutput,
       repairFn,
     });
