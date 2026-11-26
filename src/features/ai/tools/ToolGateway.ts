@@ -40,6 +40,8 @@ export interface ToolGatewayOptions {
   readonly auditSink?: ToolAuditSink;
 }
 
+export const MAX_AUDIT_LOG_ENTRIES = 500;
+
 export class ToolGateway {
   private readonly registry: ToolRegistryImpl;
   private readonly turnManager: ToolTurnManager;
@@ -58,6 +60,9 @@ export class ToolGateway {
 
   private emitAudit(event: ToolAuditEvent): ToolAuditEvent {
     const frozen = Object.freeze(event);
+    if (this.auditLog.length >= MAX_AUDIT_LOG_ENTRIES) {
+      this.auditLog.shift();
+    }
     this.auditLog.push(frozen);
     if (this.auditSink) {
       try {

@@ -11,6 +11,8 @@
 
 import { GLOBAL_MAX_TOOL_CALLS_PER_TURN } from "./ToolRegistry";
 
+export const MAX_TURN_BUCKETS = 256;
+
 interface TurnBucket {
   callsReserved: number;
   activeExecutions: number;
@@ -30,13 +32,21 @@ export class ToolTurnManager {
   private readonly buckets = new Map<string, TurnBucket>();
 
   private keyFor(userId: string, sessionId: string, turnId: string): string {
-    return `${userId}::${sessionId}::${turnId}`;
+    return JSON.stringify([userId, sessionId, turnId]);
   }
 
   private getOrCreate(userId: string, sessionId: string, turnId: string): TurnBucket {
     const key = this.keyFor(userId, sessionId, turnId);
     let bucket = this.buckets.get(key);
     if (!bucket) {
+      if (this.buckets.size >= MAX_TURN_BUCKETS) {
+        for (const [oldKey, oldBucket] of this.buckets.entries()) {
+          if (oldBucket.activeExecutions === 0) {
+            this.buckets.delete(oldKey);
+            break;
+          }
+        }
+      }
       bucket = {
         callsReserved: 0,
         activeExecutions: 0,
