@@ -55,7 +55,7 @@ test("modo Professor envia nível, método, contexto recuperado e trecho selecio
   await page.getByLabel("Método de ensino").selectOption("analogies");
   await page.locator("summary").filter({ hasText: "Ferramentas de aula" }).click();
   await page.getByRole("button", { name: "Plano de aula" }).click();
-  await expect(page.getByText("Resposta do Professor: lesson_plan", { exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conversa com o Tutor IA" }).getByText("Resposta do Professor: lesson_plan", { exact: true })).toBeVisible();
 
   expect(requests[0].context?.studyId).toBe(studyId);
   expect(requests[0].chunks?.every((chunk) => chunk.studyId === studyId)).toBe(true);

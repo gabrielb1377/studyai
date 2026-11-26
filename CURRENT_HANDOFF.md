@@ -18,8 +18,8 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
   - **102/102 testes aprovados** (2 PG skipped localmente, cobertos pelo job `postgres` da CI): IE-1 (20), IE-2 (18), IE-3 unit/comportamental (10), IE-4A (8), IE-4B (5), IE-4C (5), IE-4D (5), IE-4E (5), IE-4F (4), PS-1b/PS-1a (12), quota-policy (10).
 - **Encerramento da Onda 2 e Próxima Etapa**:
-  - CI `45890836913` (`8600f9a`) teve 5/6 jobs verdes (`quality`, `postgres`, `e2e 1, 3, 4`) e 1 falha de timing de navegação em `tests/lab.spec.ts:41` (`e2e (2)`), corrigida com `Promise.all([page.waitForURL(...), openLab.click()])`. Endurecido `spec.safety.requiresContextualValidation` no contrato imutável das skills.
-  - **Encerramento formal da Onda 2 e início da Onda 3 / `TE-1` permanecem condicionados à aprovação 6/6 da CI no checkpoint corrigido**. Aguardar aprovação da CI e autorização do owner.
+  - CI `45892664922` (`6c2f577`) teve 5/6 jobs verdes (`quality`, `postgres`, `e2e 1, 2, 3`) e 1 violação de strict mode em `tests/teacher.spec.ts:58` (`e2e (4)`), corrigida escopando o locator para a região `"Conversa com o Tutor IA"`. Cobertura de `spec.safety.requiresContextualValidation` estendida a todas as 13 skills dependentes de snapshot (IE-4B..IE-4F).
+  - **Encerramento formal da Onda 2 condicionado à aprovação 6/6 da CI no checkpoint corrigido**. Próxima etapa: Onda 3 / `TE-1`.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
