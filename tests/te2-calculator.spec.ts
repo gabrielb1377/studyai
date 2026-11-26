@@ -36,8 +36,8 @@ test.describe("TE-2: Registro Único, Flag Desligada e Autorização", () => {
   test("registra exclusivamente calculator@0.1.0 (classe read), respeita tools.enabled=false e recusa skills não autorizadas", async () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
-    expect(ToolRegistry.size()).toBe(1);
-    expect(ToolRegistry.list().map((t) => t.id)).toEqual(["calculator"]);
+    expect(ToolRegistry.has("calculator")).toBe(true);
+    expect(ToolRegistry.list().every((t) => t.class === "read")).toBe(true);
 
     const entry = ToolRegistry.get("calculator")!;
     expect(entry.spec.version).toBe("0.1.0");

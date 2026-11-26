@@ -135,11 +135,11 @@ test.afterEach(() => {
 });
 
 test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", () => {
-  test("tools.enabled=false e skills.enabled=false por padrão, registro de produção restrito à TE-2 (calculator) e catálogo 20+13 preservado", async () => {
+  test("tools.enabled=false e skills.enabled=false por padrão, registro de produção restrito às ferramentas de leitura (TE-2/TE-3) e catálogo 20+13 preservado", async () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
-    // TE-2 conecta exclusivamente a calculadora; nenhuma outra ferramenta real existe em produção
-    expect(ToolRegistry.list().map((t) => t.id)).toEqual(["calculator"]);
+    // TE-2 + TE-3 conectam exclusivamente 4 ferramentas de leitura; nenhuma ferramenta de escrita/execução existe em produção
+    expect(ToolRegistry.list().map((t) => t.id)).toEqual(["calculator", "library", "performance", "errors"]);
     expect(SkillRegistry.list().length).toBe(33);
 
     // Gateway de produção recusa execução com flag desligada
@@ -150,10 +150,10 @@ test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", 
     expect(denied.ok).toBe(false);
     expect(denied.denialReason).toBe("tools_disabled");
 
-    // Mesmo com flag ligada em teste, ferramentas fora da TE-2 continuam não conectadas
+    // Mesmo com flag ligada em teste, ferramentas de escrita/execução (TE-4/TE-5) continuam não conectadas
     setToolsEnabledForTesting(true);
     const unknown = await defaultToolGateway.execute(
-      JSON.stringify({ tool: "library", args: { query: "árvores" } }),
+      JSON.stringify({ tool: "flashcards", args: { title: "teste" } }),
       makeTrustedContext(),
     );
     expect(unknown.ok).toBe(false);

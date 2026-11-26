@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 3 / TE-2 Concluída: Calculadora (`MathLabService`) em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 3 / TE-3 Concluída: Ferramentas de Leitura no Cliente e Isolamento A→B em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,18 +8,20 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`). `PS-2` verificado (0 ocorrências de `withQuotaEnforcement` em `src/`).
-- **Onda 2 — Intelligence Engine Formalmente Encerrada (`3246b73`, CI `45895240129` 6/6 VERDE incluindo `postgres`)**:
+- **Onda 2 — Intelligence Engine Formalmente Encerrada (`3246b73`, CI `45895240129` 6/6 VERDE)**:
   - Catálogo oficial completo **20/20 skills (`0.1.0`) + 13 Teacher (`1.0.0`) = 33 registros únicos imutáveis**; `skills.enabled = false` por padrão.
-- **Onda 3 — Tool Engine / TE-1 (CI `45898083375` 6/6 VERDE) e TE-2 Concluídas (`v1.3-development`)**:
-  - **Endurecimento TE-1**: chave de turno anti-colisão (`JSON.stringify([userId, sessionId, turnId])`) e limites de memória (`MAX_TURN_BUCKETS = 256` em `ToolTurnState.ts` e `MAX_AUDIT_LOG_ENTRIES = 500` em `ToolGateway.ts`).
-  - **TE-2 — Calculadora (`src/features/ai/tools/calculator/calculatorTool.ts`)**:
-    - Única ferramenta real registrada em produção (`calculator@0.1.0`, classe `read`, `requiresConfirmation: false`, `ToolRegistry.size() === 1`), permanecendo inacessível enquanto `tools.enabled = false`.
-    - Adaptador puro sobre `MathLabService.execute` (parser AST determinístico com limite de 40.000 caracteres e `MAX_AST_DEPTH = 64`), zero `eval`/`new Function`/shell/rede/FS, bloqueio de entradas maliciosas, classificação determinística de erros (`division_by_zero`, `invalid_domain`, `non_finite_result`, `complexity_limit_exceeded`, `length_limit_exceeded`, `syntax_error`, `unsupported_operation`), diferenciação `exact` vs `approximate`, recusa de `NaN`/`Infinity` e saída delimitada via `UntrustedDataBoundary`.
-    - Autorizada exclusivamente para skills que declaram `"calculator"` em `allowedTools` (`math.step-by-step`).
+- **Onda 3 — Tool Engine / TE-1, TE-2 e TE-3 Concluídas (`v1.3-development`)**:
+  - **Endurecimento compartilhado**: `retiredTurnKeys` em `ToolTurnState.ts` (evicção nunca reseta limites), `denialReason: "session_changed"` em `ToolGateway.ts` para `SessionChangedError`, e isolamento de cache por `accountId` em `AnalyticsEngine.ts` (`clearCache()` + chave enriquecida).
+  - **TE-3 — 3 Ferramentas de Leitura no Cliente (`src/features/ai/tools/read/`)**:
+    - `library@0.1.0` (`SearchService` + `RankingService`, deduplicação `(fileId, chunkIndex)`, trechos <= 450 chars, máx. 5 itens).
+    - `performance@0.1.0` (`AnalyticsEngine` + `KnowledgeEngine`, diferenciação `no_data` vs. baixo desempenho e `observedMetrics` vs. `derivedIndicators`).
+    - `errors@0.1.0` (`ErrorNotebookStorage` + `MemoryRetrievalEngine`, respeita `settings.enabled === false`, máx. 5 erros e 5 memórias, zero escrita).
+    - **Isolamento A→B**: `runWithVerifiedAccountSession` valida `SessionOperationManager.start(userId)` antes da leitura e `operation.assertCurrent()` antes da entrega (recusa `session_changed` em troca de sessão A→B durante leitura assíncrona); descarta dados legados sem `ownerId` verificável.
+  - **Registro de produção**: exatamente **4 ferramentas de leitura** (`calculator`, `library`, `performance`, `errors`), todas com `tools.enabled = false` por padrão e zero ferramentas de escrita/execução conectadas.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **111/111 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): TE-1 (5), TE-2 (4), IE-1 (20), IE-2 (18), IE-3 unit/comportamental (10), IE-4A..IE-4F (32), PS-1b/PS-1a (12), quota-policy (10).
-- **Próxima etapa oficial**: Onda 3 / **`TE-3`** (Leituras no cliente: biblioteca `RetrievalService`/`RankingService`, desempenho `AnalyticsEngine`, caderno de erros e memória, com teste A→B sem vazamento cross-account). Aguardar autorização do owner.
+  - **116/116 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): TE-1 (5), TE-2 (4), TE-3 (5 — incluindo A→B multi-conta real), IE-1..IE-4F (80), PS-1b/PS-1a (12), quota-policy (10).
+- **Próxima etapa oficial**: Onda 3 / **`TE-4`** (Transformações com confirmação explícita e pré-visualização: `doc_reader`, `flashcards`, `quiz`, `plan`). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
