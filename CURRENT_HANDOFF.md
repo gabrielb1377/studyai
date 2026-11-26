@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 2 / IE-4F concluída: Catálogo Oficial 20/20 em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 2 Encerrada (6/6 CI) e Onda 3 / TE-1 Concluída: Tool Gateway em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,18 +8,20 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`). `PS-2` verificado (0 ocorrências de `withQuotaEnforcement` em `src/`).
-- **Onda 2 — Intelligence Engine (IE-1..IE-3 e IE-4A..IE-4F — Catálogo 20/20 Completo)**:
-  - **Fundação e Lotes 1–5 (CI `45888609899` 6/6 VERDE)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado, `SkillBudgetExecutor` (`requireContextualValidator`, captura segura de exceções, grounding pós-compressão) e 18/20 skills.
-  - **IE-4F (Lote Final — Matemática e Análise de Provas, catálogo oficial 20/20)**:
-    - `math.step-by-step` (`0.1.0`, 2.500/900 tokens, `allowedTools: ["calculator"]` declarativo): reutiliza `MathLabService.execute` para validação determinística de expressões numéricas suportadas (exatas, aproximadas com `approximationDetails` obrigatório, domínio inválido como divisão por zero), sem CAS nem TE-2 (`calculatorToolUsed === false`).
-    - `exam.comparative-analysis` (`0.1.0`, 3.500/800 tokens, `allowedTools: ["library", "performance"]` declarativo): reutiliza `Exam` / `parseExamDate` (`ExamService.ts`) e `grounding.ts` via `buildExamComparativeSnapshot`, deduplica provas repetidas, valida IDs/denominadores/contagens/percentuais, trata amostra insuficiente (< 2 provas) e bloqueia garantia de cobrança futura.
-  - **Convivência, Revisão Diferencial e Rollback**: **33 skills registradas** (13 Teacher + 20/20 catálogo oficial, zero duplicações), `skills.enabled = false` por padrão, `allowedTools` estritamente declarativo até a Onda 3.
+- **Onda 2 — Intelligence Engine Formalmente Encerrada (`3246b73`, CI `45895240129` 6/6 VERDE incluindo `postgres`)**:
+  - Catálogo oficial completo **20/20 skills (`0.1.0`) + 13 Teacher (`1.0.0`) = 33 registros únicos imutáveis**; `skills.enabled = false` por padrão; `spec.safety.requiresContextualValidation = true` nas 13 skills dependentes de snapshot determinístico; grounding pós-compressão e `SkillBudgetExecutor` com reserva/reconciliação atômica.
+- **Onda 3 — Tool Engine / TE-1 Concluída (`v1.3-development`)**:
+  - **Tool Gateway (`src/features/ai/tools/`)**:
+    - `config.ts`: flag `tools.enabled` (`isToolsEnabled()`, padrão `false`).
+    - `types.ts`: contrato canônico completo `ToolSpec` (`id: SkillToolName`, `version`, `class`, `inputSchema`, `outputSchema`, `scope`, `limits`, `requiresConfirmation`, `audit`, `tests`, `available`), `ToolIntent`, `ToolTrustedContext`, `ToolWriteConfirmation`, `ToolAuditEvent`.
+    - `ToolSchemaValidator.ts`: parser estrito `{"tool":"<id>","args":{...}}` (sem `eval`/`new Function`), bloqueio de texto livre, campos extras, prototype pollution (`__proto__`/`constructor`/`prototype`) e overrides de identidade/permissões/confirmação; `computeArgsFingerprint` determinístico.
+    - `ToolRegistry.ts`: registro imutável (`deepFreeze`) com **0 ferramentas reais conectadas em produção** (`ToolRegistry.size() === 0`).
+    - `ToolTurnState.ts`: limite rígido de **3 chamadas/turno** com reserva síncrona anti-corrida, isolamento por `userId::sessionId::turnId`, bloqueio de loops (`loop_detected`), recursão (`recursion_blocked`) e replay de confirmação (`confirmation_replayed`).
+    - `ToolGateway.ts`: validação cruzada `skill.allowedTools` + escopo + permissões + confirmação de escrita vinculada a usuário/turno/argumentos + timeout + validação de `outputSchema` + delimitação em `<UNTRUSTED_MATERIAL_DATA>` (`UntrustedDataBoundary`) + auditoria sanitizada (`in_memory_sanitized`, sem conteúdo do aluno/segredos).
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **102/102 testes aprovados** (2 PG skipped localmente, cobertos pelo job `postgres` da CI): IE-1 (20), IE-2 (18), IE-3 unit/comportamental (10), IE-4A (8), IE-4B (5), IE-4C (5), IE-4D (5), IE-4E (5), IE-4F (4), PS-1b/PS-1a (12), quota-policy (10).
-- **Encerramento da Onda 2 e Próxima Etapa**:
-  - CI `45892664922` (`6c2f577`) teve 5/6 jobs verdes (`quality`, `postgres`, `e2e 1, 2, 3`) e 1 violação de strict mode em `tests/teacher.spec.ts:58` (`e2e (4)`), corrigida escopando o locator para a região `"Conversa com o Tutor IA"`. Cobertura de `spec.safety.requiresContextualValidation` estendida a todas as 13 skills dependentes de snapshot (IE-4B..IE-4F).
-  - **Encerramento formal da Onda 2 condicionado à aprovação 6/6 da CI no checkpoint corrigido**. Próxima etapa: Onda 3 / `TE-1`.
+  - **107/107 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): TE-1 (5), IE-1 (20), IE-2 (18), IE-3 unit/comportamental (10), IE-4A..IE-4F (32), PS-1b/PS-1a (12), quota-policy (10).
+- **Próxima etapa oficial**: Onda 3 / **`TE-2`** (Calculadora — 1ª ferramenta real de leitura no cliente baseada em `MathLabService.ts`). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
