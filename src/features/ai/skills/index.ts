@@ -11,8 +11,9 @@ import { registerOrganizationSkills } from "./organization";
 import { registerPracticeSkills } from "./practice";
 import { registerPersonalizedSkills } from "./personalized";
 import { registerAudioComputingSkills } from "./audio-computing";
+import { registerMathExamSkills } from "./math-exam";
 
-// Configura o handler de registro das skills do Teacher, Pilot, Foundation (IE-4A), Organization (IE-4B), Practice (IE-4C), Personalized (IE-4D) e Audio/Computing (IE-4E)
+// Configura o handler de registro das 13 skills do Teacher + 20/20 skills oficiais (Piloto, IE-4A..IE-4F)
 setDefaultRegistrationHandler((registry) => {
   registerTeacherSkills(registry);
   registerPilotSkills(registry);
@@ -21,6 +22,7 @@ setDefaultRegistrationHandler((registry) => {
   registerPracticeSkills(registry);
   registerPersonalizedSkills(registry);
   registerAudioComputingSkills(registry);
+  registerMathExamSkills(registry);
 });
 
 export * from "./types";
@@ -34,4 +36,5 @@ export * from "./organization";
 export * from "./practice";
 export * from "./personalized";
 export * from "./audio-computing";
+export * from "./math-exam";
 export { registerTeacherSkills, buildTeacherInstruction, buildTeacherActionMessage } from "./teacher/TeacherSkills";
