@@ -146,6 +146,7 @@ export type ToolDenialReason =
   | "confirmation_invalid"
   | "confirmation_replayed"
   | "invalid_arguments"
+  | "session_changed"
   | "execution_timeout"
   | "execution_failed"
   | "invalid_output";

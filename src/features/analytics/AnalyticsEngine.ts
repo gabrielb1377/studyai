@@ -206,18 +206,24 @@ function streaks(activities: readonly LearningActivity[]) {
 }
 
 function signature(input: AnalyticsInput, now: Date) {
-  return [
+  return JSON.stringify([
+    input.accountId ?? input.profile.id,
     input.profile.updatedAt,
-    input.studies.length,
+    input.profile.totalStudyMinutes,
+    input.studies.map((s) => s.studyId),
     input.flashcards.length,
     input.quizzes.length,
     input.graphs.length,
     input.mentorSessions?.length ?? 0,
     localKey(now),
-  ].join(":");
+  ]);
 }
 
 export const AnalyticsEngine = {
+  clearCache(): void {
+    cache.clear();
+  },
+
   build(input: AnalyticsInput): AnalyticsSnapshot {
     const now = input.now ?? new Date();
     const cacheKey = signature(input, now);

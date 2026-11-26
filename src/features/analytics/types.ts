@@ -89,6 +89,8 @@ export type AnalyticsSnapshot = {
 };
 
 export type AnalyticsInput = {
+  /** Identificador de conta opcional para isolamento estrito do cache em memória. */
+  accountId?: string;
   studies: readonly StudyRecord[];
   profile: LearningProfile;
   knowledge: readonly KnowledgeScore[];

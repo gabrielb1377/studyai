@@ -12,6 +12,7 @@
 import { GLOBAL_MAX_TOOL_CALLS_PER_TURN } from "./ToolRegistry";
 
 export const MAX_TURN_BUCKETS = 256;
+export const MAX_RETIRED_TURN_KEYS = 2048;
 
 interface TurnBucket {
   callsReserved: number;
@@ -30,19 +31,27 @@ export type TurnAcquireResult =
 
 export class ToolTurnManager {
   private readonly buckets = new Map<string, TurnBucket>();
+  /** Turnos evictados nunca podem ser reabertos com contador zerado. */
+  private readonly retiredTurnKeys = new Set<string>();
 
   private keyFor(userId: string, sessionId: string, turnId: string): string {
     return JSON.stringify([userId, sessionId, turnId]);
   }
 
-  private getOrCreate(userId: string, sessionId: string, turnId: string): TurnBucket {
+  private getOrCreate(userId: string, sessionId: string, turnId: string): TurnBucket | null {
     const key = this.keyFor(userId, sessionId, turnId);
+    if (this.retiredTurnKeys.has(key)) {
+      return null;
+    }
     let bucket = this.buckets.get(key);
     if (!bucket) {
       if (this.buckets.size >= MAX_TURN_BUCKETS) {
         for (const [oldKey, oldBucket] of this.buckets.entries()) {
           if (oldBucket.activeExecutions === 0) {
             this.buckets.delete(oldKey);
+            if (this.retiredTurnKeys.size < MAX_RETIRED_TURN_KEYS) {
+              this.retiredTurnKeys.add(oldKey);
+            }
             break;
           }
         }
@@ -59,23 +68,29 @@ export class ToolTurnManager {
   }
 
   getCallsInTurn(userId: string, sessionId: string, turnId: string): number {
-    return this.buckets.get(this.keyFor(userId, sessionId, turnId))?.callsReserved ?? 0;
+    const key = this.keyFor(userId, sessionId, turnId);
+    if (this.retiredTurnKeys.has(key)) return GLOBAL_MAX_TOOL_CALLS_PER_TURN;
+    return this.buckets.get(key)?.callsReserved ?? 0;
   }
 
   isConfirmationUsed(userId: string, sessionId: string, turnId: string, confirmationId: string): boolean {
-    const bucket = this.buckets.get(this.keyFor(userId, sessionId, turnId));
+    const key = this.keyFor(userId, sessionId, turnId);
+    if (this.retiredTurnKeys.has(key)) return true;
+    const bucket = this.buckets.get(key);
     return bucket ? bucket.usedConfirmations.has(confirmationId) : false;
   }
 
   markConfirmationUsed(userId: string, sessionId: string, turnId: string, confirmationId: string): void {
     const bucket = this.getOrCreate(userId, sessionId, turnId);
-    bucket.usedConfirmations.add(confirmationId);
+    if (bucket) {
+      bucket.usedConfirmations.add(confirmationId);
+    }
   }
 
   /**
    * Reserva slot de forma síncrona ANTES de qualquer operação assíncrona.
    * Impede que chamadas concorrentes ultrapassem o teto de 3 por turno,
-   * bloqueia recursão (quando enforceNoRecursion=true) e bloqueia loops repetidos.
+   * bloqueia recursão (quando blockIfActive=true), loops e reabertura de turnos evictados.
    */
   acquireSlot(params: {
     readonly userId: string;
@@ -86,6 +101,9 @@ export class ToolTurnManager {
     readonly blockIfActive?: boolean;
   }): TurnAcquireResult {
     const bucket = this.getOrCreate(params.userId, params.sessionId, params.turnId);
+    if (!bucket) {
+      return { ok: false, reason: "turn_limit_exceeded", callsInTurn: GLOBAL_MAX_TOOL_CALLS_PER_TURN };
+    }
     const effectiveMax = Math.min(GLOBAL_MAX_TOOL_CALLS_PER_TURN, params.maxCallsForTool);
 
     if (params.blockIfActive && bucket.activeExecutions > 0) {

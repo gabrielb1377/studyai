@@ -12,6 +12,7 @@
  * - Nota de fronteira: o Gateway no cliente NÃO substitui autorização real no servidor.
  */
 
+import { SessionChangedError } from "@/features/account/SessionOperationManager";
 import { SkillRegistry } from "@/features/ai/skills/SkillRegistry";
 import { wrapUntrustedMaterialData } from "@/features/ai/UntrustedDataBoundary";
 import { isToolsEnabled } from "./config";
@@ -414,8 +415,14 @@ export class ToolGateway {
       });
     } catch (err) {
       slot.release();
+      const isSessionChanged = err instanceof SessionChangedError || (err instanceof Error && err.name === "SessionChangedError");
       const isTimeout = err instanceof Error && err.message === "__TOOL_TIMEOUT__";
-      const reason: ToolDenialReason = isTimeout ? "execution_timeout" : "execution_failed";
+      const reason: ToolDenialReason = isSessionChanged
+        ? "session_changed"
+        : isTimeout
+          ? "execution_timeout"
+          : "execution_failed";
+      const status = isSessionChanged ? "denied" : "failed";
       const auditEvent = this.emitAudit({
         eventId: nextAuditId(),
         timestamp: new Date().toISOString(),
@@ -424,7 +431,7 @@ export class ToolGateway {
         toolClass: spec.class,
         skillId: skillSpec.id,
         skillVersion: skillSpec.version,
-        status: "failed",
+        status,
         denialReason: reason,
         callsInTurn: slot.callsInTurn,
         maxCallsPerTurn: spec.limits.maxCallsPerTurn,
@@ -433,13 +440,15 @@ export class ToolGateway {
       });
       return {
         ok: false,
-        status: "failed",
+        status,
         toolId: spec.id,
         toolVersion: spec.version,
         denialReason: reason,
-        sanitizedError: isTimeout
-          ? "Execução da ferramenta excedeu o tempo limite permitido."
-          : "Falha segura durante a execução da ferramenta.",
+        sanitizedError: isSessionChanged
+          ? "Sessão ausente, suspensa ou alterada durante a operação."
+          : isTimeout
+            ? "Execução da ferramenta excedeu o tempo limite permitido."
+            : "Falha segura durante a execução da ferramenta.",
         callsInTurn: slot.callsInTurn,
         maxCallsPerTurn: spec.limits.maxCallsPerTurn,
         auditEvent,
