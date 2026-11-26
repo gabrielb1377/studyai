@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 2 / IE-4D concluída: Lote 4 de Skills (Aprendizagem Personalizada — 15/20) em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 2 / IE-4E concluída: Lote 5 de Skills (Áudio e Computação — 18/20) em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,18 +8,17 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`).
-- **Onda 2 — Inteligência Pedagógica / IE-1..IE-3 e IE-4A..IE-4D Concluídas (`v1.3-development`)**:
-  - **Fundação e Lotes 1–3 (IE-1..IE-4C, CI `45882177447` 6/6 VERDE)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado, `SkillBudgetExecutor` e 12/20 skills (Piloto, Fundação, Organização e Preparação/Prática).
-  - **Endurecimento direcionado IE-4D em `SkillBudgetExecutor` e `grounding.ts`**: opção `requireContextualValidator` (bloqueia omissão indevida de validação determinística), captura segura de exceções em `contextualValidator` (tratadas como erro de validação com reparo/fallback) e validação pós-compressão de `sourceRefs` para `explain.multimodal`.
-  - **IE-4D (Lote 4 — Aprendizagem Personalizada, catálogo oficial 15/20)**:
-    - `feedback.personal` (`0.1.0`, 2.500/600 tokens, `allowedTools: ["errors"]` declarativo): reutiliza `DifficultyMapEngine.build` / `KnowledgeEngine` via adaptador puro `buildPersonalFeedbackSnapshot`, separa resultado observado, interpretação pedagógica e recomendação, bloqueia métricas/tópicos fabricados, inferências psicológicas e rotular ausência de dados como baixo desempenho.
-    - `review.from-errors` (`0.1.0`, 2.000/600 tokens, `allowedTools: ["errors"]` declarativo): reutiliza `ErrorNotebookEntry` e `DifficultyMapEngine.build` (`recommendations` + `ReviewScheduler`/`StudyPriorityEngine`) via `buildErrorReviewSnapshot`, valida `errorId` e urgências reais, diferencia `knownCause` de `pedagogicalHypothesis`, sem resolver erros nem alterar agendamentos.
-    - `explain.multimodal` (`0.1.0`, 2.500/800 tokens, `allowedTools: ["diagram", "audio"]` declarativo): combina explicação textual, exemplos e especificação complementar (`mermaid`, `audio_script`, `structured_table` ou `text_fallback`), impõe `declarativeCapabilitiesOnly === true` (sem gerar imagens/áudio reais), exige fallback textual quando sem recurso multimodal e bloqueia HTML executável/JS/imagens remotas Markdown (PS-1a/PS-1b) e `sourceRefs` fabricados.
-  - **Convivência e Rollback**: 28 skills registradas (13 Teacher + 15/20 catálogo oficial), `skills.enabled = false` por padrão, `allowedTools` declarativo até a Onda 3.
+- **Onda 2 — Inteligência Pedagógica / IE-1..IE-3 e IE-4A..IE-4E Concluídas (`v1.3-development`)**:
+  - **Fundação e Lotes 1–4 (IE-1..IE-4D, CI `45885716916` 6/6 VERDE)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado, `SkillBudgetExecutor` (`requireContextualValidator`, captura segura de exceções) e 15/20 skills.
+  - **IE-4E (Lote 5 — Áudio e Computação, catálogo oficial 18/20)**:
+    - `audio.learning` (`0.1.0`, 2.500/900 tokens, `allowedTools: ["audio"]` declarativo): reutiliza `NarratedLessonStep` e `TeacherNarrationService` (`prepareNarrationText`, `isNarratable`) via `buildAudioLearningSnapshot`, impõe `audioSynthesized === false` e `durationBasis === "estimated_from_script"`, valida `sourceRefs` pós-compressão em `grounding.ts` e bloqueia alegação falsa de áudio MP3/WAV sintetizado.
+    - `code.teaching` (`0.1.0`, 3.000/900 tokens, `allowedTools: ["js_execution"]` declarativo): reutiliza `LabLanguage` e `validateExecutableCode` (`lab-validation.ts`) de forma puramente estática via `buildCodeTeachingSnapshot`, impõe `wasExecuted === false` e `executionStatus === "not_executed"`, diferencia erros `confirmed` de `hypothesis`, bloqueia `eval`/`new Function`/`child_process` e delimita código malicioso em `<UNTRUSTED_MATERIAL_DATA>`.
+    - `cs.algorithms` (`0.1.0`, 3.000/900 tokens, `allowedTools: ["js_execution", "diagram"]` declarativo): ensina algoritmos/estruturas com traço sequencial, estados intermediários, complexidade temporal/espacial e diagrama Mermaid/fallback declarativo (`declarativeOnly === true`), com validação determinística explícita no subconjunto canônico (`binary_search`, `linear_search`, `insertion_sort`, incluindo entrada vazia `[]`) sem alegar validação universal e bloqueando HTML/JS/Mermaid malicioso.
+  - **Convivência e Rollback**: 31 skills registradas (13 Teacher + 18/20 catálogo oficial), `skills.enabled = false` por padrão, `allowedTools` estritamente declarativo até a Onda 3.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **93/93 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): IE-1 (20/20), IE-2 (18/18), IE-3 unit/comportamental (10/10), IE-4A (8/8), IE-4B (5/5), IE-4C (5/5), IE-4D (5/5), PS-1b/PS-1a + quota-policy (22/22).
-- **Próxima etapa oficial**: Onda 2 / `IE-4` — Próximo lote (`audio.learning`, `code.teaching`, `cs.algorithms`). Aguardar autorização do owner.
+  - **98/98 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): IE-1 (20/20), IE-2 (18/18), IE-3 unit/comportamental (10/10), IE-4A (8/8), IE-4B (5/5), IE-4C (5/5), IE-4D (5/5), IE-4E (5/5), PS-1b/PS-1a + quota-policy (22/22).
+- **Próxima etapa oficial**: Onda 2 / `IE-4F` — Lote final de 2 skills (`math.step-by-step`, `exam.comparative-analysis`, fechando 20/20 do catálogo e encerrando a Onda 2). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
