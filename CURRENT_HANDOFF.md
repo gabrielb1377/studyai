@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 2 / IE-3 concluída: Contabilização e Orçamento por Skill em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 2 / IE-4A concluída: Lote 1 de Skills (Fundação Pedagógica — 6/20) em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,19 +8,18 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`).
-- **Onda 2 — Inteligência Pedagógica / IE-1, IE-2 e IE-3 Concluídas (`v1.3-development`)**:
-  - **IE-1 (`24cb663`)**: Contrato `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, paridade Teacher 13/5/7, `skills.enabled` default `false`.
-  - **IE-2 (`973d761`) + correções IE-3**: Skills piloto `technique.feynman`, `technique.socratic` e `technique.active-recall` (`0.1.0`), fallbacks 100% válidos em JSON conforme contrato, validação determinística de `sourceRef` contra chunks autorizados (`grounding.ts`) e bloqueio heurístico de vazamento explícito de solução quando `revealsSolution=false`.
-  - **IE-3 (Contabilização e Orçamento por Skill)**:
-    - **Enforcement de entrada (`ContextCompressor.compressForSkill`)**: aplica `tokenBudget.input` (2.500 Feynman/Socrático, 2.000 Active Recall) contabilizando system prompt, instruções, inputs delimitados, overhead e contexto autorizado; nunca remove segurança PS-1b; retorna fallback sem chamar provedor ou cota se o conteúdo obrigatório exceder o limite.
-    - **Enforcement de saída (`resolveEffectiveOutputLimit` + `ProviderManager`)**: aplica `Math.min` entre teto da skill (700/500/500), modelo, provedor e cota; `QuotaMiddleware` remove campos `skill`/`tokenBudget`/`maxOutputTokens` do cliente (anti-spoofing).
-    - **Cache versionado (`AIResponseCache`)**: inclui `skillKey` (`skillId@versão`) preservando isolamento de usuário/credencial/systemPrompt e bloqueando gravação de saídas inválidas (`validateResponse`).
-    - **Reserva e reconciliação por tentativa (`SkillBudgetExecutor` + `QuotaService`)**: reutiliza `reserveSharedBudget`/`reconcileReservation` da V1.2 para tentativa inicial e reparo independente (`:repair:1`), grava `usage` real em `usage_quotas.tokens_count`, sem cobrança em cache hit/fallback local. Corrigida ordem de lock em `QuotaService.reconcileReservation` (`ai_global_daily_budgets` antes de `usage_quotas`) eliminando deadlock PostgreSQL sob concorrência.
-    - **Estabilização CI**: corrigido `tests/sprint41g3d-mobile-regression.spec.ts` (`Promise.all([waitForURL, click])`) e integrado `tests/ie3-skill-budget.spec.ts` ao job `postgres` da CI.
+- **Onda 2 — Inteligência Pedagógica / IE-1, IE-2, IE-3 e IE-4A Concluídas (`v1.3-development`)**:
+  - **IE-1 (`24cb663`)**, **IE-2 (`973d761`, `3f8ad0d`)** e **IE-3 (`a6ac2c9`, `0d2d8a7` — CI `45868858953` 6/6 VERDE)**: contrato `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado (`skillId@versão` + `maxOutputTokens`), `SkillBudgetExecutor` com reserva/reconciliação atômica por tentativa e PostgreSQL real validado.
+  - **Refinamentos IE-3 aplicados no pré-lote**: `maxOutputTokens` incluído na chave do `AIResponseCache`; suporte a contexto `errors` no `ContextCompressor.compressForSkill` e `SkillBudgetExecutor` somente quando autorizado em `allowedContext`; validação de `grounding.guard` mesmo com `chunks` vazios e rejeição de citações a chunks descartados pela compressão.
+  - **IE-4A (Lote 1 — Fundação Pedagógica, catálogo oficial 6/20)**:
+    - `tutor.beginner` (`0.1.0`, 2.500/600 tokens): termos definidos antes do uso, 1..5 passos curtos, exemplo concreto, checagem de compreensão, paridade com `LEVEL_INSTRUCTIONS.beginner` e fallback JSON válido.
+    - `grounding.guard` (`0.1.0`, 1.500/300 tokens): exige `sourceRef` presente nos chunks efetivamente mantidos após compressão, recusa afirmações sem apoio (`insufficient_material` + `uncertaintyNotice`) e fallback JSON conservador.
+    - `examples.analogies` (`0.1.0`, 1.500/500 tokens): exemplos práticos e analogias com `analogyLimit` obrigatório para toda analogia, paridade com `METHOD_INSTRUCTIONS.analogies` / `practical_examples` e fallback JSON válido.
+  - **Convivência e Rollback**: 19 skills registradas (13 Teacher + 3 Piloto + 3 Fundação), `skills.enabled` permanece `false` por padrão, `allowedTools` permanece declarativo até a Onda 3.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **82/82 testes unitários/comportamentais/PostgreSQL real aprovados**: IE-1 (20/20), IE-2 (18/18), IE-3 (12/12 incl. `PG-IE3-1` e `PG-IE3-2`), Lote 3 (10/10 incl. `PG3-1`..`PG3-6`), PS-1b + quota-policy (22/22).
-- **Próxima etapa oficial**: Onda 2 / `IE-4` — Migração das demais skills do catálogo por paridade (lotes de 3 skills com fixtures e versão). Aguardar autorização do owner.
+  - **78/78 testes aprovados**: IE-1 (20/20), IE-2 (18/18), IE-3 unit/comportamental (10/10), IE-4A (8/8), PS-1b + quota-policy (22/22).
+- **Próxima etapa oficial**: Onda 2 / `IE-4` — Próximo lote de 3 skills (`doc.analysis`, `plan.study`, `technique.spaced-repetition`). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
