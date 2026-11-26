@@ -89,6 +89,11 @@ export interface SkillBudgetExecutionOptions {
   };
   readonly signal?: AbortSignal;
   readonly skipCache?: boolean;
+  /** Validador contextual opcional aplicado uniformemente em cache hits, resposta inicial e reparo. */
+  readonly contextualValidator?: (
+    parsed: unknown,
+    compression: SkillCompressionResult,
+  ) => { valid: boolean; errors: readonly string[] };
   readonly quotaAdapter?: SkillQuotaAdapter;
   readonly provider: (request: SkillProviderCallInput) => Promise<AIResponse>;
   readonly repairProvider?: (request: SkillProviderCallInput) => Promise<AIResponse>;
@@ -169,16 +174,25 @@ function tryParseJson(text: string): unknown {
 function validateSkillResponse(
   spec: SkillSpec,
   text: string,
-  chunks?: readonly RetrievedChunk[],
+  compression: SkillCompressionResult,
+  contextualValidator?: SkillBudgetExecutionOptions["contextualValidator"],
 ): { valid: boolean; errors: string[]; parsed?: unknown } {
   const structural = OutputValidator.validate(spec, text);
   const errors = [...structural.errors];
   const parsed = structural.parsed ?? (spec.output.type === "json" ? tryParseJson(text) : undefined);
 
+  const chunks = compression.chunks;
   if (structural.valid && ((chunks && chunks.length > 0) || spec.id === "grounding.guard" || spec.id === "doc.analysis")) {
     const grounding = validateParsedSourceRefs(spec.id, parsed, chunks);
     if (!grounding.valid) {
       errors.push(...grounding.errors);
+    }
+  }
+
+  if (errors.length === 0 && contextualValidator) {
+    const contextual = contextualValidator(parsed, compression);
+    if (!contextual.valid) {
+      errors.push(...contextual.errors);
     }
   }
 
@@ -325,7 +339,7 @@ export const SkillBudgetExecutor = {
     if (!options.skipCache) {
       const cachedResponse = AIResponseCache.get(cacheKey);
       if (cachedResponse) {
-        const cachedValidation = validateSkillResponse(spec, cachedResponse.text, compression.chunks);
+        const cachedValidation = validateSkillResponse(spec, cachedResponse.text, compression, options.contextualValidator);
         if (cachedValidation.valid) {
           return {
             skillId: spec.id,
@@ -559,7 +573,7 @@ export const SkillBudgetExecutor = {
       };
     }
 
-    const initialValidation = validateSkillResponse(spec, initialRun.response.text, compression.chunks);
+    const initialValidation = validateSkillResponse(spec, initialRun.response.text, compression, options.contextualValidator);
     if (initialValidation.valid) {
       if (!options.skipCache) {
         AIResponseCache.set(cacheKey, initialRun.response);
@@ -617,7 +631,7 @@ export const SkillBudgetExecutor = {
     }
 
     if (repairRun.response) {
-      const repairValidation = validateSkillResponse(spec, repairRun.response.text, compression.chunks);
+      const repairValidation = validateSkillResponse(spec, repairRun.response.text, compression, options.contextualValidator);
       if (repairValidation.valid) {
         if (!options.skipCache) {
           AIResponseCache.set(cacheKey, repairRun.response);
