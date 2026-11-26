@@ -191,12 +191,13 @@ test.describe("Sprint 58B — Recursos offline e resiliência", () => {
 
     await page.goto(`/estudo?tema=${studyId}&aba=notes`);
     await expect(page.getByRole("heading", { name: "Estruturas de dados" })).toBeVisible();
+    const notesRegion = page.getByRole("region", { name: "Notas" });
+    await expect(notesRegion.getByRole("button", { name: "Nova nota" })).toBeVisible();
 
     await context.setOffline(true);
     await expect(page.getByText("Sem conexão com a internet.", { exact: true })).toBeVisible();
 
     // 1. Notes created/edited offline persist cleanly
-    const notesRegion = page.getByRole("region", { name: "Notas" });
     await notesRegion.getByRole("button", { name: "Nova nota" }).click();
     await notesRegion.getByLabel("Título da nota").fill("Ponteiros Offline 58B");
     await notesRegion.getByLabel("Conteúdo da nota").fill("Anotação persistida offline sem perda.");
