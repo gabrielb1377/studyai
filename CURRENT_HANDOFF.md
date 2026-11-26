@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 1)
 
-## Estado atual — Onda 2 / IE-4B concluída: Lote 2 de Skills (Organização do Aprendizado — 9/20) em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 2 / IE-4C concluída: Lote 3 de Skills (Preparação e Prática — 12/20) em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,17 +8,18 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
   - `PS-1b` (`140daf8`), `QU-1` (`de9fa6f`), `CI V1.3` (`837300c`), `QU-2` (`d3db079`), `QU-3` (`dffc481`), `QU-4` (`d104319`), `QU-5` (`0ae42af`, `e3bae36`, `d0dc177`, `803501d`).
-- **Onda 2 — Inteligência Pedagógica / IE-1, IE-2, IE-3, IE-4A e IE-4B Concluídas (`v1.3-development`)**:
-  - **Fundação (IE-1..IE-3 + IE-4A `be8584c`)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill` (com suporte a `study`, `profile`, `chunks`, `history`, `errors`), `AIResponseCache` versionado (`skillId@versão` + `maxOutputTokens`), `SkillBudgetExecutor` e 6/20 skills (Piloto + Fundação).
-  - **IE-4B (Lote 2 — Organização do Aprendizado, catálogo oficial 9/20)**:
-    - `doc.analysis` (`0.1.0`, 4.000/800 tokens): resumo e questionamento documental com proveniência rastreável (`keyConcepts[].sourceRef` e `provenance` validados contra os chunks mantidos após compressão), distinção de `complementaryInterpretation`, recusa em material insuficiente e fallback JSON válido.
-    - `plan.study` (`0.1.0`, 2.000/700 tokens): reutiliza `PlanningEngine.generate` via adaptador puro `buildDeterministicPlanSnapshot` (sem efeitos colaterais/persistência), valida estritamente limite diário (`dailyMinutesLimit`) e horizonte (`horizonDays`), separa itens `engine` de `suggestion` e fallback JSON válido.
-    - `technique.spaced-repetition` (`0.1.0`, 1.500/400 tokens): reutiliza `ReviewScheduler` (SM-2) e `TopicReview` (`reviewPeriod`) via `buildSpacedRepetitionSnapshot` com data de referência fixa (sem alterar nem concluir revisões), rejeita `topicId` inventado ou datas/períodos divergentes, invalida cache naturalmente por mudança de data/contexto e fallback JSON válido.
-  - **Convivência e Rollback**: 22 skills registradas (13 Teacher + 9/20 catálogo oficial), `skills.enabled = false` por padrão, `allowedTools` (`doc_reader`, `plan`, `performance`) declarativo até a Onda 3.
+- **Onda 2 — Inteligência Pedagógica / IE-1, IE-2, IE-3, IE-4A, IE-4B e IE-4C Concluídas (`v1.3-development`)**:
+  - **Fundação e Lotes 1–2 (IE-1..IE-4B, CI `45879305336` 6/6 VERDE)**: `SkillSpec`, `SkillRegistry` imutável, `OutputValidator`, `SkillRepairService`, `ContextCompressor.compressForSkill`, `AIResponseCache` versionado, `SkillBudgetExecutor` e 9/20 skills (Piloto + Fundação + Organização).
+  - **Melhoria direcionada IE-4C em `SkillBudgetExecutor`**: hook `contextualValidator` opcional aplicado uniformemente em cache hits, resposta inicial e reparo único (com reserva independente `:repair:1` e sem gravar saída inválida em cache).
+  - **IE-4C (Lote 3 — Preparação e Prática, catálogo oficial 12/20)**:
+    - `practice.adaptive` (`0.1.0`, 2.500/800 tokens): reutiliza `AdaptiveAssessmentEngine.recommendTargetDifficulty` via adaptador puro `buildAdaptivePracticeSnapshot`, valida `targetDifficulty` e `revealAnswerBeforeAttempt === false`, sem alterar perfil/erros do estudante, com fallback JSON válido.
+    - `exam.preparation` (`0.1.0`, 2.500/800 tokens): reutiliza `ExamService.daysUntilExam` (Semana de Prova) e `PlanningEngine.generate` via `buildExamPreparationSnapshot` com data fixa, impõe limite diário (`dailyMinutesLimit`), exige `generatedByAI === true` em simulados e distingue itens `engine` de `suggestion`.
+    - `gap.detection` (`0.1.0`, 2.000/500 tokens): reutiliza `DifficultyMapEngine.build` (com `KnowledgeEngine` + `StudyPriorityEngine`) via `buildGapDetectionSnapshot`, preserva exatamente `studyId`, `classification` e `priorityScore` do motor, impede tratar `insufficient_data` como `critical` e trata ausência de histórico sem erro.
+  - **Convivência e Rollback**: 25 skills registradas (13 Teacher + 12/20 catálogo oficial), `skills.enabled = false` por padrão, `allowedTools` (`quiz`, `performance`, `plan`, `errors`) declarativo até a Onda 3.
 - **Validação Integrada (`--retries=0`, R$ 0)**:
   - `typecheck` ✅ · `lint` ✅ (0 erros) · `build` ✅ (53/53 rotas) · `git diff --check` ✅.
-  - **83/83 testes aprovados**: IE-1 (20/20), IE-2 (18/18), IE-3 unit/comportamental (10/10), IE-4A (8/8), IE-4B (5/5), PS-1b + quota-policy (22/22).
-- **Próxima etapa oficial**: Onda 2 / `IE-4` — Próximo lote de 3 skills (`practice.adaptive`, `exam.preparation`, `gap.detection`). Aguardar autorização do owner.
+  - **88/88 testes aprovados** (2 PG skipped localmente, cobertos no job `postgres` da CI): IE-1 (20/20), IE-2 (18/18), IE-3 unit/comportamental (10/10), IE-4A (8/8), IE-4B (5/5), IE-4C (5/5), PS-1b + quota-policy (22/22).
+- **Próxima etapa oficial**: Onda 2 / `IE-4` — Próximo lote de 3 skills (`feedback.personal`, `review.from-errors`, `explain.multimodal`). Aguardar autorização do owner.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
