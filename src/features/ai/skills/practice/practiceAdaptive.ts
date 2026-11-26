@@ -231,6 +231,7 @@ export const practiceAdaptiveSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "alteração automática do perfil do estudante",
       "notas ou histórico de desempenho inventados",

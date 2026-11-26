@@ -247,6 +247,7 @@ export const planStudySkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "modificação automática de planos persistidos",
       "compromissos ou matérias inventadas",

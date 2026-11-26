@@ -301,6 +301,12 @@ test.describe("IE-4B: plan.study (Reuso de PlanningEngine, Restrições e Sem Ef
       skipCache: true,
       inputs: PLAN_STUDY_FIXTURES.validWithinConstraints.inputs,
       context: { profileContextText: snapshot.contextSummary },
+      contextualValidator: (parsed) =>
+        validatePlanStudyAgainstConstraints(parsed as PlanStudyOutput, {
+          dailyMinutes: 60,
+          horizonDays: 3,
+          allowedStudyIds: ["study-grafos", "study-recursao"],
+        }),
       provider: async (req) => {
         expect(req.maxOutputTokens).toBe(700);
         expect(req.message).toContain("Plano determinístico (PlanningEngine)");
@@ -325,6 +331,7 @@ test.describe("IE-4B: plan.study (Reuso de PlanningEngine, Restrições e Sem Ef
         skillId: "plan.study",
         userId: "u-plan-missing",
         inputs: { goal: "Só meta" },
+        contextualValidator: () => ({ valid: true, errors: [] }),
         provider: async () => ({ provider: "gemini", model: "mock", text: "{}" }),
       }),
     ).rejects.toThrow(/Parâmetro de entrada obrigatório ausente/);
@@ -341,6 +348,11 @@ test.describe("IE-4B: plan.study (Reuso de PlanningEngine, Restrições e Sem Ef
       skipCache: true,
       quotaAdapter: adapter,
       inputs: PLAN_STUDY_FIXTURES.exceedsDailyAvailability.inputs,
+      contextualValidator: (parsed) =>
+        validatePlanStudyAgainstConstraints(parsed as PlanStudyOutput, {
+          dailyMinutes: 45,
+          horizonDays: 2,
+        }),
       provider: async () => ({
         provider: "gemini",
         model: "gemini-2.5-flash",
@@ -440,6 +452,8 @@ test.describe("IE-4B: technique.spaced-repetition (SM-2/TopicReview, Data Fixa e
       userId: `u-sr-1-${randomUUID()}`,
       inputs: SPACED_REPETITION_FIXTURES.validMixedQueue.inputs,
       context: { profileContextText: snapshot.contextSummary },
+      contextualValidator: (parsed) =>
+        validateSpacedRepetitionAgainstSnapshot(parsed as SpacedRepetitionOutput, snapshot),
       provider: async (req) => {
         expect(req.maxOutputTokens).toBe(400);
         return {
@@ -459,6 +473,8 @@ test.describe("IE-4B: technique.spaced-repetition (SM-2/TopicReview, Data Fixa e
       userId: `u-sr-1-${randomUUID()}`,
       inputs: { referenceDate: "2026-11-27T12:00:00.000Z" },
       context: { profileContextText: snapshot.contextSummary },
+      contextualValidator: (parsed) =>
+        validateSpacedRepetitionAgainstSnapshot(parsed as SpacedRepetitionOutput, snapshot),
       provider: async () => ({
         provider: "gemini",
         model: "gemini-2.5-flash",
@@ -493,6 +509,8 @@ test.describe("IE-4B: technique.spaced-repetition (SM-2/TopicReview, Data Fixa e
       skipCache: true,
       quotaAdapter: adapter,
       inputs: SPACED_REPETITION_FIXTURES.validMixedQueue.inputs,
+      contextualValidator: (parsed) =>
+        validateSpacedRepetitionAgainstSnapshot(parsed as SpacedRepetitionOutput, snapshot),
       provider: async () => ({
         provider: "gemini",
         model: "gemini-2.5-flash",

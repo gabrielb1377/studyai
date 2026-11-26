@@ -214,6 +214,7 @@ export const gapDetectionSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "erros ou pontuações inventadas",
       "atualização automática de históricos de erro",

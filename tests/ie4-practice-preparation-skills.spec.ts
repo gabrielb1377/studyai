@@ -623,6 +623,7 @@ test.describe("IE-4C: Gates Transversais (Injection, Budget, Cache e Fallback co
         context: {
           chunks: [makeChunk({ id: `c-inj-${tc.skillId}`, sourceName: "Doc", text: injection })],
         },
+        contextualValidator: () => ({ valid: true, errors: [] }),
         provider: async (req) => {
           capturedUserPrompts.push(req.message);
           return {
@@ -652,6 +653,7 @@ test.describe("IE-4C: Gates Transversais (Injection, Budget, Cache e Fallback co
       quotaAdapter: overflowQuota.adapter,
       inputs: { referenceDate: IE4C_FIXED_DATE, payload: "X".repeat(25_000) },
       context: {},
+      contextualValidator: () => ({ valid: true, errors: [] }),
       provider: async () => {
         overflowCalls += 1;
         return {

@@ -239,6 +239,7 @@ export const codeTeachingSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: false,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "alegação falsa de execução, compilação ou saída real de terminal",
       "eval, new Function, child_process ou HTML executável",

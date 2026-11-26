@@ -287,6 +287,7 @@ export const audioLearningSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "alegação falsa de áudio MP3/WAV sintetizado ou medido em player",
       "referências ausentes dos trechos autorizados pós-compressão",

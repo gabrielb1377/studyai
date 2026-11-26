@@ -416,6 +416,7 @@ export const csAlgorithmsSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: false,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "HTML executável, scripts, links javascript: ou imagens remotas Markdown",
       "estados intermediários incompatíveis com a referência determinística",

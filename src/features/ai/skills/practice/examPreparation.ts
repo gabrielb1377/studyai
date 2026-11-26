@@ -307,6 +307,7 @@ export const examPreparationSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "questão oficial de prova anterior inventada",
       "criação automática de provas persistidas",

@@ -259,6 +259,7 @@ export const spacedRepetitionSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "revisões inventadas fora do histórico",
       "conclusão automática de revisões",

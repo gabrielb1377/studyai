@@ -280,6 +280,7 @@ export const explainMultimodalSkillSpec: SkillSpec = {
     doNotLeakInstructions: true,
     untrustedInputDelimited: true,
     requireSourceGrounding: true,
+    requiresContextualValidation: true,
     forbiddenOutputs: [
       "HTML executável, scripts ou URLs javascript:/data:text/html",
       "imagens remotas Markdown não autorizadas (PS-1a)",

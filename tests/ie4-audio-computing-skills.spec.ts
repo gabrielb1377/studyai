@@ -390,6 +390,7 @@ test.describe("IE-4E: Infraestrutura Compartilhada (Cache, Isolamento, Budget e 
       skipCache: true,
       quotaAdapter: overflowQuota.adapter,
       inputs: { topic: "Busca Binária", extra: "A".repeat(25_000) },
+      contextualValidator: () => ({ valid: true, errors: [] }),
       provider: async () => {
         overflowCalls += 1;
         return {
