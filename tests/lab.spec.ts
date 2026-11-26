@@ -37,8 +37,10 @@ test("Academy abre exercício no Lab, executa em sandbox, corrige e atualiza o L
   }) }));
   const openLab = page.getByRole("link", { name: "Abrir no Lab" });
   await expect(openLab).toHaveAttribute("href", /\/lab\?academyStudyId=/);
-  await openLab.click();
-  await expect(page).toHaveURL(/\/lab\?academyStudyId=/);
+  await Promise.all([
+    page.waitForURL(/\/lab\?academyStudyId=/),
+    openLab.click(),
+  ]);
   await expect(page.getByRole("heading", { name: "Laboratório", exact: true })).toBeVisible();
   await expect(page.getByText("Mostre o número 42 no console.", { exact: true }).first()).toBeVisible();
 
