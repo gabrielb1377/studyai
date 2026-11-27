@@ -1,24 +1,24 @@
 # Handoff atual — StudyAI V1.3 (Onda 4)
 
-## Estado atual — MM-1 Formalmente Encerrada (`c06f77b`, CI `46058793413` 6/6 VERDE) e AL-1 Implementada em `v1.3-development` (27/11/2026)
+## Estado atual — AL-1 Formalmente Encerrada (`d53dfcb`, CI `46062817873` 6/6 VERDE) e AL-2 Implementada em `v1.3-development` (27/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 (`PS-1b`, `PS-2`, `QU-1`..`QU-5`) e Onda 2 (`IE-1`..`IE-4F`, CI `45895240129` 6/6 VERDE)**: concluídas; **33 skills (20 oficiais + 13 Teacher)** imutáveis; `skills.enabled = false`.
-- **Onda 3 — Tool Engine (`TE-1`..`TE-5`) FORMALMENTE ENCERRADA (`40ed368`, CI `45918219371` 6/6 VERDE)**:
-  - **10 ferramentas canônicas** registradas; `tools.enabled = false`; `e2e (4)` executa `tests/te5-diagram-execution.spec.ts` (Worker real no Chromium + CSP HTTP + SVG real).
-- **Onda 4 — MM-1 FORMALMENTE ENCERRADA (`c06f77b`, CI `46058793413` 6/6 VERDE)**:
-  - Gráficos SVG acessíveis sem novas bibliotecas (`src/features/analytics/charts/chartScale.ts`, `PerformanceSvgCharts.tsx`), tabela equivalente, guarda assíncrona em `useAnalytics.ts`, correções de layout mobile `320px/360px` (`SmartLearningDashboard.tsx`, `WorkspaceLauncher.tsx`, `KnowledgeCard.tsx`, `RecentActivityPanel.tsx`, `AnalyticsDashboard.tsx`, `AcademyLabOverview.tsx`) e estabilização de `<Link>` em `tests/sprint41i-e-exam-week-ux.spec.ts`.
-  - **MM-2**: adiada (opcional, mantida no roadmap aguardando autorização explícita do proprietário).
-- **Onda 4 — AL-1 Implementada e Validada Localmente (pendente CI 6/6 verde para encerramento formal)**:
-  - `src/features/ai/skills/adaptive/types.ts` e `AdaptiveSkillSelector.ts`: seletor determinístico, tipado e explicável de skill/nível/método reutilizando exclusivamente skills compatíveis do `SkillRegistry`, sem chamada adicional de IA e estritamente separado da execução (`autoExecuteSkill: false`, `autoExecuteTools: false`), com precedência clara (`opt-out` > preferência manual > sinais autorizados > fallback seguro), proteção contra memória desativada (`deriveSafeMemorySignals` sem conteúdo bruto), limites de contexto/tokens e fronteiras PS-1b.
-  - Persistência por conta do opt-out em `LongTermMemoryStorage.setAdaptivePersonalizationEnabled` (`SessionOperationManager` + guarda de sessão em `load()` e `usePersonalizedLearning.ts`), controles explicáveis e desativáveis integrados discretamente em `/aprendizagem` (`DifficultyMapTab.tsx`, `MemoryManagementTab.tsx`, `PersonalizedLearningWorkspace.tsx`).
-  - `tests/al1-adaptive-learning.spec.ts`: cobertura unitária + Chromium real (iniciante/intermediário/avançado, histórico insuficiente, revisão, preparação de prova, erros/dificuldades, preferência manual, personalização desativada, memória desativada, fallback/recusa segura, determinismo, 320/360px e troca real A→B).
-- **Pendências futuras preservadas (não implementadas silenciosamente; requerem decisão do owner / marco futuro)**:
-  - `defaultClientReadProvider.loadPerformance`; carregamento real de `exams` no contexto de planejamento; wiring completo Tutor/Professor; preview e confirmação de ferramentas; testes diretos de IndexedDB real pelo Gateway; ativação controlada das flags (`skills.enabled` / `tools.enabled`); limitações residuais do Worker; `MM-2` (opcional).
-- **Próxima etapa**: aguardar CI 6/6 verde da `AL-1` e autorização do owner para `AL-2` (painel de uso e orçamento de IA para o aluno).
+- **Onda 3 — Tool Engine (`TE-1`..`TE-5`) FORMALMENTE ENCERRADA (`40ed368`, CI `45918219371` 6/6 VERDE)**: **10 ferramentas canônicas** registradas; `tools.enabled = false`.
+- **Onda 4 — MM-1 (`c06f77b`, CI `46058793413` 6/6 VERDE) e AL-1 (`d53dfcb`, CI `46062817873` 6/6 VERDE) FORMALMENTE ENCERRADAS**:
+  - **MM-1**: gráficos SVG acessíveis em `src/features/analytics/`, tabela equivalente, guarda assíncrona e responsividade `320..1280px`.
+  - **MM-2**: adiada (opcional, mantida no roadmap aguardando autorização do owner).
+  - **AL-1**: seletor determinístico, explicável e desativável (`AdaptiveSkillSelector.ts`), persistência por conta do opt-out (`LongTermMemoryStorage`) e painel em `/aprendizagem`.
+- **Onda 4 — AL-2 Implementada e Validada Localmente (pendente CI 6/6 verde para encerramento formal)**:
+  - `src/server/ai/QuotaService.ts` (`getUsageBreakdown`, leitura somente leitura por `user_id` + `usage_date` separando `provider` vs `estimated`/`unknown`, reservas pendentes, cache hits com 0 tokens e distribuição por provedor/modelo) e `src/app/api/settings/ai/quota/route.ts` (identidade derivada da sessão, headers privados `no-store, private`, correção de `daily.resetAt` para UTC, sem expor chaves ou orçamento global).
+  - `src/features/settings/aiUsageViewModel.ts` + `AIUsageBudgetPanel.tsx` integrado em `ai-settings-panel.tsx` (`/configuracoes` → `IA`): sem novo dashboard duplicado, zero novas bibliotecas de gráficos (reutiliza `chartScale.ts` da MM-1), gráfico SVG acessível + tabela equivalente do histórico de 30 dias, separação entre consumido/reservado/restante, observado vs estimado, transparência de limites internos StudyAI vs `Não disponível` para BYOK/Ollama, estados completos (carregando, sem histórico, uso zero, dados parciais, limite próximo/atingido, reservas em andamento, falha de backend, dados desatualizados) e isolamento A→B com `SessionOperationManager` + `AbortController`.
+  - `tests/al2-ai-usage-budget.spec.ts`: cobertura unitária, segurança de rota (`401`, `userId` arbitrário, somente leitura, zero segredos/orçamento global) e Chromium real (`320..1280px`, claro/escuro, `prefers-reduced-motion`, teclado, tabela equivalente, estados e troca A→B).
+- **Pendências transversais a avaliar antes do encerramento geral da V1.3 (preservadas sem implementação silenciosa)**:
+  - `defaultClientReadProvider.loadPerformance`; contexto real de `exams` no planejamento; wiring do Intelligence Engine e Tool Gateway ao Tutor/Professor; preview e confirmação de ferramentas; preferências de `useTeacher.ts` por conta; IndexedDB real pelo Gateway; ativação controlada das flags (`skills.enabled` / `tools.enabled`); limitações de memória do Worker; `MM-2` (opcional).
+- **Próxima etapa**: aguardar CI 6/6 verde da `AL-2` e avaliação do owner sobre as pendências transversais antes do encerramento geral da V1.3 ou abertura da Onda 5.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
