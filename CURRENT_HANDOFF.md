@@ -1,28 +1,22 @@
 # Handoff atual — StudyAI V1.3 (Onda 3)
 
-## Estado atual — Onda 3 / TE-4 Concluída: Transformações com Confirmação Explícita em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 3 / TE-5 Concluída Localmente e Publicada: Diagramas, Execução Restrita e Encerramento da Onda 3 em `v1.3-development` (26/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
-- **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**:
-  - `PS-1b` (`140daf8`), `QU-1`..`QU-5` concluídas; `PS-2` verificado (0 ocorrências de `withQuotaEnforcement` em `src/`).
+- **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**: `PS-1b`, `QU-1`..`QU-5` e `PS-2` (0 ocorrências de `withQuotaEnforcement` em `src/`).
 - **Onda 2 — Intelligence Engine Formalmente Encerrada (`3246b73`, CI `45895240129` 6/6 VERDE)**:
-  - Catálogo oficial completo **20/20 skills (`0.1.0`) + 13 Teacher (`1.0.0`) = 33 registros únicos imutáveis**; `skills.enabled = false` por padrão.
-- **Onda 3 — Tool Engine / TE-1, TE-2, TE-3 (CI `45907390048` 6/6 VERDE) e TE-4 Concluídas (`v1.3-development`)**:
-  - **Revisão diferencial TE-3 e endurecimento compartilhado**:
-    - `ToolTurnState.ts`: evicção fail-closed ao saturar `MAX_RETIRED_TURN_KEYS` (2048), `canAcquireSlot` read-only (impede envenenamento de `seenFingerprints` por confirmação fabricada), `closeTurn` e controle global de `confirmationId` consumidos.
-    - `AnalyticsEngine.ts`: fallback seguro por `SessionOperationManager.current()` + geração de sessão/DB quando `accountId` é omitido, impedindo colisão de cache cross-account.
-    - `ToolCrypto.ts` + `ToolConfirmationService.ts`: protocolo autoritativo de 6 etapas (preparação → pré-visualização → confirmação explícita → claim síncrono atômico → execução → auditoria), integridade por **SHA-256 (RFC 6234)**, vínculo a `(userId, sessionId, sessionGeneration, turnId, toolId, toolVersion, argsFingerprint, previewHash, destination, expiresAt)`, uso único, proteção contra replay, concorrência (clique duplo) e troca A→B.
-  - **TE-4 — 4 Ferramentas Canônicas (`src/features/ai/tools/transform/`)**:
-    - `doc_reader@0.1.0` (`class: "read"`, `requiresConfirmation: false`): leitura documental por página reutilizando `ContentStorage`/`ExtractedContent`, bloqueia URLs/traversal, diferencia `ready`, `page_not_found`, `material_unavailable` e `content_not_extracted`.
-    - `flashcards@0.1.0` (`class: "transform"`, `prepare` sem escrita + `commit` confirmado com permissão `"write"`): reutiliza `FlashcardService`, deduplicação determinística.
-    - `quiz@0.1.0` (`class: "transform"`, `prepare` + `correct_answer` + `commit` confirmado): reutiliza `QuizService` e `AdaptiveAssessmentEngine`, separa visão do aluno do gabarito (ocultação lógica no cliente, não segurança de servidor), classifica correção em 4 níveis sem mutar tentativas/notas/erros.
-    - `plan@0.1.0` (`class: "transform"`, `prepare` + `commit` confirmado): reutiliza exclusivamente `PlanningEngine`, bloqueia sobrescrita silenciosa sem `overwriteExisting: true`.
-  - **Registro de produção**: exatamente **8 ferramentas canônicas** (`calculator`, `library`, `performance`, `errors`, `doc_reader`, `flashcards`, `quiz`, `plan`), zero ferramentas de execução (`js_execution`, `diagram`, `audio` permanecem desconectadas), `tools.enabled = false` e `skills.enabled = false` por padrão.
-- **Limitações registradas**: Gateway no cliente não substitui autorização server-side; `defaultClientReadProvider.loadPerformance` e agregação de `exams` em `defaultClientTransformProvider.loadPlanningContext` aguardam ligação de runtime no navegador quando as flags forem ativadas; testes A→B da TE-4 validam motores reais + store multi-conta não pré-filtrado em Node (persistência IndexedDB em navegador segue coberta pelas specs E2E da CI).
-- **Próxima etapa oficial**: Onda 3 / **`TE-5`** (Gráficos e execução restrita de JS em Worker sem rede). Aguardar CI verde da TE-4 e autorização explícita do owner.
+  - Catálogo completo **20/20 skills (`0.1.0`) + 13 Teacher (`1.0.0`) = 33 registros únicos imutáveis**; `skills.enabled = false`.
+- **Onda 3 — Tool Engine / TE-1..TE-5 Implementadas (`v1.3-development`)**:
+  - **TE-4 validada 6/6 na CI** (`45914113610` em `94c4ce8`, após correção cirúrgica da corrida de chunk dinâmico `NotesWorkspace` em `tests/sprint58b-offline-resilience.spec.ts`).
+  - **Revisão diferencial TE-4**: limpeza segura de `consumedConfirmations` apenas pós-expiração e `retireAndResetSession` em `ToolTurnState.ts`, `pruneExpiredProposals` em `ToolConfirmationService.ts`, dupla verificação `SessionOperationManager` em `AccountTransformProvider.ts` (`FlashcardService.save` / `QuizService.save`).
+  - **TE-5 — `diagram@0.1.0`** (`src/features/ai/tools/diagram/`): `class: "transform"`, reutiliza `diagrams/*` (`parseMermaid`, `normalizeDiagram`, `renderDiagramSvg`, `validateSvgMarkup`, `toMermaidSource`), bloqueia `%%{init:...}%%`, `click`, CSS/style, HTML/script, `on*=`, URLs externas e excesso de complexidade (`<=25` nós / `<=40` arestas), configuração de renderização fixa confiável, fallback textual seguro e validação real no DOM do Chromium (0 scripts, 0 elementos ativos, 0 rede).
+  - **TE-5 — `js_execution@0.1.0`** (`src/features/ai/tools/execution/`): `class: "execution"`, reutiliza exclusivamente `SafeExecutionService.ts` endurecido + rota dedicada `GET /api/lab/js-worker` com CSP HTTP `default-src 'none'; script-src 'unsafe-eval'; connect-src 'none'; worker-src 'none'; child-src 'none'` (preservado no `src/middleware.ts`), neutralização em toda a cadeia de protótipos de `self` e `navigator`, `AbortSignal` + `worker.terminate()` real em timeout/troca A→B, cap de 1 mensagem e truncamento de saída; comprovado no Web Worker real do Chromium (0 requisições de rede, 17/17 APIs proibidas = `undefined`).
+  - **Catálogo final de produção**: exatamente **10 ferramentas canônicas** (`calculator`, `library`, `performance`, `errors`, `doc_reader`, `flashcards`, `quiz`, `plan`, `diagram`, `js_execution`); `audio` (Fase 3) segue desconectada; `tools.enabled = false` e `skills.enabled = false`.
+- **Integrações de runtime pendentes (documentadas para decisão/Onda 4)**: `defaultClientReadProvider.loadPerformance`, carregamento de `exams` em `defaultClientTransformProvider.loadPlanningContext`, UI de confirmação no Tutor/Professor e ativação das flags (`tools.enabled`/`skills.enabled`).
+- **Encerramento formal da Onda 3**: condicionado à CI final da TE-5 completar **6/6 jobs verdes**. Próxima etapa após aprovação: **Onda 4** (iniciando por `MM-1` ou `AL-1`/`AL-2` conforme roadmap; aguardar autorização explícita do owner).
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 

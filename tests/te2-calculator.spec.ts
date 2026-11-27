@@ -37,7 +37,7 @@ test.describe("TE-2: Registro Único, Flag Desligada e Autorização", () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
     expect(ToolRegistry.has("calculator")).toBe(true);
-    expect(ToolRegistry.list().some((t) => t.class === "execution")).toBe(false);
+    expect(ToolRegistry.has("audio")).toBe(false);
 
     const entry = ToolRegistry.get("calculator")!;
     expect(entry.spec.version).toBe("0.1.0");

@@ -138,7 +138,7 @@ test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", 
   test("tools.enabled=false e skills.enabled=false por padrão, registro de produção restrito às ferramentas de leitura (TE-2/TE-3) e catálogo 20+13 preservado", async () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
-    // TE-2 + TE-3 + TE-4 conectam exatamente 8 ferramentas canônicas (5 leitura + 3 transformação com confirmação); TE-5 (js_execution/diagram/audio) segue desconectada
+    // TE-2..TE-5 conectam exatamente 10 ferramentas canônicas (5 leitura + 4 transformação + 1 execução restrita); `audio` (Fase 3) segue desconectada
     expect(ToolRegistry.list().map((t) => t.id)).toEqual([
       "calculator",
       "library",
@@ -148,8 +148,10 @@ test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", 
       "flashcards",
       "quiz",
       "plan",
+      "diagram",
+      "js_execution",
     ]);
-    expect(ToolRegistry.list().some((t) => t.class === "execution")).toBe(false);
+    expect(ToolRegistry.has("audio")).toBe(false);
     expect(SkillRegistry.list().length).toBe(33);
 
     // Gateway de produção recusa execução com flag desligada
@@ -160,11 +162,11 @@ test.describe("TE-1: Flags, Registro de Produção Vazio e Contrato Imutável", 
     expect(denied.ok).toBe(false);
     expect(denied.denialReason).toBe("tools_disabled");
 
-    // Mesmo com flag ligada em teste, ferramentas da TE-5/Fase 3 (js_execution, diagram, audio) continuam não conectadas
+    // Mesmo com flag ligada em teste, ferramenta fora da Onda 3 (`audio`) continua não conectada
     setToolsEnabledForTesting(true);
     const unknown = await defaultToolGateway.execute(
-      JSON.stringify({ tool: "js_execution", args: { code: "1 + 1" } }),
-      makeTrustedContext({ skillId: "teacher.flowchart", grantedPermissions: ["execution"] }),
+      JSON.stringify({ tool: "audio", args: { topic: "teste" } }),
+      makeTrustedContext({ skillId: "explain.multimodal", grantedPermissions: ["transform"] }),
     );
     expect(unknown.ok).toBe(false);
     expect(unknown.denialReason).toBe("unknown_tool");

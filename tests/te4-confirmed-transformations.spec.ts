@@ -406,14 +406,16 @@ test.describe("TE-4: Registro Canônico, Criptografia SHA-256 e Revisão Diferen
       "flashcards",
       "quiz",
       "plan",
+      "diagram",
+      "js_execution",
     ]);
     expect(ToolRegistry.get("doc_reader")?.spec.class).toBe("read");
     expect(ToolRegistry.get("doc_reader")?.spec.requiresConfirmation).toBe(false);
     expect(ToolRegistry.get("flashcards")?.spec.class).toBe("transform");
     expect(ToolRegistry.get("quiz")?.spec.class).toBe("transform");
     expect(ToolRegistry.get("plan")?.spec.class).toBe("transform");
-    expect(ToolRegistry.has("js_execution")).toBe(false);
-    expect(ToolRegistry.has("diagram")).toBe(false);
+    expect(ToolRegistry.get("diagram")?.spec.class).toBe("transform");
+    expect(ToolRegistry.get("js_execution")?.spec.class).toBe("execution");
     expect(ToolRegistry.has("audio")).toBe(false);
 
     // Paridade exata do SHA-256 interno (RFC 6234) com node:crypto

@@ -327,7 +327,7 @@ test.describe("TE-3: Registro das 4 Ferramentas de Leitura, Flags e Hardening de
   test("registra exatamente calculator, library, performance e errors com flags desligadas e impede reset de turno evictado", async () => {
     expect(isToolsEnabled()).toBe(false);
     expect(isSkillsEnabled()).toBe(false);
-    expect(ToolRegistry.size()).toBe(8);
+    expect(ToolRegistry.size()).toBe(10);
     for (const readId of ["calculator", "library", "performance", "errors", "doc_reader"] as const) {
       const entry = ToolRegistry.get(readId);
       expect(entry?.spec.class).toBe("read");
