@@ -49,11 +49,15 @@ test("fluxo completo cria, edita, vincula, navega, retorna e persiste", async ({
 
   const examId = await page.evaluate(() => JSON.parse(localStorage.getItem("studyai:exams:offline-session") ?? "[]")[0]?.id as string);
   const tutorHref = examLearningHref(studyId, "tutor", examId);
-  await page.locator(`a[href="${tutorHref}"]`).click();
-  await expect(page).toHaveURL(new RegExp(`tema=${studyId}.*origem=provas.*prova=${examId}`));
+  await Promise.all([
+    page.waitForURL(new RegExp(`tema=${studyId}.*origem=provas.*prova=${examId}`)),
+    page.locator(`a[href="${tutorHref}"]`).click(),
+  ]);
   await expect(page.getByRole("link", { name: "Voltar à Semana de Prova" })).toHaveAttribute("href", examReturnHref(examId));
-  await page.getByRole("link", { name: "Voltar à Semana de Prova" }).click();
-  await expect(page).toHaveURL(new RegExp(`/provas\\?prova=${examId}$`));
+  await Promise.all([
+    page.waitForURL(new RegExp(`/provas\\?prova=${examId}$`)),
+    page.getByRole("link", { name: "Voltar à Semana de Prova" }).click(),
+  ]);
   await expect(page.getByRole("heading", { name: "P1 Estruturas — revisada" })).toBeVisible();
 
   await page.reload();
