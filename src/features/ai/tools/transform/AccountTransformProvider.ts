@@ -186,7 +186,14 @@ const defaultClientTransformProvider: ToolAccountTransformProvider = {
       toInsert.push({ ...card, studyId });
     }
     if (toInsert.length > 0) {
-      await FlashcardService.save([...existing, ...toInsert]);
+      const writeOp = SessionOperationManager.start(userId);
+      try {
+        writeOp.assertCurrent();
+        await FlashcardService.save([...existing, ...toInsert]);
+        writeOp.assertCurrent();
+      } finally {
+        writeOp.release();
+      }
     }
     const totalInStudy = existing.filter((c) => c.studyId === studyId).length + toInsert.length;
     return {
@@ -242,10 +249,17 @@ const defaultClientTransformProvider: ToolAccountTransformProvider = {
     }
     // Preserva store.results intacto (nunca cria tentativa nem altera notas)
     if (toInsert.length > 0) {
-      await QuizService.save({
-        questions: [...store.questions, ...toInsert],
-        results: store.results,
-      });
+      const writeOp = SessionOperationManager.start(userId);
+      try {
+        writeOp.assertCurrent();
+        await QuizService.save({
+          questions: [...store.questions, ...toInsert],
+          results: store.results,
+        });
+        writeOp.assertCurrent();
+      } finally {
+        writeOp.release();
+      }
     }
     const totalInStudy = store.questions.filter((q) => q.studyId === studyId).length + toInsert.length;
     return {

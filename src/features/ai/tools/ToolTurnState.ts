@@ -36,11 +36,40 @@ export class ToolTurnManager {
   private readonly buckets = new Map<string, TurnBucket>();
   /** Turnos evictados ou encerrados nunca podem ser reabertos com contador zerado. */
   private readonly retiredTurnKeys = new Set<string>();
-  /** Registro global de confirmationIds consumidos (bloqueia replay entre turnos/sessões). */
-  private readonly consumedConfirmations = new Set<string>();
+  /** Registro global de confirmationIds consumidos com timestamp de expiração (anti-replay entre turnos). */
+  private readonly consumedConfirmations = new Map<string, number>();
 
   private keyFor(userId: string, sessionId: string, turnId: string): string {
     return JSON.stringify([userId, sessionId, turnId]);
+  }
+
+  /**
+   * Remove apenas confirmações consumidas cuja janela de expiração já venceu
+   * (confirmações expiradas já são recusadas pelo check de `expiresAt`, impedindo reuso).
+   */
+  pruneExpiredConfirmations(nowMs = Date.now()): number {
+    let removed = 0;
+    for (const [id, expiresAtMs] of this.consumedConfirmations.entries()) {
+      if (expiresAtMs > 0 && nowMs > expiresAtMs) {
+        this.consumedConfirmations.delete(id);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  /**
+   * Libera memória de turnos aposentados exclusivamente de uma sessão encerrada
+   * (usado ao encerrar/trocar sessão; nunca reabre turnos da sessão ativa).
+   */
+  retireAndResetSession(sessionId: string): void {
+    const suffix = `,${JSON.stringify(sessionId)},`;
+    for (const key of Array.from(this.buckets.keys())) {
+      if (key.includes(suffix)) this.buckets.delete(key);
+    }
+    for (const key of Array.from(this.retiredTurnKeys.values())) {
+      if (key.includes(suffix)) this.retiredTurnKeys.delete(key);
+    }
   }
 
   private getOrCreate(userId: string, sessionId: string, turnId: string): TurnBucket | null {
@@ -96,9 +125,18 @@ export class ToolTurnManager {
     return this.buckets.get(key)?.callsReserved ?? 0;
   }
 
-  isConfirmationUsed(userId: string, sessionId: string, turnId: string, confirmationId: string): boolean {
+  isConfirmationUsed(
+    userId: string,
+    sessionId: string,
+    turnId: string,
+    confirmationId: string,
+    nowMs = Date.now(),
+  ): boolean {
+    if (this.consumedConfirmations.size >= MAX_CONSUMED_CONFIRMATIONS) {
+      this.pruneExpiredConfirmations(nowMs);
+    }
     if (this.consumedConfirmations.has(confirmationId)) return true;
-    // Fail-closed se a memória de confirmações consumidas saturar.
+    // Fail-closed se a memória de confirmações consumidas não expiradas saturar.
     if (this.consumedConfirmations.size >= MAX_CONSUMED_CONFIRMATIONS) return true;
     const key = this.keyFor(userId, sessionId, turnId);
     if (this.retiredTurnKeys.has(key)) return true;
@@ -106,8 +144,14 @@ export class ToolTurnManager {
     return bucket ? bucket.usedConfirmations.has(confirmationId) : false;
   }
 
-  markConfirmationUsed(userId: string, sessionId: string, turnId: string, confirmationId: string): void {
-    this.consumedConfirmations.add(confirmationId);
+  markConfirmationUsed(
+    userId: string,
+    sessionId: string,
+    turnId: string,
+    confirmationId: string,
+    expiresAtMs = 0,
+  ): void {
+    this.consumedConfirmations.set(confirmationId, expiresAtMs);
     const bucket = this.getOrCreate(userId, sessionId, turnId);
     if (bucket) {
       bucket.usedConfirmations.add(confirmationId);

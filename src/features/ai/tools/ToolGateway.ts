@@ -408,6 +408,7 @@ export class ToolGateway {
           trustedContext.sessionId,
           trustedContext.turnId,
           conf.confirmationId,
+          nowMs,
         )
       ) {
         return this.deny({
@@ -575,11 +576,15 @@ export class ToolGateway {
     }
 
     if (requiresWriteConfirmation && trustedContext.confirmation) {
+      const confExpiresAtMs = trustedContext.confirmation.expiresAt
+        ? Date.parse(trustedContext.confirmation.expiresAt)
+        : 0;
       this.turnManager.markConfirmationUsed(
         trustedContext.userId,
         trustedContext.sessionId,
         trustedContext.turnId,
         trustedContext.confirmation.confirmationId,
+        Number.isFinite(confExpiresAtMs) ? confExpiresAtMs : 0,
       );
     }
 

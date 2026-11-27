@@ -587,6 +587,22 @@ export class ToolConfirmationService {
     return this.proposals.get(proposalId)?.status;
   }
 
+  /**
+   * Remove propostas expiradas ou de gerações de sessão anteriores.
+   * Seguro contra replay: qualquer `proposalId` removido será sempre rejeitado em `claim`.
+   */
+  pruneExpiredProposals(nowMs = this.clockNowMs()): number {
+    const activeGen = SessionOperationManager.current().generation;
+    let removed = 0;
+    for (const [id, entry] of this.proposals.entries()) {
+      if (nowMs > entry.expiresAtMs || entry.sessionGeneration < activeGen) {
+        this.proposals.delete(id);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
   clear(): void {
     this.proposals.clear();
   }
