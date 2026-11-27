@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 4)
 
-## Estado atual — AL-1 Formalmente Encerrada (`d53dfcb`, CI `46062817873` 6/6 VERDE) e AL-2 Implementada em `v1.3-development` (27/11/2026)
+## Estado atual — Revisão Final AL-2, Gate de Encerramento da Onda 4 e Auditoria de Integração V1.3 (27/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -10,15 +10,17 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
 - **Onda 3 — Tool Engine (`TE-1`..`TE-5`) FORMALMENTE ENCERRADA (`40ed368`, CI `45918219371` 6/6 VERDE)**: **10 ferramentas canônicas** registradas; `tools.enabled = false`.
 - **Onda 4 — MM-1 (`c06f77b`, CI `46058793413` 6/6 VERDE) e AL-1 (`d53dfcb`, CI `46062817873` 6/6 VERDE) FORMALMENTE ENCERRADAS**:
   - **MM-1**: gráficos SVG acessíveis em `src/features/analytics/`, tabela equivalente, guarda assíncrona e responsividade `320..1280px`.
-  - **MM-2**: adiada (opcional, mantida no roadmap aguardando autorização do owner).
-  - **AL-1**: seletor determinístico, explicável e desativável (`AdaptiveSkillSelector.ts`), persistência por conta do opt-out (`LongTermMemoryStorage`) e painel em `/aprendizagem`.
-- **Onda 4 — AL-2 Implementada e Validada Localmente (pendente CI 6/6 verde para encerramento formal)**:
-  - `src/server/ai/QuotaService.ts` (`getUsageBreakdown`, leitura somente leitura por `user_id` + `usage_date` separando `provider` vs `estimated`/`unknown`, reservas pendentes, cache hits com 0 tokens e distribuição por provedor/modelo) e `src/app/api/settings/ai/quota/route.ts` (identidade derivada da sessão, headers privados `no-store, private`, correção de `daily.resetAt` para UTC, sem expor chaves ou orçamento global).
-  - `src/features/settings/aiUsageViewModel.ts` + `AIUsageBudgetPanel.tsx` integrado em `ai-settings-panel.tsx` (`/configuracoes` → `IA`): sem novo dashboard duplicado, zero novas bibliotecas de gráficos (reutiliza `chartScale.ts` da MM-1), gráfico SVG acessível + tabela equivalente do histórico de 30 dias, separação entre consumido/reservado/restante, observado vs estimado, transparência de limites internos StudyAI vs `Não disponível` para BYOK/Ollama, estados completos (carregando, sem histórico, uso zero, dados parciais, limite próximo/atingido, reservas em andamento, falha de backend, dados desatualizados) e isolamento A→B com `SessionOperationManager` + `AbortController`.
-  - `tests/al2-ai-usage-budget.spec.ts`: cobertura unitária, segurança de rota (`401`, `userId` arbitrário, somente leitura, zero segredos/orçamento global) e Chromium real (`320..1280px`, claro/escuro, `prefers-reduced-motion`, teclado, tabela equivalente, estados e troca A→B).
-- **Pendências transversais a avaliar antes do encerramento geral da V1.3 (preservadas sem implementação silenciosa)**:
-  - `defaultClientReadProvider.loadPerformance`; contexto real de `exams` no planejamento; wiring do Intelligence Engine e Tool Gateway ao Tutor/Professor; preview e confirmação de ferramentas; preferências de `useTeacher.ts` por conta; IndexedDB real pelo Gateway; ativação controlada das flags (`skills.enabled` / `tools.enabled`); limitações de memória do Worker; `MM-2` (opcional).
-- **Próxima etapa**: aguardar CI 6/6 verde da `AL-2` e avaliação do owner sobre as pendências transversais antes do encerramento geral da V1.3 ou abertura da Onda 5.
+  - **MM-2**: preservada como **opcional adiada** (mantida no roadmap aguardando autorização do owner).
+  - **AL-1**: seletor determinístico, explicável e desativável (`AdaptiveSkillSelector.ts`), persistência por conta do opt-out (`LongTermMemoryStorage`) e painel informativo em `/aprendizagem`.
+- **Onda 4 — AL-2 Revisada e Endurecida (pendente CI 6/6 verde do commit de revisão para encerramento formal da AL-2 e das etapas obrigatórias da Onda 4)**:
+  - CI `46081993680` (`d3d474a`): `5/6` verde (`quality`, `postgres`, `e2e (1..3)`), `1` falha não relacionada em `e2e (4)` (`tests/ux-persistence.spec.ts:63`, que passou localmente em `16.8s`).
+  - **Revisão final AL-2**:
+    1. Contagem documental reconciliada: `tests/al2-ai-usage-budget.spec.ts` (6) + `tests/sprint42-security-quota.spec.ts` (4) = **10 passed** reais (log `task-10540.log`).
+    2. Classificação honesta sem migration: substituído `cacheHitsCount` por `zeroTokenReconciledCount` (pois `ai_token_reservations` não distingue `outcome='cached'` de `completed` com `0` tokens) e adicionado `availability.cacheHitsTracked: false` + aviso explícito no painel.
+    3. Agrupamento por `provider / model / credentialOrigin` em `QuotaService.getUsageBreakdown()`, alinhamento UTC em `getUsageStats()` e cobertura **PostgreSQL real (`PG-AL2-1`)** validada localmente em PostgreSQL 18 descartável (`1/1 passed`) e conectada ao job `postgres` em `.github/workflows/ci.yml`.
+- **Auditoria de prontidão de integração V1.3 (somente leitura; Lotes A–E NÃO iniciados)**:
+  - **Atenção**: encerrar as ondas **não equivale à prontidão de produção da V1.3**. `SkillBudgetExecutor`, `ToolGateway` e `ToolConfirmationService` possuem `0` chamadores em runtime; `AdaptiveSkillSelector` está ligado apenas ao painel `/aprendizagem`; `useTeacher.ts` ainda usa `localStorage` global sem namespace de conta; `defaultClientReadProvider.loadPerformance` retorna stub vazio; `loadPlanningContext` usa `exams: []`; IndexedDB real pelo Gateway carece de teste E2E em Chromium; flags `skills.enabled` / `tools.enabled` seguem `false` (estáticas `NEXT_PUBLIC_*`).
+- **Próxima etapa**: confirmar **CI 6/6 verde** do commit de revisão AL-2 para formalizar AL-2 e Onda 4, e aguardar aprovação do owner para o plano de integração V1.3 (Lotes A–E). Não iniciar Onda 5 nem publicação em produção.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
