@@ -94,7 +94,8 @@ export function isLabChallengeRequest(value: unknown): value is LabChallengeRequ
   });
 }
 
-const forbiddenJavaScript = /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|Worker|SharedWorker|importScripts)\b|\bimport\s*\(/;
+const forbiddenJavaScript =
+  /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|Worker|SharedWorker|importScripts|BroadcastChannel|indexedDB|caches|sendBeacon|cookieStore|WebTransport|RTCPeerConnection|FileSystemSyncAccessHandle|showOpenFilePicker)\b|\bimport\s*\(|\bnavigator\s*\.\s*(?:storage|serviceWorker|credentials|locks|clipboard)\b/;
 const forbiddenSql = /\b(?:ATTACH|DETACH|LOAD_EXTENSION)\b/i;
 const sqlKeywords = /\b(?:SELECT|CREATE\s+TABLE|INSERT\s+INTO|WITH\s+\w+\s+AS|UPDATE\s+\w+|DELETE\s+FROM)\b/i;
 const jsKeywords = /\b(?:function\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|console\.log\s*\(|=>)\b/;

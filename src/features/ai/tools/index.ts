@@ -1,23 +1,28 @@
 /**
- * StudyAI — Tool Engine (TE-1 / TE-2 / TE-3 / TE-4)
+ * StudyAI — Tool Engine (TE-1 / TE-2 / TE-3 / TE-4 / TE-5)
  * Ponto de entrada público do subsistema Tool Gateway.
  *
- * Na TE-4, exatamente 8 ferramentas canônicas estão registradas em produção:
+ * Na TE-5, exatamente 10 ferramentas canônicas estão registradas em produção:
  * - Leitura (5): `calculator`, `library`, `performance`, `errors`, `doc_reader`
- * - Transformação com escrita confirmada (3): `flashcards`, `quiz`, `plan`
+ * - Transformação (4): `flashcards`, `quiz`, `plan`, `diagram`
+ * - Execução restrita (1): `js_execution`
  * Todas permanecem inacessíveis enquanto `tools.enabled = false`.
- * Ferramentas da TE-5/Fase 3 (`diagram`, `js_execution`, `audio`) continuam não registradas.
+ * `audio` (Fase 3 / fora do escopo TE-1..TE-5) segue não registrada.
  */
 
 import { ToolRegistry } from "./ToolRegistry";
 import { registerCalculatorTool } from "./calculator";
+import { registerDiagramTool } from "./diagram";
+import { registerExecutionTools } from "./execution";
 import { registerReadTools } from "./read";
 import { registerTransformTools } from "./transform";
 
-// Registra exclusivamente as ferramentas canônicas autorizadas (TE-2 + TE-3 + TE-4)
+// Registra exclusivamente as 10 ferramentas canônicas autorizadas (TE-2..TE-5)
 registerCalculatorTool(ToolRegistry);
 registerReadTools(ToolRegistry);
 registerTransformTools(ToolRegistry);
+registerDiagramTool(ToolRegistry);
+registerExecutionTools(ToolRegistry);
 
 export * from "./config";
 export * from "./types";
@@ -30,3 +35,5 @@ export * from "./ToolGateway";
 export * from "./calculator";
 export * from "./read";
 export * from "./transform";
+export * from "./diagram";
+export * from "./execution";
