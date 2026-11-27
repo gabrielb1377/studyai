@@ -514,8 +514,12 @@ test.describe("TE-5: Evidência Real em Navegador Chromium (Worker Real + CSP HT
               : undefined;
 
           worker.onmessage = (ev) => {
-            messagesReceived += 1;
             const d = ev.data || {};
+            if (d.__workerReady === true) {
+              worker.postMessage({ code, maxOutputLines: 40, maxLineChars: 400, maxOutputBytes: 4096 });
+              return;
+            }
+            messagesReceived += 1;
             done({
               ok: d.ok === true,
               output: Array.isArray(d.output) ? d.output : [],
@@ -535,7 +539,6 @@ test.describe("TE-5: Evidência Real em Navegador Chromium (Worker Real + CSP HT
               cancelled: false,
             });
           };
-          worker.postMessage({ code, maxOutputLines: 40, maxLineChars: 400, maxOutputBytes: 4096 });
         });
 
       const legit = await runInRealWorker("const nums = [1, 2, 3, 4]; console.log('soma=', nums.reduce((a,b)=>a+b, 0)); return nums.length * 10;");

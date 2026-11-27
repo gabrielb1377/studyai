@@ -22,6 +22,7 @@ export function useLab(options: { studyId?: string } = {}) {
   const sqlRef = useRef(new SqlLabSession());
   const startedRef = useRef(Date.now());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const inFlightRunRef = useRef<Promise<unknown> | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextProjects, nextStudies] = await Promise.all([LabStorage.list(), LabService.studies()]);
@@ -131,16 +132,23 @@ export function useLab(options: { studyId?: string } = {}) {
     if (!active || isRunning) return;
     clearPendingSave();
     setIsRunning(true); setError(undefined);
-    try {
-      const code = active.files[active.language] ?? "";
-      const result = active.language === "sql" ? await sqlRef.current.execute(code) : await SafeExecutionService.run(active.language, code);
-      const practicedSeconds = Math.max(1, Math.round((Date.now() - startedRef.current) / 1_000));
-      const saved = await LabService.recordExecution(active, result, practicedSeconds);
-      setProjects((current) => current.map((project) => project.id === saved.id ? saved : project));
-      startedRef.current = Date.now();
-      return result;
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível executar o código."); }
-    finally { setIsRunning(false); }
+    const task = (async () => {
+      try {
+        const code = active.files[active.language] ?? "";
+        const result = active.language === "sql" ? await sqlRef.current.execute(code) : await SafeExecutionService.run(active.language, code);
+        const practicedSeconds = Math.max(1, Math.round((Date.now() - startedRef.current) / 1_000));
+        const saved = await LabService.recordExecution(active, result, practicedSeconds);
+        setProjects((current) => current.map((project) => project.id === saved.id ? saved : project));
+        startedRef.current = Date.now();
+        return result;
+      } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível executar o código."); }
+      finally {
+        setIsRunning(false);
+        inFlightRunRef.current = null;
+      }
+    })();
+    inFlightRunRef.current = task;
+    return task;
   }, [active, isRunning]);
 
   const review = useCallback(async () => {
@@ -148,7 +156,12 @@ export function useLab(options: { studyId?: string } = {}) {
     clearPendingSave();
     setIsReviewing(true); setError(undefined); setIsReviewRateLimited(false);
     try {
-      const feedback = await LabAIService.review(active);
+      // Aguarda execução em andamento antes de ler/gravar feedback para não sobrescrever attempts/correctAttempts
+      if (inFlightRunRef.current) {
+        await inFlightRunRef.current;
+      }
+      const latestBeforeReview = await LabStorage.get(active.id);
+      const feedback = await LabAIService.review(latestBeforeReview ?? active);
       const latest = await LabStorage.get(active.id);
       const saved = await LabService.save({ ...(latest ?? active), files: active.files, feedback });
       setProjects((current) => current.map((project) => project.id === saved.id ? saved : project));

@@ -253,6 +253,7 @@ export function buildHardenedWorkerBootstrapScript(): string {
   }
 
   _addEventListener("message", onRun);
+  _postMessage({ __workerReady: true });
 })();
 `;
 }
@@ -423,12 +424,15 @@ export const SafeExecutionService = {
       let worker: Worker | null = null;
       let blobUrl: string | null = null;
       let settled = false;
+      let startedExecution = false;
       let messageCount = 0;
+      let execTimer: ReturnType<typeof setTimeout> | undefined;
 
       const finish = (payload: Omit<RestrictedJsExecutionResult, "durationMs" | "createdAt">) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clearTimeout(bootstrapTimer);
+        if (execTimer) clearTimeout(execTimer);
         if (options.signal) {
           options.signal.removeEventListener("abort", onAbort);
         }
@@ -458,7 +462,7 @@ export const SafeExecutionService = {
       const onAbort = () => {
         finish({
           status: "error",
-          wasExecuted: true,
+          wasExecuted: startedExecution,
           staticRejected: false,
           unavailableInEnvironment: false,
           workerTerminated: true,
@@ -470,10 +474,11 @@ export const SafeExecutionService = {
         });
       };
 
-      const timer = globalThis.setTimeout(() => {
+      // Timeout separado para bootstrap do script do Worker (evita falso timeout em cold-compile do dev server)
+      const bootstrapTimer = globalThis.setTimeout(() => {
         finish({
           status: "error",
-          wasExecuted: true,
+          wasExecuted: false,
           staticRejected: false,
           unavailableInEnvironment: false,
           workerTerminated: true,
@@ -481,9 +486,9 @@ export const SafeExecutionService = {
           cancelled: false,
           truncated: false,
           output: [],
-          error: `Execução interrompida após ${Math.round(timeoutMs / 1000)} segundos.`,
+          error: "Tempo limite excedido ao inicializar o Worker isolado.",
         });
-      }, timeoutMs);
+      }, 10_000);
 
       if (options.signal) {
         options.signal.addEventListener("abort", onAbort, { once: true });
@@ -515,17 +520,48 @@ export const SafeExecutionService = {
       }
 
       worker.onmessage = (
-        event: MessageEvent<{ ok?: boolean; output?: unknown; truncated?: boolean; error?: unknown }>,
+        event: MessageEvent<{
+          __workerReady?: boolean;
+          ok?: boolean;
+          output?: unknown;
+          truncated?: boolean;
+          error?: unknown;
+        }>,
       ) => {
+        const data = event.data && typeof event.data === "object" ? event.data : {};
+        if (!startedExecution && data.__workerReady === true) {
+          startedExecution = true;
+          clearTimeout(bootstrapTimer);
+          execTimer = globalThis.setTimeout(() => {
+            finish({
+              status: "error",
+              wasExecuted: true,
+              staticRejected: false,
+              unavailableInEnvironment: false,
+              workerTerminated: true,
+              timedOut: true,
+              cancelled: false,
+              truncated: false,
+              output: [],
+              error: `Execução interrompida após ${Math.round(timeoutMs / 1000)} segundos.`,
+            });
+          }, timeoutMs);
+          worker?.postMessage({
+            code,
+            maxOutputLines,
+            maxLineChars,
+            maxOutputBytes,
+          });
+          return;
+        }
         messageCount += 1;
-        // Aceita estritamente 1 mensagem; qualquer mensagem extra/tardia é descartada e o Worker encerrado.
+        // Aceita estritamente 1 mensagem de resultado; qualquer mensagem extra/tardia é descartada e o Worker encerrado.
         if (settled || messageCount > 1) {
           try {
             worker?.terminate();
           } catch {}
           return;
         }
-        const data = event.data && typeof event.data === "object" ? event.data : {};
         const clamped = clampHostOutput(data.output, maxOutputLines, maxLineChars, maxOutputBytes);
         const truncated = Boolean(data.truncated) || clamped.truncated;
         finish({
@@ -545,7 +581,7 @@ export const SafeExecutionService = {
       worker.onerror = (event) => {
         finish({
           status: "error",
-          wasExecuted: true,
+          wasExecuted: startedExecution,
           staticRejected: false,
           unavailableInEnvironment: false,
           workerTerminated: true,
@@ -556,13 +592,6 @@ export const SafeExecutionService = {
           error: sanitizeExecutionError(event.message || "Erro de execução no Worker."),
         });
       };
-
-      worker.postMessage({
-        code,
-        maxOutputLines,
-        maxLineChars,
-        maxOutputBytes,
-      });
     });
   },
 
