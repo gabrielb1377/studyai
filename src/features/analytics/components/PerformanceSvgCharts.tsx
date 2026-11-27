@@ -88,7 +88,7 @@ export function PerformancePeriodSvgChart({
   }
 
   return (
-    <div className="min-w-0 space-y-3" data-chart-status={layout.dataStatus}>
+    <div className="relative min-w-0 space-y-3" data-chart-status={layout.dataStatus}>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="text-[11px] font-normal">
@@ -255,7 +255,7 @@ export function PerformancePeriodSvgChart({
       {/* Tabela semântica equivalente: sempre acessível para leitores de tela e expansível visualmente */}
       <div
         id={tableId}
-        className={showTable ? "overflow-x-auto rounded-lg border" : "sr-only"}
+        className={showTable ? "overflow-x-auto rounded-lg border" : "sr-only left-0 top-0"}
       >
         <table
           aria-label={`Tabela equivalente: ${label}`}
@@ -344,7 +344,7 @@ export function PerformanceBreakdownSvgChart({
   };
 
   return (
-    <div className="min-w-0 space-y-3" data-chart-status={layout.dataStatus}>
+    <div className="relative min-w-0 space-y-3" data-chart-status={layout.dataStatus}>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span aria-live="polite" className="truncate text-muted-foreground tabular-nums">
           {activeRow ? `${activeRow.label}: ${activeRow.formattedValue}` : "Observado"}
@@ -454,7 +454,7 @@ export function PerformanceBreakdownSvgChart({
 
       <div
         id={tableId}
-        className={showTable ? "overflow-x-auto rounded-lg border" : "sr-only"}
+        className={showTable ? "overflow-x-auto rounded-lg border" : "sr-only left-0 top-0"}
       >
         <table
           aria-label={`Tabela equivalente: ${label}`}
@@ -525,9 +525,9 @@ export function PerformanceRetentionSvgChart({
   };
 
   return (
-    <Card className="min-w-0 gap-4 p-4 shadow-none" data-chart-status={layout.dataStatus}>
+    <Card className="relative min-w-0 gap-4 p-4 shadow-none" data-chart-status={layout.dataStatus}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-semibold">{title}</h3>
           {layout.hasEstimated ? (
             <Badge variant="outline">Estimativa</Badge>
@@ -668,7 +668,7 @@ export function PerformanceRetentionSvgChart({
 
           <div
             id={tableId}
-            className={showTable ? "overflow-x-auto rounded-lg border" : "sr-only"}
+            className={showTable ? "overflow-x-auto rounded-lg border" : "sr-only left-0 top-0"}
           >
             <table
               aria-label={`Tabela equivalente: Retenção ${title}`}

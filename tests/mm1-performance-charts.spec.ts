@@ -405,16 +405,40 @@ test.describe("MM-1: Navegador Real — SVG Acessível, Teclado, Tabela Equivale
     });
     expect(darkColors.color).toMatch(/^rgba?\(|^oklch\(/);
 
+    const measureViewportOverflow = async () =>
+      page.evaluate(async () => {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        const scrollWidth = document.documentElement.scrollWidth;
+        const innerWidth = window.innerWidth;
+        const offenders =
+          scrollWidth > innerWidth + 1
+            ? Array.from(document.querySelectorAll("*"))
+                .filter((el) => {
+                  const r = el.getBoundingClientRect();
+                  return r.width > 0 && r.height > 0 && r.right > innerWidth + 1;
+                })
+                .map((el) => {
+                  const r = el.getBoundingClientRect();
+                  const cls =
+                    typeof el.className === "string"
+                      ? el.className.trim().split(/\s+/).slice(0, 4).join(".")
+                      : "";
+                  return `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${cls ? "." + cls : ""}(r=${Math.round(r.right)},w=${Math.round(r.width)},sw=${el.scrollWidth})`;
+                })
+                .slice(0, 8)
+            : [];
+        return { scrollWidth, innerWidth, offenders };
+      });
+
     // 6. Responsividade em 320, 360, 390, 768 e 1280px (tabela fechada E aberta) — zero overflow global
     for (const width of [320, 360, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: 780 });
-      const overflowClosed = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        innerWidth: window.innerWidth,
-      }));
+      const overflowClosed = await measureViewportOverflow();
       expect(
         overflowClosed.scrollWidth,
-        `Overflow horizontal detectado com tabela fechada em ${width}px`,
+        `Overflow horizontal detectado com tabela fechada em ${width}px: ${overflowClosed.offenders.join(" | ")}`,
       ).toBeLessThanOrEqual(overflowClosed.innerWidth + 1);
     }
 
@@ -432,13 +456,10 @@ test.describe("MM-1: Navegador Real — SVG Acessível, Teclado, Tabela Equivale
 
     for (const width of [320, 360, 390, 768, 1280]) {
       await page.setViewportSize({ width, height: 780 });
-      const overflowOpen = await page.evaluate(() => ({
-        scrollWidth: document.documentElement.scrollWidth,
-        innerWidth: window.innerWidth,
-      }));
+      const overflowOpen = await measureViewportOverflow();
       expect(
         overflowOpen.scrollWidth,
-        `Overflow horizontal detectado com tabela aberta em ${width}px`,
+        `Overflow horizontal detectado com tabela aberta em ${width}px: ${overflowOpen.offenders.join(" | ")}`,
       ).toBeLessThanOrEqual(overflowOpen.innerWidth + 1);
     }
 

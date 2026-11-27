@@ -68,7 +68,7 @@ export function AcademyLabOverview() {
     <Card className="gap-4 border-dashed p-5 shadow-none sm:flex-row sm:items-center">
       <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Sparkles className="size-5" /></span>
       <div className="min-w-0 flex-1"><h2 className="font-semibold">Academy e Laboratório</h2><p className="text-sm text-muted-foreground">Crie um estudo livre ou pratique um exercício para acompanhar tudo aqui.</p></div>
-      <div className="flex gap-2"><Button asChild variant="outline"><Link href="/lab">Abrir Lab</Link></Button><Button asChild><Link href="/academy">Criar estudo</Link></Button></div>
+      <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/lab">Abrir Lab</Link></Button><Button asChild><Link href="/academy">Criar estudo</Link></Button></div>
     </Card>
   );
 
