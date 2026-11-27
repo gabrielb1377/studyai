@@ -72,7 +72,7 @@ export function isMemoryStale(
 
 export function sanitizeMemorySettings(raw: unknown): LongTermMemorySettings {
   if (typeof raw !== "object" || raw === null) {
-    return { enabled: true };
+    return { enabled: true, adaptivePersonalizationEnabled: true };
   }
   const candidate = raw as Partial<LongTermMemorySettings>;
   return {
@@ -80,6 +80,10 @@ export function sanitizeMemorySettings(raw: unknown): LongTermMemorySettings {
     explanationLevel: isValidExplanationLevel(candidate.explanationLevel)
       ? candidate.explanationLevel
       : undefined,
+    adaptivePersonalizationEnabled:
+      typeof candidate.adaptivePersonalizationEnabled === "boolean"
+        ? candidate.adaptivePersonalizationEnabled
+        : true,
   };
 }
 

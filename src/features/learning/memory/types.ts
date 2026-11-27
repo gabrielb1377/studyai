@@ -32,6 +32,8 @@ export type LongTermMemoryEntry = {
 export type LongTermMemorySettings = {
   enabled: boolean;
   explanationLevel?: ExplanationLevel;
+  /** Controle por conta da personalização adaptativa (AL-1). Padrão: true quando omitido. */
+  adaptivePersonalizationEnabled?: boolean;
 };
 
 export type LongTermMemoryStoreState = {

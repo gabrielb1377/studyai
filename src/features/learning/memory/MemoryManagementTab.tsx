@@ -42,6 +42,7 @@ export function MemoryManagementTab({
   memories,
   isSaving,
   onToggleEnabled,
+  onToggleAdaptivePersonalization,
   onChangeLevel,
   onAddMemory,
   onUpdateMemory,
@@ -53,12 +54,14 @@ export function MemoryManagementTab({
   memories: readonly LongTermMemoryEntry[];
   isSaving: boolean;
   onToggleEnabled: (enabled: boolean) => Promise<void>;
+  onToggleAdaptivePersonalization?: (enabled: boolean) => Promise<void>;
   onChangeLevel: (level: ExplanationLevel | undefined) => Promise<void>;
   onAddMemory: (draft: ExplicitMemoryDraft) => Promise<void>;
   onUpdateMemory: (id: string, patch: { title?: string; content?: string }) => Promise<void>;
   onRemoveMemory: (id: string) => Promise<void>;
   onClearAll: () => Promise<void>;
 }) {
+  const adaptiveEnabled = settings.adaptivePersonalizationEnabled !== false;
   const [showForm, setShowForm] = useState(false);
   const [category, setCategory] = useState<MemoryCategory>("preference");
   const [studyId, setStudyId] = useState("");
@@ -98,18 +101,41 @@ export function MemoryManagementTab({
               Memória local deste navegador (isolada por conta; não sincroniza entre dispositivos). O Tutor consulta somente registros ativos e relevantes.
             </p>
           </div>
-          <Button
-            type="button"
-            role="switch"
-            aria-checked={settings.enabled}
-            variant={settings.enabled ? "default" : "outline"}
-            size="sm"
-            disabled={isSaving}
-            onClick={() => void onToggleEnabled(!settings.enabled)}
-          >
-            {settings.enabled ? "Memória ativa no Tutor" : "Memória desativada"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              role="switch"
+              aria-checked={settings.enabled}
+              variant={settings.enabled ? "default" : "outline"}
+              size="sm"
+              disabled={isSaving}
+              onClick={() => void onToggleEnabled(!settings.enabled)}
+            >
+              {settings.enabled ? "Memória ativa no Tutor" : "Memória desativada"}
+            </Button>
+            {onToggleAdaptivePersonalization ? (
+              <Button
+                type="button"
+                aria-pressed={adaptiveEnabled}
+                variant={adaptiveEnabled ? "secondary" : "outline"}
+                size="sm"
+                disabled={isSaving}
+                onClick={() => void onToggleAdaptivePersonalization(!adaptiveEnabled)}
+              >
+                {adaptiveEnabled
+                  ? "Personalização adaptativa ativa"
+                  : "Personalização adaptativa desativada"}
+              </Button>
+            ) : null}
+          </div>
         </div>
+        {onToggleAdaptivePersonalization ? (
+          <p className="text-xs text-muted-foreground">
+            {adaptiveEnabled
+              ? "A seleção adaptativa sugere skill, nível e método explicáveis usando apenas sinais autorizados desta conta."
+              : "Personalização adaptativa desativada nesta conta: sua seleção manual e o comportamento padrão são preservados."}
+          </p>
+        ) : null}
 
         <div className="grid gap-3 border-t pt-3 sm:grid-cols-2 sm:items-end">
           <label className="grid gap-1.5 text-xs font-medium">

@@ -28,6 +28,9 @@ export function PersonalizedLearningWorkspace({
     memorySettings,
     difficultyItems,
     recommendations,
+    adaptiveGoal,
+    setAdaptiveGoal,
+    adaptiveRecommendationsByStudyId,
     assessmentIndicator,
     summary,
     isLoading,
@@ -39,6 +42,7 @@ export function PersonalizedLearningWorkspace({
     removeEntry,
     completeTargetedReview,
     toggleMemoryEnabled,
+    toggleAdaptivePersonalization,
     setExplanationLevel,
     addExplicitMemory,
     updateMemory,
@@ -191,6 +195,12 @@ export function PersonalizedLearningWorkspace({
         <DifficultyMapTab
           difficultyItems={difficultyItems}
           assessmentIndicator={assessmentIndicator}
+          adaptiveGoal={adaptiveGoal}
+          onChangeAdaptiveGoal={setAdaptiveGoal}
+          adaptiveRecommendationsByStudyId={adaptiveRecommendationsByStudyId}
+          adaptivePersonalizationEnabled={memorySettings.adaptivePersonalizationEnabled !== false}
+          isSaving={isSaving}
+          onToggleAdaptivePersonalization={toggleAdaptivePersonalization}
           onSelectStudyFilter={(studyId) => setStudyFilter(studyId)}
           onGoToErrorsTab={() => setActiveTab("erros")}
         />
@@ -231,6 +241,7 @@ export function PersonalizedLearningWorkspace({
           memories={memories}
           isSaving={isSaving}
           onToggleEnabled={toggleMemoryEnabled}
+          onToggleAdaptivePersonalization={toggleAdaptivePersonalization}
           onChangeLevel={setExplanationLevel}
           onAddMemory={addExplicitMemory}
           onUpdateMemory={updateMemory}

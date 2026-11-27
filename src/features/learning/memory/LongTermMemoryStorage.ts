@@ -100,9 +100,15 @@ export const LongTermMemoryStorage = {
   async load(): Promise<LongTermMemoryStoreState> {
     const session = SessionOperationManager.current();
     if (session.suspended) {
-      return { settings: { enabled: true }, entries: [] };
+      return { settings: { enabled: true, adaptivePersonalizationEnabled: true }, entries: [] };
     }
+    const generation = session.generation;
+    const userId = session.userId;
     const record = await StorageManager.get<MemoryMetadataRecord>("metadata", MEMORY_KEY);
+    const after = SessionOperationManager.current();
+    if (after.suspended || after.generation !== generation || after.userId !== userId) {
+      return { settings: { enabled: true, adaptivePersonalizationEnabled: true }, entries: [] };
+    }
     return sanitizeMemoryStoreState(record?.value);
   },
 
@@ -112,6 +118,16 @@ export const LongTermMemoryStorage = {
       settings: {
         ...current.settings,
         enabled,
+      },
+    }));
+  },
+
+  async setAdaptivePersonalizationEnabled(enabled: boolean): Promise<LongTermMemoryStoreState> {
+    return mutateMemoryStore((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        adaptivePersonalizationEnabled: enabled,
       },
     }));
   },

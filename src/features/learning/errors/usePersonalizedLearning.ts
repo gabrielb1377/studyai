@@ -1,12 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  deriveSafeMemorySignals,
+  selectAdaptiveSkill,
+  type AdaptiveActivityGoal,
+  type AdaptiveSkillRecommendation,
+} from "@/features/ai/skills";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import type { TopicReview } from "@/features/learning/TopicReview";
 import { TopicReviewStorage } from "@/features/learning/TopicReviewStorage";
 import { useLearningEngine } from "@/features/learning/hooks/useLearningEngine";
 import { useQuiz } from "@/features/quiz/useQuiz";
 import { useStudyEngine } from "@/features/study/hooks/useStudyEngine";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import { STORAGE_UPDATED_EVENT } from "@/lib/storage/StorageManager";
 import {
   DifficultyMapEngine,
@@ -54,46 +61,84 @@ export function usePersonalizedLearning() {
   const [rawErrors, setRawErrors] = useState<ErrorNotebookEntry[]>([]);
   const [topicReviews, setTopicReviews] = useState<TopicReview[]>([]);
   const [memoryState, setMemoryState] = useState<LongTermMemoryStoreState>({
-    settings: { enabled: true },
+    settings: { enabled: true, adaptivePersonalizationEnabled: true },
     entries: [],
   });
+  const [adaptiveGoal, setAdaptiveGoal] = useState<AdaptiveActivityGoal>("learn");
   const [auxLoading, setAuxLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const loadSeqRef = useRef(0);
 
   const loadAuxData = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    const sessionBefore = SessionOperationManager.current();
     try {
       const [loadedErrors, loadedReviews, loadedMemory] = await Promise.all([
         ErrorNotebookStorage.load(),
         TopicReviewStorage.load(),
         LongTermMemoryStorage.load(),
       ]);
+      const sessionAfter = SessionOperationManager.current();
+      if (
+        seq !== loadSeqRef.current ||
+        sessionAfter.generation !== sessionBefore.generation ||
+        sessionAfter.userId !== sessionBefore.userId
+      ) {
+        return;
+      }
       setRawErrors(loadedErrors);
       setTopicReviews(loadedReviews);
       setMemoryState(loadedMemory);
       setError(null);
     } catch (caught) {
+      const sessionAfter = SessionOperationManager.current();
+      if (
+        seq !== loadSeqRef.current ||
+        sessionAfter.generation !== sessionBefore.generation ||
+        sessionAfter.userId !== sessionBefore.userId
+      ) {
+        return;
+      }
       setError(
         caught instanceof Error
           ? caught.message
           : "Não foi possível carregar os dados do Caderno de Erros.",
       );
     } finally {
-      setAuxLoading(false);
+      const sessionAfter = SessionOperationManager.current();
+      if (
+        seq === loadSeqRef.current &&
+        sessionAfter.generation === sessionBefore.generation &&
+        sessionAfter.userId === sessionBefore.userId
+      ) {
+        setAuxLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     void loadAuxData();
-    const reload = () => {
+    const reload = (event?: Event) => {
+      const detail = (event as CustomEvent<{ scopeChanged?: boolean }> | undefined)?.detail;
+      if (detail?.scopeChanged) {
+        loadSeqRef.current += 1;
+        setRawErrors([]);
+        setTopicReviews([]);
+        setMemoryState({
+          settings: { enabled: true, adaptivePersonalizationEnabled: true },
+          entries: [],
+        });
+      }
       void loadAuxData();
     };
     window.addEventListener(STORAGE_UPDATED_EVENT, reload);
     window.addEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, reload);
     window.addEventListener(LONG_TERM_MEMORY_UPDATED_EVENT, reload);
     return () => {
+      loadSeqRef.current += 1;
       window.removeEventListener(STORAGE_UPDATED_EVENT, reload);
       window.removeEventListener(ERROR_NOTEBOOK_UPDATED_EVENT, reload);
       window.removeEventListener(LONG_TERM_MEMORY_UPDATED_EVENT, reload);
@@ -271,6 +316,21 @@ export function usePersonalizedLearning() {
     [enqueueOperation],
   );
 
+  const toggleAdaptivePersonalization = useCallback(
+    async (enabled: boolean) => {
+      await enqueueOperation(
+        async () => {
+          const next = await LongTermMemoryStorage.setAdaptivePersonalizationEnabled(enabled);
+          setMemoryState(next);
+        },
+        enabled
+          ? "Personalização adaptativa ativada."
+          : "Personalização adaptativa desativada; seleção manual preservada.",
+      );
+    },
+    [enqueueOperation],
+  );
+
   const setExplanationLevel = useCallback(
     async (level: ExplanationLevel | undefined) => {
       await enqueueOperation(async () => {
@@ -344,6 +404,40 @@ export function usePersonalizedLearning() {
     [entries, flashcards, quizzes],
   );
 
+  const adaptiveRecommendationsByStudyId = useMemo(() => {
+    const map: Record<string, AdaptiveSkillRecommendation> = {};
+    const reconciledMemoryState: LongTermMemoryStoreState = {
+      settings: memoryState.settings,
+      entries: memories,
+    };
+    for (const item of difficultyItems) {
+      const topicMetrics = profile.topics[item.study.studyId];
+      const memorySignals = deriveSafeMemorySignals(reconciledMemoryState, {
+        studyId: item.study.studyId,
+        subject: item.study.subject,
+      });
+      map[item.study.studyId] = selectAdaptiveSkill({
+        goal: adaptiveGoal,
+        personalizationEnabled: memoryState.settings.adaptivePersonalizationEnabled !== false,
+        memoryEnabled: memoryState.settings.enabled,
+        memorySettings: memoryState.settings,
+        study: item.study,
+        knowledge: item.knowledge,
+        difficultyItem: item,
+        priority: item.priority,
+        observedPerformance: {
+          quizAttempts: item.evolution.quizAttempts,
+          averageScore: item.evolution.latestScore,
+          totalStudyMinutes: topicMetrics?.timeMinutes ?? 0,
+          dueFlashcardsCount: item.dueFlashcardsCount,
+          pendingErrorsCount: item.pendingErrorsCount,
+        },
+        memorySignals,
+      });
+    }
+    return map;
+  }, [adaptiveGoal, difficultyItems, memories, memoryState.settings, profile.topics]);
+
   return {
     studies,
     entries,
@@ -351,6 +445,9 @@ export function usePersonalizedLearning() {
     memorySettings: memoryState.settings,
     difficultyItems,
     recommendations,
+    adaptiveGoal,
+    setAdaptiveGoal,
+    adaptiveRecommendationsByStudyId,
     assessmentIndicator,
     summary,
     isLoading,
@@ -363,6 +460,7 @@ export function usePersonalizedLearning() {
     removeEntry,
     completeTargetedReview,
     toggleMemoryEnabled,
+    toggleAdaptivePersonalization,
     setExplanationLevel,
     addExplicitMemory,
     updateMemory,
