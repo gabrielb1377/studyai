@@ -72,6 +72,7 @@ export type QuotaInfo = {
 export type ProviderModelUsageSummary = {
   provider: string;
   model: string | null;
+  credentialOrigin: "shared" | "byok" | "local";
   requests: number;
   totalTokens: number;
   observedTokens: number;
@@ -85,7 +86,13 @@ export type DailyUsageBreakdown = {
   pendingReservedTokens: number;
   pendingReservationsCount: number;
   reconciledCount: number;
-  cacheHitsCount: number;
+  /**
+   * Reconciliações concluídas com 0 tokens reportados pelo provedor (`status='reconciled'`,
+   * `usage_source='provider'`, `actual_total_tokens=0`). Pode incluir acertos de cache da IA
+   * compartilhada ou respostas concluídas sem cobrança de tokens; acertos de cache não possuem
+   * marcador persistido separado em `ai_token_reservations`.
+   */
+  zeroTokenReconciledCount: number;
   failedOrCancelledCount: number;
   byProviderModel: ProviderModelUsageSummary[];
   source: "reservations" | "unavailable";
@@ -964,13 +971,14 @@ export const QuotaService = {
       return [];
     }
 
+    const dateStr = getDateString();
     const safeDays = Math.min(365, Math.max(1, Math.trunc(days)));
     const result = await query(
       `SELECT date::text AS date, requests_count as requests, tokens_count as tokens
        FROM usage_quotas
-       WHERE user_id = $1 AND minute_bucket = 0 AND date >= CURRENT_DATE - ($2::int * INTERVAL '1 day')
+       WHERE user_id = $1 AND minute_bucket = 0 AND date >= ($2::date - ($3::int * INTERVAL '1 day'))
        ORDER BY date DESC`,
-      [userId, safeDays],
+      [userId, dateStr, safeDays],
     );
 
     return result.rows.map((row) => ({
@@ -998,7 +1006,7 @@ export const QuotaService = {
       let pendingReservedTokens = 0;
       let pendingReservationsCount = 0;
       let reconciledCount = 0;
-      let cacheHitsCount = 0;
+      let zeroTokenReconciledCount = 0;
       let failedOrCancelledCount = 0;
       const groupMap = new Map<string, ProviderModelUsageSummary>();
 
@@ -1014,7 +1022,7 @@ export const QuotaService = {
         if (res.status === "reconciled") {
           reconciledCount += 1;
           if (isObserved && charged === 0) {
-            cacheHitsCount += 1;
+            zeroTokenReconciledCount += 1;
           }
         } else if (res.status === "failed" || res.status === "cancelled") {
           failedOrCancelledCount += 1;
@@ -1024,10 +1032,11 @@ export const QuotaService = {
           else estimatedTokens += charged;
 
           const modelKey = res.model?.trim() || null;
-          const groupKey = `${res.provider}::${modelKey ?? ""}`;
+          const groupKey = `${res.provider}::${modelKey ?? ""}::${res.credentialOrigin}`;
           const existing = groupMap.get(groupKey) ?? {
             provider: res.provider,
             model: modelKey,
+            credentialOrigin: res.credentialOrigin,
             requests: 0,
             totalTokens: 0,
             observedTokens: 0,
@@ -1052,7 +1061,7 @@ export const QuotaService = {
         pendingReservedTokens,
         pendingReservationsCount,
         reconciledCount,
-        cacheHitsCount,
+        zeroTokenReconciledCount,
         failedOrCancelledCount,
         byProviderModel,
         source: "reservations",
@@ -1067,7 +1076,7 @@ export const QuotaService = {
           pending_reserved_tokens: string;
           pending_count: string;
           reconciled_count: string;
-          cache_hits_count: string;
+          zero_token_reconciled_count: string;
           failed_count: string;
         }>(
           `SELECT
@@ -1076,7 +1085,7 @@ export const QuotaService = {
              COALESCE(SUM(CASE WHEN status = 'reserved' AND expires_at > NOW() THEN reserved_tokens ELSE 0 END), 0)::text AS pending_reserved_tokens,
              COALESCE(COUNT(*) FILTER (WHERE status = 'reserved' AND expires_at > NOW()), 0)::text AS pending_count,
              COALESCE(COUNT(*) FILTER (WHERE status = 'reconciled'), 0)::text AS reconciled_count,
-             COALESCE(COUNT(*) FILTER (WHERE status = 'reconciled' AND usage_source = 'provider' AND COALESCE(actual_total_tokens, 0) = 0), 0)::text AS cache_hits_count,
+             COALESCE(COUNT(*) FILTER (WHERE status = 'reconciled' AND usage_source = 'provider' AND COALESCE(actual_total_tokens, 0) = 0), 0)::text AS zero_token_reconciled_count,
              COALESCE(COUNT(*) FILTER (WHERE status IN ('failed','cancelled')), 0)::text AS failed_count
            FROM ai_token_reservations
            WHERE user_id = $1 AND usage_date = $2::date`,
@@ -1085,6 +1094,7 @@ export const QuotaService = {
         query<{
           provider: string;
           model: string | null;
+          credential_origin: "shared" | "byok" | "local";
           requests: string;
           total_tokens: string;
           observed_tokens: string;
@@ -1093,6 +1103,7 @@ export const QuotaService = {
           `SELECT
              provider,
              NULLIF(TRIM(COALESCE(model, '')), '') AS model,
+             credential_origin,
              COUNT(*)::text AS requests,
              COALESCE(SUM(COALESCE(actual_total_tokens, 0)), 0)::text AS total_tokens,
              COALESCE(SUM(CASE WHEN usage_source = 'provider' THEN COALESCE(actual_total_tokens, 0) ELSE 0 END), 0)::text AS observed_tokens,
@@ -1101,7 +1112,7 @@ export const QuotaService = {
            WHERE user_id = $1
              AND usage_date = $2::date
              AND status IN ('reconciled','failed','cancelled')
-           GROUP BY provider, NULLIF(TRIM(COALESCE(model, '')), '')
+           GROUP BY provider, NULLIF(TRIM(COALESCE(model, '')), ''), credential_origin
            ORDER BY COALESCE(SUM(COALESCE(actual_total_tokens, 0)), 0) DESC, COUNT(*) DESC
            LIMIT 12`,
           [userId, dateStr],
@@ -1116,11 +1127,15 @@ export const QuotaService = {
         pendingReservedTokens: Math.max(0, Number(row?.pending_reserved_tokens ?? 0) || 0),
         pendingReservationsCount: Math.max(0, Number(row?.pending_count ?? 0) || 0),
         reconciledCount: Math.max(0, Number(row?.reconciled_count ?? 0) || 0),
-        cacheHitsCount: Math.max(0, Number(row?.cache_hits_count ?? 0) || 0),
+        zeroTokenReconciledCount: Math.max(0, Number(row?.zero_token_reconciled_count ?? 0) || 0),
         failedOrCancelledCount: Math.max(0, Number(row?.failed_count ?? 0) || 0),
         byProviderModel: groupRes.rows.map((item) => ({
           provider: item.provider,
           model: item.model,
+          credentialOrigin:
+            item.credential_origin === "byok" || item.credential_origin === "local"
+              ? item.credential_origin
+              : "shared",
           requests: Math.max(0, Number(item.requests) || 0),
           totalTokens: Math.max(0, Number(item.total_tokens) || 0),
           observedTokens: Math.max(0, Number(item.observed_tokens) || 0),
@@ -1136,7 +1151,7 @@ export const QuotaService = {
         pendingReservedTokens: 0,
         pendingReservationsCount: 0,
         reconciledCount: 0,
-        cacheHitsCount: 0,
+        zeroTokenReconciledCount: 0,
         failedOrCancelledCount: 0,
         byProviderModel: [],
         source: "unavailable",

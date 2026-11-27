@@ -751,7 +751,7 @@ export function AIUsageBudgetPanel({
               </div>
             </dl>
 
-            {/* Contabilização real (provider) vs estimada conservadoramente vs cache hits */}
+            {/* Contabilização real (provider) vs estimada conservadoramente vs reconciliações sem cobrança */}
             <div className="space-y-2 border-t pt-3">
               <p className="text-xs font-medium text-foreground">
                 Origem da contabilização hoje
@@ -771,9 +771,9 @@ export function AIUsageBudgetPanel({
                     </dd>
                   </div>
                   <div className="min-w-0 rounded-md border bg-muted/15 p-2">
-                    <dt className="text-muted-foreground">Cache hits sem nova cobrança</dt>
+                    <dt className="text-muted-foreground">Reconciliações sem cobrança (0 tokens)</dt>
                     <dd className="mt-0.5 font-medium text-foreground tabular-nums">
-                      {vm.accounting.cacheHitsCount.toLocaleString("pt-BR")}
+                      {vm.accounting.zeroTokenReconciledCount.toLocaleString("pt-BR")}
                     </dd>
                   </div>
                 </dl>
@@ -803,10 +803,11 @@ export function AIUsageBudgetPanel({
                       </thead>
                       <tbody className="divide-y">
                         {vm.accounting.byProviderModel.map((row) => (
-                          <tr key={`${row.provider}-${row.model ?? "default"}`}>
+                          <tr key={`${row.provider}-${row.model ?? "default"}-${row.credentialOrigin ?? "shared"}`}>
                             <th scope="row" className="px-2.5 py-1.5 font-medium text-foreground">
                               {row.provider}
                               {row.model ? ` · ${row.model}` : ""}
+                              {row.credentialOrigin ? ` (${row.credentialOrigin})` : ""}
                             </th>
                             <td className="px-2.5 py-1.5 text-right tabular-nums">
                               {row.requests.toLocaleString("pt-BR")}

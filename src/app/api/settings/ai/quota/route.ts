@@ -97,6 +97,7 @@ export async function GET(request: Request) {
       accounting,
       availability: {
         blockedRequestsTracked: false,
+        cacheHitsTracked: false,
         externalProviderLimitsTracked: false,
         monetaryCostTracked: false,
       },

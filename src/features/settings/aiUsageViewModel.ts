@@ -34,6 +34,7 @@ export interface AITokenWindowPayload {
 export interface AIProviderModelUsagePayload {
   provider: string;
   model: string | null;
+  credentialOrigin?: "shared" | "byok" | "local";
   requests: number;
   totalTokens: number;
   observedTokens: number;
@@ -47,7 +48,7 @@ export interface AIAccountingBreakdownPayload {
   pendingReservedTokens: number;
   pendingReservationsCount: number;
   reconciledCount: number;
-  cacheHitsCount: number;
+  zeroTokenReconciledCount: number;
   failedOrCancelledCount: number;
   byProviderModel: AIProviderModelUsagePayload[];
   source: "reservations" | "unavailable";
@@ -71,6 +72,7 @@ export interface AIQuotaApiPayload {
   accounting?: AIAccountingBreakdownPayload;
   availability?: {
     blockedRequestsTracked?: boolean;
+    cacheHitsTracked?: boolean;
     externalProviderLimitsTracked?: boolean;
     monetaryCostTracked?: boolean;
   };
@@ -173,7 +175,7 @@ export interface AIUsageBudgetViewModel {
     pendingReservedTokens: number;
     pendingReservationsCount: number;
     reconciledCount: number;
-    cacheHitsCount: number;
+    zeroTokenReconciledCount: number;
     failedOrCancelledCount: number;
     byProviderModel: AIProviderModelUsagePayload[];
   };
@@ -449,7 +451,7 @@ export function buildAIUsageBudgetViewModel(
     status: classifyMetricStatus(tokenAllocated, tokenLimit),
   };
 
-  // 4. Contabilização (observado vs estimado vs reservas pendentes vs cache hits)
+  // 4. Contabilização (observado vs estimado vs reservas pendentes vs reconciliações sem cobrança)
   const rawAcc = payload.accounting;
   const accountingAvailable = Boolean(rawAcc && rawAcc.source === "reservations");
   const accounting = {
@@ -459,12 +461,17 @@ export function buildAIUsageBudgetViewModel(
     pendingReservedTokens: safeNonNegativeInt(rawAcc?.pendingReservedTokens, tokenReserved),
     pendingReservationsCount: safeNonNegativeInt(rawAcc?.pendingReservationsCount, 0),
     reconciledCount: safeNonNegativeInt(rawAcc?.reconciledCount, 0),
-    cacheHitsCount: safeNonNegativeInt(rawAcc?.cacheHitsCount, 0),
+    zeroTokenReconciledCount: safeNonNegativeInt(rawAcc?.zeroTokenReconciledCount, 0),
     failedOrCancelledCount: safeNonNegativeInt(rawAcc?.failedOrCancelledCount, 0),
     byProviderModel: Array.isArray(rawAcc?.byProviderModel)
       ? rawAcc.byProviderModel.map((row) => ({
           provider: String(row.provider || "desconhecido"),
           model: row.model ? String(row.model) : null,
+          credentialOrigin: (
+            row.credentialOrigin === "byok" || row.credentialOrigin === "local"
+              ? row.credentialOrigin
+              : "shared"
+          ) as "shared" | "byok" | "local",
           requests: safeNonNegativeInt(row.requests, 0),
           totalTokens: safeNonNegativeInt(row.totalTokens, 0),
           observedTokens: safeNonNegativeInt(row.observedTokens, 0),
@@ -587,6 +594,7 @@ export function buildAIUsageBudgetViewModel(
   const unavailableNotices: string[] = [
     "Limites externos, preços e gastos monetários de provedores (BYOK/externos): Não disponível.",
     "Contagem histórica de requisições bloqueadas (429/403/503): Não disponível na persistência atual.",
+    "Acertos de cache de IA separados de outras reconciliações com 0 tokens: Não disponível na persistência atual.",
   ];
 
   return {

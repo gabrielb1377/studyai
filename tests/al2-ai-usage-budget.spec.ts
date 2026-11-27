@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -98,7 +99,7 @@ function makeBasePayload(overrides: Partial<AIQuotaApiPayload> = {}): AIQuotaApi
       pendingReservedTokens: 0,
       pendingReservationsCount: 0,
       reconciledCount: 0,
-      cacheHitsCount: 0,
+      zeroTokenReconciledCount: 0,
       failedOrCancelledCount: 0,
       byProviderModel: [],
       source: "reservations",
@@ -187,12 +188,13 @@ test.describe("AL-2: Contabilização Real, ViewModel e Isolamento de QuotaServi
           pendingReservedTokens: 5_000,
           pendingReservationsCount: 1,
           reconciledCount: 2,
-          cacheHitsCount: 1,
+          zeroTokenReconciledCount: 1,
           failedOrCancelledCount: 0,
           byProviderModel: [
             {
               provider: "gemini",
               model: "gemini-2.5-flash",
+              credentialOrigin: "shared",
               requests: 2,
               totalTokens: 10_000,
               observedTokens: 7_500,
@@ -210,7 +212,8 @@ test.describe("AL-2: Contabilização Real, ViewModel e Isolamento de QuotaServi
     expect(reservedVm.tokens.remaining).toBe(235_000);
     expect(reservedVm.accounting.observedTokens).toBe(7_500);
     expect(reservedVm.accounting.estimatedTokens).toBe(2_500);
-    expect(reservedVm.accounting.cacheHitsCount).toBe(1);
+    expect(reservedVm.accounting.zeroTokenReconciledCount).toBe(1);
+    expect(reservedVm.unavailableNotices.some((n) => n.includes("cache"))).toBe(true);
 
     // Transparência de BYOK e Ollama: limite desconhecido = "Não disponível" (nunca "ilimitado")
     const byokRow = reservedVm.providerTransparency.find((r) => r.id === "byok")!;
@@ -297,7 +300,8 @@ test.describe("AL-2: Contabilização Real, ViewModel e Isolamento de QuotaServi
     expect(estRes.usageSource).toBe("estimated");
     expect(estRes.chargedTokens).toBeGreaterThan(0);
 
-    // 3. Cache hit reconciliado com 0 tokens (sem cobrança duplicada)
+    // 3. Reconciliação sem cobrança (cache hit + resposta concluída com 0 tokens):
+    // ambas somam em zeroTokenReconciledCount (sem assumir inequivocamente que toda cobrança 0 é cache hit).
     const r3 = await QuotaService.reserveSharedBudget(userA, {
       provider: "gemini",
       model: "gemini-2.5-flash",
@@ -313,6 +317,23 @@ test.describe("AL-2: Contabilização Real, ViewModel e Isolamento de QuotaServi
       emittedOutput: true,
     });
     expect(cacheRes.chargedTokens).toBe(0);
+
+    const r3b = await QuotaService.reserveSharedBudget(userA, {
+      provider: "gemini",
+      model: "gemini-2.5-flash",
+      requestId: `req-zero-provider-${Date.now()}`,
+      reserveTokens: 1_000,
+      useSharedKeys: true,
+    });
+    expect(r3b.allowed).toBe(true);
+    const zeroProviderRes = await QuotaService.reconcileReservation(r3b.reservationId!, {
+      provider: "gemini",
+      outcome: "completed",
+      providerContacted: true,
+      emittedOutput: false,
+      usage: { source: "provider", inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    });
+    expect(zeroProviderRes.chargedTokens).toBe(0);
 
     // 4. Reserva pendente ainda em andamento
     const r4 = await QuotaService.reserveSharedBudget(userA, {
@@ -336,8 +357,9 @@ test.describe("AL-2: Contabilização Real, ViewModel e Isolamento de QuotaServi
     expect(breakdownA.estimatedTokens).toBe(estRes.chargedTokens);
     expect(breakdownA.pendingReservedTokens).toBe(2_500);
     expect(breakdownA.pendingReservationsCount).toBe(1);
-    expect(breakdownA.cacheHitsCount).toBe(1);
+    expect(breakdownA.zeroTokenReconciledCount).toBe(2);
     expect(breakdownA.byProviderModel.length).toBeGreaterThanOrEqual(2);
+    expect(breakdownA.byProviderModel.every((row) => row.credentialOrigin === "shared")).toBe(true);
 
     // Verifica isolamento absoluto da Conta B (zero vazamento da Conta A)
     const infoB = await QuotaService.getQuotaInfo(userB);
@@ -395,6 +417,7 @@ test.describe("AL-2: Endpoint Protegido e Painel em Navegador Real (Acessibilida
     expect(raw1).not.toContain("ai_global_daily_budgets");
     expect(body1.daily.used).toBe(0);
     expect(body1.accounting.source).toBe("reservations");
+    expect(body1.availability.cacheHitsTracked).toBe(false);
     expect(body1.availability.externalProviderLimitsTracked).toBe(false);
     expect(body1.availability.monetaryCostTracked).toBe(false);
 
@@ -478,12 +501,13 @@ test.describe("AL-2: Endpoint Protegido e Painel em Navegador Real (Acessibilida
                 pendingReservedTokens: 0,
                 pendingReservationsCount: 0,
                 reconciledCount: 1,
-                cacheHitsCount: 0,
+                zeroTokenReconciledCount: 0,
                 failedOrCancelledCount: 0,
                 byProviderModel: [
                   {
                     provider: "gemini",
                     model: "gemini-2.5-flash",
+                    credentialOrigin: "shared",
                     requests: 1,
                     totalTokens: 420,
                     observedTokens: 420,
@@ -522,12 +546,13 @@ test.describe("AL-2: Endpoint Protegido e Painel em Navegador Real (Acessibilida
               pendingReservedTokens: 2_500,
               pendingReservationsCount: 1,
               reconciledCount: 12,
-              cacheHitsCount: 2,
+              zeroTokenReconciledCount: 2,
               failedOrCancelledCount: 0,
               byProviderModel: [
                 {
                   provider: "gemini",
                   model: "gemini-2.5-flash",
+                  credentialOrigin: "shared",
                   requests: 10,
                   totalTokens: 15_000,
                   observedTokens: 15_000,
@@ -536,6 +561,7 @@ test.describe("AL-2: Endpoint Protegido e Painel em Navegador Real (Acessibilida
                 {
                   provider: "groq",
                   model: "llama-3.3-70b",
+                  credentialOrigin: "shared",
                   requests: 4,
                   totalTokens: 3_500,
                   observedTokens: 0,
@@ -562,12 +588,12 @@ test.describe("AL-2: Endpoint Protegido e Painel em Navegador Real (Acessibilida
     await expect(panel).toBeVisible();
     await expect(panel).toHaveAttribute("data-al2-state", "reservations_in_flight");
 
-    // 1. Verifica separação explícita de consumido vs reservado, observado vs estimado, cache hit e BYOK/Ollama Não disponível
+    // 1. Verifica separação explícita de consumido vs reservado, observado vs estimado, reconciliações 0-token e BYOK/Ollama Não disponível
     await expect(panel).toContainText("18.500 tokens");
     await expect(panel).toContainText("2.500 tokens (1 ativa)");
     await expect(panel).toContainText("15.000 tokens");
     await expect(panel).toContainText("3.500 tokens");
-    await expect(panel).toContainText("Cache hits sem nova cobrança");
+    await expect(panel).toContainText("Reconciliações sem cobrança (0 tokens)");
     await expect(panel).toContainText("Limite: Não disponível");
     await expect(panel).not.toContainText("sem limites");
 
@@ -647,5 +673,345 @@ test.describe("AL-2: Endpoint Protegido e Painel em Navegador Real (Acessibilida
     await expect(panel).toContainText("420 tokens");
     await expect(panel).not.toContainText("18.500 tokens");
     expect(quotaCalls).toBeGreaterThanOrEqual(4);
+  });
+});
+
+function isDisposableLocalPostgres(url: string | undefined): url is string {
+  if (!url || process.env.STUDYAI_ALLOW_LOCAL_DB_TESTS !== "1") return false;
+  try {
+    const parsed = new URL(url);
+    return ["127.0.0.1", "localhost", "::1", "[::1]"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function loadPgModule(
+  file: string,
+  dependencies: Record<string, unknown>,
+  env: Record<string, string | undefined>,
+) {
+  const source = readFileSync(path.join(process.cwd(), file), "utf8");
+  const js = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const compiled = { exports: {} as Record<string, unknown> };
+  const resolvedDeps: Record<string, unknown> = { "server-only": {}, ...dependencies };
+  vm.runInContext(
+    js,
+    vm.createContext({
+      module: compiled,
+      exports: compiled.exports,
+      require: (id: string) => (id in resolvedDeps ? resolvedDeps[id] : testRequire(id)),
+      Buffer,
+      Date,
+      URL,
+      setTimeout,
+      clearTimeout,
+      crypto: globalThis.crypto,
+      process: { env },
+      console: { ...console, warn: () => undefined, info: () => undefined, error: () => undefined },
+    }),
+  );
+  return compiled.exports;
+}
+
+test.describe("AL-2: PostgreSQL Real (PG-AL2)", () => {
+  const databaseUrl = process.env.DATABASE_URL;
+  const hasLocalPg = isDisposableLocalPostgres(databaseUrl);
+
+  test("PG-AL2-1: getUsageBreakdown, getQuotaInfo e getUsageStats validam isolamento A/B, provider/model/credentialOrigin, observado vs estimado, pendentes, janelas UTC, idempotência, ausência de orçamento global e consistência com histórico", async () => {
+    test.skip(!hasLocalPg, "Requer DATABASE_URL local descartável com STUDYAI_ALLOW_LOCAL_DB_TESTS=1");
+    const pg = testRequire("pg") as typeof import("pg");
+    const adminPool = new pg.Pool({ connectionString: databaseUrl, max: 2, ssl: false });
+    const env = {
+      NODE_ENV: "test",
+      DATABASE_URL: databaseUrl,
+      DATABASE_SSL: "false",
+      AI_USER_DAILY_TOKEN_LIMIT: "100000",
+      AI_GLOBAL_DAILY_TOKEN_BUDGET: "500000",
+    };
+    const pgMod = loadPgModule("src/server/database/Postgres.ts", {}, env) as {
+      postgresPool: () => import("pg").Pool;
+    };
+    const quotaMod = loadPgModule(
+      "src/server/ai/QuotaService.ts",
+      { "@/server/database/Postgres": pgMod },
+      env,
+    ) as { QuotaService: typeof QuotaServiceType };
+    const PgQuota = quotaMod.QuotaService;
+
+    const userA = `al2_pg_a_${Date.now()}_${randomUUID().slice(0, 6)}`;
+    const userB = `al2_pg_b_${Date.now()}_${randomUUID().slice(0, 6)}`;
+    const todayUtc = new Date().toISOString().split("T")[0];
+    const yesterdayUtc = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    try {
+      const schemaSql = readFileSync(path.join(process.cwd(), "src/server/database/schema.sql"), "utf8");
+      const mig0003 = readFileSync(
+        path.join(process.cwd(), "migrations/0003_lote3_ai_budgets_and_storage_quotas.sql"),
+        "utf8",
+      );
+      await adminPool.query(schemaSql);
+      await adminPool.query(mig0003);
+
+      await adminPool.query(
+        `INSERT INTO users (id, email, password_hash, email_verified_at)
+         VALUES ($1, $2, 'hash', NOW()), ($3, $4, 'hash', NOW())`,
+        [userA, `${userA}@example.com`, userB, `${userB}@example.com`],
+      );
+
+      // 1. Registro em janela UTC anterior (ontem) para userA: deve aparecer no histórico 30d, mas NÃO no breakdown de hoje
+      await adminPool.query(
+        `INSERT INTO usage_quotas (user_id, date, minute_bucket, requests_count, tokens_count, reserved_tokens)
+         VALUES ($1, $2::date, 0, 3, 4500, 0)`,
+        [userA, yesterdayUtc],
+      );
+      await adminPool.query(
+        `INSERT INTO ai_token_reservations (
+           id, request_id, user_id, usage_date, provider, model, credential_origin,
+           reserved_tokens, actual_input_tokens, actual_output_tokens, actual_total_tokens,
+           usage_source, status, expires_at, reconciled_at
+         ) VALUES (
+           $1, $2, $3, $4::date, 'gemini', 'gemini-2.5-flash', 'shared',
+           5000, 3000, 1500, 4500, 'provider', 'reconciled', NOW() + INTERVAL '5 minutes', NOW()
+         )`,
+        [`res-yest-${randomUUID()}`, `req-yest-${randomUUID()}`, userA, yesterdayUtc],
+      );
+
+      // 2. Reserva + reconciliação observada (provider) para userA + idempotência de requestId e reconcileReservation
+      const obsReqId = `pg-al2-obs-${randomUUID()}`;
+      const rObs = await PgQuota.reserveSharedBudget(userA, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: obsReqId,
+        reserveTokens: 3_000,
+        useSharedKeys: true,
+      });
+      expect(rObs.allowed).toBe(true);
+      const rObsDup = await PgQuota.reserveSharedBudget(userA, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: obsReqId,
+        reserveTokens: 3_000,
+        useSharedKeys: true,
+      });
+      expect(rObsDup.deduplicated).toBe(true);
+      expect(rObsDup.reservationId).toBe(rObs.reservationId);
+
+      const recObs = await PgQuota.reconcileReservation(rObs.reservationId!, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        outcome: "completed",
+        providerContacted: true,
+        emittedOutput: true,
+        usage: { source: "provider", inputTokens: 900, outputTokens: 300, totalTokens: 1_200 },
+      });
+      expect(recObs.reconciled).toBe(true);
+      expect(recObs.chargedTokens).toBe(1_200);
+
+      // Reconciliação duplicada -> idempotente (zero duplicação)
+      const recObsDup = await PgQuota.reconcileReservation(rObs.reservationId!, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        outcome: "completed",
+        providerContacted: true,
+        emittedOutput: true,
+        usage: { source: "provider", inputTokens: 900, outputTokens: 300, totalTokens: 1_200 },
+      });
+      expect(recObsDup.alreadySettled).toBe(true);
+      expect(recObsDup.chargedTokens).toBe(0);
+
+      // 3. Reserva + reconciliação estimada conservadoramente (outro provedor/modelo) para userA
+      const rEst = await PgQuota.reserveSharedBudget(userA, {
+        provider: "groq",
+        model: "llama-3.3-70b",
+        requestId: `pg-al2-est-${randomUUID()}`,
+        reserveTokens: 2_000,
+        useSharedKeys: true,
+      });
+      expect(rEst.allowed).toBe(true);
+      const recEst = await PgQuota.reconcileReservation(
+        rEst.reservationId!,
+        {
+          provider: "groq",
+          model: "llama-3.3-70b",
+          outcome: "completed",
+          providerContacted: true,
+          emittedOutput: true,
+          emittedText: "Texto de resposta estimada para validar separação observado vs estimado no PostgreSQL.",
+        },
+        { inputEstimate: 400 },
+      );
+      expect(recEst.usageSource).toBe("estimated");
+      expect(recEst.chargedTokens).toBeGreaterThan(0);
+
+      // 4. Duas reconciliações sem cobrança (0 tokens): uma cached e uma completed com totalTokens=0
+      const rCache = await PgQuota.reserveSharedBudget(userA, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: `pg-al2-cache-${randomUUID()}`,
+        reserveTokens: 1_500,
+        useSharedKeys: true,
+      });
+      await PgQuota.reconcileReservation(rCache.reservationId!, {
+        provider: "gemini",
+        outcome: "cached",
+        providerContacted: false,
+        emittedOutput: true,
+      });
+
+      const rZero = await PgQuota.reserveSharedBudget(userA, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: `pg-al2-zero-${randomUUID()}`,
+        reserveTokens: 1_000,
+        useSharedKeys: true,
+      });
+      await PgQuota.reconcileReservation(rZero.reservationId!, {
+        provider: "gemini",
+        outcome: "completed",
+        providerContacted: true,
+        emittedOutput: false,
+        usage: { source: "provider", inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      });
+
+      // 5. Reserva pendente ativa + reserva falhada/cancelada + registro distinto de credential_origin ('byok') no mesmo provider/model
+      const rPending = await PgQuota.reserveSharedBudget(userA, {
+        provider: "gemini",
+        model: "gemini-2.5-flash",
+        requestId: `pg-al2-pending-${randomUUID()}`,
+        reserveTokens: 2_200,
+        useSharedKeys: true,
+      });
+      expect(rPending.allowed).toBe(true);
+
+      const rCancel = await PgQuota.reserveSharedBudget(userA, {
+        provider: "groq",
+        model: "llama-3.3-70b",
+        requestId: `pg-al2-cancel-${randomUUID()}`,
+        reserveTokens: 900,
+        useSharedKeys: true,
+      });
+      await PgQuota.reconcileReservation(rCancel.reservationId!, {
+        provider: "groq",
+        outcome: "cancelled",
+        providerContacted: false,
+        emittedOutput: false,
+      });
+
+      // Inserção controlada de linha com credential_origin='byok' no mesmo provider/model para validar GROUP BY credential_origin
+      await adminPool.query(
+        `INSERT INTO ai_token_reservations (
+           id, request_id, user_id, usage_date, provider, model, credential_origin,
+           reserved_tokens, actual_input_tokens, actual_output_tokens, actual_total_tokens,
+           usage_source, status, expires_at, reconciled_at
+         ) VALUES (
+           $1, $2, $3, $4::date, 'gemini', 'gemini-2.5-flash', 'byok',
+           0, 100, 50, 150, 'provider', 'reconciled', NOW() + INTERVAL '5 minutes', NOW()
+         )`,
+        [`res-byok-${randomUUID()}`, `req-byok-${randomUUID()}`, userA, todayUtc],
+      );
+
+      // 6. Consumo isolado para userB
+      const rB = await PgQuota.reserveSharedBudget(userB, {
+        provider: "openrouter",
+        model: "deepseek-r1",
+        requestId: `pg-al2-b-${randomUUID()}`,
+        reserveTokens: 1_800,
+        useSharedKeys: true,
+      });
+      await PgQuota.reconcileReservation(rB.reservationId!, {
+        provider: "openrouter",
+        model: "deepseek-r1",
+        outcome: "completed",
+        providerContacted: true,
+        emittedOutput: true,
+        usage: { source: "provider", inputTokens: 200, outputTokens: 100, totalTokens: 300 },
+      });
+
+      // Verificações para userA (somente leitura)
+      const [infoA, breakdownA, statsA] = await Promise.all([
+        PgQuota.getQuotaInfo(userA),
+        PgQuota.getUsageBreakdown(userA),
+        PgQuota.getUsageStats(userA, 30),
+      ]);
+
+      expect(breakdownA.source).toBe("reservations");
+      expect(breakdownA.date).toBe(todayUtc);
+      // Observado hoje: 1200 (shared) + 150 (byok) = 1350 (ontem 4500 NÃO entra no breakdown de hoje)
+      expect(breakdownA.observedTokens).toBe(1_350);
+      expect(breakdownA.estimatedTokens).toBe(recEst.chargedTokens);
+      expect(breakdownA.pendingReservedTokens).toBe(2_200);
+      expect(breakdownA.pendingReservationsCount).toBe(1);
+      expect(breakdownA.reconciledCount).toBe(5); // obs + est + cache + zero + byok
+      expect(breakdownA.zeroTokenReconciledCount).toBe(2); // cache + zero
+      expect(breakdownA.failedOrCancelledCount).toBe(1);
+
+      // Agregação separada por provider / model / credentialOrigin
+      const geminiShared = breakdownA.byProviderModel.find(
+        (row) => row.provider === "gemini" && row.model === "gemini-2.5-flash" && row.credentialOrigin === "shared",
+      );
+      const geminiByok = breakdownA.byProviderModel.find(
+        (row) => row.provider === "gemini" && row.model === "gemini-2.5-flash" && row.credentialOrigin === "byok",
+      );
+      const groqShared = breakdownA.byProviderModel.find(
+        (row) => row.provider === "groq" && row.model === "llama-3.3-70b" && row.credentialOrigin === "shared",
+      );
+      expect(geminiShared).toMatchObject({ requests: 3, observedTokens: 1_200, estimatedTokens: 0 });
+      expect(geminiByok).toMatchObject({ requests: 1, observedTokens: 150, estimatedTokens: 0 });
+      expect(groqShared).toMatchObject({ requests: 2, observedTokens: 0, estimatedTokens: recEst.chargedTokens });
+
+      // Consistência entre usage_quotas (shared) e histórico 30d (inclui ontem + hoje UTC)
+      const expectedSharedTodayTokens = 1_200 + recEst.chargedTokens;
+      expect(infoA.tokens?.used).toBe(expectedSharedTodayTokens);
+      expect(infoA.tokens?.reserved).toBe(2_200);
+      expect(infoA.daily.used).toBe(6); // 6 reservas shared hoje (duplicada não conta)
+
+      const statToday = statsA.find((s) => s.date === todayUtc);
+      const statYesterday = statsA.find((s) => s.date === yesterdayUtc);
+      expect(statToday).toEqual({ date: todayUtc, requests: 6, tokens: expectedSharedTodayTokens });
+      expect(statYesterday).toEqual({ date: yesterdayUtc, requests: 3, tokens: 4_500 });
+
+      // Ausência de vazamento de orçamento global nos retornos
+      const serializedA = JSON.stringify({ infoA, breakdownA, statsA });
+      expect(serializedA).not.toContain("500000");
+      expect(serializedA).not.toContain("globalDailyTokenBudget");
+      expect(serializedA).not.toContain("ai_global_daily_budgets");
+
+      // Isolamento absoluto de userB (zero vazamento de userA)
+      const [infoB, breakdownB, statsB] = await Promise.all([
+        PgQuota.getQuotaInfo(userB),
+        PgQuota.getUsageBreakdown(userB),
+        PgQuota.getUsageStats(userB, 30),
+      ]);
+      expect(infoB.daily.used).toBe(1);
+      expect(infoB.tokens?.used).toBe(300);
+      expect(infoB.tokens?.reserved).toBe(0);
+      expect(breakdownB.observedTokens).toBe(300);
+      expect(breakdownB.estimatedTokens).toBe(0);
+      expect(breakdownB.pendingReservedTokens).toBe(0);
+      expect(breakdownB.zeroTokenReconciledCount).toBe(0);
+      expect(breakdownB.byProviderModel).toEqual([
+        {
+          provider: "openrouter",
+          model: "deepseek-r1",
+          credentialOrigin: "shared",
+          requests: 1,
+          totalTokens: 300,
+          observedTokens: 300,
+          estimatedTokens: 0,
+        },
+      ]);
+      expect(statsB).toEqual([{ date: todayUtc, requests: 1, tokens: 300 }]);
+    } finally {
+      await adminPool.query("DELETE FROM users WHERE id IN ($1, $2)", [userA, userB]).catch(() => undefined);
+      await pgMod.postgresPool().end().catch(() => undefined);
+      await adminPool.end().catch(() => undefined);
+    }
   });
 });
