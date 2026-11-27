@@ -69,6 +69,28 @@ export type QuotaInfo = {
   sharedKeysUsed: boolean;
 };
 
+export type ProviderModelUsageSummary = {
+  provider: string;
+  model: string | null;
+  requests: number;
+  totalTokens: number;
+  observedTokens: number;
+  estimatedTokens: number;
+};
+
+export type DailyUsageBreakdown = {
+  date: string;
+  observedTokens: number;
+  estimatedTokens: number;
+  pendingReservedTokens: number;
+  pendingReservationsCount: number;
+  reconciledCount: number;
+  cacheHitsCount: number;
+  failedOrCancelledCount: number;
+  byProviderModel: ProviderModelUsageSummary[];
+  source: "reservations" | "unavailable";
+};
+
 export type TokenEstimate = {
   inputEstimate: number;
   outputEstimate: number;
@@ -932,11 +954,19 @@ export const QuotaService = {
 
   async getUsageStats(userId: string, days = 30) {
     const hasPg = await hasPostgresAsync();
-    if (!hasPg) return [];
+    if (!hasPg) {
+      const dateStr = getDateString();
+      reclaimExpiredLocalReservations(dateStr);
+      const current = localQuota.get(userId);
+      if (current && current.date === dateStr && (current.dailyUsed > 0 || current.tokensUsed > 0)) {
+        return [{ date: current.date, requests: current.dailyUsed, tokens: current.tokensUsed }];
+      }
+      return [];
+    }
 
     const safeDays = Math.min(365, Math.max(1, Math.trunc(days)));
     const result = await query(
-      `SELECT date, requests_count as requests, tokens_count as tokens
+      `SELECT date::text AS date, requests_count as requests, tokens_count as tokens
        FROM usage_quotas
        WHERE user_id = $1 AND minute_bucket = 0 AND date >= CURRENT_DATE - ($2::int * INTERVAL '1 day')
        ORDER BY date DESC`,
@@ -944,10 +974,174 @@ export const QuotaService = {
     );
 
     return result.rows.map((row) => ({
-      date: row.date,
-      requests: Number(row.requests),
-      tokens: Number(row.tokens),
+      date: String(row.date),
+      requests: Math.max(0, Number(row.requests) || 0),
+      tokens: Math.max(0, Number(row.tokens) || 0),
     }));
+  },
+
+  /**
+   * Consulta somente leitura da composição diária de tokens do próprio usuário
+   * (observado pelo provedor vs estimado conservadoramente vs em reserva pendente).
+   * Nunca expõe dados de terceiros, chaves, prompts ou orçamento global.
+   */
+  async getUsageBreakdown(userId: string): Promise<DailyUsageBreakdown> {
+    const dateStr = getDateString();
+    const hasPg = await hasPostgresAsync();
+    if (!hasPg) {
+      if (process.env.NODE_ENV === "production") {
+        throw Object.assign(new Error("Armazenamento de quota indisponível."), { code: "QUOTA_STORAGE_UNAVAILABLE" });
+      }
+      reclaimExpiredLocalReservations(dateStr);
+      let observedTokens = 0;
+      let estimatedTokens = 0;
+      let pendingReservedTokens = 0;
+      let pendingReservationsCount = 0;
+      let reconciledCount = 0;
+      let cacheHitsCount = 0;
+      let failedOrCancelledCount = 0;
+      const groupMap = new Map<string, ProviderModelUsageSummary>();
+
+      for (const res of localReservations.values()) {
+        if (res.userId !== userId || res.usageDate !== dateStr) continue;
+        if (res.status === "reserved") {
+          pendingReservationsCount += 1;
+          pendingReservedTokens += Math.max(0, res.reservedTokens);
+          continue;
+        }
+        const charged = Math.max(0, res.actualTotalTokens ?? 0);
+        const isObserved = res.usageSource === "provider";
+        if (res.status === "reconciled") {
+          reconciledCount += 1;
+          if (isObserved && charged === 0) {
+            cacheHitsCount += 1;
+          }
+        } else if (res.status === "failed" || res.status === "cancelled") {
+          failedOrCancelledCount += 1;
+        }
+        if (res.status === "reconciled" || res.status === "failed" || res.status === "cancelled") {
+          if (isObserved) observedTokens += charged;
+          else estimatedTokens += charged;
+
+          const modelKey = res.model?.trim() || null;
+          const groupKey = `${res.provider}::${modelKey ?? ""}`;
+          const existing = groupMap.get(groupKey) ?? {
+            provider: res.provider,
+            model: modelKey,
+            requests: 0,
+            totalTokens: 0,
+            observedTokens: 0,
+            estimatedTokens: 0,
+          };
+          existing.requests += 1;
+          existing.totalTokens += charged;
+          if (isObserved) existing.observedTokens += charged;
+          else existing.estimatedTokens += charged;
+          groupMap.set(groupKey, existing);
+        }
+      }
+
+      const byProviderModel = [...groupMap.values()].sort(
+        (left, right) => right.totalTokens - left.totalTokens || right.requests - left.requests,
+      );
+
+      return {
+        date: dateStr,
+        observedTokens,
+        estimatedTokens,
+        pendingReservedTokens,
+        pendingReservationsCount,
+        reconciledCount,
+        cacheHitsCount,
+        failedOrCancelledCount,
+        byProviderModel,
+        source: "reservations",
+      };
+    }
+
+    try {
+      const [summaryRes, groupRes] = await Promise.all([
+        query<{
+          observed_tokens: string;
+          estimated_tokens: string;
+          pending_reserved_tokens: string;
+          pending_count: string;
+          reconciled_count: string;
+          cache_hits_count: string;
+          failed_count: string;
+        }>(
+          `SELECT
+             COALESCE(SUM(CASE WHEN status IN ('reconciled','failed','cancelled') AND usage_source = 'provider' THEN COALESCE(actual_total_tokens, 0) ELSE 0 END), 0)::text AS observed_tokens,
+             COALESCE(SUM(CASE WHEN status IN ('reconciled','failed','cancelled') AND usage_source IN ('estimated','unknown') THEN COALESCE(actual_total_tokens, 0) ELSE 0 END), 0)::text AS estimated_tokens,
+             COALESCE(SUM(CASE WHEN status = 'reserved' AND expires_at > NOW() THEN reserved_tokens ELSE 0 END), 0)::text AS pending_reserved_tokens,
+             COALESCE(COUNT(*) FILTER (WHERE status = 'reserved' AND expires_at > NOW()), 0)::text AS pending_count,
+             COALESCE(COUNT(*) FILTER (WHERE status = 'reconciled'), 0)::text AS reconciled_count,
+             COALESCE(COUNT(*) FILTER (WHERE status = 'reconciled' AND usage_source = 'provider' AND COALESCE(actual_total_tokens, 0) = 0), 0)::text AS cache_hits_count,
+             COALESCE(COUNT(*) FILTER (WHERE status IN ('failed','cancelled')), 0)::text AS failed_count
+           FROM ai_token_reservations
+           WHERE user_id = $1 AND usage_date = $2::date`,
+          [userId, dateStr],
+        ),
+        query<{
+          provider: string;
+          model: string | null;
+          requests: string;
+          total_tokens: string;
+          observed_tokens: string;
+          estimated_tokens: string;
+        }>(
+          `SELECT
+             provider,
+             NULLIF(TRIM(COALESCE(model, '')), '') AS model,
+             COUNT(*)::text AS requests,
+             COALESCE(SUM(COALESCE(actual_total_tokens, 0)), 0)::text AS total_tokens,
+             COALESCE(SUM(CASE WHEN usage_source = 'provider' THEN COALESCE(actual_total_tokens, 0) ELSE 0 END), 0)::text AS observed_tokens,
+             COALESCE(SUM(CASE WHEN usage_source IN ('estimated','unknown') THEN COALESCE(actual_total_tokens, 0) ELSE 0 END), 0)::text AS estimated_tokens
+           FROM ai_token_reservations
+           WHERE user_id = $1
+             AND usage_date = $2::date
+             AND status IN ('reconciled','failed','cancelled')
+           GROUP BY provider, NULLIF(TRIM(COALESCE(model, '')), '')
+           ORDER BY COALESCE(SUM(COALESCE(actual_total_tokens, 0)), 0) DESC, COUNT(*) DESC
+           LIMIT 12`,
+          [userId, dateStr],
+        ),
+      ]);
+
+      const row = summaryRes.rows[0];
+      return {
+        date: dateStr,
+        observedTokens: Math.max(0, Number(row?.observed_tokens ?? 0) || 0),
+        estimatedTokens: Math.max(0, Number(row?.estimated_tokens ?? 0) || 0),
+        pendingReservedTokens: Math.max(0, Number(row?.pending_reserved_tokens ?? 0) || 0),
+        pendingReservationsCount: Math.max(0, Number(row?.pending_count ?? 0) || 0),
+        reconciledCount: Math.max(0, Number(row?.reconciled_count ?? 0) || 0),
+        cacheHitsCount: Math.max(0, Number(row?.cache_hits_count ?? 0) || 0),
+        failedOrCancelledCount: Math.max(0, Number(row?.failed_count ?? 0) || 0),
+        byProviderModel: groupRes.rows.map((item) => ({
+          provider: item.provider,
+          model: item.model,
+          requests: Math.max(0, Number(item.requests) || 0),
+          totalTokens: Math.max(0, Number(item.total_tokens) || 0),
+          observedTokens: Math.max(0, Number(item.observed_tokens) || 0),
+          estimatedTokens: Math.max(0, Number(item.estimated_tokens) || 0),
+        })),
+        source: "reservations",
+      };
+    } catch {
+      return {
+        date: dateStr,
+        observedTokens: 0,
+        estimatedTokens: 0,
+        pendingReservedTokens: 0,
+        pendingReservationsCount: 0,
+        reconciledCount: 0,
+        cacheHitsCount: 0,
+        failedOrCancelledCount: 0,
+        byProviderModel: [],
+        source: "unavailable",
+      };
+    }
   },
 
   /**
