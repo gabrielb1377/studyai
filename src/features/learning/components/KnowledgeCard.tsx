@@ -12,7 +12,7 @@ const classificationLabels = {
 
 export function KnowledgeCard({ score, priority }: { score: KnowledgeScore; priority: StudyPriority }) {
   return (
-    <Card className="gap-4 p-4 shadow-none" aria-label={`Conhecimento em ${score.topic}: ${score.knowledge}%`}>
+    <Card className="min-w-0 gap-4 p-4 shadow-none" aria-label={`Conhecimento em ${score.topic}: ${score.knowledge}%`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0"><p className="truncate font-medium">{score.topic}</p><p className="truncate text-xs text-muted-foreground">{score.subject}</p></div>
         <Badge variant={priority.level === "Alta" ? "destructive" : "secondary"}>{priority.level}</Badge>
