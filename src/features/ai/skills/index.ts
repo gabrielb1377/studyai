@@ -37,4 +37,6 @@ export * from "./practice";
 export * from "./personalized";
 export * from "./audio-computing";
 export * from "./math-exam";
+export * from "./adaptive/types";
+export * from "./adaptive/AdaptiveSkillSelector";
 export { registerTeacherSkills, buildTeacherInstruction, buildTeacherActionMessage } from "./teacher/TeacherSkills";
