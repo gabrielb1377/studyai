@@ -1,22 +1,25 @@
-# Handoff atual — StudyAI V1.3 (Onda 3)
+# Handoff atual — StudyAI V1.3 (Onda 4)
 
-## Estado atual — Onda 3 / TE-5 Concluída Localmente e Publicada: Diagramas, Execução Restrita e Encerramento da Onda 3 em `v1.3-development` (26/11/2026)
+## Estado atual — Onda 3 Formalmente Encerrada e Onda 4 / MM-1 Validada Localmente em `v1.3-development` (27/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
 - **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
-- **Onda 1 — Quality Upgrade Concluído (`v1.3-development`)**: `PS-1b`, `QU-1`..`QU-5` e `PS-2` (0 ocorrências de `withQuotaEnforcement` em `src/`).
-- **Onda 2 — Intelligence Engine Formalmente Encerrada (`3246b73`, CI `45895240129` 6/6 VERDE)**:
-  - Catálogo completo **20/20 skills (`0.1.0`) + 13 Teacher (`1.0.0`) = 33 registros únicos imutáveis**; `skills.enabled = false`.
-- **Onda 3 — Tool Engine / TE-1..TE-5 Implementadas (`v1.3-development`)**:
-  - **TE-4 validada 6/6 na CI** (`45914113610` em `94c4ce8`, após correção cirúrgica da corrida de chunk dinâmico `NotesWorkspace` em `tests/sprint58b-offline-resilience.spec.ts`).
-  - **Revisão diferencial TE-4**: limpeza segura de `consumedConfirmations` apenas pós-expiração e `retireAndResetSession` em `ToolTurnState.ts`, `pruneExpiredProposals` em `ToolConfirmationService.ts`, dupla verificação `SessionOperationManager` em `AccountTransformProvider.ts` (`FlashcardService.save` / `QuizService.save`).
-  - **TE-5 — `diagram@0.1.0`** (`src/features/ai/tools/diagram/`): `class: "transform"`, reutiliza `diagrams/*` (`parseMermaid`, `normalizeDiagram`, `renderDiagramSvg`, `validateSvgMarkup`, `toMermaidSource`), bloqueia `%%{init:...}%%`, `click`, CSS/style, HTML/script, `on*=`, URLs externas e excesso de complexidade (`<=25` nós / `<=40` arestas), configuração de renderização fixa confiável, fallback textual seguro e validação real no DOM do Chromium (0 scripts, 0 elementos ativos, 0 rede).
-  - **TE-5 — `js_execution@0.1.0`** (`src/features/ai/tools/execution/`): `class: "execution"`, reutiliza exclusivamente `SafeExecutionService.ts` endurecido + rota dedicada `GET /api/lab/js-worker` com CSP HTTP `default-src 'none'; script-src 'unsafe-eval'; connect-src 'none'; worker-src 'none'; child-src 'none'` (preservado no `src/middleware.ts`), neutralização em toda a cadeia de protótipos de `self` e `navigator`, `AbortSignal` + `worker.terminate()` real em timeout/troca A→B, cap de 1 mensagem e truncamento de saída; comprovado no Web Worker real do Chromium (0 requisições de rede, 17/17 APIs proibidas = `undefined`).
-  - **Catálogo final de produção**: exatamente **10 ferramentas canônicas** (`calculator`, `library`, `performance`, `errors`, `doc_reader`, `flashcards`, `quiz`, `plan`, `diagram`, `js_execution`); `audio` (Fase 3) segue desconectada; `tools.enabled = false` e `skills.enabled = false`.
-- **Integrações de runtime pendentes (documentadas para decisão/Onda 4)**: `defaultClientReadProvider.loadPerformance`, carregamento de `exams` em `defaultClientTransformProvider.loadPlanningContext`, UI de confirmação no Tutor/Professor e ativação das flags (`tools.enabled`/`skills.enabled`).
-- **Encerramento formal da Onda 3**: condicionado à CI final da TE-5 completar **6/6 jobs verdes**. Próxima etapa após aprovação: **Onda 4** (iniciando por `MM-1` ou `AL-1`/`AL-2` conforme roadmap; aguardar autorização explícita do owner).
+- **Onda 1 (`PS-1b`, `PS-2`, `QU-1`..`QU-5`) e Onda 2 (`IE-1`..`IE-4F`, CI `45895240129` 6/6 VERDE)**: concluídas; **33 skills (20 oficiais + 13 Teacher)** imutáveis; `skills.enabled = false`.
+- **Onda 3 — Tool Engine (`TE-1`..`TE-5`) FORMALMENTE ENCERRADA (`40ed368`, CI `45918219371` 6/6 VERDE)**:
+  - Correção da regressão Lab (`40ed368`): handshake `{ __workerReady: true }` em `SafeExecutionService.ts` + sincronização `inFlightRunRef` em `useLab.ts` → **6/6 jobs verdes**, incluindo `e2e (4)` executando `tests/te5-diagram-execution.spec.ts` (Worker real no Chromium + CSP HTTP + renderizador SVG real).
+  - Catálogo completo: **10 ferramentas canônicas** (`calculator`, `library`, `performance`, `errors`, `doc_reader`, `flashcards`, `quiz`, `plan`, `diagram`, `js_execution`); `tools.enabled = false`.
+  - Riscos residuais preservados: limite rígido de memória do Web Worker não garantido pelo navegador; ausência de teste direto de IndexedDB real pelo Gateway; Gateway cliente não substitui autorização server-side.
+- **Onda 4 — MM-1 Implementada e Validada Localmente (pendente CI 6/6 verde para encerramento formal)**:
+  - `src/features/analytics/charts/chartScale.ts`: escalas matemáticas puras sem `NaN`/`Infinity`, tratamento explícito de `no_data`, `zero_values`, valores iguais e extremos, diferenciação entre métricas observadas e indicadores derivados.
+  - `src/features/analytics/components/PerformanceSvgCharts.tsx` + `AnalyticsCharts.tsx` + `AnalyticsDashboard.tsx`: gráficos SVG acessíveis sem novas bibliotecas (`Evolução semanal`, `Evolução mensal`, `Tempo por matéria/tema/capítulo`, `Retenção` com marcador geométrico `◆`), teclado (`Arrow*`/`Home`/`End`/`Enter`/`Space`), `<title>`/`<desc>`, tabela semântica equivalente (`Ver tabela` + `sr-only`), claro/escuro e `motion-reduce:transition-none`.
+  - `src/features/analytics/useAnalytics.ts`: guarda assíncrona monotônica (`scopeSeqRef` + `currentDatabaseGeneration()`) descartando respostas tardias de `MentorStorage.load()` e `requestIdleCallback` após troca de conta (`scopeChanged`).
+  - `src/features/learning/components/SmartLearningDashboard.tsx`: correção cirúrgica de layout mobile preexistente (`min-w-0` nos cards do grid de `Plano diário` + `shrink-0`), eliminando overflow horizontal em `/` (`521px` → `350px` em `360px` com tabela aberta/fechada e `310px` em `320px`).
+  - `tests/mm1-performance-charts.spec.ts`: cobertura unitária + Chromium real (320/360/390/768/1280px, tabela aberta/fechada, claro/escuro, `prefers-reduced-motion`, teclado e isolamento real A→B na UI).
+- **Pendências futuras preservadas (não implementadas silenciosamente; requerem decisão do owner / marco futuro)**:
+  - `defaultClientReadProvider.loadPerformance`; carregamento real de `exams` no contexto de planejamento; wiring de Intelligence Engine e Tool Gateway ao Tutor/Professor; interface de confirmação; testes diretos de IndexedDB real pelo Gateway; ativação controlada das flags (`skills.enabled` / `tools.enabled`).
+- **Próxima etapa**: aguardar CI 6/6 verde da `MM-1` e decisão do owner sobre `MM-2` (opcional, somente com demanda) ou avanço direto para **`AL-1`** (seleção explicável e desativável de skill por perfil do aluno).
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
