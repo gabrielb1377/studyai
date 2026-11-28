@@ -1,24 +1,21 @@
-# Handoff atual — StudyAI V1.3 (Onda 4)
+# Handoff atual — StudyAI V1.3 (Integração — Lote A)
 
-## Estado atual — AL-2 e Etapas Obrigatórias da Onda 4 FORMALMENTE ENCERRADAS (`650109f`/`cb57d77`, CI `46084803360` 6/6 VERDE) + Auditoria de Integração V1.3 (27/11/2026)
+## Estado atual — Lote A (Isolamento por Conta e Segurança de Sessão) IMPLEMENTADO E VALIDADO LOCALMENTE (aguardando CI 6/6 verde para encerramento formal) (27/11/2026)
 
-Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
+Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)**, `main` segue intocada em `7e3d89b` e `exp/s3-direct-upload` intacta em `7b7be19`.
 
-- **Caminho A — Fechamento Técnico V1.2 (`v1.1-development` @ `1d0d698`)**:
-  - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
-- **Onda 1 (`PS-1b`, `PS-2`, `QU-1`..`QU-5`) e Onda 2 (`IE-1`..`IE-4F`, CI `45895240129` 6/6 VERDE)**: concluídas; **33 skills (20 oficiais + 13 Teacher)** imutáveis; `skills.enabled = false`.
-- **Onda 3 — Tool Engine (`TE-1`..`TE-5`) FORMALMENTE ENCERRADA (`40ed368`, CI `45918219371` 6/6 VERDE)**: **10 ferramentas canônicas** registradas; `tools.enabled = false`.
-- **Onda 4 — Etapas Obrigatórias FORMALMENTE ENCERRADAS (`MM-1` `c06f77b` CI `46058793413` 6/6 VERDE · `AL-1` `d53dfcb` CI `46062817873` 6/6 VERDE · `AL-2` `650109f`/`cb57d77` CI `46084803360` 6/6 VERDE)**:
-  - **MM-1**: gráficos SVG acessíveis em `src/features/analytics/`, tabela equivalente, guarda assíncrona e responsividade `320..1280px`.
-  - **MM-2**: preservada como **opcional adiada** (mantida no roadmap aguardando autorização do owner).
-  - **AL-1**: seletor determinístico, explicável e desativável (`AdaptiveSkillSelector.ts`), persistência por conta do opt-out (`LongTermMemoryStorage`) e painel informativo em `/aprendizagem`.
-  - **AL-2**: painel explicável de uso e orçamento em `/configuracoes` → `IA`, revisado e validado com **6/6 jobs verdes** na CI **`46084803360`** (`quality`, `postgres` com `PG-AL2-1` em PostgreSQL 17 real, e `e2e (1..4)`):
-    1. Contagem documental reconciliada: `tests/al2-ai-usage-budget.spec.ts` (6) + `tests/sprint42-security-quota.spec.ts` (4) = **10 passed** reais (`task-10540.log`); CI anterior `46081993680` teve 1 falha intermitente não relacionada em `e2e (4)` (`ux-persistence.spec.ts:63`), resolvida sem regressão na CI `46084803360`.
-    2. Classificação honesta sem migration: substituído `cacheHitsCount` por `zeroTokenReconciledCount` + `availability.cacheHitsTracked: false` + aviso explícito (pois `ai_token_reservations` não distingue `cached` de `completed` com `0` tokens).
-    3. Agrupamento por `provider / model / credentialOrigin`, alinhamento UTC em `getUsageStats()` e cobertura **PostgreSQL real (`PG-AL2-1`)** aprovada em PostgreSQL 18 local (`1/1`) e no job `postgres` da CI (`46084803360`).
-- **Auditoria de prontidão de integração V1.3 (somente leitura; Lotes A–E NÃO iniciados)**:
-  - **Encerramento das ondas NÃO equivale à prontidão de produção da V1.3**: `SkillBudgetExecutor`, `ToolGateway` e `ToolConfirmationService` possuem `0` chamadores em runtime; `AdaptiveSkillSelector` está ligado apenas a `/aprendizagem`; `useTeacher.ts` usa 3 chaves `localStorage` globais sem namespace de conta; `defaultClientReadProvider.loadPerformance` é stub vazio; `loadPlanningContext` usa `exams: []`; IndexedDB real pelo Gateway carece de teste E2E em Chromium; flags `skills.enabled` / `tools.enabled` seguem `false` (estáticas `NEXT_PUBLIC_*`).
-- **Próxima etapa**: aguardar aprovação do owner para o plano enxuto de integração V1.3 (Lotes A–E). Não iniciar Onda 5, Lotes A–E ou publicação em produção sem autorização.
+- **Base V1.3 encerrada (Ondas 1–4)**:
+  - **Onda 1 (`PS-1b`, `PS-2`, `QU-1`..`QU-5`) e Onda 2 (`IE-1`..`IE-4F`, CI `45895240129` 6/6 VERDE)**: **33 skills (20 oficiais + 13 Teacher)** imutáveis; `skills.enabled = false`.
+  - **Onda 3 (`TE-1`..`TE-5`, `40ed368`, CI `45918219371` 6/6 VERDE)**: **10 ferramentas canônicas** registradas; `tools.enabled = false`.
+  - **Onda 4 — Etapas Obrigatórias FORMALMENTE ENCERRADAS (`MM-1` `c06f77b` CI `46058793413` · `AL-1` `d53dfcb` CI `46062817873` · `AL-2` `650109f`/`cb57d77` CI `46084803360`, todas 6/6 VERDES)**; **MM-2** preservada como opcional adiada.
+- **Integração V1.3 — Lote A (`Account Isolation & Session Safety`)**:
+  - **Professor e Aula em Áudio**: `useTeacher.ts` migrado para chaves isoladas por conta (`studyai:teacher-preferences:v2:<user>`, `studyai:teacher-audio-lesson-preferences:v2:<user>`, `studyai:teacher-audio-lesson-session:v2:<user>`), integrado a `useAuth()` + `SessionOperationManager`, sem sobrescrita no mount/Strict Mode e sem absorção de chaves `:v1` legadas sem dono; `useAudioLesson.ts` e `TeacherAudioSessionStorage.ts` protegidos com `SessionOperationManager`, verificação de `session.suspended` e geração de IndexedDB (`currentDatabaseGeneration`/`currentDatabaseName`) contra respostas tardias e troca `A → B`.
+  - **Workspace e Notas**: `WorkspacePersistence.ts`, `WorkspaceStorage.ts`, `WorkspaceManager.ts`, `StudyWorkspace.tsx`, `WorkspaceCanvas.tsx`, `useNotes.ts`, `NotesWorkspace.tsx`, `WorkspaceLauncher.tsx` e `BetaReadinessPanel.tsx` migrados para chaves por conta (`:u:<user>:`), falhando fechado em sessão suspensa/inativa/geração obsoleta, limpando estado em memória no logout/troca, eliminando a corrida de hidratação da reabertura em nova aba (`ux-persistence.spec.ts:49` aprovou **3/3** em `--repeat-each=3 --retries=0`) e ignorando sem destruir chaves legadas sem dono.
+  - **Validação local (`--retries=0`, R$ 0/mês)**: `git diff --check` (0) · `typecheck` (0) · `lint` (0 erros, 44 avisos preexistentes) · `build` (54/54, `21.9s`) · Node isolamento & Onda 4 (`61 passed / 0 failed / 6 skipped browser/PG`) · Chromium E2E (`v13-integration-a-account-isolation` **4/4**, `ux-persistence` **6/6** + **3/3** `repeat-each=3`, `teacher` **3/3**, `tutor` **5/5**, `workspace-v2` **3/3**, `sprint41g3d-browser-isolation` **2/2**, `sprint58b-offline-resilience` **6/6**).
+- **Pendências de integração V1.3 (Lotes B–E NÃO iniciados)**:
+  - **Lote B**: completar leitores/adaptadores reais (`defaultClientReadProvider.loadPerformance`, `loadPlanningContext` com provas reais, teste E2E Chromium de IndexedDB real pelo Tool Gateway).
+  - **Lote C/D/E**: wiring progressivo de `SkillBudgetExecutor`, `AdaptiveSkillSelector`, `ToolGateway` e `ToolConfirmationService` sob feature flags desligadas por padrão e homologação integrada.
+- **Próxima etapa**: confirmar **CI 6/6 verde** dos commits do Lote A em `v1.3-development` e aguardar avaliação/autorização do owner antes de iniciar o **Lote B**. Não iniciar Lote B, MM-2, Onda 5 ou publicação em produção sem autorização.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 

@@ -16,11 +16,11 @@ test("Workspace 2.0 redimensiona, restaura, troca layouts e registra a sessão",
   const separator = page.getByRole("separator", { name: /Material e Tutor IA/ });
   await separator.focus();
   await separator.press("ArrowRight");
-  const storedBeforeRefresh = await page.evaluate((id) => JSON.parse(localStorage.getItem(`studyai:workspace-v2:${id}`) ?? "null"), studyId);
+  const storedBeforeRefresh = await page.evaluate((id) => JSON.parse(localStorage.getItem(`studyai:workspace-v2:u:offline-session:${id}`) ?? "null"), studyId);
   expect(storedBeforeRefresh.panels[0].size).toBeGreaterThan(65);
 
   await page.reload();
-  const storedAfterRefresh = await page.evaluate((id) => JSON.parse(localStorage.getItem(`studyai:workspace-v2:${id}`) ?? "null"), studyId);
+  const storedAfterRefresh = await page.evaluate((id) => JSON.parse(localStorage.getItem(`studyai:workspace-v2:u:offline-session:${id}`) ?? "null"), studyId);
   expect(storedAfterRefresh.panels[0].size).toBe(storedBeforeRefresh.panels[0].size);
 
   await page.getByLabel("Layout do Workspace").selectOption("review");
@@ -85,7 +85,7 @@ test("PDF Pro persiste marcações, comentários e histórico", async ({ page })
   await page.waitForTimeout(250);
 
   const persisted = await page.evaluate(({ studyId, materialId }) => {
-    const state = JSON.parse(localStorage.getItem(`studyai:workspace:${studyId}`) ?? "null");
+    const state = JSON.parse(localStorage.getItem(`studyai:workspace:u:offline-session:${studyId}`) ?? "null");
     return state.pdf[materialId];
   }, { studyId: material.studyId, materialId: material.id });
   expect(persisted.annotations).toHaveLength(2);

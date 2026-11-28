@@ -271,7 +271,7 @@ test.describe("Sprint 58B — Recursos offline e resiliência", () => {
     // Protected Exam blocked offline & zero answer key leakage
     await expect(quiz.getByText(/Modo Prova protegido indisponível sem internet/)).toBeVisible();
     await expect(quiz.getByRole("button", { name: "Gerar prova protegida" })).toBeDisabled();
-    const workspaceDump = await page.evaluate((id) => localStorage.getItem(`studyai:workspace:${id}`) ?? "", studyId);
+    const workspaceDump = await page.evaluate((id) => localStorage.getItem(`studyai:workspace:u:offline-session:${id}`) ?? "", studyId);
     expect(workspaceDump).not.toContain("correctAnswer");
 
     // Tutor IA preserves history offline but prevents remote generation cleanly
