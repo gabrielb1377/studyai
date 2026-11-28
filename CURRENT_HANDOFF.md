@@ -1,6 +1,6 @@
 # Handoff atual — StudyAI V1.3 (Onda 4)
 
-## Estado atual — Revisão Final AL-2, Gate de Encerramento da Onda 4 e Auditoria de Integração V1.3 (27/11/2026)
+## Estado atual — AL-2 e Etapas Obrigatórias da Onda 4 FORMALMENTE ENCERRADAS (`650109f`/`cb57d77`, CI `46084803360` 6/6 VERDE) + Auditoria de Integração V1.3 (27/11/2026)
 
 Ciclo funcional em execução na branch **`v1.3-development`** sob restrição permanente de **R$ 0/mês** (sem chamadas pagas de IA, sem contratações ou alterações remotas). **A V1.2 permanece congelada em `v1.1-development` (`1d0d698`, `NO-GO` para publicação pública)** e `main` segue intocada em `7e3d89b`.
 
@@ -8,19 +8,17 @@ Ciclo funcional em execução na branch **`v1.3-development`** sob restrição p
   - **CI GitHub Actions 6/6 VERDE** (`45519407335` e `45519417036`). Homologação remota pendente; publicação pública `NO-GO`; `exp/s3-direct-upload` intacta em `7b7be19`.
 - **Onda 1 (`PS-1b`, `PS-2`, `QU-1`..`QU-5`) e Onda 2 (`IE-1`..`IE-4F`, CI `45895240129` 6/6 VERDE)**: concluídas; **33 skills (20 oficiais + 13 Teacher)** imutáveis; `skills.enabled = false`.
 - **Onda 3 — Tool Engine (`TE-1`..`TE-5`) FORMALMENTE ENCERRADA (`40ed368`, CI `45918219371` 6/6 VERDE)**: **10 ferramentas canônicas** registradas; `tools.enabled = false`.
-- **Onda 4 — MM-1 (`c06f77b`, CI `46058793413` 6/6 VERDE) e AL-1 (`d53dfcb`, CI `46062817873` 6/6 VERDE) FORMALMENTE ENCERRADAS**:
+- **Onda 4 — Etapas Obrigatórias FORMALMENTE ENCERRADAS (`MM-1` `c06f77b` CI `46058793413` 6/6 VERDE · `AL-1` `d53dfcb` CI `46062817873` 6/6 VERDE · `AL-2` `650109f`/`cb57d77` CI `46084803360` 6/6 VERDE)**:
   - **MM-1**: gráficos SVG acessíveis em `src/features/analytics/`, tabela equivalente, guarda assíncrona e responsividade `320..1280px`.
   - **MM-2**: preservada como **opcional adiada** (mantida no roadmap aguardando autorização do owner).
   - **AL-1**: seletor determinístico, explicável e desativável (`AdaptiveSkillSelector.ts`), persistência por conta do opt-out (`LongTermMemoryStorage`) e painel informativo em `/aprendizagem`.
-- **Onda 4 — AL-2 Revisada e Endurecida (pendente CI 6/6 verde do commit de revisão para encerramento formal da AL-2 e das etapas obrigatórias da Onda 4)**:
-  - CI `46081993680` (`d3d474a`): `5/6` verde (`quality`, `postgres`, `e2e (1..3)`), `1` falha não relacionada em `e2e (4)` (`tests/ux-persistence.spec.ts:63`, que passou localmente em `16.8s`).
-  - **Revisão final AL-2**:
-    1. Contagem documental reconciliada: `tests/al2-ai-usage-budget.spec.ts` (6) + `tests/sprint42-security-quota.spec.ts` (4) = **10 passed** reais (log `task-10540.log`).
-    2. Classificação honesta sem migration: substituído `cacheHitsCount` por `zeroTokenReconciledCount` (pois `ai_token_reservations` não distingue `outcome='cached'` de `completed` com `0` tokens) e adicionado `availability.cacheHitsTracked: false` + aviso explícito no painel.
-    3. Agrupamento por `provider / model / credentialOrigin` em `QuotaService.getUsageBreakdown()`, alinhamento UTC em `getUsageStats()` e cobertura **PostgreSQL real (`PG-AL2-1`)** validada localmente em PostgreSQL 18 descartável (`1/1 passed`) e conectada ao job `postgres` em `.github/workflows/ci.yml`.
+  - **AL-2**: painel explicável de uso e orçamento em `/configuracoes` → `IA`, revisado e validado com **6/6 jobs verdes** na CI **`46084803360`** (`quality`, `postgres` com `PG-AL2-1` em PostgreSQL 17 real, e `e2e (1..4)`):
+    1. Contagem documental reconciliada: `tests/al2-ai-usage-budget.spec.ts` (6) + `tests/sprint42-security-quota.spec.ts` (4) = **10 passed** reais (`task-10540.log`); CI anterior `46081993680` teve 1 falha intermitente não relacionada em `e2e (4)` (`ux-persistence.spec.ts:63`), resolvida sem regressão na CI `46084803360`.
+    2. Classificação honesta sem migration: substituído `cacheHitsCount` por `zeroTokenReconciledCount` + `availability.cacheHitsTracked: false` + aviso explícito (pois `ai_token_reservations` não distingue `cached` de `completed` com `0` tokens).
+    3. Agrupamento por `provider / model / credentialOrigin`, alinhamento UTC em `getUsageStats()` e cobertura **PostgreSQL real (`PG-AL2-1`)** aprovada em PostgreSQL 18 local (`1/1`) e no job `postgres` da CI (`46084803360`).
 - **Auditoria de prontidão de integração V1.3 (somente leitura; Lotes A–E NÃO iniciados)**:
-  - **Atenção**: encerrar as ondas **não equivale à prontidão de produção da V1.3**. `SkillBudgetExecutor`, `ToolGateway` e `ToolConfirmationService` possuem `0` chamadores em runtime; `AdaptiveSkillSelector` está ligado apenas ao painel `/aprendizagem`; `useTeacher.ts` ainda usa `localStorage` global sem namespace de conta; `defaultClientReadProvider.loadPerformance` retorna stub vazio; `loadPlanningContext` usa `exams: []`; IndexedDB real pelo Gateway carece de teste E2E em Chromium; flags `skills.enabled` / `tools.enabled` seguem `false` (estáticas `NEXT_PUBLIC_*`).
-- **Próxima etapa**: confirmar **CI 6/6 verde** do commit de revisão AL-2 para formalizar AL-2 e Onda 4, e aguardar aprovação do owner para o plano de integração V1.3 (Lotes A–E). Não iniciar Onda 5 nem publicação em produção.
+  - **Encerramento das ondas NÃO equivale à prontidão de produção da V1.3**: `SkillBudgetExecutor`, `ToolGateway` e `ToolConfirmationService` possuem `0` chamadores em runtime; `AdaptiveSkillSelector` está ligado apenas a `/aprendizagem`; `useTeacher.ts` usa 3 chaves `localStorage` globais sem namespace de conta; `defaultClientReadProvider.loadPerformance` é stub vazio; `loadPlanningContext` usa `exams: []`; IndexedDB real pelo Gateway carece de teste E2E em Chromium; flags `skills.enabled` / `tools.enabled` seguem `false` (estáticas `NEXT_PUBLIC_*`).
+- **Próxima etapa**: aguardar aprovação do owner para o plano enxuto de integração V1.3 (Lotes A–E). Não iniciar Onda 5, Lotes A–E ou publicação em produção sem autorização.
 
 ## Registro histórico — Sprint QU-4 (25/11/2026)
 
