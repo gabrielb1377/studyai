@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/features/account/AuthProvider";
+import { WorkspacePersistence } from "@/features/study/services/WorkspacePersistence";
 import { StorageManager } from "@/lib/storage/StorageManager";
 
 type Check = { label: string; ok: boolean; detail: string };
@@ -32,7 +33,7 @@ export function BetaReadinessPanel() {
       { label: "Provider de IA", ok: Boolean(ai.providers?.some((provider) => provider.available)), detail: ai.activeProvider ? `Ativo: ${ai.activeProvider}` : "Nenhum provider online" },
       { label: "HTTPS", ok: window.isSecureContext || location.hostname === "localhost", detail: window.isSecureContext ? "Contexto seguro" : location.hostname === "localhost" ? "Desenvolvimento local" : "HTTPS necessário" },
       { label: "PWA", ok: "serviceWorker" in navigator, detail: "serviceWorker" in navigator ? "Suportado pelo navegador" : "Não suportado" },
-      { label: "Workspace", ok: Boolean(localStorage.getItem("studyai:workspace-current") || storage?.counts.studies), detail: localStorage.getItem("studyai:workspace-current") ? "Sessão restaurável" : "Aguardando primeiro estudo" },
+      { label: "Workspace", ok: Boolean(WorkspacePersistence.loadLastStudyId() || storage?.counts.studies), detail: WorkspacePersistence.loadLastStudyId() ? "Sessão restaurável" : "Aguardando primeiro estudo" },
     ]);
     setWorking(false);
   }, [auth.session]);

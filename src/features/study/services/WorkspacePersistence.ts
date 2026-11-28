@@ -50,14 +50,36 @@ export type StudyWorkspaceState = {
   updatedAt: string;
 };
 
-const VERSION = 1;
-const PREFIX = "studyai:workspace:";
-const LAST_STUDY_KEY = "studyai:workspace-current";
+export type ExpectedWorkspaceSession = {
+  readonly userId: string;
+  readonly generation?: number;
+};
 
-function currentUserId(): string | null {
+const VERSION = 2;
+export const WORKSPACE_STATE_KEY_PREFIX = "studyai:workspace:u:";
+export const WORKSPACE_CURRENT_KEY_PREFIX = "studyai:workspace-current:u:";
+
+function sanitizeOwnerSegment(userId: string): string {
+  return userId.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+export function workspaceStateKey(userId: string, studyId: string): string {
+  return `${WORKSPACE_STATE_KEY_PREFIX}${sanitizeOwnerSegment(userId)}:${studyId}`;
+}
+
+export function workspaceCurrentStudyKey(userId: string): string {
+  return `${WORKSPACE_CURRENT_KEY_PREFIX}${sanitizeOwnerSegment(userId)}`;
+}
+
+function activeSessionUser(expected?: ExpectedWorkspaceSession): string | null {
   if (typeof window === "undefined") return null;
   const session = SessionOperationManager.current();
-  return session.userId ?? null;
+  if (session.suspended || !session.userId) return null;
+  if (expected) {
+    if (session.userId !== expected.userId) return null;
+    if (expected.generation !== undefined && session.generation !== expected.generation) return null;
+  }
+  return session.userId;
 }
 
 const DEFAULT_STATE: StudyWorkspaceState = {
@@ -103,24 +125,35 @@ function normalize(value: unknown): StudyWorkspaceState {
 }
 
 export const WorkspacePersistence = {
-  load(studyId: string): StudyWorkspaceState {
-    if (typeof window === "undefined") return normalize(null);
-    if (!currentUserId()) return normalize(null);
+  load(studyId: string, expected?: ExpectedWorkspaceSession): StudyWorkspaceState {
+    const userId = activeSessionUser(expected);
+    if (!userId) return normalize(null);
     try {
-      const parsed: unknown = JSON.parse(window.localStorage.getItem(`${PREFIX}${studyId}`) ?? "null");
+      // Nunca lê nem migra automaticamente a chave global legada `studyai:workspace:<studyId>`.
+      const parsed: unknown = JSON.parse(
+        window.localStorage.getItem(workspaceStateKey(userId, studyId)) ?? "null",
+      );
+      if (parsed && typeof parsed === "object" && "ownerId" in parsed && (parsed as { ownerId?: unknown }).ownerId !== userId) {
+        return normalize(null);
+      }
       return normalize(parsed);
     } catch {
       return normalize(null);
     }
   },
 
-  save(studyId: string, changes: Partial<StudyWorkspaceState>) {
-    if (typeof window === "undefined") return normalize(null);
-    if (!currentUserId()) return normalize(null);
-    const next = { ...this.load(studyId), ...changes, updatedAt: new Date().toISOString() };
+  save(studyId: string, changes: Partial<StudyWorkspaceState>, expected?: ExpectedWorkspaceSession) {
+    const userId = activeSessionUser(expected);
+    if (!userId) return normalize(null);
+    const next = { ...this.load(studyId, expected), ...changes, updatedAt: new Date().toISOString() };
+    // Revalida identidade e geração imediatamente antes da escrita efetiva
+    if (activeSessionUser(expected) !== userId) return normalize(null);
     try {
-      window.localStorage.setItem(`${PREFIX}${studyId}`, JSON.stringify({ version: VERSION, ...next }));
-      window.localStorage.setItem(LAST_STUDY_KEY, studyId);
+      window.localStorage.setItem(
+        workspaceStateKey(userId, studyId),
+        JSON.stringify({ version: VERSION, ownerId: userId, ...next }),
+      );
+      window.localStorage.setItem(workspaceCurrentStudyKey(userId), studyId);
     } catch (error) {
       const isQuota = error instanceof DOMException && error.name === "QuotaExceededError";
       window.dispatchEvent(new CustomEvent("studyai:storage-error", {
@@ -137,14 +170,17 @@ export const WorkspacePersistence = {
     return next;
   },
 
-  savePdf(studyId: string, materialId: string, pdf: PdfViewState) {
-    const current = this.load(studyId);
-    return this.save(studyId, { pdf: { ...current.pdf, [materialId]: pdf }, materialId });
+  savePdf(studyId: string, materialId: string, pdf: PdfViewState, expected?: ExpectedWorkspaceSession) {
+    const current = this.load(studyId, expected);
+    return this.save(studyId, { pdf: { ...current.pdf, [materialId]: pdf }, materialId }, expected);
   },
 
-  loadLastStudyId() {
+  loadLastStudyId(expected?: ExpectedWorkspaceSession) {
+    const userId = activeSessionUser(expected);
+    if (!userId) return null;
     try {
-      return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_STUDY_KEY);
+      // Nunca lê a chave global legada `studyai:workspace-current`.
+      return window.localStorage.getItem(workspaceCurrentStudyKey(userId));
     } catch {
       return null;
     }

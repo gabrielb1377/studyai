@@ -1,9 +1,34 @@
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { workspaceCurrentStudyKey, type ExpectedWorkspaceSession } from "@/features/study/services/WorkspacePersistence";
 import { LayoutManager } from "./LayoutManager";
 import { WorkspaceState } from "./WorkspaceState";
 import type { WorkspaceLayout, WorkspaceRuntimeState } from "../types";
 
-const PREFIX = "studyai:workspace-v2:";
-const LAYOUTS_KEY = "studyai:workspace-layouts:v2";
+export const WORKSPACE_V2_KEY_PREFIX = "studyai:workspace-v2:u:";
+export const WORKSPACE_LAYOUTS_KEY_PREFIX = "studyai:workspace-layouts:v2:u:";
+
+function sanitizeOwnerSegment(userId: string): string {
+  return userId.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+export function workspaceV2Key(userId: string, studyId: string): string {
+  return `${WORKSPACE_V2_KEY_PREFIX}${sanitizeOwnerSegment(userId)}:${studyId}`;
+}
+
+export function workspaceLayoutsKey(userId: string): string {
+  return `${WORKSPACE_LAYOUTS_KEY_PREFIX}${sanitizeOwnerSegment(userId)}`;
+}
+
+function activeSessionUser(expected?: ExpectedWorkspaceSession): string | null {
+  if (typeof window === "undefined") return null;
+  const session = SessionOperationManager.current();
+  if (session.suspended || !session.userId) return null;
+  if (expected) {
+    if (session.userId !== expected.userId) return null;
+    if (expected.generation !== undefined && session.generation !== expected.generation) return null;
+  }
+  return session.userId;
+}
 
 function isState(value: unknown): value is WorkspaceRuntimeState {
   if (!value || typeof value !== "object") return false;
@@ -12,43 +37,82 @@ function isState(value: unknown): value is WorkspaceRuntimeState {
 }
 
 export const WorkspaceStorage = {
-  load(studyId: string) {
-    if (typeof window === "undefined") return WorkspaceState.create(studyId);
+  load(studyId: string, expected?: ExpectedWorkspaceSession) {
+    const userId = activeSessionUser(expected);
+    if (!userId) return WorkspaceState.create(studyId);
     try {
-      const parsed: unknown = JSON.parse(localStorage.getItem(`${PREFIX}${studyId}`) ?? "null");
+      // Nunca lê nem migra automaticamente a chave global legada `studyai:workspace-v2:<studyId>`.
+      const parsed: unknown = JSON.parse(
+        localStorage.getItem(workspaceV2Key(userId, studyId)) ?? "null",
+      );
+      if (parsed && typeof parsed === "object" && "ownerId" in parsed && (parsed as { ownerId?: unknown }).ownerId !== userId) {
+        return WorkspaceState.create(studyId);
+      }
       return isState(parsed) ? parsed : WorkspaceState.create(studyId);
     } catch {
       return WorkspaceState.create(studyId);
     }
   },
 
-  save(state: WorkspaceRuntimeState) {
+  save(state: WorkspaceRuntimeState, expected?: ExpectedWorkspaceSession) {
+    const userId = activeSessionUser(expected);
     const next = { ...state, updatedAt: new Date().toISOString() };
-    localStorage.setItem(`${PREFIX}${state.studyId}`, JSON.stringify(next));
-    localStorage.setItem("studyai:workspace-current", state.studyId);
+    if (!userId) return next;
+    // Revalida imediatamente antes da gravação efetiva
+    if (activeSessionUser(expected) !== userId) return next;
+    try {
+      localStorage.setItem(
+        workspaceV2Key(userId, state.studyId),
+        JSON.stringify({ ...next, ownerId: userId }),
+      );
+      localStorage.setItem(workspaceCurrentStudyKey(userId), state.studyId);
+    } catch {
+      return next;
+    }
     window.dispatchEvent(new Event("studyai:workspace-v2-updated"));
     return next;
   },
 
-  loadLayouts(): WorkspaceLayout[] {
-    if (typeof window === "undefined") return LayoutManager.builtIn;
+  loadLayouts(expected?: ExpectedWorkspaceSession): WorkspaceLayout[] {
+    const userId = activeSessionUser(expected);
+    if (!userId) return LayoutManager.builtIn;
     try {
-      const custom: unknown = JSON.parse(localStorage.getItem(LAYOUTS_KEY) ?? "[]");
-      return [...LayoutManager.builtIn, ...(Array.isArray(custom) ? custom.filter((layout) => layout && typeof layout === "object") as WorkspaceLayout[] : [])];
+      // Nunca lê nem migra automaticamente a chave global legada `studyai:workspace-layouts:v2`.
+      const custom: unknown = JSON.parse(localStorage.getItem(workspaceLayoutsKey(userId)) ?? "[]");
+      return [
+        ...LayoutManager.builtIn,
+        ...(Array.isArray(custom)
+          ? (custom.filter((layout) => layout && typeof layout === "object") as WorkspaceLayout[])
+          : []),
+      ];
     } catch {
       return LayoutManager.builtIn;
     }
   },
 
-  saveCustomLayout(layout: WorkspaceLayout) {
-    const custom = this.loadLayouts().filter((item) => !item.builtIn && item.id !== layout.id);
-    localStorage.setItem(LAYOUTS_KEY, JSON.stringify([...custom, layout]));
+  saveCustomLayout(layout: WorkspaceLayout, expected?: ExpectedWorkspaceSession) {
+    const userId = activeSessionUser(expected);
+    if (!userId) return;
+    const custom = this.loadLayouts(expected).filter((item) => !item.builtIn && item.id !== layout.id);
+    if (activeSessionUser(expected) !== userId) return;
+    try {
+      localStorage.setItem(workspaceLayoutsKey(userId), JSON.stringify([...custom, layout]));
+    } catch {
+      return;
+    }
     window.dispatchEvent(new Event("studyai:workspace-layouts-updated"));
   },
 
-  removeCustomLayout(layoutId: string) {
-    const custom = this.loadLayouts().filter((item) => !item.builtIn && item.id !== layoutId);
-    localStorage.setItem(LAYOUTS_KEY, JSON.stringify(custom));
+  removeCustomLayout(layoutId: string, expected?: ExpectedWorkspaceSession) {
+    const userId = activeSessionUser(expected);
+    if (!userId) return;
+    const custom = this.loadLayouts(expected).filter((item) => !item.builtIn && item.id !== layoutId);
+    if (activeSessionUser(expected) !== userId) return;
+    try {
+      localStorage.setItem(workspaceLayoutsKey(userId), JSON.stringify(custom));
+    } catch {
+      return;
+    }
     window.dispatchEvent(new Event("studyai:workspace-layouts-updated"));
   },
 };

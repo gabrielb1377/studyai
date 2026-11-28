@@ -14,7 +14,9 @@ import { useWorkspaceSession } from "../useWorkspaceSession";
 import { WorkspacePanelContent } from "./WorkspacePanelContent";
 import { WorkspacePanelFrame } from "./WorkspacePanelFrame";
 import { WorkspaceToolbar } from "./WorkspaceToolbar";
-import { WorkspacePersistence, type WorkspaceTab } from "@/features/study/services/WorkspacePersistence";
+import { useAuth } from "@/features/account/AuthProvider";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
+import { WorkspacePersistence, type ExpectedWorkspaceSession, type WorkspaceTab } from "@/features/study/services/WorkspacePersistence";
 import { useUpdateGuard } from "@/features/platform/UpdateSafety";
 import { WorkspaceState } from "../services/WorkspaceState";
 
@@ -66,6 +68,19 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
   onStatusChange: (status: StudyStatus) => void;
   onFocusModeChange?: (active: boolean) => void;
 }) {
+  const auth = useAuth();
+  const runtimeSession = SessionOperationManager.current();
+  const activeSession: ExpectedWorkspaceSession | null =
+    !auth.isLoading &&
+    !runtimeSession.suspended &&
+    runtimeSession.userId &&
+    (!auth.session?.user.id || auth.session.user.id === runtimeSession.userId)
+      ? { userId: runtimeSession.userId, generation: runtimeSession.generation }
+      : null;
+  const activeSessionKey = activeSession ? `${activeSession.userId}:${activeSession.generation}` : null;
+  const activeSessionRef = useRef<ExpectedWorkspaceSession | null>(activeSession);
+  activeSessionRef.current = activeSession;
+
   const [state, setState] = useState<WorkspaceRuntimeState>();
   const [layouts, setLayouts] = useState(() => LayoutManager.builtIn);
   const isMobileWorkspace = useSyncExternalStore(subscribeMobileWorkspace, getMobileWorkspace, () => false);
@@ -73,15 +88,27 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let next = resetWorkspace ? WorkspaceState.create(study.studyId) : WorkspaceManager.load(study.studyId);
-    if (requestedLayoutId) next = WorkspaceManager.applyLayout(next, requestedLayoutId);
+    if (!activeSession || !activeSessionKey) {
+      stateRef.current = undefined;
+      setState(undefined);
+      setLayouts(LayoutManager.builtIn);
+      return;
+    }
+    let next = resetWorkspace ? WorkspaceState.create(study.studyId) : WorkspaceManager.load(study.studyId, activeSession);
+    if (requestedLayoutId) next = WorkspaceManager.applyLayout(next, requestedLayoutId, activeSession);
     const requestedType = requestedTab && workspacePanelTypes.includes(requestedTab as WorkspacePanelType)
       ? requestedTab as WorkspacePanelType
       : requestedTab && requestedTab in tabToPanel
         ? tabToPanel[requestedTab as WorkspaceTab]
         : undefined;
     if (requestedType) {
-      next = WorkspaceManager.openTool(next, requestedType, requestedType === "material" ? requestedMaterialId : undefined);
+      next = WorkspaceManager.openTool(
+        next,
+        requestedType,
+        requestedType === "material" ? requestedMaterialId : undefined,
+        false,
+        activeSession,
+      );
       const target = next.panels.find((panel) => panel.id === next.activePanelId);
       if (target && !target.maximized) next = { ...next, panels: PanelManager.maximize(next.panels, target.id) };
     }
@@ -91,35 +118,48 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
     }
     stateRef.current = next;
     setState(next);
-    setLayouts(WorkspaceStorage.loadLayouts());
-  }, [requestedLayoutId, requestedMaterialId, requestedTab, resetWorkspace, study.studyId]);
+    setLayouts(WorkspaceStorage.loadLayouts(activeSession));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionKey, requestedLayoutId, requestedMaterialId, requestedTab, resetWorkspace, study.studyId]);
 
   const update = useCallback((updater: (current: WorkspaceRuntimeState) => WorkspaceRuntimeState) => {
+    const expected = activeSessionRef.current;
+    if (!expected) return;
     setState((current) => {
       if (!current) return current;
-      const next = WorkspaceManager.save(updater(current));
+      const next = WorkspaceManager.save(updater(current), expected);
       stateRef.current = next;
       return next;
     });
   }, []);
 
   const openTool = useCallback((type: WorkspacePanelType, forceNew = false) => {
+    const expected = activeSessionRef.current;
+    if (!expected) return;
     update((current) => {
-      const next = WorkspaceManager.openTool(current, type, type === "material" ? requestedMaterialId ?? materials[0]?.id : undefined, forceNew);
+      const next = WorkspaceManager.openTool(
+        current,
+        type,
+        type === "material" ? requestedMaterialId ?? materials[0]?.id : undefined,
+        forceNew,
+        expected,
+      );
       if (forceNew) return next;
       const target = next.panels.find((panel) => panel.id === next.activePanelId);
       return target && !target.maximized ? { ...next, panels: PanelManager.maximize(next.panels, target.id) } : next;
     });
     const tab = panelToTab[type];
-    if (tab) WorkspacePersistence.save(study.studyId, { activeTab: tab });
+    if (tab) WorkspacePersistence.save(study.studyId, { activeTab: tab }, expected);
   }, [materials, requestedMaterialId, study.studyId, update]);
 
   useEffect(() => {
     const handler = (event: Event) => {
+      const expected = activeSessionRef.current;
+      if (!expected) return;
       const detail = (event as CustomEvent<{ type?: WorkspacePanelType; resourceId?: string }>).detail;
       if (!detail?.type) return;
       update((current) => {
-        const next = WorkspaceManager.openTool(current, detail.type!, detail.resourceId);
+        const next = WorkspaceManager.openTool(current, detail.type!, detail.resourceId, false, expected);
         const target = next.panels.find((panel) => panel.id === next.activePanelId);
         return target && !target.maximized ? { ...next, panels: PanelManager.maximize(next.panels, target.id) } : next;
       });
@@ -166,9 +206,11 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
     const end = () => {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", end);
+      const expected = activeSessionRef.current;
+      if (!expected) return;
       setState((current) => {
         if (!current) return current;
-        const saved = WorkspaceManager.save(current);
+        const saved = WorkspaceManager.save(current, expected);
         stateRef.current = saved;
         return saved;
       });
@@ -190,19 +232,23 @@ export function WorkspaceCanvas({ study, materials, requestedMaterialId, request
         pendingRecovery={session.pendingRecovery}
         progress={study.progress}
         status={study.status}
-        onApplyLayout={(layoutId) => update((current) => WorkspaceManager.applyLayout(current, layoutId))}
+        onApplyLayout={(layoutId) => update((current) => WorkspaceManager.applyLayout(current, layoutId, activeSessionRef.current ?? undefined))}
         onOpenTool={openTool}
         onNewPanel={(type) => openTool(type, true)}
         onSaveLayout={(name) => {
+          const expected = activeSessionRef.current;
+          if (!expected) return;
           const layout = LayoutManager.createCustom(name, state.panels);
-          WorkspaceStorage.saveCustomLayout(layout);
-          setLayouts(WorkspaceStorage.loadLayouts());
+          WorkspaceStorage.saveCustomLayout(layout, expected);
+          setLayouts(WorkspaceStorage.loadLayouts(expected));
           update((current) => ({ ...current, layoutId: layout.id }));
         }}
         onDeleteLayout={(layoutId) => {
-          WorkspaceStorage.removeCustomLayout(layoutId);
-          setLayouts(WorkspaceStorage.loadLayouts());
-          update((current) => WorkspaceManager.applyLayout(current, "reading"));
+          const expected = activeSessionRef.current;
+          if (!expected) return;
+          WorkspaceStorage.removeCustomLayout(layoutId, expected);
+          setLayouts(WorkspaceStorage.loadLayouts(expected));
+          update((current) => WorkspaceManager.applyLayout(current, "reading", expected));
         }}
         onEnterFocusMode={(goalLabel) => { void session.enterFocusMode(goalLabel); }}
         onExitFocusMode={() => { void session.exitFocusMode(); }}

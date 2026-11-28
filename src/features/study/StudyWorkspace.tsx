@@ -6,6 +6,8 @@ import { BookOpen } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useAuth } from "@/features/account/AuthProvider";
+import { SessionOperationManager } from "@/features/account/SessionOperationManager";
 import { useExtraction } from "@/features/extraction/useExtraction";
 import { useFlashcards } from "@/features/flashcards/useFlashcards";
 import { useQuiz } from "@/features/quiz/useQuiz";
@@ -28,6 +30,16 @@ function toStudyMaterialType(fileType: string): StudyMaterialType {
 }
 
 export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requestedTab, requestedLayoutId, requestedQuizMode, resetWorkspace = false, returnHref }: { requestedStudyId?: string; requestedMaterialId?: string; requestedTab?: string; requestedLayoutId?: string; requestedQuizMode?: "exam"; resetWorkspace?: boolean; returnHref?: string }) {
+  const auth = useAuth();
+  const runtimeSession = SessionOperationManager.current();
+  const activeSession =
+    !auth.isLoading &&
+    !runtimeSession.suspended &&
+    runtimeSession.userId &&
+    (!auth.session?.user.id || auth.session.user.id === runtimeSession.userId)
+      ? { userId: runtimeSession.userId, generation: runtimeSession.generation }
+      : null;
+  const activeSessionKey = activeSession ? `${activeSession.userId}:${activeSession.generation}` : null;
   const { records, isLoading, recordAccess, setProgress, setStatus } = useStudyEngine();
   const { materials } = useMaterials();
   const { records: extractedContents } = useExtraction();
@@ -71,8 +83,11 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
   }, [recordAccess, studyId]);
 
   useEffect(() => {
-    if (!studyId) return;
-    const stored = WorkspacePersistence.load(studyId);
+    if (!studyId || !activeSession || !activeSessionKey) {
+      setWorkspace(null);
+      return;
+    }
+    const stored = WorkspacePersistence.load(studyId, activeSession);
     const next = {
       ...stored,
       materialId: requestedMaterialId ?? stored.materialId,
@@ -81,12 +96,13 @@ export function StudyWorkspace({ requestedStudyId, requestedMaterialId, requeste
         : stored.quiz,
     };
     setWorkspace(next);
-    WorkspacePersistence.save(studyId, next);
-  }, [requestedMaterialId, requestedQuizMode, requestedTab, studyId]);
+    WorkspacePersistence.save(studyId, next, activeSession);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionKey, requestedMaterialId, requestedQuizMode, requestedTab, studyId]);
 
   const updateWorkspace = (changes: Partial<StudyWorkspaceState>) => {
-    if (!studyId) return;
-    setWorkspace(WorkspacePersistence.save(studyId, changes));
+    if (!studyId || !activeSession) return;
+    setWorkspace(WorkspacePersistence.save(studyId, changes, activeSession));
   };
 
   if (isLoading) {
