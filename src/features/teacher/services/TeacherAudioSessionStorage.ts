@@ -18,6 +18,11 @@ export const TEACHER_AUDIO_SESSION_KEY_PREFIX = "teacher-audio-session:v1:";
 export const LEGACY_TEACHER_AUDIO_SESSION_KEY = "teacher-audio-session:v1";
 export const TEACHER_AUDIO_SESSION_EVENT = "studyai:teacher-audio-session";
 
+export type ExpectedAudioSessionContext = {
+  readonly userId: string;
+  readonly generation?: number;
+};
+
 export type TeacherAudioLessonStep = {
   id: string;
   title: string;
@@ -65,10 +70,32 @@ function now() {
   return new Date().toISOString();
 }
 
+function sessionChangedError(message: string): Error {
+  const err = new Error(message);
+  err.name = "SessionChangedError";
+  return err;
+}
+
 function currentUserId(): string | null {
   if (typeof window === "undefined") return null;
   const session = SessionOperationManager.current();
-  return session.userId ?? null;
+  return session.suspended ? null : session.userId ?? null;
+}
+
+function assertExpectedContext(expected?: ExpectedAudioSessionContext): string {
+  const session = SessionOperationManager.current();
+  if (session.suspended || !session.userId) {
+    throw sessionChangedError("Nenhuma sessão ativa para acessar a aula em áudio.");
+  }
+  if (expected) {
+    if (session.userId !== expected.userId) {
+      throw sessionChangedError("A conta mudou antes da persistência da aula em áudio.");
+    }
+    if (expected.generation !== undefined && session.generation !== expected.generation) {
+      throw sessionChangedError("A geração de sessão mudou antes da persistência da aula em áudio.");
+    }
+  }
+  return session.userId;
 }
 
 function sessionKey(userId: string) {
@@ -85,8 +112,8 @@ export const TeacherAudioSessionStorage = {
       operation.assertCurrent();
       if (isSession(record?.value)) return record.value;
 
-      // O registro legado permanece no IndexedDB já escopado ao usuário.
-      // Ele é lido como recuperação e só ganha a nova chave em um próximo save.
+      // O registro legado permanece no IndexedDB já escopado ao usuário (studyai-db:user-<id>).
+      // Ele é lido como recuperação segura apenas dentro do banco da própria conta e só ganha a nova chave no próximo save.
       const legacy = await StorageManager.get<MetadataRecord>("metadata", LEGACY_TEACHER_AUDIO_SESSION_KEY);
       operation.assertCurrent();
       return isSession(legacy?.value) ? legacy.value : null;
@@ -98,12 +125,16 @@ export const TeacherAudioSessionStorage = {
     }
   },
 
-  async save(session: TeacherAudioSession): Promise<TeacherAudioSession> {
-    const userId = currentUserId();
-    if (!userId) throw new Error("Nenhum usuário autenticado para salvar sessão de áudio.");
+  async save(
+    session: TeacherAudioSession,
+    expected?: ExpectedAudioSessionContext,
+  ): Promise<TeacherAudioSession> {
+    const userId = assertExpectedContext(expected);
     const operation = SessionOperationManager.start(userId);
     const updated: TeacherAudioSession = { ...session, updatedAt: now() };
     try {
+      // Validação imediatamente antes da fronteira efetiva de escrita
+      operation.assertCurrent();
       await StorageManager.put("metadata", {
         key: sessionKey(userId),
         value: updated,
@@ -111,7 +142,11 @@ export const TeacherAudioSessionStorage = {
       } satisfies MetadataRecord);
       operation.assertCurrent();
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(TEACHER_AUDIO_SESSION_EVENT, { detail: updated }));
+        window.dispatchEvent(
+          new CustomEvent(TEACHER_AUDIO_SESSION_EVENT, {
+            detail: { ownerId: userId, session: updated },
+          }),
+        );
       }
       return updated;
     } finally {
@@ -119,15 +154,19 @@ export const TeacherAudioSessionStorage = {
     }
   },
 
-  async remove(): Promise<void> {
-    const userId = currentUserId();
-    if (!userId) return;
+  async remove(expected?: ExpectedAudioSessionContext): Promise<void> {
+    const userId = assertExpectedContext(expected);
     const operation = SessionOperationManager.start(userId);
     try {
+      operation.assertCurrent();
       await StorageManager.delete("metadata", sessionKey(userId));
       operation.assertCurrent();
       if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(TEACHER_AUDIO_SESSION_EVENT, { detail: null }));
+        window.dispatchEvent(
+          new CustomEvent(TEACHER_AUDIO_SESSION_EVENT, {
+            detail: { ownerId: userId, session: null },
+          }),
+        );
       }
     } finally {
       operation.release();
